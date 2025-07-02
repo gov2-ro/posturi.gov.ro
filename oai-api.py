@@ -1,8 +1,15 @@
 import openai
 from docx import Document
 
-# Replace this with your actual OpenAI API key
-openai.api_key = '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'
+
+from dotenv import load_dotenv
+import os
+
+# read api key fron .env file
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
 
  
 

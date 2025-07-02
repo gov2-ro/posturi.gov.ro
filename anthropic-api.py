@@ -6,7 +6,17 @@ import PyPDF2
 import docx
 import sys
 
-os.environ["ANTHROPIC_API_KEY"] = "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"
+
+
+# os.environ["ANTHROPIC_API_KEY"] = ""
+
+from dotenv import load_dotenv
+import os
+
+# read api key fron .env file
+load_dotenv()
+os.environ["ANTHROPIC_API_KEY"] = os.getenv("ANTHROPIC_API_KEY")
+
 
 
 def read_file(file_path):

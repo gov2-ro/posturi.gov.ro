@@ -1,7 +1,13 @@
 import openai
 import json
+from dotenv import load_dotenv
+import os
 
-openai.api_key = "sk-1CFVKnRLyGpVs_DVua8Drlr9wiCclsexKR1wuz_GyUT3BlbkFJQlZ1GN-I7-vH1Qmty0_AKceGrNp4I3yr7fY5jn1ZgA"
+# read api key fron .env file
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# openai.api_key = ""
 
 
 # Function to call GPT-4 and generate schema.org/JobPosting

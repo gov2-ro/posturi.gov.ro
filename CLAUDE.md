@@ -7,7 +7,7 @@ See README.md for project overview, pipeline, and data structure.
 ## Running scripts
 
 ```bash
-python fetch-index-check-changes.py   # preferred index scraper: scans all pages
+python fetch-index.py   # preferred index scraper: scans all pages
 python fetch-index.py                 # stops early at first page with no changes
 python fetch-anunturi.py
 python parse-anunturi.py
@@ -17,9 +17,9 @@ python anthropic-api.py               # LLM schema generation (needs .env)
 
 ## Key behaviors
 
-**Two index scripts** — `fetch-index-check-changes.py` always scans all pages and is preferred. `fetch-index.py` stops at the first page with no new entries, which misses updates to older listings.
+**Two index scripts** — `fetch-index.py` always scans all pages and is preferred. `fetch-index.py` stops at the first page with no new entries, which misses updates to older listings.
 
-**Incremental saves** — both index scripts save to CSV after each page that has new or updated entries (crash-safe). `fetch-index-check-changes.py` skips the save on unchanged pages.
+**Incremental saves** — both index scripts save to CSV after each page that has new or updated entries (crash-safe). `fetch-index.py` skips the save on unchanged pages.
 
 **Change tracking** — `compare_and_update()` diffs each scraped listing against the stored row and appends changed field names + date to the `updates` column.
 

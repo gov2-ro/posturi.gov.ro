@@ -21,7 +21,7 @@ Run scripts in order:
 
 | Step | Script | Output |
 |------|--------|--------|
-| 1 | `fetch-index-check-changes.py` | `data/posturi_gov_ro.csv` |
+| 1 | `fetch-index.py` | `data/posturi_gov_ro.csv` |
 | 2 | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
 | 3 | `parse-anunturi.py` | `data/anunturi/anunturi.csv` |
 | 4 | `download-attachments.py` | `data/downloads/` |

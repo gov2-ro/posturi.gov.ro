@@ -1,0 +1,13 @@
+requests
+beautifulsoup4
+tqdm
+pandas
+markdownify
+python-dotenv
+openai
+anthropic
+google-generativeai
+PyPDF2
+python-docx
+docx2txt
+pypandoc

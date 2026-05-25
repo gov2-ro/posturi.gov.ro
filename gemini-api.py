@@ -1,6 +1,9 @@
+import os
 import google.generativeai as genai
+from dotenv import load_dotenv
 
-genai.configure(api_key="AIzaSyBN3sL-00-0qzStkjoSXs6WZSmoxfpcPs0")
+load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 file_uri = genai.upload_file(path='data/downloads/41d71860.docx')
 prompt = "Convert the attached job posting to schema.org/JobPosting JSON-LD format. return the JSON-LD object."

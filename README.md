@@ -8,11 +8,11 @@ Scrapes [posturi.gov.ro](http://posturi.gov.ro) — the Romanian government job 
 pip install -r requirements.txt
 ```
 
-For LLM scripts, create a `.env` file:
-```
-OPENAI_API_KEY=...
-ANTHROPIC_API_KEY=...
-GOOGLE_API_KEY=...
+For LLM scripts, copy `.env.example` to `.env` and fill in your API keys.
+
+`dox2md.py` also requires system packages:
+```bash
+brew install libreoffice pandoc tesseract
 ```
 
 ## Pipeline
@@ -25,7 +25,7 @@ Run scripts in order:
 | 2 | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
 | 3 | `parse-anunturi.py` | `data/anunturi/anunturi.csv` |
 | 4 | `download-attachments.py` | `data/downloads/` |
-| 5 | `llm-schema-posts.py` / `oai-api.py` / `anthropic-api.py` | schema.org JSON |
+| 5 | `llm-schema-posts.py` / `oai-api.py` / `gemini-api.py` / `anthropic-api.py` | `data/schema/*.json` |
 
 ## Data
 

@@ -1,47 +1,49 @@
 import openai
-from docx import Document
-
-
-from dotenv import load_dotenv
+import json
+import csv
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# read api key fron .env file
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
+input_csv = 'data/anunturi/anunturi.csv'
+output_dir = Path('data/schema')
+output_dir.mkdir(parents=True, exist_ok=True)
 
+PROMPT = "Convert this job posting to schema.org/JobPosting JSON-LD format. Return only valid JSON."
 
- 
+def slug_from_url(url):
+    return url.rstrip('/').split('/')[-1] or 'unknown'
 
-# Load the document
-def load_file(file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        return file.read()
+def generate_schema(markdown_content):
+    client = openai.OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"{PROMPT}\n\n{markdown_content}"}
+        ]
+    )
+    generated = response.choices[0].message.content
+    try:
+        return json.loads(generated)
+    except json.JSONDecodeError:
+        return generated
 
-def load_docx(file_path):
-    doc = Document(file_path)
-    full_text = []
-    for paragraph in doc.paragraphs:
-        full_text.append(paragraph.text)
-    return '\n'.join(full_text)
-
-# Define your document and prompt
-file_path = 'data/downloads/41d71860.docx'  # Path to your docx, doc, or pdf file
-file_content = load_docx(file_path)
-prompt = "Convert the attached job posting to schema.org/JobPosting JSON-LD format. return the JSON-LD object."
-
-# Send the document and prompt to GPT API
-response = openai.ChatCompletion.create(
-    model="gpt-3.5-turbo",  # or "gpt-4"
-    messages=[
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prompt}
-    ]
-)
-
-# Print the response
-# print(response['choices'][0]['message']['content'])
-
-print(response['choices'][0]['message']['content'])
-
-
+if __name__ == "__main__":
+    with open(input_csv, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            markdown = row.get('Main Body Markdown', '').replace('\\n', '\n')
+            if not markdown:
+                continue
+            slug = slug_from_url(row.get('Announcement URL', ''))
+            out_path = output_dir / f"{slug}.json"
+            if out_path.exists():
+                print(f"Skipping {slug} (already exists)")
+                continue
+            print(f"Processing {slug}...")
+            schema = generate_schema(markdown)
+            out_path.write_text(json.dumps(schema, indent=2, ensure_ascii=False), encoding='utf-8')
+            print(f"Saved {out_path}")

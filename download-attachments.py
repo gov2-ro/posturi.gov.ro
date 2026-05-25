@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 # Directory where files will be saved
 download_dir = 'data/downloads'
-csv_path = 'data/anunturi.csv'  # Update this to the actual path
+csv_path = 'data/anunturi/anunturi.csv'
 
 # Create the directory if it doesn't exist
 if not os.path.exists(download_dir):
@@ -23,7 +23,7 @@ def download_file(url, save_dir):
             return file_path
 
         # Send a GET request to download the file
-        response = requests.get(url, headers={
+        response = requests.get(url, timeout=30, headers={
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',

@@ -1,62 +1,55 @@
 import openai
 import json
-from dotenv import load_dotenv
+import csv
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# read api key fron .env file
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# openai.api_key = ""
+input_csv = 'data/anunturi/anunturi.csv'
+output_dir = Path('data/schema')
+output_dir.mkdir(parents=True, exist_ok=True)
 
-
-# Function to call GPT-4 and generate schema.org/JobPosting
 def generate_jobposting_schema(markdown_content):
-    # OpenAI GPT-4 API call
-    response = openai.ChatCompletion.create(
-        model="gpt-4",  # Specify the GPT model here (using GPT-4 as a placeholder)
+    client = openai.OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
-                "content": "You are a helpful assistant that converts job postings in markdown into schema.org/JobPosting JSON format."
+                "content": "You are a helpful assistant that converts job postings in markdown into schema.org/JobPosting JSON-LD format. Return only valid JSON."
             },
             {
                 "role": "user",
-                "content": f"Here is a job posting in markdown format: \n\n{markdown_content}\n\nConvert this into a schema.org/JobPosting JSON structure."
+                "content": f"Convert this job posting to schema.org/JobPosting JSON-LD:\n\n{markdown_content}"
             }
         ],
         max_tokens=1500,
         temperature=0.3,
     )
-    
-    # Extract the job posting schema from the response
-    generated_schema = response['choices'][0]['message']['content']
-    
+    generated = response.choices[0].message.content
     try:
-        # Attempt to convert the output to JSON
-        schema_json = json.loads(generated_schema)
-        return schema_json
+        return json.loads(generated)
     except json.JSONDecodeError:
-        print("Failed to parse GPT output as JSON.")
-        return generated_schema
+        return generated
 
-# Function to read a markdown file and return its content
-def read_markdown_file(filepath):
-    with open(filepath, 'r') as file:
-        content = file.read()
-    return content
+def slug_from_url(url):
+    return url.rstrip('/').split('/')[-1] or 'unknown'
 
-# Main function
 if __name__ == "__main__":
-    # Specify the markdown file path
-    markdown_file_path = 'path/to/job_posting.md'
-    
-    # Read markdown content
-    markdown_content = read_markdown_file(markdown_file_path)
-    
-    # Generate JobPosting schema from markdown content
-    job_posting_schema = generate_jobposting_schema(markdown_content)
-    
-    # Output the generated schema
-    print("Generated JobPosting schema (JSON):")
-    print(json.dumps(job_posting_schema, indent=4))
+    with open(input_csv, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            markdown = row.get('Main Body Markdown', '').replace('\\n', '\n')
+            if not markdown:
+                continue
+            slug = slug_from_url(row.get('Announcement URL', ''))
+            out_path = output_dir / f"{slug}.json"
+            if out_path.exists():
+                print(f"Skipping {slug} (already exists)")
+                continue
+            print(f"Processing {slug}...")
+            schema = generate_jobposting_schema(markdown)
+            out_path.write_text(json.dumps(schema, indent=2, ensure_ascii=False), encoding='utf-8')
+            print(f"Saved {out_path}")

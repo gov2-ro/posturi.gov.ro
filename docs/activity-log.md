@@ -2,6 +2,12 @@
 
 ## 2026
 
+### 2026-05-27 — Full LLM inference pass on 4 379 postings
+
+**What:** Ran `infer_postings --provider gemini --force` on the full dataset after dict refresh brought low-confidence count from 1,608 → 1,007. Discovered the webapp Django process wasn't loading `GOOGLE_API_KEY` because `settings.py` only called `load_dotenv(BASE_DIR / ".env")` (= `webapp/.env`, which doesn't exist) and never reached the repo-root `.env`. Fixed by adding `load_dotenv(REPO_ROOT / ".env")` as a fallback immediately after — webapp-level `.env` still takes precedence for production overrides.
+
+**Non-obvious:** The 1,007 "errors" in the first run were silent `KeyError: 'GOOGLE_API_KEY'` inside `_llm_classify`, caught as `RuntimeError` and mapped to `source="error"` — counted in the error tally but not printed. All 1,007 now processed successfully with actual LLM calls after the settings fix.
+
 ### 2026-05-26 — FAMILIES sync, google-genai migration, contact_in_attachment refinement
 
 **What:** Three follow-up improvements after the datePosted fix.

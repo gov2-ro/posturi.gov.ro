@@ -17,7 +17,7 @@ FTS_CONFIG = "romanian_unaccent"
 PAGE_SIZE = 25
 
 
-def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_cats, expires_before, expires_after, families, seniorities):
+def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_cats, expires_before, expires_after, families, seniorities, anomaly_flags=None):
     if q:
         qs = qs.filter(search_vector=SearchQuery(q, config=FTS_CONFIG, search_type="plain"))
     if judet_slugs:
@@ -44,6 +44,9 @@ def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_ca
         qs = qs.filter(inferred__profession_family__in=families)
     if seniorities:
         qs = qs.filter(inferred__seniority__in=seniorities)
+    if anomaly_flags:
+        for flag in anomaly_flags:
+            qs = qs.filter(inferred__anomaly_flags__contains=[flag])
     return qs
 
 
@@ -58,6 +61,7 @@ def job_list(request):
     expires_after = request.GET.get("expires_after", "")
     families = request.GET.getlist("family")
     seniorities = request.GET.getlist("seniority")
+    anomaly_flags = request.GET.getlist("anomaly")
     sort = request.GET.get("sort", "")
 
     filter_kwargs = dict(
@@ -71,6 +75,7 @@ def job_list(request):
         expires_after=expires_after,
         families=families,
         seniorities=seniorities,
+        anomaly_flags=anomaly_flags,
     )
 
     base_qs = JobPosting.objects.all()
@@ -164,6 +169,7 @@ def job_list(request):
         "expires_after": expires_after,
         "families": families,
         "seniorities": seniorities,
+        "anomaly_flags": anomaly_flags,
         "sort": sort,
         "judet_options": judet_options,
         "level_options": level_options,
@@ -172,6 +178,13 @@ def job_list(request):
         "employer_cat_options": employer_cat_options,
         "family_options": family_options,
         "seniority_options": seniority_options,
+        "anomaly_choices": [
+            ("short_deadline", "Termen scurt"),
+            ("missing_contact", "Contact lipsă"),
+            ("gender_criteria", "Criteriu de gen"),
+            ("no_body", "Fără corp"),
+            ("frequent_repost", "Re-publicare frecventă"),
+        ],
         "today": date.today(),
     }
 
@@ -192,6 +205,7 @@ def _filter_kwargs_from_request(request):
         expires_after=request.GET.get("expires_after", ""),
         families=request.GET.getlist("family"),
         seniorities=request.GET.getlist("seniority"),
+        anomaly_flags=request.GET.getlist("anomaly"),
     )
 
 

@@ -4,29 +4,6 @@ Alternative browser / explorer for [posturi.gov.ro](http://posturi.gov.ro). Scra
 
 See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7Ue98SqNFQ/) gdocs
 
-## Setup
-
-```bash
-pip install -r requirements.txt
-```
-
-For LLM scripts and the webapp, copy `.env.example` to `.env` and fill in your API keys.
-
-`dox2md.py` also requires system packages:
-```bash
-brew install libreoffice pandoc tesseract
-```
-
-### Webapp setup
-
-```bash
-cd webapp
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python manage.py migrate
-.venv/bin/python manage.py runserver
-```
-
 ## Pipeline
 
 ### Quick start — run everything
@@ -60,6 +37,23 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 `--force` re-processes already-done rows for `import`, `extract`, and `infer`.
 `--limit N` restricts `infer` to N postings (useful for testing).
 `--provider gemini|openai|anthropic` sets the LLM used by the `infer` step (default: `gemini`).
+
+## Data quality
+
+`quality_check.py` samples 5–10 diverse postings and runs all four pipeline layers through automated checks, then writes `data/quality_report.json` and a console summary table.
+
+```bash
+# Fast pass — no API calls (CSV fields, attachment extraction, dict-only inference)
+webapp/.venv/bin/python3 quality_check.py --no-llm
+
+# Full pass — includes LLM infer fallback + schema.org generation
+webapp/.venv/bin/python3 quality_check.py --provider anthropic
+
+# Check specific postings by slug
+webapp/.venv/bin/python3 quality_check.py --slugs 2a66f376.doc,67438cc9.docx
+```
+
+Use the webapp venv because it has `docx2txt`, `python-docx`, and `pypdf`. After running, invoke `/quality-review` in Claude Code for a narrative assessment with root-cause analysis and recommended fixes.
 
 ## Data
 
@@ -111,3 +105,27 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `ora` | Time in `HH:MM` format (empty if not specified) |
 
 `data/` is gitignored.
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+```
+
+For LLM scripts and the webapp, copy `.env.example` to `.env` and fill in your API keys.
+
+`dox2md.py` also requires system packages:
+```bash
+brew install libreoffice pandoc tesseract
+```
+
+### Webapp setup
+
+```bash
+cd webapp
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py runserver
+```
+

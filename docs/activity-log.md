@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-05-27 — Browse UI: profession_family and seniority facets (Slice 2b)
+
+**What:** Extended the Browse sidebar with two inferred-data facets: "Domeniu" (profession_family) and "Grad/funcție" (seniority). Both backed by JSONB field lookups on `JobPosting.inferred`.
+
+**Changes:** `_apply_filters` in `views.py` extended with `families`/`seniorities` params; two new `.values().annotate(count=Count('id'))` queries on `inferred__profession_family` and `inferred__seniority`; `list.html` updated with two new `{% include facet_group %}` calls and updated reset-filter condition.
+
+**Facet counts (current data):** sănătate 1164, administrație 983, tehnic 938, financiar 189, social 123, cultură 84 + 4 more families; seniority: referent 224, debutant 200, consilier 186, inspector 146, asistent 137, director 124.
+
+**Note:** anomaly_flags facet skipped — it's a JSONB array and needs PostgreSQL `UNNEST` or a separate annotated queryset; deferred to a future pass.
+
 ### 2026-05-27 — Employer canonicalization (EmployerAlias model + management command)
 
 **What:** 2,955 raw employer names contained 205 normalized-duplicate groups (462 employers, 257 that were pure variants). Added `EmployerAlias` model and `canonicalize_employers` management command.

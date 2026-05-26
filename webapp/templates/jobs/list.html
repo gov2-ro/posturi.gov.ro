@@ -56,11 +56,13 @@
         <!-- Divider -->
         <div class="border-t border-border-warm mb-4"></div>
 
-        {% include "jobs/partials/facet_group.html" with label="Județ" items=judet_options name="judet" active_values=judet_slugs value_field="judet__slug" label_field="judet__name" %}
-        {% include "jobs/partials/facet_group.html" with label="Nivel" items=level_options name="level" active_values=levels value_field="job_level" label_field="job_level" %}
-        {% include "jobs/partials/facet_group.html" with label="Tip" items=type_options name="type" active_values=types value_field="job_type" label_field="job_type" %}
-        {% include "jobs/partials/facet_group.html" with label="Categorie" items=categorie_options name="categorie" active_values=categories value_field="categorie" label_field="categorie" %}
-        {% include "jobs/partials/facet_group.html" with label="Angajator" items=employer_cat_options name="employer_cat" active_values=employer_cats value_field="employer_category" label_field="employer_category" %}
+        {% include "jobs/partials/facet_group.html" with label="Domeniu" items=family_options name="family" active_values=families %}
+        {% include "jobs/partials/facet_group.html" with label="Județ" items=judet_options name="judet" active_values=judet_slugs %}
+        {% include "jobs/partials/facet_group.html" with label="Nivel" items=level_options name="level" active_values=levels %}
+        {% include "jobs/partials/facet_group.html" with label="Tip" items=type_options name="type" active_values=types %}
+        {% include "jobs/partials/facet_group.html" with label="Categorie" items=categorie_options name="categorie" active_values=categories %}
+        {% include "jobs/partials/facet_group.html" with label="Angajator" items=employer_cat_options name="employer_cat" active_values=employer_cats %}
+        {% include "jobs/partials/facet_group.html" with label="Grad/funcție" items=seniority_options name="seniority" active_values=seniorities %}
 
         <!-- Deadline range -->
         <div class="mb-4">
@@ -80,7 +82,7 @@
         </div>
 
         <!-- Reset -->
-        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after %}
+        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after or families or seniorities %}
           <a href="/" class="block text-center text-xs text-gov hover:underline mt-2 py-1">
             ✕ Șterge filtrele
           </a>

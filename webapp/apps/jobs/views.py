@@ -12,7 +12,7 @@ FTS_CONFIG = "romanian_unaccent"
 PAGE_SIZE = 25
 
 
-def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_cats, expires_before, expires_after):
+def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_cats, expires_before, expires_after, families, seniorities):
     if q:
         qs = qs.filter(search_vector=SearchQuery(q, config=FTS_CONFIG, search_type="plain"))
     if judet_slugs:
@@ -35,6 +35,10 @@ def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_ca
             qs = qs.filter(expires_at__gte=date.fromisoformat(expires_after))
         except (ValueError, AttributeError):
             pass
+    if families:
+        qs = qs.filter(inferred__profession_family__in=families)
+    if seniorities:
+        qs = qs.filter(inferred__seniority__in=seniorities)
     return qs
 
 
@@ -47,6 +51,8 @@ def job_list(request):
     employer_cats = request.GET.getlist("employer_cat")
     expires_before = request.GET.get("expires_before", "")
     expires_after = request.GET.get("expires_after", "")
+    families = request.GET.getlist("family")
+    seniorities = request.GET.getlist("seniority")
     sort = request.GET.get("sort", "")
 
     filter_kwargs = dict(
@@ -58,6 +64,8 @@ def job_list(request):
         employer_cats=employer_cats,
         expires_before=expires_before,
         expires_after=expires_after,
+        families=families,
+        seniorities=seniorities,
     )
 
     base_qs = JobPosting.objects.all()
@@ -74,7 +82,8 @@ def job_list(request):
         qs = qs.order_by("-published_at")
 
     def facet_qs(exclude_key):
-        return _apply_filters(base_qs, **{**filter_kwargs, exclude_key: []})
+        overrides = {exclude_key: []} if exclude_key in filter_kwargs else {}
+        return _apply_filters(base_qs, **{**filter_kwargs, **overrides})
 
     judet_options = [
         {"value": x["judet__slug"], "label": x["judet__name"], "count": x["count"]}
@@ -116,6 +125,23 @@ def job_list(request):
         .exclude(employer_category="")
         .order_by("-count")[:20]
     ]
+    family_options = [
+        {"value": x["inferred__profession_family"], "label": x["inferred__profession_family"], "count": x["count"]}
+        for x in facet_qs("families")
+        .values("inferred__profession_family")
+        .annotate(count=Count("id"))
+        .exclude(inferred__profession_family=None)
+        .exclude(inferred__profession_family="altele")
+        .order_by("-count")
+    ]
+    seniority_options = [
+        {"value": x["inferred__seniority"], "label": x["inferred__seniority"], "count": x["count"]}
+        for x in facet_qs("seniorities")
+        .values("inferred__seniority")
+        .annotate(count=Count("id"))
+        .exclude(inferred__seniority=None)
+        .order_by("-count")
+    ]
 
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get("page", 1))
@@ -131,12 +157,16 @@ def job_list(request):
         "employer_cats": employer_cats,
         "expires_before": expires_before,
         "expires_after": expires_after,
+        "families": families,
+        "seniorities": seniorities,
         "sort": sort,
         "judet_options": judet_options,
         "level_options": level_options,
         "type_options": type_options,
         "categorie_options": categorie_options,
         "employer_cat_options": employer_cat_options,
+        "family_options": family_options,
+        "seniority_options": seniority_options,
         "today": date.today(),
     }
 

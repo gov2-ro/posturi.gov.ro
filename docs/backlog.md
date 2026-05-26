@@ -36,7 +36,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] **Seniority/grade normalizer** — regex over title for seniority (debutant → conducere_superioara) + grade (gradul I/IA/II/principal/superior). Done 2026-05-26.
 - [x] **Inference review queue (admin)** — `InferenceConfidenceFilter`, `AnomalyFilter`, `reset_inferred` bulk action, family/confidence/anomaly columns. Done 2026-05-26.
 - [ ] **Run LLM fallback on the 36.7% low-confidence postings** — `python manage.py infer_postings --provider gemini --force` once GEMINI_API_KEY is set in .env. Estimated ~1,600 API calls.
-- [ ] **Extend Browse UI with inferred facets** — add profession_family, seniority, anomaly_flags to the facet sidebar and queryset filters in `views.py`. Slice 2b.
+- [x] **Extend Browse UI with inferred facets** — done 2026-05-27. Added `family` (profession_family) and `seniority` facets to the Browse sidebar (Slice 2b). Views.py: `_apply_filters` extended with `families`/`seniorities` params, two new JSONB-backed facet count queries, context updated. Template: "Domeniu" facet at top of sidebar, "Grad/funcție" at bottom. anomaly_flags skipped (array faceting needs UNNEST; deferred to a future pass).
 
 ## Job-detail-page prep (Slice 3)
 

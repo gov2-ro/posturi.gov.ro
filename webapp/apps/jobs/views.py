@@ -348,6 +348,39 @@ def about(request):
     return render(request, "jobs/about.html", {})
 
 
+def stats_json(request):
+    today = date.today()
+    total = JobPosting.objects.count()
+    active = JobPosting.objects.filter(expires_at__gte=today).count()
+    by_family = list(
+        JobPosting.objects.exclude(inferred__profession_family=None)
+        .exclude(inferred__profession_family="altele")
+        .values("inferred__profession_family")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:10]
+    )
+    by_judet = list(
+        JobPosting.objects.filter(judet__isnull=False)
+        .values("judet__name")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:10]
+    )
+    anomaly_counts = {
+        flag: JobPosting.objects.filter(inferred__anomaly_flags__contains=[flag]).count()
+        for flag in ("short_deadline", "missing_contact", "gender_criteria", "no_body", "frequent_repost")
+    }
+    inferred_count = JobPosting.objects.exclude(inferred={}).count()
+
+    return JsonResponse({
+        "total": total,
+        "active": active,
+        "inferred": inferred_count,
+        "by_family": [{"family": x["inferred__profession_family"], "count": x["count"]} for x in by_family],
+        "by_judet": [{"judet": x["judet__name"], "count": x["count"]} for x in by_judet],
+        "anomaly_counts": anomaly_counts,
+    })
+
+
 def job_detail(request, pk):
     posting = get_object_or_404(
         JobPosting.objects.select_related("employer", "judet").prefetch_related("calendar_events"),

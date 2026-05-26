@@ -49,7 +49,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] **Install `black` in the venv** — already in `requirements.txt`; black 26.5.1 confirmed present. Done.
 - [x] **Test suite** — done 2026-05-27. pytest-django + factory-boy installed. `tests/test_import_idempotency.py` covers: (1) idempotency (run twice, counts unchanged), (2) expected records created, (3) update-existing-fields. All 3 pass in 0.25s. `pytest.ini` configured.
 - [x] **CI** — GitHub Actions: lint (ruff), tests, migrations check. Added `.github/workflows/ci.yml` (Python 3.13, Postgres 17 service, ruff lint + makemigrations --check + pytest). Done 2026-05-27.
-- [ ] **Docker compose for dev** — Postgres + Redis (when we add Celery) so contributors don't need brew services.
+- [x] **Docker compose for dev** — `docker-compose.yml` at repo root: postgres:17 service with named volume, health check, port 5433 (avoids conflict with local brew Postgres). `.env.example` updated with Docker DATABASE_URL comment. Done 2026-05-27.
 - [ ] **Production deploy plan** — pick host (Fly.io vs Railway vs small VPS), decide on managed Postgres, set up backups.
 
 ## Cross-cutting / future
@@ -63,6 +63,6 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 ## Known small issues
 
-- [ ] **Migrations: `prepopulated_fields` on slug-on-save** — `JudetAdmin` and `EmployerAdmin` use `prepopulated_fields = {"slug": ("name",)}` but the models also auto-slug on save. Slightly redundant; harmless. Decide which approach owns slug generation.
+- [x] **Migrations: `prepopulated_fields` on slug-on-save** — Replaced `prepopulated_fields` with `readonly_fields = ("slug",)` in both `JudetAdmin` and `EmployerAdmin`. Model `save()` owns slug generation; admin just displays the computed slug as read-only. Done 2026-05-27.
 - [ ] **`unique_slug` is O(n) per insert** — fine for ~3k employers, would scale poorly. Consider a deferred-uniqueness approach (try-except IntegrityError) if employer count ever explodes.
 - [ ] **`Other Links` parsing is naive** — splits on comma and filters by `http` prefix. Misses cases where URLs themselves contain commas. Low priority; sample data clean for now.

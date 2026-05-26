@@ -8,14 +8,14 @@ from .models import CalendarEvent, Employer, EmployerAlias, JobPosting, JobPosti
 class JudetAdmin(admin.ModelAdmin):
     list_display = ("name", "slug")
     search_fields = ("name",)
-    prepopulated_fields = {"slug": ("name",)}
+    readonly_fields = ("slug",)
 
 
 @admin.register(Employer)
 class EmployerAdmin(admin.ModelAdmin):
     list_display = ("name", "slug", "posting_count", "alias_count")
     search_fields = ("name",)
-    prepopulated_fields = {"slug": ("name",)}
+    readonly_fields = ("slug",)
 
     def posting_count(self, obj):
         return obj.postings.count()

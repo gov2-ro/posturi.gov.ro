@@ -507,18 +507,26 @@ def _infer_certifications(body: str) -> list[str]:
     return [m.group(0) for m in _CERT_RE.finditer(body)]
 
 
+_CONTACT_IN_TEXT_RE = re.compile(
+    r"\b0[\d\s.\-–/]{9,14}\d\b"          # Romanian phone (formatted)
+    r"|[\w.+-]+@[\w.-]+\.[a-z]{2,}",      # email
+    re.IGNORECASE,
+)
+
+
 def _infer_anomaly_flags(row: dict, body: str) -> list[str]:
     flags = []
 
-    deadline = row.get("Data Limita Depunere", "").strip()
-    # anunturi.csv doesn't have a publicat_in column, so skip the delta check
-
-    has_contact = any(
+    has_contact_csv = any(
         row.get(f, "").strip()
         for f in ("Contact Telefon", "Contact Email", "Contact Persoana")
     )
-    if not has_contact:
-        flags.append("missing_contact")
+    if not has_contact_csv:
+        if body and _CONTACT_IN_TEXT_RE.search(body):
+            # Phone/email present in body or attachment but not extracted to CSV fields
+            flags.append("contact_in_attachment")
+        else:
+            flags.append("missing_contact")
 
     if body and _GENDER_RE.search(body):
         flags.append("gender_criteria")

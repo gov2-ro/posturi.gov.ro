@@ -244,6 +244,12 @@ def _infer_certifications(body: str) -> list[str]:
 
 _GENDER_RE = re.compile(r"\b(masculin|feminin)\b", re.IGNORECASE)
 
+_CONTACT_IN_TEXT_RE = re.compile(
+    r"\b0[\d\s.\-–/]{9,14}\d\b"       # Romanian phone (formatted)
+    r"|[\w.+-]+@[\w.-]+\.[a-z]{2,}",   # email
+    re.IGNORECASE,
+)
+
 
 def _infer_anomaly_flags(posting: JobPosting) -> list[str]:
     flags: list[str] = []
@@ -255,9 +261,16 @@ def _infer_anomaly_flags(posting: JobPosting) -> list[str]:
         if delta < 7:
             flags.append("short_deadline")
 
-    # Missing contact
-    if not posting.contact_phone and not posting.contact_email and not posting.contact_person:
-        flags.append("missing_contact")
+    # Missing contact — distinguish card-empty from attachment-found
+    has_contact_fields = (
+        posting.contact_phone or posting.contact_email or posting.contact_person
+    )
+    if not has_contact_fields:
+        combined = (posting.body_markdown or "") + " " + (posting.attachment_text or "")
+        if _CONTACT_IN_TEXT_RE.search(combined):
+            flags.append("contact_in_attachment")
+        else:
+            flags.append("missing_contact")
 
     # Gender-specific requirement in body
     if posting.body_markdown and _GENDER_RE.search(posting.body_markdown):

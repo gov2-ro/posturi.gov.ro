@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-05-26 — FAMILIES sync, google-genai migration, contact_in_attachment refinement
+
+**What:** Three follow-up improvements after the datePosted fix.
+
+**1 — FAMILIES dict sync (webapp/infer_postings.py):** The webapp's `FAMILIES` dict was ~2 releases behind `quality_check.py`. Synced to full parity: `administrație` += manager/director/expert; `sănătate` += balneolog/ergoterapeut; `tehnic` += full construction/equipment operator vocabulary including `muncitor`, `muncitor necalificat`, `muncitor calificat`; `social` += `psiholog practicant`, `psiholog specialist`, `educator specializat`, `terapeut`; `ordine publică` += svsu/situatii urgenta/aparare civila/psi. Also fixed the webapp's env var to `GOOGLE_API_KEY` and bumped model to `gemini-2.5-flash`.
+
+**2 — Migrate google.generativeai → google.genai:** Deprecated package was EOL with a FutureWarning on every run. Installed `google-genai`, updated both `quality_check.py` and `webapp/infer_postings.py` to use `google.genai.Client.models.generate_content`. Updated `requirements.txt`. FutureWarning confirmed gone.
+
+**3 — `contact_in_attachment` anomaly flag:** `_infer_anomaly_flags` previously emitted `missing_contact` for any posting without a phone/email in the CSV card fields — including postings where the contact was clearly in the `.docx` attachment. Fixed: when CSV contact fields are empty, scan `combined_body` (card body + attachment text) for Romanian phone/email patterns. Emit `contact_in_attachment` (CSV extraction gap — not a real problem) vs `missing_contact` (truly absent everywhere). Applied to both `quality_check.py` and `webapp/infer_postings.py`. Verified: seed 7 sample correctly fires `contact_in_attachment` instead of `missing_contact` for a posting whose attachment contained a phone number.
+
+**Re-ran parse-anunturi.py** locally to regenerate `anunturi.csv` with `Data Publicare`/`Data Expirare` columns baked in (data/ is gitignored).
+
 ### 2026-05-26 — Schema valid rate 0.5 → 1.0: join publicat_in/expira_in into schema context
 
 **What:** The schema.org generator was failing `datePosted` and `validThrough` for 4–5/10 postings every run because `anunturi.csv` has no publication/expiry dates — those are only on the listing archive pages and were only stored in `posturi_gov_ro.csv` (`publicat_in` / `expira_in` columns scraped by `fetch-index.py`).

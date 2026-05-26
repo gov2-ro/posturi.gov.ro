@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Despre{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-md mx-auto px-4 sm:px-6 py-10">
+
+  <h1 class="font-display text-3xl italic font-semibold text-ink mb-2">Despre posturi.gov.ro</h1>
+  <p class="text-ink-muted text-sm mb-8 font-mono">Explorator independent al anunțurilor de angajare din sectorul public românesc</p>
+
+  <div class="space-y-10 text-sm text-ink leading-relaxed">
+
+    <!-- What -->
+    <section>
+      <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">Ce este acest site</h2>
+      <p>
+        <strong>posturi.gov.ro</strong> este un explorator independent care agregă și analizează anunțurile de angajare publicate pe
+        <a href="https://posturi.gov.ro" target="_blank" rel="noopener" class="text-gov hover:underline">posturi.gov.ro</a>,
+        portalul oficial al Agenției Naționale a Funcționarilor Publici (ANFP).
+      </p>
+      <p class="mt-3">
+        Scopul este să faciliteze căutarea posturilor vacante în sectorul public prin filtrare avansată (județ, domeniu profesional,
+        grad, categorie), detectarea automată a anomaliilor în anunțuri și exportul datelor în formate deschise.
+      </p>
+    </section>
+
+    <!-- Data sources -->
+    <section>
+      <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">Surse de date</h2>
+      <p>
+        Datele provin exclusiv din <a href="https://posturi.gov.ro" target="_blank" rel="noopener" class="text-gov hover:underline">posturi.gov.ro</a>.
+        Scraperul citește indexul paginat al anunțurilor și paginile individuale de detaliu; atașamentele (anunțuri în format .docx / .pdf)
+        sunt descărcate și extrase textual.
+      </p>
+      <p class="mt-3">
+        Nu stocăm date cu caracter personal dincolo de ce este public pe portalul ANFP.
+        Informațiile de contact (telefon, email) apar în anunțurile publice și sunt reproduse fără modificare.
+      </p>
+    </section>
+
+    <!-- Methodology -->
+    <section>
+      <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">Metodologie</h2>
+
+      <h3 class="font-semibold text-ink mb-1 mt-4">Inferență taxonomică</h3>
+      <p>
+        Fiecare anunț este clasificat automat într-un <em>domeniu profesional</em> (sănătate, administrație, tehnic, financiar etc.)
+        și un <em>grad/funcție</em> (debutant, principal, superior, director etc.) pe baza titlului postului.
+      </p>
+      <p class="mt-2">
+        Clasificarea se face în două straturi:
+      </p>
+      <ol class="list-decimal list-inside mt-2 space-y-1">
+        <li><strong>Dicționar de cuvinte-cheie</strong> — o listă de termeni specifici fiecărui domeniu,
+          verificată cu expresii regulate (ex: <em>medic, asistent medical, farmacist</em> → sănătate).
+          Când un cuvânt-cheie este găsit, clasificarea are o încredere de 0.8–0.9.</li>
+        <li><strong>Fallback LLM</strong> — pentru titluri cu încredere &lt; 0.5, se apelează un model de limbaj (Gemini 2.5 Flash)
+          care întoarce familia profesională. Clasificările LLM primesc o încredere de 0.7.</li>
+      </ol>
+
+      <h3 class="font-semibold text-ink mb-1 mt-5">Detectarea anomaliilor</h3>
+      <p>Fiecare anunț este evaluat prin cinci euristici:</p>
+      <ul class="list-disc list-inside mt-2 space-y-1">
+        <li><strong>short_deadline</strong> — termenul de depunere este la mai puțin de 7 zile de la data publicării.</li>
+        <li><strong>missing_contact</strong> — nu există niciun număr de telefon sau adresă de email nici în card, nici în atașamente.</li>
+        <li><strong>contact_in_attachment</strong> — contactul există în atașamentul .docx/.pdf dar lipsește din câmpurile structurate CSV.</li>
+        <li><strong>gender_criteria</strong> — corpul anunțului conține termeni de gen explicit (masculin / feminin) ca cerință.</li>
+        <li><strong>no_body</strong> — anunțul nu conține text descriptiv sau are sub 100 de caractere.</li>
+        <li><strong>frequent_repost</strong> — același angajator a publicat același post (normalizat) de cel puțin 3 ori.</li>
+      </ul>
+    </section>
+
+    <!-- Limitations -->
+    <section>
+      <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">Limitări cunoscute</h2>
+      <ul class="list-disc list-inside space-y-2">
+        <li>
+          <strong>PDF-uri scanate</strong> — documentele fotografiate/printate nu au strat text și nu pot fi extrase automat.
+          Necesită OCR (Tesseract), neimplementat deocamdată.
+        </li>
+        <li>
+          <strong>Acoperire atașamente</strong> — ~25% din anunțuri au atașamentul descărcat și extras;
+          restul fie nu are URL de atașament, fie URL-ul a expirat.
+        </li>
+        <li>
+          <strong>Clasificare automată imperfectă</strong> — titlurile ambigue sau neobișnuite pot fi clasificate greșit
+          sau rămâne în categoria <em>altele</em>.
+        </li>
+        <li>
+          <strong>Date istorice</strong> — baza de date reflectă ce a fost publicat pe posturi.gov.ro
+          și nu reprezintă o sursă autoritativă oficială.
+        </li>
+      </ul>
+    </section>
+
+    <!-- Exports -->
+    <section>
+      <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">Exporturi / API</h2>
+      <p>Toate filtrele browse sunt disponibile și în format mașinistic:</p>
+      <ul class="list-disc list-inside mt-2 space-y-1">
+        <li><a href="/posturi.json" class="text-gov hover:underline font-mono">/posturi.json</a> — JSON cu maxim 200 rezultate</li>
+        <li><a href="/posturi.atom" class="text-gov hover:underline font-mono">/posturi.atom</a> — feed Atom (RSS) cu ultimele 50 anunțuri</li>
+        <li><a href="/posturi.ics" class="text-gov hover:underline font-mono">/posturi.ics</a> — calendar iCal cu termenele de depunere</li>
+      </ul>
+      <p class="mt-3 text-xs text-ink-muted font-mono">
+        Parametrii de filtrare se aplică la toate endpoint-urile (q, judet, level, type, categorie, employer_cat, family, seniority, expires_before, expires_after).
+      </p>
+    </section>
+
+    <!-- Contact -->
+    <section>
+      <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">Contact</h2>
+      <p>
+        Proiect independent open-source. Codul sursă și metodologia sunt disponibile pe
+        <a href="https://github.com" target="_blank" rel="noopener" class="text-gov hover:underline">GitHub</a>.
+        Erori sau sugestii: <a href="mailto:pax@mioritics.ro" class="text-gov hover:underline">pax@mioritics.ro</a>.
+      </p>
+      <p class="mt-2 text-xs text-ink-muted">
+        Acest site nu este afiliat cu ANFP sau cu posturi.gov.ro. Datele sunt reproduse conform principiilor accesului public.
+      </p>
+    </section>
+
+  </div>
+</div>
+{% endblock %}

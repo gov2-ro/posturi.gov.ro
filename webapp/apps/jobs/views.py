@@ -330,6 +330,10 @@ def job_ical(request):
     return HttpResponse(cal.to_ical(), content_type="text/calendar; charset=utf-8")
 
 
+def about(request):
+    return render(request, "jobs/about.html", {})
+
+
 def job_detail(request, pk):
     posting = get_object_or_404(
         JobPosting.objects.select_related("employer", "judet").prefetch_related("calendar_events"),

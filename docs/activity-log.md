@@ -2,6 +2,34 @@
 
 ## 2026
 
+### 2026-05-26 — Schema valid rate 0.5 → 1.0: join publicat_in/expira_in into schema context
+
+**What:** The schema.org generator was failing `datePosted` and `validThrough` for 4–5/10 postings every run because `anunturi.csv` has no publication/expiry dates — those are only on the listing archive pages and were only stored in `posturi_gov_ro.csv` (`publicat_in` / `expira_in` columns scraped by `fetch-index.py`).
+
+**Fix in `quality_check.py`:** Added `_parse_index_date()` (parses both `"Publicat în: D luna,YYYY"` and `"Expiră in  DD/MM/YYYY"` → ISO `YYYY-MM-DD`), `_load_index_dates()` (loads the index CSV into a URL-keyed dict once per run), and passed `date_posted`/`valid_through` kwargs into `check_schema`, where they are injected into the `fields_text` given to the LLM. The schema prompt now explicitly labels these as `datePosted` and `validThrough`.
+
+**Fix in `parse-anunturi.py`:** Added `Data Publicare` and `Data Expirare` columns to `anunturi.csv` output by joining `posturi_gov_ro.csv` at parse time (same URL key). After re-running `parse-anunturi.py`, downstream consumers (webapp, quality checker) will find the dates in the CSV row directly.
+
+**Result (seed 99, 10 postings):** `schema_valid_rate: 1.0` (was 0.5 with the same seed). All 10 schemas generated valid datePosted and validThrough.
+
+**Non-obvious:** `quality_check.py` now checks `row.get("Data Publicare")` first (from a regenerated `anunturi.csv`) and falls back to the index lookup — so it degrades gracefully on an old CSV.
+
+### 2026-05-26 — Quality review #1: pipeline fixes (attachment extraction, parse fallbacks, FAMILIES dict)
+
+**What:** Ran `/quality-review` on the first 8-posting quality report and fixed the four systemic issues it surfaced.
+
+**1 — `.doc` extraction via `textutil`:** `docx2txt` silently crashed on binary Word97 `.doc` files (they're OLE2, not ZIP — it tried to open `word/document.xml` in a zip archive). Replaced `_extract_doc` in `quality_check.py` with a `subprocess.run(["textutil", "-convert", "txt", "-stdout", ...])` call using macOS's built-in converter. All 8 `.doc` attachments in the sample now yield full text (8 KB+). Note: `textutil` is macOS-only; add a fallback if the pipeline moves to Linux.
+
+**2 — FAMILIES dict expansion:** Added missing keywords that caused 5/8 postings to fall through to LLM fallback (which then failed on auth): `manager`, `director`, `expert` → `administrație`; `buldoexcavatorist`, `excavatorist`, `utilajist`, `macaragiu`, `stivuitorist`, `fochist`, `lacatus`, `tamplar`, `zidar`, `zugrav`, `pavator`, `dulgher`, `vopsitor`, `timonist` → `tehnic`; `svsu`, `situatii urgenta`, `aparare civila`, `psi` → `ordine publică`; `balneolog`, `ergoterapeut` → `sănătate`. All 8 postings now classify correctly via dict (no LLM needed for this sample).
+
+**3 — Phone extraction fallback (`parse-anunturi.py`):** Existing `PHONE_RE` required 10 consecutive digits — missed formatted landlines like `0265 – 587.014` and mobile numbers written as `0722.256.558`. Added `PHONE_CANDIDATE_RE` that matches any 0-prefixed digit-with-separators sequence, then strips non-digits and keeps 10-digit results. Handles dash, dot, slash, en-dash, and mixed formats.
+
+**4 — Deadline body fallback (`parse-anunturi.py`):** `_find_calendar_date` only searched the HTML calendar table; institutions sometimes put the deadline only in free-text body paragraphs (confirmed on live page for the Epidemiologie posting). Added `DEADLINE_BODY_RE` fallback that scans `body_text` for `data limita de depunere dosare : DD.MM.YYYY` when the calendar lookup returns empty.
+
+**5 — Rectification detection (`parse-anunturi.py`):** When an institution corrects an announcement, they publish a new `.doc` and add a "Document atașat corectat" link in the body — but the original `<a>Anunt</a>` card link still points to the old file. Added a check that looks for this link pattern and promotes `announcement_url` to the corrected document. Verified against the live Epidemiologie posting via Playwright: `3dcc6ebe-1.doc` is the actual current document, `20ce1ed7-2.doc` is the superseded original.
+
+**Non-obvious:** LLM schema generation had a 100% failure rate not because of code bugs but because `--provider anthropic` was used without `ANTHROPIC_API_KEY` set. The `anthropic` Python SDK makes direct REST calls — separate from Claude Code's claude.ai session auth. Gemini API key is available; use `--provider gemini` for LLM features going forward.
+
 ### 2026-05-26 — Data quality test suite (`quality_check.py` + `/quality-review` skill)
 
 **What:** Added a standalone `quality_check.py` script that samples 5–10 diverse job postings (stratified by job type, level, county, attachment presence, body length) and runs all four pipeline layers through automated quality checks: CSV field completeness, attachment text readability, metadata inference (profession family confidence, skills, anomaly flags), and LLM schema.org/JobPosting generation. Produces `data/quality_report.json` and a console summary table. Also added `.claude/commands/quality-review.md` — a project-scoped Claude Code slash command (`/quality-review`) that reads the report, deep-reads source files, and produces a qualitative narrative with root-cause analysis and recommended fixes. Can optionally open source URLs in Playwright for visual scraping verification.

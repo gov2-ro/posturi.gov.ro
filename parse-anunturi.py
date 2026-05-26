@@ -2,6 +2,7 @@
 folder_path = 'data/anunturi'
 output_csv_path = 'data/anunturi/anunturi.csv'
 output_calendar_path = 'data/calendar.csv'
+index_csv_path = 'data/posturi_gov_ro.csv'
 
 import csv
 import os
@@ -10,11 +11,55 @@ import glob
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
+_RO_MONTHS = {
+    'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
+    'mai': 5, 'iunie': 6, 'iulie': 7, 'august': 8,
+    'septembrie': 9, 'octombrie': 10, 'noiembrie': 11, 'decembrie': 12,
+}
+
+
+def _parse_index_date(raw):
+    """Parse 'Publicat în: 9 septembrie,2024' or 'Expiră in  16/09/2024' → 'YYYY-MM-DD'."""
+    m = re.search(r'(\d{1,2})/(\d{2})/(\d{4})', raw)
+    if m:
+        return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+    m = re.search(r'(\d{1,2})\s+(\w+),\s*(\d{4})', raw)
+    if m:
+        month_num = _RO_MONTHS.get(m.group(2).lower())
+        if month_num:
+            return f"{m.group(3)}-{month_num:02d}-{int(m.group(1)):02d}"
+    return ''
+
+
+def _load_index_dates():
+    """Return {url: (date_posted_iso, valid_through_iso)} from posturi_gov_ro.csv."""
+    result = {}
+    if not os.path.exists(index_csv_path):
+        return result
+    with open(index_csv_path, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            url = row.get('url', '').strip()
+            if url:
+                result[url] = (
+                    _parse_index_date(row.get('publicat_in', '')),
+                    _parse_index_date(row.get('expira_in', '')),
+                )
+    return result
+
+
+_INDEX_DATES = _load_index_dates()
+
 DATE_RE = re.compile(r'\b(\d{1,2}\.\d{2}\.\d{4})\b')
 TIME_RE = re.compile(r'ora\s+(\d{1,2}[:.]\d{2})', re.IGNORECASE)
 PHONE_RE = re.compile(r'\b(0[0-9]{9})\b')
+# Formatted phone candidate: 0 followed by digits+separators totalling ~10 digits
+PHONE_CANDIDATE_RE = re.compile(r'\b0[\d\s.\-–/]{9,14}\d\b')
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-z]{2,}')
 NR_POSTURI_RE = re.compile(r'(\d+)\s+post(?:uri|ul)?\b', re.IGNORECASE)
+DEADLINE_BODY_RE = re.compile(
+    r'data\s+limit[aă]\s+(?:de\s+)?(?:depunere|inscriere|depunerii)[^:\n]{0,40}:\s*(\d{1,2}\.\d{2}\.\d{4})',
+    re.IGNORECASE,
+)
 
 
 def extract_card_fields(soup):
@@ -82,6 +127,11 @@ def extract_calendar(body_soup):
 
 def extract_contact(body_text):
     phones = PHONE_RE.findall(body_text)
+    if not phones:
+        for m in PHONE_CANDIDATE_RE.finditer(body_text):
+            digits = re.sub(r'\D', '', m.group(0))
+            if len(digits) == 10:
+                phones.append(digits)
     emails = EMAIL_RE.findall(body_text)
     persoana = ''
     m = re.search(
@@ -141,6 +191,13 @@ def extract_job_details(file_path):
     announcement_link_tag = soup.find('a', string='Anunt')
     announcement_url = announcement_link_tag['href'] if announcement_link_tag else ''
 
+    # If a rectification notice is present, prefer the corrected document
+    corrected_link = soup.find('a', string=re.compile(r'Document\s+ata[șş]at\s+corectat', re.IGNORECASE))
+    if corrected_link:
+        href = corrected_link.get('href', '')
+        if href.startswith('https://posturi.gov.ro/wp-content/uploads/'):
+            announcement_url = href
+
     main_body_markdown = ''
     if announcement_link_tag:
         main_body_html = ''
@@ -165,12 +222,19 @@ def extract_job_details(file_path):
 
     calendar_rows = extract_calendar(body_soup)
     data_limita = _find_calendar_date(calendar_rows, ['depunere', 'inscriere', 'dosar', 'limita'])
+    if not data_limita:
+        m = DEADLINE_BODY_RE.search(body_text)
+        if m:
+            data_limita = m.group(1)
     data_scrisa = _find_calendar_date(calendar_rows, ['scrisa', 'scrisă', 'scris'])
     data_interviu = _find_calendar_date(calendar_rows, ['interviu'])
     data_rezultate = _find_calendar_date(calendar_rows, ['final', 'rezultat final', 'rezultate finale'])
 
+    src_url = source_url_from_path(file_path)
+    date_posted, valid_through = _INDEX_DATES.get(src_url, ('', ''))
+
     return {
-        'source_url': source_url_from_path(file_path),
+        'source_url': src_url,
         'job_title': job_title,
         'employer': employer,
         'location': location,
@@ -189,6 +253,8 @@ def extract_job_details(file_path):
         'data_proba_scrisa': data_scrisa,
         'data_interviu': data_interviu,
         'data_rezultate_finale': data_rezultate,
+        'data_publicare': date_posted,
+        'data_expirare': valid_through,
         '_calendar_rows': calendar_rows,
     }
 
@@ -201,6 +267,7 @@ def save_to_csv(data_list, path):
         'Main Body Markdown', 'Other Links',
         'Nr Posturi', 'Contact Telefon', 'Contact Email', 'Contact Persoana',
         'Data Limita Depunere', 'Data Proba Scrisa', 'Data Interviu', 'Data Rezultate Finale',
+        'Data Publicare', 'Data Expirare',
     ]
     with open(path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
@@ -226,6 +293,8 @@ def save_to_csv(data_list, path):
                 'Data Proba Scrisa': d['data_proba_scrisa'],
                 'Data Interviu': d['data_interviu'],
                 'Data Rezultate Finale': d['data_rezultate_finale'],
+                'Data Publicare': d.get('data_publicare', ''),
+                'Data Expirare': d.get('data_expirare', ''),
             })
 
 

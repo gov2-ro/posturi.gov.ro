@@ -30,12 +30,13 @@ load_dotenv()
 
 DATA_DIR = Path("data")
 CSV_PATH = DATA_DIR / "anunturi" / "anunturi.csv"
+INDEX_CSV_PATH = DATA_DIR / "posturi_gov_ro.csv"
 DOWNLOADS_DIR = DATA_DIR / "downloads"
 SCHEMA_DIR = DATA_DIR / "schema"
 REPORT_PATH = DATA_DIR / "quality_report.json"
 
 DEFAULTS = {
-    "gemini": "gemini/gemini-2.5-flash",
+    "gemini": "gemini-2.5-flash",
     "openai": "gpt-4o",
     "anthropic": "claude-3-5-haiku-20241022",
 }
@@ -48,11 +49,56 @@ def slug_from_url(url: str) -> str:
     return url.rstrip("/").split("/")[-1] or "unknown"
 
 
+_RO_MONTHS = {
+    "ianuarie": 1, "februarie": 2, "martie": 3, "aprilie": 4,
+    "mai": 5, "iunie": 6, "iulie": 7, "august": 8,
+    "septembrie": 9, "octombrie": 10, "noiembrie": 11, "decembrie": 12,
+}
+
+
+def _parse_index_date(raw: str) -> str:
+    """Parse index CSV date strings to YYYY-MM-DD.
+
+    Handles:
+      "Publicat în: 9 septembrie,2024"  →  "2024-09-09"
+      "Expiră in  16/09/2024"           →  "2024-09-16"
+    Returns "" if unparseable.
+    """
+    m = re.search(r"(\d{1,2})/(\d{2})/(\d{4})", raw)
+    if m:
+        return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}"
+    m = re.search(r"(\d{1,2})\s+(\w+),\s*(\d{4})", raw)
+    if m:
+        month_num = _RO_MONTHS.get(m.group(2).lower())
+        if month_num:
+            return f"{m.group(3)}-{month_num:02d}-{int(m.group(1)):02d}"
+    return ""
+
+
+def _load_index_dates() -> dict[str, tuple[str, str]]:
+    """Return {url: (date_posted_iso, valid_through_iso)} from posturi_gov_ro.csv."""
+    result: dict[str, tuple[str, str]] = {}
+    if not INDEX_CSV_PATH.exists():
+        return result
+    with open(INDEX_CSV_PATH, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            url = row.get("url", "").strip()
+            if url:
+                result[url] = (
+                    _parse_index_date(row.get("publicat_in", "")),
+                    _parse_index_date(row.get("expira_in", "")),
+                )
+    return result
+
+
 # ─── step 1: stratified sampling ──────────────────────────────────────────────
 
 
-def sample_diverse(rows: list, n: int) -> list:
+def sample_diverse(rows: list, n: int, seed: int | None = None) -> list:
+    import random
+    rng = random.Random(seed)
     candidates = [r for r in rows if len(r.get("Main Body Markdown", "")) > 100]
+    rng.shuffle(candidates)
 
     bins: dict[str, list] = {
         "Temporar": [],
@@ -213,8 +259,12 @@ def _extract_docx(path: Path) -> str:
 
 
 def _extract_doc(path: Path) -> str:
-    import docx2txt
-    return docx2txt.process(str(path)) or ""
+    import subprocess
+    result = subprocess.run(
+        ["textutil", "-convert", "txt", "-stdout", str(path)],
+        capture_output=True, text=True,
+    )
+    return result.stdout if result.returncode == 0 else ""
 
 
 def _extract_pdf(path: Path) -> str:
@@ -276,7 +326,7 @@ FAMILIES: dict[str, list[str]] = {
         "referent", "secretar", "registrator", "casier", "arhivist",
         "resurse umane", "urbanism", "amenajare", "registratura", "arhiva",
         "relatii publice", "protocol", "achizitii", "achizitie",
-        "inspector", "consilier", "administrator",
+        "inspector", "consilier", "administrator", "manager", "director", "expert",
     ],
     "IT": [
         "informatician", "programator", "analist programator", "administrator retea",
@@ -287,7 +337,7 @@ FAMILIES: dict[str, list[str]] = {
         "medic", "asistent medical", "infirmier", "infirmiera", "ingrijitor",
         "farmacist", "kinetoterapeut", "stomatolog", "psiholog", "moasa",
         "labrant", "brancardier", "ambulantier", "biolog", "chimist",
-        "fizician", "biochimist", "radiolog", "fizio",
+        "fizician", "biochimist", "radiolog", "fizio", "balneolog", "ergoterapeut",
     ],
     "educație": [
         "profesor", "invatator", "educator", "pedagog", "psihopedagog",
@@ -306,10 +356,17 @@ FAMILIES: dict[str, list[str]] = {
         "inginer", "tehnician", "electrician", "instalator", "mecanic", "sudor",
         "operator", "conducator auto", "sofer", "laborant tehnic", "topograf",
         "geolog", "desenator", "proiectant", "constructor",
+        "buldoexcavatorist", "excavatorist", "utilajist", "macaragiu",
+        "stivuitorist", "fochist", "lacatus", "tamplar", "zidar", "zugrav",
+        "pavator", "dulgher", "vopsitor", "timonist",
+        "muncitor", "muncitor necalificat", "muncitor calificat",
+        "ingrijitor cladiri", "paznic", "portar",
     ],
     "social": [
         "asistent social", "inspector social", "mediator", "ingrijitor domiciliu",
         "ingrijitor la domiciliu", "monitor", "insotitor",
+        "psiholog", "psiholog practicant", "psiholog specialist", "logoped social",
+        "educator specializat", "terapeut",
     ],
     "cultură": [
         "muzeograf", "arhivar", "documentarist", "etnolog", "restaurator",
@@ -318,6 +375,7 @@ FAMILIES: dict[str, list[str]] = {
     "ordine publică": [
         "politist", "pompier", "jandarm", "ofiter", "subofiter", "agent paza",
         "inspector isu", "inspector protectia muncii", "protectie civila",
+        "svsu", "situatii urgenta", "aparare civila", "psi",
     ],
 }
 
@@ -482,9 +540,9 @@ def _llm_classify(title: str, provider: str) -> str:
     raw = ""
     if provider == "gemini":
         import google.generativeai as genai
-        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        raw = model.generate_content(prompt).text.strip()
+        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+        gmodel = genai.GenerativeModel(DEFAULTS["gemini"])
+        raw = gmodel.generate_content(prompt).text.strip()
     elif provider == "openai":
         import openai
         client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -549,7 +607,9 @@ def check_infer(row: dict, body: str, *, provider: str, use_llm: bool) -> dict:
 
 SCHEMA_PROMPT = (
     "Convert this Romanian public sector job posting to schema.org/JobPosting JSON-LD format. "
-    "Return only valid JSON with no markdown fences."
+    "Return only valid JSON with no markdown fences. "
+    "Do not include taxa de concurs or application fees as baseSalary — omit baseSalary entirely "
+    "if no actual salary range is explicitly stated."
 )
 
 SCHEMA_REQUIRED = [
@@ -576,11 +636,12 @@ def _parse_json_response(text: str) -> dict | None:
 
 def make_schema_generator(provider: str, model: str):
     if provider == "gemini":
-        import llm as llm_lib
-        m = llm_lib.get_model(model)
-        m.key = os.getenv("GOOGLE_API_KEY")
+        import google.generativeai as genai
+        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+        gmodel = genai.GenerativeModel(model)
         def generate(content: str):
-            return _parse_json_response(m.prompt(f"{SCHEMA_PROMPT}\n\n{content}").text())
+            resp = gmodel.generate_content(f"{SCHEMA_PROMPT}\n\n{content}")
+            return _parse_json_response(resp.text)
 
     elif provider == "openai":
         import openai
@@ -637,12 +698,36 @@ def _validate_schema(schema_json: dict) -> tuple[bool, list[str]]:
     return len(missing) == 0, missing
 
 
-def check_schema(row: dict, body: str, attachment_text: str, generate_fn) -> dict:
+def _unwrap_schema(parsed) -> dict | None:
+    """If the LLM returned a list (multi-role posting), validate the first item
+    and keep the full list for saving — one file per posting URL is fine."""
+    if isinstance(parsed, list):
+        if parsed and isinstance(parsed[0], dict):
+            return parsed  # caller will use [0] for validation, save whole list
+        return None
+    return parsed
+
+
+def check_schema(
+    row: dict,
+    body: str,
+    attachment_text: str,
+    generate_fn,
+    *,
+    date_posted: str = "",
+    valid_through: str = "",
+) -> dict:
+    # Prefer columns from anunturi.csv if present; fall back to index lookup args
+    date_posted = row.get("Data Publicare", "").strip() or date_posted
+    valid_through = row.get("Data Expirare", "").strip() or valid_through
+
     fields_text = (
         f"Titlu: {row.get('Job Title', '')}\n"
         f"Angajator: {row.get('Employer', '')}\n"
         f"Localitate: {row.get('Location', '')}\n"
         f"Tip: {row.get('Job Type', '')} / {row.get('Categorie', '')}\n"
+        f"Data publicare (datePosted): {date_posted}\n"
+        f"Data expirare (validThrough): {valid_through}\n"
         f"Data limita depunere: {row.get('Data Limita Depunere', '')}\n"
         f"Nr posturi: {row.get('Nr Posturi', '')}\n"
         f"Telefon: {row.get('Contact Telefon', '')}\n"
@@ -662,7 +747,13 @@ def check_schema(row: dict, body: str, attachment_text: str, generate_fn) -> dic
     if schema_json is None:
         return {"valid": False, "missing_fields": ["parse_error"], "schema_json": None}
 
-    valid, missing = _validate_schema(schema_json)
+    schema_json = _unwrap_schema(schema_json)
+    if schema_json is None:
+        return {"valid": False, "missing_fields": ["parse_error"], "schema_json": None}
+
+    # For multi-role arrays, validate against the first item
+    validate_target = schema_json[0] if isinstance(schema_json, list) else schema_json
+    valid, missing = _validate_schema(validate_target)
 
     announce_url = row.get("Announcement URL", "") or row.get("Source URL", "")
     slug = slug_from_url(announce_url)
@@ -670,12 +761,15 @@ def check_schema(row: dict, body: str, attachment_text: str, generate_fn) -> dic
     SCHEMA_DIR.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(schema_json, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    return {
+    result = {
         "valid": valid,
         "missing_fields": missing,
         "schema_json": schema_json,
         "saved_to": str(out_path),
     }
+    if isinstance(schema_json, list):
+        result["multi_role"] = len(schema_json)
+    return result
 
 
 # ─── reporting ────────────────────────────────────────────────────────────────
@@ -770,6 +864,7 @@ def main() -> None:
     parser.add_argument("--model", default=None, help="Override default model for the provider")
     parser.add_argument("--no-llm", action="store_true", help="Skip LLM steps (infer fallback + schema generation)")
     parser.add_argument("--slugs", default=None, help="Comma-separated slugs to force-select (e.g. 2a66f376.doc)")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for sampling (omit for different sample each run)")
     args = parser.parse_args()
 
     model = args.model or DEFAULTS[args.provider]
@@ -789,7 +884,7 @@ def main() -> None:
         if not rows:
             rows = [r for r in all_rows if any(s in r.get("Source URL", "") for s in slugs_wanted)]
     else:
-        rows = sample_diverse(all_rows, args.n)
+        rows = sample_diverse(all_rows, args.n, seed=args.seed)
 
     print(f"  Selected {len(rows)} postings")
     if not use_llm:
@@ -803,6 +898,8 @@ def main() -> None:
             schema_gen = make_schema_generator(args.provider, model)
         except Exception as e:
             print(f"  WARNING: Could not initialise LLM generator: {e}")
+
+    index_dates = _load_index_dates()
 
     results = []
 
@@ -833,10 +930,16 @@ def main() -> None:
             f"flags={infer_result['anomaly_flags'] or 'none'}"
         )
 
+        idx_date_posted, idx_valid_through = index_dates.get(source_url, ("", ""))
+
         schema_result = None
         if schema_gen:
             print("  Schema    generating...", end="", flush=True)
-            schema_result = check_schema(row, body, attachment_text, schema_gen)
+            schema_result = check_schema(
+                row, body, attachment_text, schema_gen,
+                date_posted=idx_date_posted,
+                valid_through=idx_valid_through,
+            )
             status = "ok" if schema_result["valid"] else f"FAIL {schema_result['missing_fields']}"
             print(f"\r  Schema    {status}                    ")
         else:

@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-05-27 — JobPostingUpdate model + parse_updates management command
+
+**What:** Added `JobPostingUpdate` (migration 0005) to store parsed change-log segments from `JobPosting.updates_raw`. The `parse_updates` management command reads all non-empty `updates_raw` values, splits on `"; "` to get individual event segments, parses each as `(YYYY-MM-DD, fields_changed)`, and bulk-creates records idempotently. Registered in admin with `date_hierarchy` and `is_new_entry` boolean display.
+
+**Current result:** 2,529 "New entry" records (all postings have only their initial first-seen date; no field-change events exist yet in current data). The model and command are ready for when incremental scrapes begin producing actual change records, which will power the "modificat recent" browse badge and job-detail change history.
+
+**Format:** `"YYYY-MM-DD: New entry"` or `"YYYY-MM-DD: field1, field2; YYYY-MM-DD: field3"` — semicolons separate segments, colon+space separates date from fields. Regex: `(\d{4}-\d{2}-\d{2}):\s*(.+?)(?=;\s*\d{4}-\d{2}-\d{2}:|$)`.
+
+### 2026-05-27 — CI: GitHub Actions workflow (ruff + pytest + migrations check)
+
+**What:** Added `.github/workflows/ci.yml` — Python 3.13, Postgres 17 service (health-checked), runs: `ruff check .`, `python manage.py makemigrations --check --dry-run`, `pytest`. Added `webapp/pyproject.toml` with ruff config (E+F+I rules, line-length 120, migrations excluded from E501). Added `ruff` to `webapp/requirements.txt`. Fixed 3 unused imports and 6 unsorted import blocks flagged by ruff across `import_csvs.py`, `infer_postings.py`, `templatetags/jobs_extras.py`, `urls.py`, `settings.py`, and `tests/`.
+
+**Also:** `llm-schema.py` prompt updated with baseSalary suppression guard (same text as `quality_check.py::SCHEMA_PROMPT`). FAMILIES dict and `black` backlog items closed (both were already done in prior session).
+
 ### 2026-05-27 — Fix: conftest.py `django_db_setup` override wiped production DB
 
 **What:** The original `conftest.py` included a session-scoped `django_db_setup` fixture that was a no-op (`pass`). This bypassed pytest-django's built-in database isolation, causing the `@pytest.mark.django_db(transaction=True)` test to run against the real `posturi_dev` database. After the test completed, pytest-django flushed all tables (standard `TransactionTestCase` teardown), deleting all 4,379 postings and associated data.

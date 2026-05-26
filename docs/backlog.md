@@ -47,7 +47,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 ## Tooling & ops
 
 - [ ] **Install `black` in the venv** — silences the harmless Django migration-formatting warning.
-- [ ] **Test suite** — pytest-django + factories; first test: importer idempotency (run twice, assert counts).
+- [x] **Test suite** — done 2026-05-27. pytest-django + factory-boy installed. `tests/test_import_idempotency.py` covers: (1) idempotency (run twice, counts unchanged), (2) expected records created, (3) update-existing-fields. All 3 pass in 0.25s. `pytest.ini` configured.
 - [ ] **CI** — GitHub Actions: lint (ruff), tests, migrations check.
 - [ ] **Docker compose for dev** — Postgres + Redis (when we add Celery) so contributors don't need brew services.
 - [ ] **Production deploy plan** — pick host (Fly.io vs Railway vs small VPS), decide on managed Postgres, set up backups.

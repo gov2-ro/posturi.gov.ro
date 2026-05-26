@@ -5,6 +5,8 @@ dj-database-url>=2.2
 django-htmx>=1.21
 markdown>=3.7
 black
+pytest-django
+factory-boy
 openai>=1.0
 anthropic>=0.25
 google-genai>=0.8

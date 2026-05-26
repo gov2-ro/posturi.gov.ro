@@ -2,6 +2,12 @@
 
 ## 2026
 
+### 2026-05-27 — Test suite: importer idempotency (pytest-django)
+
+**What:** Added pytest-django + factory-boy; wrote `tests/test_import_idempotency.py` with 3 tests covering: (1) running `import_csvs` twice doesn't duplicate Judet/Employer/JobPosting/CalendarEvent rows; (2) expected records are created with correct field values; (3) re-importing with updated title updates the existing row instead of creating a new one. All 3 pass in 0.25s against the real test database. Added `pytest.ini` and `conftest.py`.
+
+**Non-obvious:** `call_command("import_csvs", data_dir=data_dir)` must pass a `Path` object, not `str` — the argparse `type=Path` conversion is bypassed when calling programmatically.
+
 ### 2026-05-27 — Browse UI: profession_family and seniority facets (Slice 2b)
 
 **What:** Extended the Browse sidebar with two inferred-data facets: "Domeniu" (profession_family) and "Grad/funcție" (seniority). Both backed by JSONB field lookups on `JobPosting.inferred`.

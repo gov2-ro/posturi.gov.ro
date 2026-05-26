@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-05-27 — Employer canonicalization (EmployerAlias model + management command)
+
+**What:** 2,955 raw employer names contained 205 normalized-duplicate groups (462 employers, 257 that were pure variants). Added `EmployerAlias` model and `canonicalize_employers` management command.
+
+**Algorithm:** NFKD normalize → strip combining diacritics → lowercase → punctuation→space → collapse whitespace. Canonical selection scored: +2 per Romanian diacritic (ș/ț/ă/î/â), +10 for title-case (not ALL CAPS). Picks the most "proper" looking variant as canonical.
+
+**Result after `--apply`:** 257 EmployerAlias records created, 521 JobPosting.employer FKs reassigned to canonical employers. All 257 merged variants now have 0 postings. Admin updated: EmployerAdmin shows posting_count/alias_count; EmployerAliasAdmin for auditing.
+
+**Why it matters:** Before this fix, "Administrația Bazinală de Apă Jiu" and "ADMINISTRATIA BAZINALĂ DE APĂ JIU" were separate employer records with 1 and 8 postings respectively. Now they're unified (10 postings) under the canonical. v2 employer-profile pages will be accurate.
+
+**Non-obvious:** Aliased Employer records are kept in the DB with 0 postings (not deleted) as a safety measure — can be cleaned up once the merge is confirmed correct.
+
 ### 2026-05-27 — Full LLM inference pass on 4 379 postings
 
 **What:** Ran `infer_postings --provider gemini --force` on the full dataset after dict refresh brought low-confidence count from 1,608 → 1,007. Discovered the webapp Django process wasn't loading `GOOGLE_API_KEY` because `settings.py` only called `load_dotenv(BASE_DIR / ".env")` (= `webapp/.env`, which doesn't exist) and never reached the repo-root `.env`. Fixed by adding `load_dotenv(REPO_ROOT / ".env")` as a fallback immediately after — webapp-level `.env` still takes precedence for production overrides.

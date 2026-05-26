@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import CalendarEvent, Employer, JobPosting, Judet
+from .models import CalendarEvent, Employer, EmployerAlias, JobPosting, Judet
 
 
 @admin.register(Judet)
@@ -13,9 +13,25 @@ class JudetAdmin(admin.ModelAdmin):
 
 @admin.register(Employer)
 class EmployerAdmin(admin.ModelAdmin):
-    list_display = ("name", "slug")
+    list_display = ("name", "slug", "posting_count", "alias_count")
     search_fields = ("name",)
     prepopulated_fields = {"slug": ("name",)}
+
+    def posting_count(self, obj):
+        return obj.postings.count()
+    posting_count.short_description = "Anunțuri"
+
+    def alias_count(self, obj):
+        return obj.aliases.count()
+    alias_count.short_description = "Aliasuri"
+
+
+@admin.register(EmployerAlias)
+class EmployerAliasAdmin(admin.ModelAdmin):
+    list_display = ("alias_name", "canonical", "auto_generated", "created_at")
+    search_fields = ("alias_name", "canonical__name")
+    list_filter = ("auto_generated",)
+    raw_id_fields = ("canonical",)
 
 
 class CalendarEventInline(admin.TabularInline):

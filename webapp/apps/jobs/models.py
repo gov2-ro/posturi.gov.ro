@@ -46,6 +46,27 @@ class Employer(models.Model):
         super().save(*args, **kwargs)
 
 
+class EmployerAlias(models.Model):
+    """Maps a raw variant employer name to its canonical Employer record.
+
+    Created by the canonicalize_employers management command. After running
+    that command, all JobPosting.employer FKs point to the canonical employer,
+    so this table is an audit trail of what was merged and why.
+    """
+    alias_name = models.CharField(max_length=500, unique=True)
+    canonical = models.ForeignKey(Employer, on_delete=models.PROTECT, related_name="aliases")
+    auto_generated = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["alias_name"]
+        verbose_name = "Alias angajator"
+        verbose_name_plural = "Aliasuri angajatori"
+
+    def __str__(self):
+        return f"{self.alias_name} → {self.canonical.name}"
+
+
 class JobPosting(models.Model):
     # ---- Index fields (data/posturi_gov_ro.csv) ----
     url = models.URLField(unique=True, max_length=500, help_text="Posting URL — primary key from posturi.gov.ro")

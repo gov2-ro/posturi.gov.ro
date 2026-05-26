@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-05-27 — JSON API and Atom feed endpoints
+
+**What:** Added two feed endpoints that mirror the Browse UI filters:
+- `/posturi.json` — `JsonResponse` up to 200 results; all 10 browse filter params accepted (`q`, `judet`, `level`, `type`, `categorie`, `employer_cat`, `expires_before`, `expires_after`, `family`, `seniority`). Returns `{count, results[]}` with full field set including `profession_family`, `seniority`, and `anomaly_flags` from `inferred`.
+- `/posturi.atom` — Atom 1.0 feed via `django.contrib.syndication.views.Feed`, 50 most recent items with title, employer as `author`, and structured description (județ/tip/categorie/termen).
+
+**Architecture:** Extracted `_filter_kwargs_from_request(request)` helper that parses GET params into the `filter_kwargs` dict; both feeds and the browse view's `job_list` share `_apply_filters()`. Feed class uses `get_object()` override to capture request context before `items()` is called.
+
+### 2026-05-27 — Docker Compose for dev, admin slug cleanup, canonical fields decision
+
+**What:**
+- `docker-compose.yml` at repo root: `postgres:17` service with named `pgdata` volume and health check. Port 5433 avoids conflict with local brew Postgres on 5432. `webapp/.env.example` updated: added Docker DATABASE_URL comment, renamed `GEMINI_API_KEY` → `GOOGLE_API_KEY`.
+- `JudetAdmin` and `EmployerAdmin`: replaced `prepopulated_fields = {"slug": ("name",)}` with `readonly_fields = ("slug",)`. Model `save()` owns slug generation via `slugify()` + unique suffix loop; the admin JS `prepopulated_fields` was redundant and visually misleading (it suggested the admin form controlled the slug, when it doesn't).
+- Canonical fields decision: `job_type` (from detail/announcement page) is canonical for job permanency over `tip` (index tag). `categorie`/`job_level`/`employer_category` are canonical over `detalii_raw` for display/filtering; `detalii_raw` retained for FTS.
+
 ### 2026-05-27 — Anomaly heuristics: frequent_repost flag
 
 **What:** Added `frequent_repost` as the 5th anomaly flag in `infer_postings.py`. Added `build_frequent_repost_ids()`: one O(n) pre-pass before the main inference loop that groups all 4,379 postings by `(employer_id, normalized_title)` using NFKD/strip-diacritics normalization. Any group with 3+ members is a frequent-repost cluster; the function returns a `frozenset[int]` of those posting IDs. Each posting's `_infer_anomaly_flags()` call checks `posting.pk in frequent_repost_ids` — avoiding per-posting cross-queries entirely.

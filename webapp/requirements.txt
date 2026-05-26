@@ -6,6 +6,7 @@ django-htmx>=1.21
 markdown>=3.7
 black
 ruff
+icalendar>=6.0
 pytest-django
 factory-boy
 openai>=1.0

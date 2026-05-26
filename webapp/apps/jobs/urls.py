@@ -7,4 +7,5 @@ urlpatterns = [
     path("job/<int:pk>/", views.job_detail, name="job_detail"),
     path("posturi.json", views.job_json, name="job_json"),
     path("posturi.atom", views.JobPostingFeed(), name="job_feed"),
+    path("posturi.ics", views.job_ical, name="job_ical"),
 ]

@@ -1,13 +1,15 @@
 from datetime import date, datetime, time
+from datetime import timezone as dt_timezone
 
 import markdown as md
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
 from django.db.models import Count
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.feedgenerator import Atom1Feed
+from icalendar import Calendar, Event
 
 from apps.jobs.models import JobPosting
 
@@ -275,6 +277,57 @@ class JobPostingFeed(Feed):
 
     def item_author_name(self, item):
         return item.employer.name if item.employer else None
+
+
+def job_ical(request):
+    """iCal feed: one VEVENT per active job posting (deadline as DTSTART/DTEND).
+
+    Each event represents the application deadline for a posting so subscribers
+    can see upcoming deadlines in their calendar app. Same filter params as the
+    browse view.
+    """
+    filter_kwargs = _filter_kwargs_from_request(request)
+    qs = _apply_filters(
+        JobPosting.objects.select_related("employer", "judet"),
+        **filter_kwargs,
+    ).filter(expires_at__isnull=False).order_by("expires_at")[:200]
+
+    cal = Calendar()
+    cal.add("prodid", "-//posturi.gov.ro//Posturi Publice//RO")
+    cal.add("version", "2.0")
+    cal.add("x-wr-calname", "Posturi publice Romania")
+    cal.add("x-wr-caldesc", "Termene de depunere — posturi.gov.ro")
+
+    for posting in qs:
+        ev = Event()
+        ev.add("uid", f"posturi-gov-ro-{posting.pk}@posturi.gov.ro")
+        title = posting.title or "Anunț"
+        employer = posting.employer.name if posting.employer else ""
+        ev.add("summary", f"{title} — {employer}" if employer else title)
+
+        deadline_dt = datetime.combine(posting.expires_at, time(23, 59, 59), tzinfo=dt_timezone.utc)
+        ev.add("dtstart", deadline_dt.date())
+        ev.add("dtend", deadline_dt.date())
+
+        desc_parts = []
+        if posting.judet:
+            desc_parts.append(f"Județ: {posting.judet.name}")
+        if posting.categorie:
+            desc_parts.append(f"Categorie: {posting.categorie}")
+        if posting.contact_phone:
+            desc_parts.append(f"Tel: {posting.contact_phone}")
+        if posting.contact_email:
+            desc_parts.append(f"Email: {posting.contact_email}")
+        desc_parts.append(f"URL: {posting.url}")
+        ev.add("description", "\n".join(desc_parts))
+        ev.add("url", posting.url)
+
+        if posting.published_at:
+            ev.add("dtstamp", datetime.combine(posting.published_at, time.min, tzinfo=dt_timezone.utc))
+
+        cal.add_component(ev)
+
+    return HttpResponse(cal.to_ical(), content_type="text/calendar; charset=utf-8")
 
 
 def job_detail(request, pk):

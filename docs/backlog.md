@@ -56,7 +56,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 - [ ] **Bilingual UI (RO/EN)** — gettext catalogs; default RO, EN toggle.
 - [x] **RSS + JSON feeds per filter combination** — Done 2026-05-27. `/posturi.json` (JsonResponse, up to 200 results, full field set) and `/posturi.atom` (Atom1Feed via `django.contrib.syndication`, 50 items) both accept the same query params as the browse view (`q`, `judet`, `level`, `type`, `categorie`, `employer_cat`, `expires_before`, `expires_after`, `family`, `seniority`). `_filter_kwargs_from_request()` helper extracts params from the request; both feeds share `_apply_filters()`.
-- [ ] **iCal feed per filter combination** (v2 calendar slice) — `icalendar` lib + a single view.
+- [x] **iCal feed per filter combination** — `/posturi.ics` — one `VEVENT` per posting (deadline as `DTSTART`/`DTEND`), employer as `SUMMARY`, contact info + URL in `DESCRIPTION`. Same filter params as browse view, up to 200 events. Done 2026-05-27.
 - [ ] **Methodology + About pages** — open about scraping cadence, taxonomy inference, anomaly heuristics, limitations.
 - [ ] **Auth (v3)** — `django-sesame` magic-link; optional Google OAuth.
 - [ ] **Stats dashboard (v3)** — KPI tiles, time series, geographic, anomaly index, re-posting tracker.

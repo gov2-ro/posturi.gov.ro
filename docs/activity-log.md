@@ -2,6 +2,14 @@
 
 ## 2026
 
+### 2026-05-27 — Anomaly heuristics: frequent_repost flag
+
+**What:** Added `frequent_repost` as the 5th anomaly flag in `infer_postings.py`. Added `build_frequent_repost_ids()`: one O(n) pre-pass before the main inference loop that groups all 4,379 postings by `(employer_id, normalized_title)` using NFKD/strip-diacritics normalization. Any group with 3+ members is a frequent-repost cluster; the function returns a `frozenset[int]` of those posting IDs. Each posting's `_infer_anomaly_flags()` call checks `posting.pk in frequent_repost_ids` — avoiding per-posting cross-queries entirely.
+
+**Result:** 80 postings flagged on current dataset. Top offenders: MINISTERUL AFACERILOR EXTERNE (8× "Referent relații"), Universitatea Dunărea de Jos (5× "Administrator patrimoniu"), Agenția Națională de Îmbunătățiri Funciare (5× "Consilier IA"). These are real re-posting cases where institutions repeatedly fill unfilled vacancies.
+
+**Also updated:** `anomaly_score` denominator bumped from 4 → 5 (now covers all v1 flag types). Admin `AnomalyFilter` and display icon dict updated. `narrow_criteria` flag deferred — would need LLM to detect tailored requirements (too vague for regex).
+
 ### 2026-05-27 — JobPostingUpdate model + parse_updates management command
 
 **What:** Added `JobPostingUpdate` (migration 0005) to store parsed change-log segments from `JobPosting.updates_raw`. The `parse_updates` management command reads all non-empty `updates_raw` values, splits on `"; "` to get individual event segments, parses each as `(YYYY-MM-DD, fields_changed)`, and bulk-creates records idempotently. Registered in admin with `date_hierarchy` and `is_new_entry` boolean display.

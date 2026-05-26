@@ -64,5 +64,5 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 ## Known small issues
 
 - [x] **Migrations: `prepopulated_fields` on slug-on-save** — Replaced `prepopulated_fields` with `readonly_fields = ("slug",)` in both `JudetAdmin` and `EmployerAdmin`. Model `save()` owns slug generation; admin just displays the computed slug as read-only. Done 2026-05-27.
-- [ ] **`unique_slug` is O(n) per insert** — fine for ~3k employers, would scale poorly. Consider a deferred-uniqueness approach (try-except IntegrityError) if employer count ever explodes.
+- [x] **`unique_slug` is O(n) per insert** — replaced SELECT-loop with try/except IntegrityError retry (up to 100 attempts). Uses `transaction.atomic()` savepoint per attempt so the outer transaction isn't poisoned on conflict. Done 2026-05-27.
 - [ ] **`Other Links` parsing is naive** — splits on comma and filters by `http` prefix. Misses cases where URLs themselves contain commas. Low priority; sample data clean for now.

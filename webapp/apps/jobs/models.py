@@ -1,6 +1,6 @@
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils.text import slugify
 
 
@@ -36,13 +36,15 @@ class Employer(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            base = slugify(self.name)[:240] or "angajator"
-            candidate = base
-            i = 1
-            while Employer.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
-                i += 1
-                candidate = f"{base}-{i}"[:255]
-            self.slug = candidate
+            self.slug = slugify(self.name)[:240] or "angajator"
+        for attempt in range(1, 100):
+            try:
+                with transaction.atomic():
+                    super().save(*args, **kwargs)
+                return
+            except IntegrityError:
+                base = slugify(self.name)[:235] or "angajator"
+                self.slug = f"{base}-{attempt + 1}"[:255]
         super().save(*args, **kwargs)
 
 

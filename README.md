@@ -10,24 +10,56 @@ See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7U
 pip install -r requirements.txt
 ```
 
-For LLM scripts, copy `.env.example` to `.env` and fill in your API keys.
+For LLM scripts and the webapp, copy `.env.example` to `.env` and fill in your API keys.
 
 `dox2md.py` also requires system packages:
 ```bash
 brew install libreoffice pandoc tesseract
 ```
 
+### Webapp setup
+
+```bash
+cd webapp
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py runserver
+```
+
 ## Pipeline
 
-Run scripts in order:
+### Quick start — run everything
 
-| Step | Script | Output |
-|------|--------|--------|
-| 1 | `fetch-index.py` | `data/posturi_gov_ro.csv` |
-| 2 | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
-| 3 | `parse-anunturi.py` | `data/anunturi/anunturi.csv` + `data/calendar.csv` |
-| 4 | `download-attachments.py` | `data/downloads/` |
-| 5 | `llm-schema.py` | `data/schema/*.json` |
+```bash
+python pipeline.py
+```
+
+### Selective runs
+
+```bash
+python pipeline.py --steps fetch-index,parse,import   # specific steps
+python pipeline.py --skip download,infer               # skip slow steps
+python pipeline.py --steps infer --provider gemini     # LLM inference only
+python pipeline.py --no-llm --force                    # re-run dict-only inference
+python pipeline.py --continue-on-error                 # log failures, keep going
+```
+
+### Steps
+
+| Step | Script / command | Output |
+|------|-----------------|--------|
+| `fetch-index` | `fetch-index.py` | `data/posturi_gov_ro.csv` |
+| `fetch-detail` | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
+| `parse` | `parse-anunturi.py` | `data/anunturi/anunturi.csv` + `data/calendar.csv` |
+| `download` | `download-attachments.py` | `data/downloads/` |
+| `import` | `manage.py import_csvs` | Postgres `jobs_jobposting` table |
+| `extract` | `manage.py extract_attachments` | `JobPosting.attachment_text` |
+| `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
+
+`--force` re-processes already-done rows for `import`, `extract`, and `infer`.
+`--limit N` restricts `infer` to N postings (useful for testing).
+`--provider gemini|openai|anthropic` sets the LLM used by the `infer` step (default: `gemini`).
 
 ## Data
 

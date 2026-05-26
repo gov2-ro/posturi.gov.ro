@@ -16,6 +16,7 @@ import os
 import re
 import time
 import unicodedata
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from django.core.management.base import BaseCommand
@@ -243,6 +244,29 @@ def _infer_certifications(body: str) -> list[str]:
 
 _GENDER_RE = re.compile(r"\b(masculin|feminin)\b", re.IGNORECASE)
 
+_NORM_TITLE_RE = re.compile(r"[^\w\s]")
+
+
+def _norm_title(title: str) -> str:
+    n = "".join(
+        c for c in unicodedata.normalize("NFKD", title) if not unicodedata.combining(c)
+    )
+    n = _NORM_TITLE_RE.sub(" ", n.lower())
+    return re.sub(r"\s+", " ", n).strip()
+
+
+def build_frequent_repost_ids(min_count: int = 3) -> frozenset[int]:
+    """Return IDs of postings whose employer+title combo appears >= min_count times."""
+    groups: dict[tuple, list[int]] = defaultdict(list)
+    for pk, employer_id, title in JobPosting.objects.values_list("pk", "employer_id", "title").iterator():
+        key = (employer_id, _norm_title(title or ""))
+        groups[key].append(pk)
+    frequent: set[int] = set()
+    for pks in groups.values():
+        if len(pks) >= min_count:
+            frequent.update(pks)
+    return frozenset(frequent)
+
 _CONTACT_IN_TEXT_RE = re.compile(
     r"\b0[\d\s.\-–/]{9,14}\d\b"       # Romanian phone (formatted)
     r"|[\w.+-]+@[\w.-]+\.[a-z]{2,}",   # email
@@ -250,7 +274,10 @@ _CONTACT_IN_TEXT_RE = re.compile(
 )
 
 
-def _infer_anomaly_flags(posting: JobPosting) -> list[str]:
+def _infer_anomaly_flags(
+    posting: JobPosting,
+    frequent_repost_ids: frozenset[int] | None = None,
+) -> list[str]:
     flags: list[str] = []
 
     # Short deadline: < 7 days from publish to submission deadline
@@ -278,6 +305,10 @@ def _infer_anomaly_flags(posting: JobPosting) -> list[str]:
     # No body
     if not posting.body_markdown or len(posting.body_markdown.strip()) < 100:
         flags.append("no_body")
+
+    # Frequent repost: same employer+normalized-title posted 3+ times
+    if frequent_repost_ids and posting.pk in frequent_repost_ids:
+        flags.append("frequent_repost")
 
     return flags
 
@@ -340,7 +371,13 @@ def _llm_classify(title: str, provider: str) -> str:
 # Main inference function
 # ---------------------------------------------------------------------------
 
-def infer_posting(posting: JobPosting, *, provider: str, use_llm: bool) -> dict:
+def infer_posting(
+    posting: JobPosting,
+    *,
+    provider: str,
+    use_llm: bool,
+    frequent_repost_ids: frozenset[int] | None = None,
+) -> dict:
     body = (posting.body_markdown or "") + "\n\n" + (posting.attachment_text or "")
     title = posting.title or ""
 
@@ -371,8 +408,8 @@ def infer_posting(posting: JobPosting, *, provider: str, use_llm: bool) -> dict:
     certifications = _infer_certifications(body)
 
     # Layer 4: anomaly flags
-    anomaly_flags = _infer_anomaly_flags(posting)
-    anomaly_score = round(len(anomaly_flags) / 4, 3)
+    anomaly_flags = _infer_anomaly_flags(posting, frequent_repost_ids=frequent_repost_ids)
+    anomaly_score = round(len(anomaly_flags) / 5, 3)
 
     return {
         "profession_family": family,
@@ -436,11 +473,20 @@ class Command(BaseCommand):
         total = qs.count()
         self.stdout.write(f"Processing {total} postings (provider={provider}, llm={'yes' if use_llm else 'no'})…")
 
+        frequent_repost_ids = build_frequent_repost_ids()
+        if frequent_repost_ids:
+            self.stdout.write(f"  Frequent-repost pool: {len(frequent_repost_ids)} posting IDs flagged.")
+
         done = llm_calls = errors = 0
 
         for posting in qs.iterator(chunk_size=200):
             try:
-                inferred = infer_posting(posting, provider=provider, use_llm=use_llm)
+                inferred = infer_posting(
+                    posting,
+                    provider=provider,
+                    use_llm=use_llm,
+                    frequent_repost_ids=frequent_repost_ids,
+                )
                 if inferred["profession_family_source"] == "llm":
                     llm_calls += 1
                 elif inferred["profession_family_source"] == "error":

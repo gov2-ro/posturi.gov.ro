@@ -42,7 +42,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 - [ ] **Romanian gazetteer for locality extraction** — needed for the mini-map and city-precision facet (deferred per spec to v2, but the dataset can be built in advance).
 - [ ] **`is_repost_of` detection** — title + body cosine similarity within the same employer (12-month window).
-- [ ] **Anomaly heuristics (v1 set)** — short deadline (< X days), missing contact, narrow criteria phrasing, frequent re-posting. Each as a separate rule with its own flag and `why` message.
+- [x] **Anomaly heuristics (v1 set)** — Done 2026-05-27. `short_deadline` (< 7 days publish→deadline), `missing_contact` + `contact_in_attachment`, `gender_criteria` (masculin/feminin in body), `no_body` (< 100 chars), `frequent_repost` (3+ postings for same employer+normalized-title). `build_frequent_repost_ids()` pre-computes the set in O(n) before the main loop; threading it in avoids per-posting cross-queries. Current data: 80 postings flagged as frequent reposts (top: MINISTERUL AFACERILOR EXTERNE 8× same Referent role). Deferred: `narrow_criteria` (needs LLM to detect tailored requirements phrasing — too vague for regex).
 
 ## Tooling & ops
 

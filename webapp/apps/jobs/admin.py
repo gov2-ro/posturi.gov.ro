@@ -78,18 +78,19 @@ class AnomalyFilter(admin.SimpleListFilter):
 
     def lookups(self, request, model_admin):
         return [
-            ("any",             "Orice anomalie"),
-            ("short_deadline",  "Termen scurt"),
-            ("missing_contact", "Contact lipsă"),
-            ("gender_criteria", "Criteriu de gen"),
-            ("no_body",         "Fără corp"),
+            ("any",              "Orice anomalie"),
+            ("short_deadline",   "Termen scurt"),
+            ("missing_contact",  "Contact lipsă"),
+            ("gender_criteria",  "Criteriu de gen"),
+            ("no_body",          "Fără corp"),
+            ("frequent_repost",  "Re-publicare frecventă"),
         ]
 
     def queryset(self, request, queryset):
         v = self.value()
         if v == "any":
             return queryset.exclude(inferred__anomaly_flags=[])
-        if v in ("short_deadline", "missing_contact", "gender_criteria", "no_body"):
+        if v in ("short_deadline", "missing_contact", "gender_criteria", "no_body", "frequent_repost"):
             return queryset.filter(inferred__anomaly_flags__contains=[v])
         return queryset
 
@@ -192,7 +193,7 @@ class JobPostingAdmin(admin.ModelAdmin):
         flags = obj.inferred.get("anomaly_flags", []) if obj.inferred else []
         if not flags:
             return "—"
-        labels = {"short_deadline": "⏰", "missing_contact": "📵", "gender_criteria": "⚠️", "no_body": "📄"}
+        labels = {"short_deadline": "⏰", "missing_contact": "📵", "gender_criteria": "⚠️", "no_body": "📄", "frequent_repost": "♻️"}
         icons = " ".join(labels.get(f, f) for f in flags)
         return format_html('<span title="{}">{}</span>', ", ".join(flags), icons)
 

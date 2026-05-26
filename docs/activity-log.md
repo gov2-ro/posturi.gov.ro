@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-05-27 — Production deploy: Dockerfile + fly.toml + whitenoise
+
+**What:** Full production deployment configuration for Fly.io:
+- `webapp/Dockerfile`: `python:3.13-slim`, installs `libpq-dev` for psycopg, runs `collectstatic` at build time, starts gunicorn with 2 workers.
+- `webapp/fly.toml`: App name `posturi-gov-ro`, primary region `waw` (Warsaw, closest to Romania), `shared-cpu-1x` + 512 MB RAM, `auto_stop_machines=stop` (free-tier friendly), `release_command = python manage.py migrate --noinput`.
+- `webapp/.dockerignore`: excludes `.venv/`, `.env` files, `staticfiles/`, `__pycache__`.
+- `requirements.txt`: added `gunicorn>=23.0` and `whitenoise[brotli]>=6.8`.
+- `settings.py`: `WhiteNoiseMiddleware` inserted after `SecurityMiddleware`; `STORAGES` key set to `CompressedManifestStaticFilesStorage`.
+
+**Deploy steps:** `fly launch` (first deploy, provisions Postgres), then `fly secrets set SECRET_KEY=... DATABASE_URL=... GOOGLE_API_KEY=...`, then `fly deploy` for updates. The `release_command` applies migrations atomically before traffic switches.
+
+### 2026-05-27 — Browse UI: anomaly flags filter + feed autodiscovery
+
+**What:**
+- Browse sidebar: new "Anomalii" section with 5 checkboxes (short_deadline, missing_contact, gender_criteria, no_body, frequent_repost). Uses HTMX-wired checkboxes; each flag ANDs with the others in `_apply_filters`. Reset button condition updated.
+- `base.html`: added `<link rel="alternate">` for Atom and JSON feeds — standard feed autodiscovery that browsers and RSS readers pick up automatically.
+- `detail.html`: inferred data section in sidebar showing `profession_family`, `seniority`, and `anomaly_flags` (amber badges). Only rendered when `posting.inferred` is non-empty.
+- `list.html`: Export section at bottom of facet sidebar with Atom/JSON/iCal links that carry the current filter querystring (via `feed_url` template tag).
+- `jobs_extras.py`: new `feed_url` template tag returns `/filename?<current_qs>`.
+
 ### 2026-05-27 — JSON API and Atom feed endpoints
 
 **What:** Added two feed endpoints that mirror the Browse UI filters:

@@ -23,7 +23,7 @@ Run scripts in order:
 |------|--------|--------|
 | 1 | `fetch-index.py` | `data/posturi_gov_ro.csv` |
 | 2 | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
-| 3 | `parse-anunturi.py` | `data/anunturi/anunturi.csv` |
+| 3 | `parse-anunturi.py` | `data/anunturi/anunturi.csv` + `data/calendar.csv` |
 | 4 | `download-attachments.py` | `data/downloads/` |
 | 5 | `llm-schema-posts.py` / `oai-api.py` / `gemini-api.py` / `anthropic-api.py` | `data/schema/*.json` |
 
@@ -43,5 +43,16 @@ Run scripts in order:
 | `url_judet` | County filter URL |
 | `tip` | Listing type |
 | `updates` | Semicolon-separated log of field changes with dates |
+
+**`data/anunturi/anunturi.csv`** — one row per cached announcement, keyed by Announcement URL. Includes structured fields extracted from HTML: `Job Level`, `Job Type`, `Employer Category`, `Categorie`, `Nr Posturi`, `Contact Telefon`, `Contact Email`, `Contact Persoana`, `Data Limita Depunere`, `Data Proba Scrisa`, `Data Interviu`, `Data Rezultate Finale`.
+
+**`data/calendar.csv`** — flat competition timeline table, one row per event:
+
+| Field | Description |
+|-------|-------------|
+| `url` | Announcement URL |
+| `eveniment` | Event description (e.g. "Depunerea dosarelor", "Proba scrisă") |
+| `data` | Date in `DD.MM.YYYY` format |
+| `ora` | Time in `HH:MM` format (empty if not specified) |
 
 `data/` is gitignored.

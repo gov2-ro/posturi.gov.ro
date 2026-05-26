@@ -17,7 +17,9 @@ python anthropic-api.py               # LLM schema generation (needs .env)
 
 ## Key behaviors
 
-**Two index scripts** — `fetch-index.py` always scans all pages and is preferred. `fetch-index.py` stops at the first page with no new entries, which misses updates to older listings.
+**Two index scripts** — `fetch-index.py` always scans all pages and is preferred. The old early-stop version has been deleted.
+
+**`parse-anunturi.py` outputs two files** — `data/anunturi/anunturi.csv` (one row per posting, with structured fields: contact info, competition dates, card fields) and `data/calendar.csv` (flat table: `url, eveniment, data, ora` — all competition timeline events across all postings).
 
 **Incremental saves** — both index scripts save to CSV after each page that has new or updated entries (crash-safe). `fetch-index.py` skips the save on unchanged pages.
 

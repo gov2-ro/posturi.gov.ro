@@ -50,7 +50,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] **Test suite** — done 2026-05-27. pytest-django + factory-boy installed. `tests/test_import_idempotency.py` covers: (1) idempotency (run twice, counts unchanged), (2) expected records created, (3) update-existing-fields. All 3 pass in 0.25s. `pytest.ini` configured.
 - [x] **CI** — GitHub Actions: lint (ruff), tests, migrations check. Added `.github/workflows/ci.yml` (Python 3.13, Postgres 17 service, ruff lint + makemigrations --check + pytest). Done 2026-05-27.
 - [x] **Docker compose for dev** — `docker-compose.yml` at repo root: postgres:17 service with named volume, health check, port 5433 (avoids conflict with local brew Postgres). `.env.example` updated with Docker DATABASE_URL comment. Done 2026-05-27.
-- [ ] **Production deploy plan** — pick host (Fly.io vs Railway vs small VPS), decide on managed Postgres, set up backups.
+- [x] **Production deploy plan** — Fly.io. `webapp/Dockerfile` (python:3.13-slim, gunicorn, collectstatic), `fly.toml` (app=posturi-gov-ro, region=waw Warsaw, release_command=migrate), `.dockerignore`. `whitenoise` + `gunicorn` added to `requirements.txt`; `WhiteNoiseMiddleware` added to settings. Deploy: `fly launch` (first time) then `fly deploy`. Required secrets: `SECRET_KEY`, `DATABASE_URL`, `GOOGLE_API_KEY`. Done 2026-05-27.
 
 ## Cross-cutting / future
 

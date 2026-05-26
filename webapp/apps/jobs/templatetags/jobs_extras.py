@@ -25,3 +25,10 @@ def querystring(context, **kwargs):
         else:
             params[key] = str(value)
     return params.urlencode()
+
+
+@register.simple_tag(takes_context=True)
+def feed_url(context, filename):
+    """Return /filename?<current querystring> for feed export links."""
+    qs = context["request"].GET.urlencode()
+    return f"/{filename}?{qs}" if qs else f"/{filename}"

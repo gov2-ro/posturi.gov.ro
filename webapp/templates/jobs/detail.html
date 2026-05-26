@@ -138,6 +138,29 @@
         </div>
         {% endif %}
 
+        {% if posting.inferred %}
+          {% with fam=posting.inferred.profession_family sen=posting.inferred.seniority flags=posting.inferred.anomaly_flags %}
+          {% if fam or sen or flags %}
+        <div class="pt-3 border-t border-border-warm">
+          <div class="text-xs font-semibold uppercase tracking-widest text-ink-faint mb-2">Inferat automat</div>
+          {% if fam and fam != "altele" %}
+          <div class="mb-1"><span class="text-xs text-ink-faint">Domeniu</span> <span class="ml-1 text-sm text-ink">{{ fam }}</span></div>
+          {% endif %}
+          {% if sen %}
+          <div class="mb-1"><span class="text-xs text-ink-faint">Grad</span> <span class="ml-1 text-sm text-ink">{{ sen }}</span></div>
+          {% endif %}
+          {% if flags %}
+          <div class="mt-1 flex flex-wrap gap-1">
+            {% for flag in flags %}
+            <span class="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-800 border border-amber-200">{{ flag }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+          {% endif %}
+          {% endwith %}
+        {% endif %}
+
         {% if posting.announcement_url %}
         <div class="pt-3 border-t border-border-warm">
           <div class="text-xs font-semibold uppercase tracking-widest text-ink-faint mb-1">Atașamente</div>

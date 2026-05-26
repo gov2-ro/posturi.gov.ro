@@ -25,7 +25,7 @@ Run scripts in order:
 | 2 | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
 | 3 | `parse-anunturi.py` | `data/anunturi/anunturi.csv` + `data/calendar.csv` |
 | 4 | `download-attachments.py` | `data/downloads/` |
-| 5 | `llm-schema-posts.py` / `oai-api.py` / `gemini-api.py` / `anthropic-api.py` | `data/schema/*.json` |
+| 5 | `llm-schema.py` | `data/schema/*.json` |
 
 ## Data
 

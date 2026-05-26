@@ -12,7 +12,7 @@ python fetch-index.py                 # stops early at first page with no change
 python fetch-anunturi.py
 python parse-anunturi.py
 python download-attachments.py
-python anthropic-api.py               # LLM schema generation (needs .env)
+python llm-schema.py                  # LLM schema generation (needs .env); --provider gemini|openai|anthropic
 ```
 
 ## Key behaviors

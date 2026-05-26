@@ -44,7 +44,28 @@ Run scripts in order:
 | `tip` | Listing type |
 | `updates` | Semicolon-separated log of field changes with dates |
 
-**`data/anunturi/anunturi.csv`** — one row per cached announcement, keyed by Announcement URL. Includes structured fields extracted from HTML: `Job Level`, `Job Type`, `Employer Category`, `Categorie`, `Nr Posturi`, `Contact Telefon`, `Contact Email`, `Contact Persoana`, `Data Limita Depunere`, `Data Proba Scrisa`, `Data Interviu`, `Data Rezultate Finale`.
+**`data/anunturi/anunturi.csv`** — one row per cached announcement:
+
+| Field | Description |
+|-------|-------------|
+| `Job Title` | Position title |
+| `Employer` | Hiring organisation |
+| `Location` | County / locality |
+| `Job Level` | Funcții de execuție / Funcții de conducere |
+| `Job Type` | Permanent / Temporar |
+| `Employer Category` | Angajator type (Primării, Instituții locale, Guvern și ministere, etc.) |
+| `Categorie` | Funcție contractuală / Funcție publică |
+| `Announcement URL` | Link to attached document or posting page |
+| `Main Body Markdown` | Full announcement text converted to markdown |
+| `Other Links` | Comma-separated attachment URLs |
+| `Nr Posturi` | Number of vacancies |
+| `Contact Telefon` | Phone number extracted from body text |
+| `Contact Email` | Email address extracted from body text |
+| `Contact Persoana` | Contact person name |
+| `Data Limita Depunere` | Application deadline (DD.MM.YYYY, ora HH:MM) |
+| `Data Proba Scrisa` | Written test date |
+| `Data Interviu` | Interview date |
+| `Data Rezultate Finale` | Final results date |
 
 **`data/calendar.csv`** — flat competition timeline table, one row per event:
 

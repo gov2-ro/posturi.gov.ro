@@ -1,6 +1,8 @@
 # posturi.gov.ro scraper
 
-Scrapes [posturi.gov.ro](http://posturi.gov.ro) — the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → (optional) LLM-generated schema.org JSON.
+Alternative browser / explorer for [posturi.gov.ro](http://posturi.gov.ro). Scrapes the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → (optional) LLM-generated schema.org JSON.
+
+See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7Ue98SqNFQ/) gdocs
 
 ## Setup
 

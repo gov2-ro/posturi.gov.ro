@@ -6,7 +6,7 @@ markdownify
 python-dotenv
 openai
 anthropic
-google-generativeai
+google-genai
 PyPDF2
 python-docx
 docx2txt

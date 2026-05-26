@@ -539,10 +539,11 @@ def _llm_classify(title: str, provider: str) -> str:
     )
     raw = ""
     if provider == "gemini":
-        import google.generativeai as genai
-        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-        gmodel = genai.GenerativeModel(DEFAULTS["gemini"])
-        raw = gmodel.generate_content(prompt).text.strip()
+        from google import genai
+        client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+        raw = client.models.generate_content(
+            model=DEFAULTS["gemini"], contents=prompt
+        ).text.strip()
     elif provider == "openai":
         import openai
         client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -636,11 +637,12 @@ def _parse_json_response(text: str) -> dict | None:
 
 def make_schema_generator(provider: str, model: str):
     if provider == "gemini":
-        import google.generativeai as genai
-        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-        gmodel = genai.GenerativeModel(model)
+        from google import genai
+        client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
         def generate(content: str):
-            resp = gmodel.generate_content(f"{SCHEMA_PROMPT}\n\n{content}")
+            resp = client.models.generate_content(
+                model=model, contents=f"{SCHEMA_PROMPT}\n\n{content}"
+            )
             return _parse_json_response(resp.text)
 
     elif provider == "openai":

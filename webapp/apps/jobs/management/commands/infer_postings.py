@@ -33,7 +33,7 @@ FAMILIES: dict[str, list[str]] = {
         "referent", "secretar", "registrator", "casier", "arhivist",
         "resurse umane", "urbanism", "amenajare", "registratura", "arhiva",
         "relatii publice", "protocol", "achizitii", "achizitie",
-        "inspector", "consilier", "administrator",
+        "inspector", "consilier", "administrator", "manager", "director", "expert",
     ],
     "IT": [
         "informatician", "programator", "analist programator", "administrator retea",
@@ -44,7 +44,7 @@ FAMILIES: dict[str, list[str]] = {
         "medic", "asistent medical", "infirmier", "infirmiera", "ingrijitor",
         "farmacist", "kinetoterapeut", "stomatolog", "psiholog", "moasa",
         "labrant", "brancardier", "ambulantier", "biolog", "chimist",
-        "fizician", "biochimist", "radiolog", "fizio",
+        "fizician", "biochimist", "radiolog", "fizio", "balneolog", "ergoterapeut",
     ],
     "educație": [
         "profesor", "invatator", "educator", "pedagog", "psihopedagog",
@@ -63,10 +63,17 @@ FAMILIES: dict[str, list[str]] = {
         "inginer", "tehnician", "electrician", "instalator", "mecanic", "sudor",
         "operator", "conducator auto", "sofer", "laborant tehnic", "topograf",
         "geolog", "desenator", "proiectant", "constructor",
+        "buldoexcavatorist", "excavatorist", "utilajist", "macaragiu",
+        "stivuitorist", "fochist", "lacatus", "tamplar", "zidar", "zugrav",
+        "pavator", "dulgher", "vopsitor", "timonist",
+        "muncitor", "muncitor necalificat", "muncitor calificat",
+        "ingrijitor cladiri", "paznic", "portar",
     ],
     "social": [
         "asistent social", "inspector social", "mediator", "ingrijitor domiciliu",
         "ingrijitor la domiciliu", "monitor", "insotitor",
+        "psiholog", "psiholog practicant", "psiholog specialist",
+        "logoped social", "educator specializat", "terapeut",
     ],
     "cultură": [
         "muzeograf", "arhivar", "documentarist", "etnolog", "restaurator",
@@ -75,6 +82,7 @@ FAMILIES: dict[str, list[str]] = {
     "ordine publică": [
         "politist", "pompier", "jandarm", "ofiter", "subofiter", "agent paza",
         "inspector isu", "inspector protectia muncii", "protectie civila",
+        "svsu", "situatii urgenta", "aparare civila", "psi",
     ],
 }
 
@@ -280,10 +288,11 @@ def _llm_classify(title: str, provider: str) -> str:
     raw = ""
     try:
         if provider == "gemini":
-            import google.generativeai as genai
-            genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            raw = model.generate_content(prompt).text.strip()
+            from google import genai
+            client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+            raw = client.models.generate_content(
+                model="gemini-2.5-flash", contents=prompt
+            ).text.strip()
         elif provider == "openai":
             import openai
             client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])

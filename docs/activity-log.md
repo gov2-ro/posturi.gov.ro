@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-05-26 — Data quality test suite (`quality_check.py` + `/quality-review` skill)
+
+**What:** Added a standalone `quality_check.py` script that samples 5–10 diverse job postings (stratified by job type, level, county, attachment presence, body length) and runs all four pipeline layers through automated quality checks: CSV field completeness, attachment text readability, metadata inference (profession family confidence, skills, anomaly flags), and LLM schema.org/JobPosting generation. Produces `data/quality_report.json` and a console summary table. Also added `.claude/commands/quality-review.md` — a project-scoped Claude Code slash command (`/quality-review`) that reads the report, deep-reads source files, and produces a qualitative narrative with root-cause analysis and recommended fixes. Can optionally open source URLs in Playwright for visual scraping verification.
+
+**Key findings from first run (--no-llm, 8 postings):**
+- `.doc` files return empty text — `docx2txt` throws `KeyError` on old binary Word format (only handles DOCX/ZIP). 6/8 `.doc` attachment files affected. Added to backlog.
+- `Data Limita Depunere` empty for most postings — structured deadline field is often unpopulated; dates appear only in body markdown. Added to backlog.
+- Avg CSV completeness: 81.4%; avg profession-family confidence (dict-only): 0.19 — many titles need LLM fallback.
+- `.docx` files (Buldoexcavatorist: 7k chars, ȘEF SVSU: 15k chars) extract correctly.
+
+**New files:** `quality_check.py`, `.claude/commands/quality-review.md`, `docs/superpowers/specs/2026-05-26-data-quality-test-design.md`
+
+**Usage:** `webapp/.venv/bin/python3 quality_check.py --no-llm` (fast) or `--provider anthropic` (full LLM pass). Then `/quality-review` in Claude Code for narrative assessment.
+
 ### 2026-05-26 — Attachment text extraction (`extract_attachments` command + `attachment_text` field)
 
 **What:** Added `JobPosting.attachment_text` (TextField) + `extract_attachments` management command that reads `data/downloads/`, extracts plain text from linked DOCX/DOC/PDF files, and stores the result. Updated `infer_postings` to combine `body_markdown + attachment_text` for all Layer 3 inference.

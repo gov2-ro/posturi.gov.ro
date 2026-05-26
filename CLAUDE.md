@@ -13,6 +13,10 @@ python fetch-anunturi.py
 python parse-anunturi.py
 python download-attachments.py
 python llm-schema.py                  # LLM schema generation (needs .env); --provider gemini|openai|anthropic
+# Data quality testing (use webapp venv for attachment extraction):
+webapp/.venv/bin/python3 quality_check.py --no-llm          # fast: CSV + attachment + infer, no LLM
+webapp/.venv/bin/python3 quality_check.py --provider anthropic  # full pass incl. schema.org generation
+# Then run /quality-review in Claude Code for narrative assessment
 ```
 
 ## Key behaviors

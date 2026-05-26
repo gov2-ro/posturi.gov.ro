@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import csv
 import re
-import sys
 from collections import defaultdict
 from datetime import date, datetime, time
 from pathlib import Path
@@ -19,7 +18,6 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.jobs.models import CalendarEvent, Employer, JobPosting, Judet
-
 
 RO_MONTHS = {
     "ianuarie": 1, "februarie": 2, "martie": 3, "aprilie": 4,

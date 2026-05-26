@@ -23,7 +23,6 @@ from django.db.models import Q
 
 from apps.jobs.models import JobPosting
 
-
 # ---------------------------------------------------------------------------
 # Profession family dictionary
 # ---------------------------------------------------------------------------

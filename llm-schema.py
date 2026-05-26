@@ -25,7 +25,11 @@ input_csv = 'data/anunturi/anunturi.csv'
 output_dir = Path('data/schema')
 output_dir.mkdir(parents=True, exist_ok=True)
 
-PROMPT = "Convert this job posting to schema.org/JobPosting JSON-LD format. Return only valid JSON."
+PROMPT = (
+    "Convert this job posting to schema.org/JobPosting JSON-LD format. Return only valid JSON. "
+    "Do not include taxa de concurs or application fees as baseSalary — omit baseSalary entirely "
+    "if no actual salary range is explicitly stated in the posting."
+)
 
 DEFAULTS = {
     'gemini':    'gemini/gemini-2.5-flash',

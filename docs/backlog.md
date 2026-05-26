@@ -9,9 +9,9 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] **`.doc` files return empty text** — replaced `docx2txt` in `quality_check.py::_extract_doc` with `subprocess textutil` (macOS built-in). All `.doc` files now extract correctly. Note: `textutil` is macOS-only; add a `antiword`/LibreOffice fallback before deploying to Linux. Fixed 2026-05-26.
 - [x] **`Data Limita Depunere` often empty in anunturi.csv** — added `DEADLINE_BODY_RE` fallback in `parse-anunturi.py` that scans body text for `data limita de depunere dosare : DD.MM.YYYY` when the calendar table lookup returns empty. Fixed 2026-05-26.
 - [ ] **Scanned PDF attachments unreadable** — confirmed via `pypdf` on `d4e146ab-10.pdf` (5 pages, 0 chars on all). PDFs from some institutions (e.g. Consiliul Economic și Social) are photographed/printed documents with no text layer. Fix: add OCR fallback in `quality_check.py::_extract_pdf` using `pytesseract` + `pdf2image`. Requires `brew install tesseract poppler`. Affects a subset of PDF attachments; frequency unknown — needs a survey pass over `data/downloads/*.pdf`.
-- [ ] **Schema prompt: suppress `baseSalary` hallucination** — LLM (Gemini) encoded `taxa de concurs` (150 RON application fee) as `baseSalary` in schema for 49e420ba-1.doc (Șef Secție, Spitalul Ploiești). Add to `SCHEMA_PROMPT`: *"Do not include taxa de concurs or application fees as baseSalary. Omit baseSalary entirely if no salary range is explicitly stated."* Seen in quality review run #2.
+- [x] **Schema prompt: suppress `baseSalary` hallucination** — Added guard to both `quality_check.py::SCHEMA_PROMPT` and `llm-schema.py::PROMPT`: *"Do not include taxa de concurs or application fees as baseSalary. Omit baseSalary entirely if no salary range is explicitly stated."* Done 2026-05-27.
 - [x] **Schema prompt: `datePosted` / `validThrough` from index CSV** — `publicat_in` and `expira_in` exist in `posturi_gov_ro.csv` (scraped by `fetch-index.py`) but were not reaching the schema generator. Fixed 2026-05-26: `quality_check.py` now loads the index CSV and injects `Data publicare (datePosted)` + `Data expirare (validThrough)` into the schema context. `parse-anunturi.py` also now joins these as `Data Publicare` / `Data Expirare` columns in `anunturi.csv`. Re-run `parse-anunturi.py` to regenerate the CSV with the new columns (quality checker already has a fallback to the index CSV for old CSVs). Result: `schema_valid_rate` went from 0.5 → 1.0.
-- [ ] **FAMILIES dict: add `muncitor` → `tehnic`, `psiholog practicant` → `social`** — both cause LLM fallback and return wrong family (`administrație`). `muncitor necalificat` hit twice in quality run #2. Quick dict addition eliminates the fallback for these high-frequency patterns.
+- [x] **FAMILIES dict: add `muncitor` → `tehnic`, `psiholog practicant` → `social`** — both now in `infer_postings.py` FAMILIES dict (synced 2026-05-27 alongside broader dict expansion). Done 2026-05-27.
 - [x] **`missing_contact` anomaly: distinguish card-empty from attachment-found** — fixed 2026-05-26. `_infer_anomaly_flags` now scans `combined_body` (card body + attachment text) for phone/email patterns when CSV contact fields are empty. Emits `contact_in_attachment` (CSV extraction gap, not a data problem) vs `missing_contact` (truly absent). Same fix applied to `quality_check.py` and `webapp/infer_postings.py`.
 
 
@@ -46,9 +46,9 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 ## Tooling & ops
 
-- [ ] **Install `black` in the venv** — silences the harmless Django migration-formatting warning.
+- [x] **Install `black` in the venv** — already in `requirements.txt`; black 26.5.1 confirmed present. Done.
 - [x] **Test suite** — done 2026-05-27. pytest-django + factory-boy installed. `tests/test_import_idempotency.py` covers: (1) idempotency (run twice, counts unchanged), (2) expected records created, (3) update-existing-fields. All 3 pass in 0.25s. `pytest.ini` configured.
-- [ ] **CI** — GitHub Actions: lint (ruff), tests, migrations check.
+- [x] **CI** — GitHub Actions: lint (ruff), tests, migrations check. Added `.github/workflows/ci.yml` (Python 3.13, Postgres 17 service, ruff lint + makemigrations --check + pytest). Done 2026-05-27.
 - [ ] **Docker compose for dev** — Postgres + Redis (when we add Celery) so contributors don't need brew services.
 - [ ] **Production deploy plan** — pick host (Fly.io vs Railway vs small VPS), decide on managed Postgres, set up backups.
 

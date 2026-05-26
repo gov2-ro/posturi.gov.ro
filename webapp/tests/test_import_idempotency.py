@@ -3,15 +3,12 @@ Importer idempotency test: running import_csvs twice must not create
 duplicate records for any model (Judet, Employer, JobPosting, CalendarEvent).
 """
 import csv
-import io
-import tempfile
 from pathlib import Path
 
 import pytest
 from django.core.management import call_command
 
 from apps.jobs.models import CalendarEvent, Employer, JobPosting, Judet
-
 
 INDEX_ROWS = [
     {

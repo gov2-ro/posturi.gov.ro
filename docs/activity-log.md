@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-05-27 — Fix: conftest.py `django_db_setup` override wiped production DB
+
+**What:** The original `conftest.py` included a session-scoped `django_db_setup` fixture that was a no-op (`pass`). This bypassed pytest-django's built-in database isolation, causing the `@pytest.mark.django_db(transaction=True)` test to run against the real `posturi_dev` database. After the test completed, pytest-django flushed all tables (standard `TransactionTestCase` teardown), deleting all 4,379 postings and associated data.
+
+**Fix:** Removed the `django_db_setup` override from `conftest.py`; pytest-django's default fixture now creates an isolated `test_posturi_dev` database. The `pytest_configure` function was also removed since `pytest.ini` already sets `DJANGO_SETTINGS_MODULE`. `conftest.py` is now a 2-line file that just sets the env var at module level.
+
+**Recovery:** Re-ran `import_csvs --data-dir ../data` (4,379 postings, 2,955 employers, 43 județe, 11,567 calendar events), then `canonicalize_employers --apply` (257 aliases, 521 FK reassignments), then `infer_postings` (dict + LLM pass on all postings).
+
+**Non-obvious:** `@pytest.mark.django_db(transaction=True)` uses Django's `TransactionTestCase` semantics which does NOT roll back via savepoint — it calls `flush` on teardown. Overriding `django_db_setup` to skip test-DB creation is only safe if you also ensure post-test cleanup; without it, the production DB is trashed. The default pytest-django `django_db_setup` correctly wraps everything in a `test_` prefixed database.
+
 ### 2026-05-27 — Test suite: importer idempotency (pytest-django)
 
 **What:** Added pytest-django + factory-boy; wrote `tests/test_import_idempotency.py` with 3 tests covering: (1) running `import_csvs` twice doesn't duplicate Judet/Employer/JobPosting/CalendarEvent rows; (2) expected records are created with correct field values; (3) re-importing with updated title updates the existing row instead of creating a new one. All 3 pass in 0.25s against the real test database. Added `pytest.ini` and `conftest.py`.

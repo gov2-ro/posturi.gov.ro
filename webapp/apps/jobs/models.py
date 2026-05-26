@@ -123,6 +123,40 @@ class JobPosting(models.Model):
         return self.title or self.url
 
 
+class JobPostingUpdate(models.Model):
+    """One parsed segment from JobPosting.updates_raw.
+
+    Populated by the parse_updates management command.  Each segment is one
+    scraper-detected change: either the initial "New entry" or a list of
+    field names that changed on a given date.
+    """
+
+    posting = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name="update_log")
+    changed_at = models.DateField()
+    fields_changed = models.CharField(
+        max_length=500,
+        help_text='Comma-separated field names that changed, or "New entry"',
+    )
+
+    class Meta:
+        ordering = ["changed_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["posting", "changed_at", "fields_changed"],
+                name="unique_posting_update",
+            )
+        ]
+        verbose_name = "Actualizare anunț"
+        verbose_name_plural = "Actualizări anunțuri"
+
+    def __str__(self):
+        return f"{self.changed_at:%Y-%m-%d} — {self.fields_changed[:60]}"
+
+    @property
+    def is_new_entry(self) -> bool:
+        return self.fields_changed == "New entry"
+
+
 class CalendarEvent(models.Model):
     posting = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name="calendar_events")
     eveniment = models.CharField(max_length=500)

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import CalendarEvent, Employer, EmployerAlias, JobPosting, Judet
+from .models import CalendarEvent, Employer, EmployerAlias, JobPosting, JobPostingUpdate, Judet
 
 
 @admin.register(Judet)
@@ -195,3 +195,16 @@ class JobPostingAdmin(admin.ModelAdmin):
         labels = {"short_deadline": "⏰", "missing_contact": "📵", "gender_criteria": "⚠️", "no_body": "📄"}
         icons = " ".join(labels.get(f, f) for f in flags)
         return format_html('<span title="{}">{}</span>', ", ".join(flags), icons)
+
+
+@admin.register(JobPostingUpdate)
+class JobPostingUpdateAdmin(admin.ModelAdmin):
+    list_display = ("posting", "changed_at", "fields_changed", "is_new_entry_display")
+    list_filter = ("changed_at",)
+    search_fields = ("posting__title", "posting__url", "fields_changed")
+    raw_id_fields = ("posting",)
+    date_hierarchy = "changed_at"
+
+    @admin.display(boolean=True, description="Intrare nouă")
+    def is_new_entry_display(self, obj):
+        return obj.is_new_entry

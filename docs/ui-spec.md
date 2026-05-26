@@ -12,6 +12,8 @@ The official site offers poor discovery: no profession taxonomy, no city-level g
 
 This spec defines an alternative UI/app on top of the scraped + enriched dataset. **Primary audience: job seekers**, with a layered analytics surface for researchers/journalists. Goal: a useful, robust gov-jobs board alternative built entirely from public data, with inferred taxonomies and feeds first-class.
 
+**Stack:** Django + HTMX, with React islands for the map and calendar views. See the "Stack" section below for the full picture.
+
 ## Scope summary
 
 A "go bold" feature set across the surface area, to be phased during implementation. v1 inferred-attribute scope (must-haves):
@@ -220,6 +222,79 @@ These fields must be added to the dataset beyond what `anunturi.csv` provides to
 - Personal saved-jobs feed (signed URL).
 - Public JSON dumps (nightly) for researchers — anunturi, calendar, derived fields.
 
+## Stack
+
+Server-rendered Django app with HTMX for facet interactivity and a small number of React islands where they earn their keep. Single language end-to-end with the existing Python scraper + LLM inference pipeline.
+
+**Why this stack:**
+- The spec leans on admin-heavy features (manual review of inferred taxonomies, anomaly moderation, report-an-issue moderation queue) — Django admin gives these effectively for free.
+- The scraper and inference pipeline are already Python; the web app can share models, settings, and management commands with them in one repo.
+- SSR is required for the SEO surface (category hubs, employer profiles, job detail pages).
+- Auth, RSS, i18n, full-text search, migrations, ORM all built in — short path from v1 to v3 without architectural rewrites.
+
+### Web / UI
+
+- **Framework:** Django (latest LTS).
+- **Templating:** Django templates + HTMX for partial updates (facet filters, preview pane, infinite scroll on browse, "save" toggles).
+- **CSS:** Tailwind via `django-tailwind` (or static-built Tailwind CLI). Custom design tokens for RO public-sector trust signals.
+- **JS sprinkles:** Alpine.js for tiny client-side state (dropdowns, dialogs).
+- **React islands** — used only where a richer interactive component pays off:
+  - **Map view** — MapLibre GL JS + a React wrapper, mounted in a single `<div id="map-root">`.
+  - **Calendar view** — FullCalendar (React build), same pattern.
+  - Both islands are bundled via Vite and loaded only on their pages.
+- **i18n:** Django's built-in i18n (`gettext`); RO default, EN toggle.
+- **Accessibility:** semantic templates + ARIA on facet groups; tested with axe-core CI step.
+
+### Data
+
+- **DB:** PostgreSQL 16+. JSONB columns for `anomaly_flags`, `skills`, `summary_bullets`, `updates` history. GIN indexes on JSONB and on tsvector columns for FTS.
+- **Search:** Postgres full-text search (`tsvector` + `tsquery`) over title + body + employer. Romanian text-search config (or `simple` + custom unaccent). The dataset (~thousands of active postings) fits well within Postgres FTS; Meilisearch or pg_trgm can be added later if needed.
+- **Geo (v2):** PostGIS for locality coordinates and "near me" queries.
+- **Migrations:** Django migrations.
+
+### Background work
+
+- **Task queue:** Celery + Redis (or Django-Q2 if we want to stay lighter).
+- **Scrapers + inference pipeline:** existing Python scripts ported into Django management commands (`python manage.py scrape_index`, `enrich_taxonomy`, `flag_anomalies`, etc.). Scheduled via Celery beat (or cron in v1).
+- **LLM enrichment:** the existing `llm-schema.py` becomes a management command; results go straight into DB rows, not separate JSON files.
+
+### Auth & notifications (v3)
+
+- **Auth:** `django-sesame` for passwordless magic-links; optionally `django-allauth` for Google OAuth.
+- **Email:** Postmark or Resend for transactional. Notification cadence handled by Celery beat.
+- **Feeds:** `django.contrib.syndication` for RSS; a thin Django view emits iCal (icalendar lib); JSON via Django REST Framework or plain views.
+
+### Admin tooling
+
+- **Django admin** powers the manual-review queue (low-confidence taxonomy assignments, reported issues), the employer canonicalization workflow, and content moderation. Custom admin actions for bulk re-tagging.
+
+### Deployment
+
+- **Single host** (v1/v2): a small VPS or Fly.io / Railway. Docker Compose for app + Postgres + Redis.
+- **Static assets:** WhiteNoise (or CDN later).
+- **Background workers:** same host as v1, separate workers when load justifies.
+- **Scrapers** run on the same host on a schedule.
+
+### Repo layout (proposed)
+
+The current `posturi.gov.ro` repo grows into a small monorepo:
+
+```
+posturi.gov.ro/
+  scraper/          # existing scripts, refactored into a Django app's management commands
+  webapp/           # Django project
+    apps/
+      jobs/         # postings, employers, calendar
+      taxonomy/     # inferred fields, review queue
+      accounts/     # v3
+      feeds/        # RSS/iCal/JSON
+    templates/
+    static/
+    frontend/       # Vite + React islands (map, calendar) only
+  data/             # gitignored; mirrors current layout
+  docs/
+```
+
 ## Phased roadmap (recommended)
 
 A recommended path from a small useful release to the full spec. Phases are sequenced so that each ships standalone value and unblocks the next.
@@ -286,8 +361,9 @@ Inferred fields ready for v1: profession family + seniority/grade (dictionary-dr
 
 ## Open decisions deferred to planning
 
-- Stack & hosting (server-rendered vs static + client search vs hybrid).
-- Auth provider details.
-- Map tile provider.
+- Hosting target (VPS vs Fly.io vs Railway).
+- Auth provider details for v3 (django-sesame magic-link only, or also OAuth).
+- Map tile provider (MapTiler, Stadia Maps, OSM raster, self-hosted).
 - LLM provider/model choice for inference pipeline (already prototyped in the scraper's `llm-schema.py`).
+- Task queue choice (Celery + Redis vs Django-Q2).
 - Phasing details — which sections actually ship in each release.

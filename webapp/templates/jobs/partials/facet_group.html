@@ -1,0 +1,17 @@
+{% comment %}Params: label, items (list of {value,label,count}), name, active_values{% endcomment %}
+{% if items %}
+<div class="mb-4">
+  <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-2">{{ label }}</div>
+  <div class="space-y-0.5 max-h-48 overflow-y-auto pr-1">
+    {% for item in items %}
+    <label class="flex items-center gap-2 py-0.5 cursor-pointer group">
+      <input type="checkbox" name="{{ name }}" value="{{ item.value }}"
+             class="facet-check accent-gov shrink-0"
+             {% if item.value in active_values %}checked{% endif %}>
+      <span class="text-sm text-ink group-hover:text-gov transition-colors truncate flex-1">{{ item.label }}</span>
+      <span class="text-xs text-ink-faint font-mono shrink-0">{{ item.count }}</span>
+    </label>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}

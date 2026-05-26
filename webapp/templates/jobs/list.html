@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% load jobs_extras %}
+
+{% block title %}Posturi publice{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
+
+  <!-- Page heading -->
+  <div class="mb-5">
+    <h1 class="font-display text-3xl font-semibold italic text-ink leading-tight">
+      Posturi în sectorul public
+    </h1>
+    <p class="text-ink-muted text-sm mt-1">
+      {{ total_count }} anunțuri indexate · sursă: posturi.gov.ro
+    </p>
+  </div>
+
+  <div class="flex gap-6 items-start">
+
+    <!-- SIDEBAR -->
+    <aside class="hidden lg:flex flex-col gap-0 w-64 shrink-0 sticky top-4 self-start">
+      <form id="filter-form"
+            hx-get="/"
+            hx-target="#results"
+            hx-push-url="true"
+            hx-trigger="change, input delay:400ms from:[name=q]"
+            hx-indicator="#results">
+
+        <!-- Keyword search -->
+        <div class="mb-4">
+          <div class="relative">
+            <input type="text" name="q" value="{{ q }}"
+                   placeholder="Caută posturi…"
+                   class="w-full bg-white border border-border-warm px-3 py-2 pr-8 text-sm text-ink placeholder-ink-faint focus:outline-none focus:border-gov focus:ring-1 focus:ring-gov transition-colors">
+            {% if q %}
+              <button type="button" onclick="document.querySelector('[name=q]').value=''; htmx.trigger('#filter-form', 'change')"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink text-lg leading-none">×</button>
+            {% else %}
+              <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint text-sm">⌕</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Sort -->
+        <div class="mb-5">
+          <label class="block text-xs font-semibold uppercase tracking-widest text-ink-muted mb-1.5">Sortare</label>
+          <select name="sort" class="w-full bg-white border border-border-warm px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov">
+            <option value="" {% if not sort %}selected{% endif %}>{% if q %}Relevanță{% else %}Cele mai noi{% endif %}</option>
+            <option value="newest" {% if sort == "newest" %}selected{% endif %}>Cele mai noi</option>
+            <option value="deadline" {% if sort == "deadline" %}selected{% endif %}>Termen limită</option>
+            <option value="employer" {% if sort == "employer" %}selected{% endif %}>Angajator A–Z</option>
+          </select>
+        </div>
+
+        <!-- Divider -->
+        <div class="border-t border-border-warm mb-4"></div>
+
+        {% include "jobs/partials/facet_group.html" with label="Județ" items=judet_options name="judet" active_values=judet_slugs value_field="judet__slug" label_field="judet__name" %}
+        {% include "jobs/partials/facet_group.html" with label="Nivel" items=level_options name="level" active_values=levels value_field="job_level" label_field="job_level" %}
+        {% include "jobs/partials/facet_group.html" with label="Tip" items=type_options name="type" active_values=types value_field="job_type" label_field="job_type" %}
+        {% include "jobs/partials/facet_group.html" with label="Categorie" items=categorie_options name="categorie" active_values=categories value_field="categorie" label_field="categorie" %}
+        {% include "jobs/partials/facet_group.html" with label="Angajator" items=employer_cat_options name="employer_cat" active_values=employer_cats value_field="employer_category" label_field="employer_category" %}
+
+        <!-- Deadline range -->
+        <div class="mb-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-2">Termen limită</div>
+          <div class="space-y-1.5">
+            <div>
+              <label class="text-xs text-ink-muted">De la</label>
+              <input type="date" name="expires_after" value="{{ expires_after }}"
+                     class="w-full bg-white border border-border-warm px-2 py-1 text-xs text-ink focus:outline-none focus:border-gov mt-0.5">
+            </div>
+            <div>
+              <label class="text-xs text-ink-muted">Până la</label>
+              <input type="date" name="expires_before" value="{{ expires_before }}"
+                     class="w-full bg-white border border-border-warm px-2 py-1 text-xs text-ink focus:outline-none focus:border-gov mt-0.5">
+            </div>
+          </div>
+        </div>
+
+        <!-- Reset -->
+        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after %}
+          <a href="/" class="block text-center text-xs text-gov hover:underline mt-2 py-1">
+            ✕ Șterge filtrele
+          </a>
+        {% endif %}
+
+      </form>
+    </aside>
+
+    <!-- RESULTS -->
+    <div class="flex-1 min-w-0">
+
+      <!-- Mobile filter toggle (placeholder) -->
+      <div class="lg:hidden mb-4">
+        <details class="border border-border-warm bg-white">
+          <summary class="px-4 py-2 text-sm font-medium cursor-pointer text-gov">Filtre ▾</summary>
+          <div class="px-4 pb-4">
+            <p class="text-xs text-ink-muted mt-2">Deschide pe desktop pentru filtre complete.</p>
+          </div>
+        </details>
+      </div>
+
+      <div id="results">
+        {% include "jobs/partials/result_list.html" %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

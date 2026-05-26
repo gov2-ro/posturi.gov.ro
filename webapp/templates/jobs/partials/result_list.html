@@ -1,0 +1,109 @@
+{% load jobs_extras %}
+
+<!-- Top bar: count + active chips -->
+<div class="flex items-center justify-between mb-3 pb-2 border-b border-border-warm">
+  <div class="text-sm text-ink-muted">
+    {% if total_count %}
+      <span class="font-mono font-medium text-ink">{{ total_count }}</span>
+      post{% if total_count != 1 %}uri{% else %}&#x2E;&#x2E;&#x2E;{% endif %} găsite
+    {% else %}
+      Niciun rezultat
+    {% endif %}
+    {% if q %}<span class="ml-1">pentru <em class="text-ink">"{{ q }}"</em></span>{% endif %}
+  </div>
+  {% if total_count %}
+    <span class="text-xs text-ink-faint font-mono">
+      pag. {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}
+    </span>
+  {% endif %}
+</div>
+
+<!-- Active filter chips -->
+{% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after %}
+<div class="flex flex-wrap gap-1.5 mb-3">
+  {% if q %}
+    <a href="/?{% querystring q=None page=None %}" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-colors">
+      "{{ q }}" ×
+    </a>
+  {% endif %}
+  {% for s in judet_slugs %}
+    <a href="/?{% querystring judet=None page=None %}" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:text-red-700 transition-colors">
+      Județ: {{ s }} ×
+    </a>
+  {% endfor %}
+  {% for l in levels %}
+    <a href="/?{% querystring level=None page=None %}" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:text-red-700 transition-colors">
+      {{ l }} ×
+    </a>
+  {% endfor %}
+  {% for t in types %}
+    <a href="/?{% querystring type=None page=None %}" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:text-red-700 transition-colors">
+      {{ t }} ×
+    </a>
+  {% endfor %}
+  {% for c in categories %}
+    <a href="/?{% querystring categorie=None page=None %}" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:text-red-700 transition-colors">
+      {{ c }} ×
+    </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Results -->
+{% if page_obj.object_list %}
+  <div class="divide-y divide-border-warm border-t border-border-warm">
+    {% for posting in page_obj %}
+      {% include "jobs/partials/result_row.html" %}
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.paginator.num_pages > 1 %}
+  <nav class="mt-6 flex items-center justify-between text-sm">
+    <div class="text-xs text-ink-faint font-mono">
+      {{ page_obj.start_index }}–{{ page_obj.end_index }} din {{ total_count }}
+    </div>
+    <div class="flex items-center gap-1">
+      {% if page_obj.has_previous %}
+        <a href="/?{% querystring page=page_obj.previous_page_number %}"
+           hx-get="/?{% querystring page=page_obj.previous_page_number %}"
+           hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
+           class="px-3 py-1 border border-border-warm text-ink-muted hover:text-gov hover:border-gov transition-colors">
+          ← Prev
+        </a>
+      {% endif %}
+
+      {% for i in page_obj.paginator.page_range %}
+        {% if i >= page_obj.number|add:"-3" and i <= page_obj.number|add:"3" %}
+          {% if i == page_obj.number %}
+            <span class="px-3 py-1 bg-gov text-white text-sm font-mono">{{ i }}</span>
+          {% else %}
+            <a href="/?{% querystring page=i %}"
+               hx-get="/?{% querystring page=i %}"
+               hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
+               class="px-3 py-1 border border-border-warm text-ink-muted hover:text-gov hover:border-gov transition-colors font-mono text-xs">
+              {{ i }}
+            </a>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+        <a href="/?{% querystring page=page_obj.next_page_number %}"
+           hx-get="/?{% querystring page=page_obj.next_page_number %}"
+           hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
+           class="px-3 py-1 border border-border-warm text-ink-muted hover:text-gov hover:border-gov transition-colors">
+          Următor →
+        </a>
+      {% endif %}
+    </div>
+  </nav>
+  {% endif %}
+
+{% else %}
+  <div class="py-16 text-center">
+    <div class="font-display text-4xl text-ink-faint italic mb-3">—</div>
+    <p class="text-ink-muted text-sm">Niciun anunț nu corespunde filtrelor selectate.</p>
+    <a href="/" class="mt-4 inline-block text-sm text-gov hover:underline">Șterge filtrele</a>
+  </div>
+{% endif %}

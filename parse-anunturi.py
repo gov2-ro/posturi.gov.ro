@@ -104,6 +104,17 @@ def _find_calendar_date(calendar_rows, keywords):
     return ''
 
 
+def source_url_from_path(file_path):
+    """Reconstruct the posting URL from the cached HTML path.
+
+    Files are saved by fetch-anunturi.py at
+    data/anunturi/YYYY/MM/DD/<slug>.html, where <slug> is the last path
+    segment of the original /anunt/<slug>/ URL.
+    """
+    slug = os.path.splitext(os.path.basename(file_path))[0]
+    return f'https://posturi.gov.ro/anunt/{slug}/'
+
+
 def extract_job_details(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
@@ -159,6 +170,7 @@ def extract_job_details(file_path):
     data_rezultate = _find_calendar_date(calendar_rows, ['final', 'rezultat final', 'rezultate finale'])
 
     return {
+        'source_url': source_url_from_path(file_path),
         'job_title': job_title,
         'employer': employer,
         'location': location,
@@ -183,6 +195,7 @@ def extract_job_details(file_path):
 
 def save_to_csv(data_list, path):
     headers = [
+        'Source URL',
         'Job Title', 'Employer', 'Location', 'Job Level', 'Job Type',
         'Employer Category', 'Categorie', 'Announcement URL',
         'Main Body Markdown', 'Other Links',
@@ -194,6 +207,7 @@ def save_to_csv(data_list, path):
         writer.writeheader()
         for d in data_list:
             writer.writerow({
+                'Source URL': d['source_url'],
                 'Job Title': d['job_title'],
                 'Employer': d['employer'],
                 'Location': d['location'],
@@ -220,7 +234,7 @@ def save_calendar(data_list, path):
         writer = csv.DictWriter(f, fieldnames=['url', 'eveniment', 'data', 'ora'])
         writer.writeheader()
         for d in data_list:
-            url = d['announcement_url'] or ''
+            url = d['source_url']
             for eveniment, data_str, ora in d['_calendar_rows']:
                 writer.writerow({'url': url, 'eveniment': eveniment, 'data': data_str, 'ora': ora})
 

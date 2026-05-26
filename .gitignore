@@ -15,3 +15,12 @@ selenium/geckodriver.log
 /data/cached-responses/*
 /testbench/
 */scraping.log
+
+# webapp
+webapp/.venv/
+.playwright-mcp/
+webapp/.env
+webapp/__pycache__/
+**/__pycache__/
+webapp/staticfiles/
+webapp/db.sqlite3

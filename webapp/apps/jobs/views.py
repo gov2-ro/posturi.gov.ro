@@ -1,10 +1,13 @@
-from datetime import date
+from datetime import date, datetime, time
 
 import markdown as md
 from django.contrib.postgres.search import SearchQuery, SearchRank
+from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
 from django.db.models import Count
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils.feedgenerator import Atom1Feed
 
 from apps.jobs.models import JobPosting
 
@@ -173,6 +176,105 @@ def job_list(request):
     if request.htmx:
         return render(request, "jobs/partials/result_list.html", ctx)
     return render(request, "jobs/list.html", ctx)
+
+
+def _filter_kwargs_from_request(request):
+    return dict(
+        q=request.GET.get("q", "").strip(),
+        judet_slugs=request.GET.getlist("judet"),
+        levels=request.GET.getlist("level"),
+        types=request.GET.getlist("type"),
+        categories=request.GET.getlist("categorie"),
+        employer_cats=request.GET.getlist("employer_cat"),
+        expires_before=request.GET.get("expires_before", ""),
+        expires_after=request.GET.get("expires_after", ""),
+        families=request.GET.getlist("family"),
+        seniorities=request.GET.getlist("seniority"),
+    )
+
+
+def job_json(request):
+    filter_kwargs = _filter_kwargs_from_request(request)
+    qs = _apply_filters(
+        JobPosting.objects.select_related("employer", "judet"),
+        **filter_kwargs,
+    ).order_by("-published_at")[:200]
+
+    results = []
+    for p in qs:
+        inferred = p.inferred or {}
+        results.append({
+            "id": p.pk,
+            "title": p.title,
+            "url": p.url,
+            "employer": p.employer.name if p.employer else None,
+            "judet": p.judet.name if p.judet else None,
+            "published_at": p.published_at.isoformat() if p.published_at else None,
+            "expires_at": p.expires_at.isoformat() if p.expires_at else None,
+            "job_level": p.job_level,
+            "job_type": p.job_type,
+            "categorie": p.categorie,
+            "employer_category": p.employer_category,
+            "nr_posturi": p.nr_posturi,
+            "contact_phone": p.contact_phone,
+            "contact_email": p.contact_email,
+            "profession_family": inferred.get("profession_family"),
+            "seniority": inferred.get("seniority"),
+            "anomaly_flags": inferred.get("anomaly_flags", []),
+        })
+
+    total = _apply_filters(
+        JobPosting.objects.all(), **filter_kwargs
+    ).count()
+
+    return JsonResponse({"count": total, "results": results})
+
+
+class JobPostingFeed(Feed):
+    title = "Posturi publice — posturi.gov.ro"
+    link = "/"
+    description = "Anunțuri de angajare în sectorul public din România"
+    feed_type = Atom1Feed
+
+    def get_object(self, request, *args, **kwargs):
+        self._filter_kwargs = _filter_kwargs_from_request(request)
+        return None
+
+    def items(self, obj):
+        return _apply_filters(
+            JobPosting.objects.select_related("employer", "judet"),
+            **self._filter_kwargs,
+        ).order_by("-published_at")[:50]
+
+    def item_title(self, item):
+        employer = item.employer.name if item.employer else ""
+        return f"{item.title} — {employer}" if employer else item.title
+
+    def item_description(self, item):
+        parts = []
+        if item.judet:
+            parts.append(f"Județ: {item.judet.name}")
+        if item.job_type:
+            parts.append(f"Tip: {item.job_type}")
+        if item.categorie:
+            parts.append(f"Categorie: {item.categorie}")
+        if item.expires_at:
+            parts.append(f"Termen depunere: {item.expires_at:%d.%m.%Y}")
+        return " | ".join(parts)
+
+    def item_link(self, item):
+        return item.url
+
+    def item_pubdate(self, item):
+        if item.published_at:
+            return datetime.combine(item.published_at, time.min)
+        return None
+
+    def item_guid(self, item):
+        return item.url
+
+    def item_author_name(self, item):
+        return item.employer.name if item.employer else None
 
 
 def job_detail(request, pk):

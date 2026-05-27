@@ -83,7 +83,9 @@ def _build_cmd(
 ) -> list[str | Path]:
     """Return the subprocess command for a given step."""
     if step in _SCRAPER_STEPS:
-        cmd: list[str | Path] = [sys.executable, _SCRAPER_STEPS[step]]
+        # schema needs psycopg which lives in the webapp venv; other scrapers use sys.executable
+        python = VENV_PYTHON if step == "schema" else sys.executable
+        cmd: list[str | Path] = [python, _SCRAPER_STEPS[step]]
         if step == "schema":
             if force:
                 cmd.append("--force")
@@ -160,7 +162,7 @@ def main() -> None:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Pass --force to import, extract, and infer steps.",
+        help="Pass --force to import, extract, infer, and schema steps.",
     )
     parser.add_argument(
         "--no-llm",
@@ -171,7 +173,7 @@ def main() -> None:
         "--provider",
         choices=["gemini", "openai", "anthropic"],
         default=os.environ.get("LLM_PROVIDER", "gemini"),
-        help="LLM provider for infer step (default: gemini).",
+        help="LLM provider for infer and schema steps (default: gemini).",
     )
     parser.add_argument(
         "--limit",

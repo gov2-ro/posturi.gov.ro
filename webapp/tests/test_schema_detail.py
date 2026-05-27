@@ -46,6 +46,11 @@ def test_render_schema_sections_null_returns_none():
     assert _render_schema_sections(schema) is None
 
 
+def test_render_schema_sections_empty_dict_returns_none():
+    from apps.jobs.views import _render_schema_sections
+    assert _render_schema_sections({}) is None
+
+
 def test_render_schema_sections_html_in_output():
     from apps.jobs.views import _render_schema_sections
     schema = {
@@ -100,6 +105,7 @@ def posting_without_schema(db):
     )
 
 
+@pytest.mark.django_db
 def test_detail_with_schema_json_passes_sections(posting_with_schema):
     client = Client()
     resp = client.get(f"/job/{posting_with_schema.pk}/")
@@ -109,6 +115,7 @@ def test_detail_with_schema_json_passes_sections(posting_with_schema):
     assert "schema_sections" in resp.context
 
 
+@pytest.mark.django_db
 def test_detail_without_schema_json_passes_body_html(posting_without_schema):
     client = Client()
     resp = client.get(f"/job/{posting_without_schema.pk}/")

@@ -6,20 +6,31 @@ calls an LLM to extract 7 structured sections, and writes the result back to
 jobs_jobposting.schema_json. Skips postings that already have schema_json
 unless --force is passed.
 
+Models and prompts are defined in models_config.json.
+
 Usage:
-    python llm-schema.py                       # default provider (gemini), all postings
+    python llm-schema.py                                    # default provider (gemini) + v1 prompt
     python llm-schema.py --provider anthropic
-    python llm-schema.py --provider openai --model gpt-4o
-    python llm-schema.py --slug subinginer-gradul-i   # single posting by URL fragment
-    python llm-schema.py --force               # re-generate existing outputs
-    python llm-schema.py --compare             # run all providers; store variants only
-    python llm-schema.py --compare --limit 5   # compare on first 5 postings
+    python llm-schema.py --provider openai --model gpt-4o-mini
+    python llm-schema.py --slug subinginer-gradul-i        # single posting by URL fragment
+    python llm-schema.py --force                            # re-generate existing outputs
+
+    # Variant comparison (test multiple providers):
+    python llm-schema.py --compare                          # run all enabled models, store variants only
+    python llm-schema.py --compare --limit 10               # compare on first 10 postings
+    python llm-schema.py --compare --model-filter "gemini-.*" --limit 5  # test only Gemini models
+
+    # Prompt testing:
+    python llm-schema.py --prompt-version v2                # use prompt v2 with default provider
+    python llm-schema.py --compare --prompt-version v2      # compare all providers with prompt v2
+    python llm-schema.py --compare --model-filter "gpt-.*" --prompt-version v2  # GPT with prompt v2
 """
 
 import argparse
 import json
 import os
 import re
+import sys
 import time
 import itertools
 import psycopg
@@ -33,23 +44,20 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost/posturi_dev")
 with open("models_config.json") as f:
     MODELS_CONFIG = json.load(f)
 
-PROMPT = """\
-Extract structured sections from this Romanian government job posting.
-Return a JSON object with exactly these 7 keys. Values must be in Romanian.
-Use markdown bullet lists (lines starting with -) for lists.
-Use null for any section not mentioned in the posting.
 
-{
-  "responsibilities": "markdown list of job duties and tasks, or null",
-  "qualifications": "markdown describing required education and eligibility conditions, or null",
-  "skills": "markdown list of required skills, competencies, computer skills, languages, certifications, or null",
-  "application_docs": "markdown list of documents required to apply (dosar de candidatură), or null",
-  "salary": "salary description as plain text, or null if not stated",
-  "application_fee": "application fee amount and payment details as plain text, or null if none",
-  "work_conditions": "work schedule, location details, or benefits as plain text, or null if not stated"
-}
+def get_prompt(prompt_version="v1"):
+    """Fetch prompt text from config by version."""
+    return MODELS_CONFIG.get("prompts", {}).get(prompt_version, "")
 
-Return only valid JSON. No explanation, no markdown code blocks."""
+
+def get_enabled_models():
+    """Return list of (provider, model_id) tuples for enabled models only."""
+    enabled = []
+    for provider, prov_config in MODELS_CONFIG.get("providers", {}).items():
+        for model_id, model_config in prov_config.get("models", {}).items():
+            if model_config.get("enabled", True):  # Default to enabled if not specified
+                enabled.append((provider, model_id))
+    return enabled
 
 DEFAULTS = {
     'gemini':    'gemini-2-5-flash',
@@ -89,7 +97,7 @@ def parse_json_response(text):
     return text
 
 
-def make_generator(provider, model):
+def make_generator(provider, model, prompt):
     """Returns a generate(content) function that yields (schema, input_tokens, output_tokens)."""
     if provider == 'gemini':
         from google import genai
@@ -98,7 +106,7 @@ def make_generator(provider, model):
         def generate(content):
             resp = client.models.generate_content(
                 model=model,
-                contents=f"{PROMPT}\n\n{content}",
+                contents=f"{prompt}\n\n{content}",
                 config=genai_types.GenerateContentConfig(temperature=0.2),
             )
             schema = parse_json_response(resp.text)
@@ -114,7 +122,7 @@ def make_generator(provider, model):
                 model=model,
                 messages=[
                     {'role': 'system', 'content': 'You extract structured sections from Romanian job postings. Return only valid JSON.'},
-                    {'role': 'user', 'content': f"{PROMPT}\n\n{content}"},
+                    {'role': 'user', 'content': f"{prompt}\n\n{content}"},
                 ],
                 max_tokens=2000,
                 temperature=0.2,
@@ -131,7 +139,7 @@ def make_generator(provider, model):
             msg = client.messages.create(
                 model=model,
                 max_tokens=2000,
-                messages=[{'role': 'user', 'content': f"{PROMPT}\n\n{content}"}],
+                messages=[{'role': 'user', 'content': f"{prompt}\n\n{content}"}],
             )
             schema = parse_json_response(msg.content[0].text)
             input_tokens = msg.usage.input_tokens if hasattr(msg, 'usage') else None
@@ -146,7 +154,7 @@ def make_generator(provider, model):
                 model=model,
                 messages=[
                     {'role': 'system', 'content': 'You extract structured sections from Romanian job postings. Return only valid JSON.'},
-                    {'role': 'user', 'content': f"{PROMPT}\n\n{content}"},
+                    {'role': 'user', 'content': f"{prompt}\n\n{content}"},
                 ],
                 max_tokens=2000,
                 temperature=0.2,
@@ -205,7 +213,7 @@ def write_schema(conn, posting_id, schema):
     conn.commit()
 
 
-def write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost_usd, latency_ms):
+def write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost_usd, latency_ms, prompt_version=PROMPT_VERSION):
     """Write variant to jobs_jobpostingschemavariant (upsert on unique constraint)."""
     with conn.cursor() as cur:
         cur.execute(
@@ -223,7 +231,7 @@ def write_variant(conn, posting_id, provider, model, schema, input_tokens, outpu
                 latency_ms    = EXCLUDED.latency_ms,
                 created_at    = NOW()
             """,
-            (posting_id, provider, model, PROMPT_VERSION,
+            (posting_id, provider, model, prompt_version,
              json.dumps(schema, ensure_ascii=False),
              input_tokens, output_tokens, cost_usd, latency_ms),
         )
@@ -237,28 +245,37 @@ if __name__ == '__main__':
     parser.add_argument('--slug', default=None, help='Process only postings whose URL contains this string')
     parser.add_argument('--force', action='store_true', help='Re-generate even if schema_json already set')
     parser.add_argument('--limit', type=int, default=None, help='Process at most N postings')
-    parser.add_argument('--compare', action='store_true', help='Run all providers and save variants only (does NOT overwrite schema_json)')
+    parser.add_argument('--compare', action='store_true', help='Run all enabled providers and save variants only (does NOT overwrite schema_json)')
+    parser.add_argument('--model-filter', default=None, help='Only test models matching this regex (e.g., "gemini-.*" or "gpt-.*")')
+    parser.add_argument('--prompt-version', default='v1', help='Prompt version to use (from config; default v1)')
     args = parser.parse_args()
+
+    # Load the prompt version
+    prompt = get_prompt(args.prompt_version)
+    if not prompt:
+        print(f"✗ Prompt version '{args.prompt_version}' not found in config")
+        sys.exit(1)
 
     with psycopg.connect(DATABASE_URL) as conn:
         if args.compare:
-            providers_to_run = [
-                ('gemini', 'gemini-2-5-flash'),
-                ('gemini', 'gemini-3-1-flash-lite'),
-                ('openai', 'gpt-5-nano'),
-                ('openai', 'gpt-4o-mini'),
-                ('anthropic', 'claude-3-5-haiku-20241022'),
-                ('deepseek', 'deepseek-v4-flash'),
-            ]
-            print(f"Running comparison on {len(providers_to_run)} providers...")
+            # Get all enabled models, optionally filtered by regex
+            all_enabled = get_enabled_models()
+            if args.model_filter:
+                import re
+                pattern = re.compile(args.model_filter)
+                providers_to_run = [(p, m) for p, m in all_enabled if pattern.search(m)]
+                print(f"Running comparison (filtered by '{args.model_filter}') on {len(providers_to_run)} models...")
+            else:
+                providers_to_run = all_enabled
+                print(f"Running comparison on {len(providers_to_run)} enabled models...")
         else:
             model = args.model or DEFAULTS[args.provider]
             providers_to_run = [(args.provider, model)]
-            print(f"Provider: {args.provider}, model: {model}")
+            print(f"Provider: {args.provider}, model: {model}, prompt: {args.prompt_version}")
 
         for provider, model in providers_to_run:
-            print(f"\n[{provider}/{model}]")
-            generate = make_generator(provider, model)
+            print(f"\n[{provider}/{model} @ {args.prompt_version}]")
+            generate = make_generator(provider, model, prompt)
             postings = iter_postings(conn, slug_filter=args.slug, force=args.force or args.compare)
             if args.limit:
                 postings = itertools.islice(postings, args.limit)
@@ -279,7 +296,7 @@ if __name__ == '__main__':
                     continue
 
                 cost = compute_cost(provider, model, input_tokens, output_tokens)
-                write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms)
+                write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms, args.prompt_version)
 
                 if not args.compare:
                     write_schema(conn, posting_id, schema)

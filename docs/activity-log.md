@@ -2,20 +2,34 @@
 
 ## 2026
 
-### 2026-05-27 — LLM provider comparison infrastructure
+### 2026-05-27 — LLM provider comparison infrastructure (with model enable/disable + prompt versioning)
 
-**What:** Built end-to-end framework for comparing LLM providers on the same job postings without overwriting production schema:
-- **Config-driven models** (`models_config.json`): Defined 6 models across 4 providers (Gemini 3.1/2.5 Flash, GPT-5 Nano, GPT-4o Mini, Claude 3.5 Haiku, DeepSeek-V4-Flash) with input/output costs per million tokens and cache pricing.
-- **Variant storage** (`JobPostingSchemaVariant` model, migration 0007): Captures provider, model, prompt_version, schema output, token counts, cost (computed), latency_ms, created_at. Unique constraint on (posting, provider, model, prompt_version) for idempotent reruns.
-- **Refactored llm-schema.py**: Token capture from each provider's SDK response; `compute_cost()` function for real USD calculation; `write_variant()` for upsert to variants table.
-- **New `--compare` flag**: Runs all 6 providers on the same postings, stores results in variants only (never touches production `schema_json`). Usage: `python llm-schema.py --compare --limit 5 --slug substring`.
-- **Variant comparison view** (`/job/<id>/variants/`): Side-by-side display of all variants with cost/latency highlighting (green=best, red=worst), full schema preview per variant, provider/model/token metadata.
-- **Admin inline + standalone**: JobPostingAdmin now shows SchemaVariantInline; standalone JobPostingSchemaVariantAdmin allows filtering by provider/model/date.
-- **UI link**: Job detail page has "Dev → Comparație LLM" link in sidebar.
+**What:** Built end-to-end framework for comparing LLM providers and prompts on the same job postings without overwriting production schema:
+- **Config-driven models + prompts** (`models_config.json`): 
+  - Defined 6 enabled models across 4 providers (Gemini 3.1/2.5 Flash, GPT-5 Nano, GPT-4o Mini, Claude 3.5 Haiku, DeepSeek-V4-Flash) with input/output costs per million tokens
+  - 2 disabled models (Claude 3 Haiku, GPT-4o) kept in config for reference
+  - Prompts versioned (`v1`, etc.) centralized in config; loaded per-run via `--prompt-version`
+- **Variant storage** (`JobPostingSchemaVariant` model, migration 0007): Captures provider, model, prompt_version, schema output, token counts, cost (computed), latency_ms, created_at. Unique constraint on (posting, provider, model, prompt_version) for A/B testing multiple prompt versions.
+- **Refactored llm-schema.py**: 
+  - Token capture from each provider's SDK response; `compute_cost()` for real USD calculation
+  - `get_enabled_models()` to respect enabled flag; skip disabled models in `--compare`
+  - `get_prompt(version)` to load prompts from config dynamically
+  - New flags: `--model-filter <regex>` for testing subsets (e.g., `gemini-.*`, `gpt-.*`), `--prompt-version <v>` for prompt A/B testing
+- **Variant comparison view** (`/job/<id>/variants/`): Side-by-side display with cost/latency highlighting, full schema preview, prompt version visible.
+- **Admin + UI**: JobPostingAdmin inline display; standalone variant browser; job detail "Dev → Comparație LLM" link.
 
-**Why:** Choose the best LLM provider for production by comparing real token counts, costs, and latency on actual postings. Variant storage lets you A/B test multiple providers without disrupting the main pipeline.
+**Usage examples:**
+```
+python llm-schema.py --compare --limit 10                              # all enabled models, prompt v1
+python llm-schema.py --compare --model-filter "gemini-.*" --limit 5    # test only Gemini
+python llm-schema.py --compare --prompt-version v2                     # compare all with prompt v2 (when v2 exists)
+python llm-schema.py --model-filter "gpt-.*" --prompt-version v2 --limit 3  # GPT models + prompt v2
+python llm-schema.py --provider anthropic                              # single provider (production mode)
+```
 
-**Next:** Run `python llm-schema.py --compare --limit 100` to benchmark all 6 providers on a representative sample, then pick the winner based on cost/quality tradeoff.
+**Why:** (1) Choose best LLM provider by cost/quality on real postings. (2) Test prompt improvements without running all providers. (3) Disable expensive models (GPT-4o) or older ones (Claude 3) without deletion. (4) A/B test prompt v1 vs v2 across providers.
+
+**Next:** Run `python llm-schema.py --compare --limit 100` to benchmark, then consider adding prompt v2 (stricter/more detailed) to config for comparative testing.
 
 ### 2026-05-27 — Structured job detail display from schema_json
 

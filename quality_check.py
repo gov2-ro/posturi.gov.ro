@@ -10,7 +10,7 @@ and produces:
 Usage:
     python quality_check.py
     python quality_check.py --n 10
-    python quality_check.py --provider gemini|openai|anthropic
+    python quality_check.py --provider gemini|openai|anthropic|deepseek
     python quality_check.py --no-llm
     python quality_check.py --slugs slug1,slug2,...
 """
@@ -26,6 +26,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from boilerplate import strip_hg_1336
+
 load_dotenv()
 
 DATA_DIR = Path("data")
@@ -39,6 +41,7 @@ DEFAULTS = {
     "gemini": "gemini-2.5-flash",
     "openai": "gpt-4o",
     "anthropic": "claude-3-5-haiku-20241022",
+    "deepseek": "deepseek-v4-flash",
 }
 
 
@@ -657,15 +660,23 @@ def make_schema_generator(provider: str, model: str):
         import openai
         client = openai.OpenAI()
         def generate(content: str):
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
+            kwargs = {
+                "model": model,
+                "messages": [
                     {"role": "system", "content": "Convert job postings to schema.org/JobPosting JSON-LD. Return only valid JSON."},
                     {"role": "user", "content": f"{SCHEMA_PROMPT}\n\n{content}"},
                 ],
-                max_tokens=1500,
-                temperature=0.3,
-            )
+                # GPT-5 rejects `max_tokens`; GPT-4o accepts both. Use the new one uniformly.
+                "max_completion_tokens": 2000,
+            }
+            # GPT-5 reasoning models consume the completion budget with internal
+            # reasoning tokens by default — force minimal for this extraction task.
+            # They also reject custom temperature.
+            if model.startswith("gpt-5"):
+                kwargs["reasoning_effort"] = "minimal"
+            else:
+                kwargs["temperature"] = 0.3
+            resp = client.chat.completions.create(**kwargs)
             return _parse_json_response(resp.choices[0].message.content)
 
     elif provider == "anthropic":
@@ -678,6 +689,22 @@ def make_schema_generator(provider: str, model: str):
                 messages=[{"role": "user", "content": f"{SCHEMA_PROMPT}\n\n{content}"}],
             )
             return _parse_json_response(msg.content[0].text)
+
+    elif provider == "deepseek":
+        import openai
+        client = openai.OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
+        def generate(content: str):
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "Convert job postings to schema.org/JobPosting JSON-LD. Return only valid JSON."},
+                    {"role": "user", "content": f"{SCHEMA_PROMPT}\n\n{content}"},
+                ],
+                max_tokens=2000,
+                temperature=0.3,
+                response_format={"type": "json_object"},
+            )
+            return _parse_json_response(resp.choices[0].message.content)
 
     else:
         raise ValueError(f"Unknown provider: {provider}")
@@ -748,6 +775,10 @@ def check_schema(
     content = f"{fields_text}\n\n{deduped_body}"
     if attachment_text:
         content += f"\n\n--- Document atașat ---\n{attachment_text[:2000]}"
+    # Strip HG 1.336/2022 generic eligibility boilerplate before sending — same
+    # treatment as the production llm-schema.py pipeline so the JSON-LD output
+    # is grounded in role-specific signal, not legal citations.
+    content = strip_hg_1336(content)
 
     try:
         schema_json = generate_fn(content)
@@ -870,7 +901,7 @@ def compute_aggregate(results: list) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Data quality check for posturi.gov.ro pipeline")
     parser.add_argument("--n", type=int, default=8, help="Number of postings to sample (default: 8)")
-    parser.add_argument("--provider", choices=["gemini", "openai", "anthropic"], default="anthropic")
+    parser.add_argument("--provider", choices=["gemini", "openai", "anthropic", "deepseek"], default="anthropic")
     parser.add_argument("--model", default=None, help="Override default model for the provider")
     parser.add_argument("--no-llm", action="store_true", help="Skip LLM steps (infer fallback + schema generation)")
     parser.add_argument("--slugs", default=None, help="Comma-separated slugs to force-select (e.g. 2a66f376.doc)")

@@ -6,6 +6,68 @@ See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7U
 
 ## Pipeline
 
+```mermaid
+flowchart LR
+    web(["posturi.gov.ro"])
+
+    subgraph scrape["① Scrape"]
+        direction TB
+        fetchIdx["fetch-index.py"]
+        indexCSV[/"posturi_gov_ro.csv"/]
+        fetchDetail["fetch-anunturi.py"]
+        htmlCache[/"anunturi/\n**∕*.html"/]
+        download["download-attachments.py"]
+        dlFiles[/"downloads/\n*.docx *.pdf"/]
+
+        fetchIdx --> indexCSV --> fetchDetail --> htmlCache
+        htmlCache --> download --> dlFiles
+    end
+
+    subgraph parse["② Parse"]
+        direction TB
+        parseScript["parse-anunturi.py"]
+        anunturiCSV[/"anunturi.csv"/]
+        calendarCSV[/"calendar.csv"/]
+        parseScript --> anunturiCSV & calendarCSV
+    end
+
+    subgraph db_layer["③ Import → Postgres"]
+        direction TB
+        importCSVs["import_csvs"]
+        extractCmd["extract_attachments"]
+        inferCmd["infer_postings"]
+        pg[("jobs_jobposting\nbody_markdown\nattachment_text\ninferred JSONB")]
+
+        importCSVs --> pg
+        extractCmd -->|"attachment_text"| pg
+        pg --> inferCmd -->|"inferred"| pg
+    end
+
+    subgraph enrich["④ Enrich"]
+        llmSchema["llm-schema.py"]
+        schemaJSON[/"data/schema/\n*.json"/]
+        llmSchema --> schemaJSON
+    end
+
+    subgraph serve["⑤ Serve"]
+        webapp["Django webapp"]
+        browser(["browser"])
+        webapp --> browser
+    end
+
+    web -->|"index pages"| fetchIdx
+    web -->|"detail pages"| fetchDetail
+    web -->|"attachments"| download
+
+    htmlCache --> parseScript
+    anunturiCSV & calendarCSV --> importCSVs
+    dlFiles --> extractCmd
+
+    pg -->|"body_markdown\n+ attachment_text"| llmSchema
+    pg --> webapp
+    schemaJSON --> webapp
+```
+
 ### Quick start — run everything
 
 ```bash
@@ -33,6 +95,7 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `import` | `manage.py import_csvs` | Postgres `jobs_jobposting` table |
 | `extract` | `manage.py extract_attachments` | `JobPosting.attachment_text` |
 | `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
+| `schema` | `llm-schema.py` | `JobPosting.schema_json` JSONB |
 
 `--force` re-processes already-done rows for `import`, `extract`, and `infer`.
 `--limit N` restricts `infer` to N postings (useful for testing).

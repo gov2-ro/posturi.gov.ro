@@ -2,6 +2,10 @@
 
 ## 2026
 
+### 2026-05-27 — Structured job detail display from schema_json
+
+Added `schema_json` JSONField to `JobPosting` (migration 0006). Rewrote `llm-schema.py` to extract 7 structured display sections (responsibilities, qualifications, skills, application_docs, salary, application_fee, work_conditions) from `body_markdown + attachment_text` via LLM, storing results in `jobs_jobposting.schema_json` directly via psycopg. Added `schema` pipeline step. Detail page now renders named structured sections instead of raw markdown blob when `schema_json` is populated, with fallback to `body_html`. Calendar reordered to appear after body content.
+
 ### 2026-05-27 — Stats dashboard at /statistici/
 
 **What:** Added a server-rendered stats page accessible from the nav:

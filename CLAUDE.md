@@ -12,7 +12,7 @@ python fetch-index.py                 # stops early at first page with no change
 python fetch-anunturi.py
 python parse-anunturi.py
 python download-attachments.py
-python llm-schema.py                  # LLM schema generation (needs .env); --provider gemini|openai|anthropic
+python llm-schema.py                  # extracts 7 structured sections (responsibilities, qualifications, skills, etc.) from body+attachment → stores in JobPosting.schema_json; --provider gemini|openai|anthropic; --slug <fragment>; --force to re-generate
 # Data quality testing (use webapp venv for attachment extraction):
 webapp/.venv/bin/python3 quality_check.py --no-llm          # fast: CSV + attachment + infer, no LLM
 webapp/.venv/bin/python3 quality_check.py --provider anthropic  # full pass incl. schema.org generation

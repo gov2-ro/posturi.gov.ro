@@ -59,7 +59,8 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] **iCal feed per filter combination** — `/posturi.ics` — one `VEVENT` per posting (deadline as `DTSTART`/`DTEND`), employer as `SUMMARY`, contact info + URL in `DESCRIPTION`. Same filter params as browse view, up to 200 events. Done 2026-05-27.
 - [x] **Methodology + About pages** — `/despre/` page with sections: what the site is, data sources, inference methodology (dict + LLM fallback, confidence scoring), anomaly heuristics (all 6 flags explained), limitations (scanned PDFs, partial attachment coverage, imperfect classification), export/API reference. Navigation link in base.html header. Done 2026-05-27.
 - [ ] **Auth (v3)** — `django-sesame` magic-link; optional Google OAuth.
-- [ ] **Stats dashboard (v3)** — KPI tiles, time series, geographic, anomaly index, re-posting tracker.
+- [x] **Stats dashboard** — `/statistici/` page with KPI tiles (total/active/classified), top-10 profession family and județ bar charts with filter links, and anomaly flag table. Done 2026-05-27. Remaining v3 additions: time series, geographic heat map, re-posting tracker.
+- [ ] **Stats dashboard v3 additions** — time series (postings over time), geographic choropleth, re-posting tracker.
 
 ## Known small issues
 

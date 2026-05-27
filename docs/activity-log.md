@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-05-27 — Stats dashboard at /statistici/
+
+**What:** Added a server-rendered stats page accessible from the nav:
+- KPI tiles: total postings, active count (14%), auto-classified count (61%)
+- Horizontal bar charts for top 10 profession families and top 10 județe; each bar label links to the browse view pre-filtered
+- Anomaly table: all 6 flags with count, % of total, and a "filtrează →" link
+- Refactored `stats_json` logic into `_build_stats()` shared helper; `stats_json` now calls it; `stats_dashboard` view also calls it and enriches the data for display
+- `by_judet` query now also returns `judet__slug` so the judet links in both dashboard and JSON are correct
+- "Statistici" nav link added to `base.html` header
+
 ### 2026-05-27 — FTS search_vector extended with attachment_text (weight D)
 
 **What:** Extended the full-text search index to include attachment content:

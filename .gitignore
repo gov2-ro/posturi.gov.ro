@@ -16,8 +16,9 @@ selenium/geckodriver.log
 /testbench/
 */scraping.log
 
+# virtualenv
+.venv/
 # webapp
-webapp/.venv/
 .playwright-mcp/
 webapp/.env
 webapp/__pycache__/

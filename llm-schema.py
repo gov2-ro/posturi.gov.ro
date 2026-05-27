@@ -68,11 +68,15 @@ def parse_json_response(text):
 
 def make_generator(provider, model):
     if provider == 'gemini':
-        import google.generativeai as genai
-        genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
-        m = genai.GenerativeModel(model)
+        from google import genai
+        from google.genai import types as genai_types
+        client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
         def generate(content):
-            resp = m.generate_content(f"{PROMPT}\n\n{content}")
+            resp = client.models.generate_content(
+                model=model,
+                contents=f"{PROMPT}\n\n{content}",
+                config=genai_types.GenerateContentConfig(temperature=0.2),
+            )
             return parse_json_response(resp.text)
 
     elif provider == 'openai':

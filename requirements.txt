@@ -1,13 +1,37 @@
+# Scraping / pipeline
 requests
 beautifulsoup4
 tqdm
 pandas
 markdownify
-python-dotenv
-openai
-anthropic
-google-genai
-PyPDF2
-python-docx
-docx2txt
 pypandoc
+
+# Document extraction
+PyPDF2
+python-docx>=1.1
+docx2txt>=0.8
+pypdf>=4.0
+
+# LLM APIs
+openai>=1.0
+anthropic>=0.25
+google-genai>=0.8
+
+# Database
+psycopg[binary]>=3.2
+
+# Django webapp
+Django>=5.2,<6
+gunicorn>=23.0
+whitenoise[brotli]>=6.8
+python-dotenv>=1.0
+dj-database-url>=2.2
+django-htmx>=1.21
+markdown>=3.7
+icalendar>=6.0
+
+# Dev / test
+black
+ruff
+pytest-django
+factory-boy

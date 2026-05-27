@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parent.resolve()
 WEBAPP_DIR = ROOT / "webapp"
-VENV_PYTHON = WEBAPP_DIR / ".venv" / "bin" / "python"
+VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
 
 ALL_STEPS = [
     "fetch-index",
@@ -83,9 +83,7 @@ def _build_cmd(
 ) -> list[str | Path]:
     """Return the subprocess command for a given step."""
     if step in _SCRAPER_STEPS:
-        # schema needs psycopg which lives in the webapp venv; other scrapers use sys.executable
-        python = VENV_PYTHON if step == "schema" else sys.executable
-        cmd: list[str | Path] = [python, _SCRAPER_STEPS[step]]
+        cmd: list[str | Path] = [VENV_PYTHON, _SCRAPER_STEPS[step]]
         if step == "schema":
             if force:
                 cmd.append("--force")
@@ -217,7 +215,7 @@ def main() -> None:
     if mgmt_steps_selected and not VENV_PYTHON.exists():
         print(
             f"Error: {VENV_PYTHON} not found. Create the virtualenv first:\n"
-            f"  cd webapp && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+            f"  python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
             file=sys.stderr,
         )
         sys.exit(1)

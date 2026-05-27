@@ -184,10 +184,9 @@ brew install libreoffice pandoc tesseract
 ### Webapp setup
 
 ```bash
-cd webapp
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python manage.py migrate
-.venv/bin/python manage.py runserver
+.venv/bin/python webapp/manage.py migrate
+.venv/bin/python webapp/manage.py runserver
 ```
 

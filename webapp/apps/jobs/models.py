@@ -105,6 +105,7 @@ class JobPosting(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     last_seen_at = models.DateField(null=True, blank=True, help_text="Set by importer; can detect dropped postings")
     inferred = models.JSONField(default=dict, blank=True, help_text="Reserved for v2/v3 derived fields")
+    schema_json = models.JSONField(null=True, blank=True, help_text="LLM-extracted structured sections for display (responsibilities, qualifications, skills, etc.)")
 
     # ---- Full-text search ----
     search_vector = SearchVectorField(null=True, blank=True)

@@ -2,6 +2,14 @@
 
 ## 2026
 
+### 2026-05-27 — LLM comparison analysis document
+
+**What:** Wrote `docs/llm-comparison-analysis.md` — a standalone analysis of the 4-model benchmark (GPT-5 Nano, Gemini 2.5 Flash, DeepSeek-V4-Flash, GPT-4o Mini) run with prompt v2 on 5 postings.
+
+Covers: cost per 1,000 posts, cache hit rates, structured-output API differences per provider, quality delta v1→v2, and a ranked recommendation (GPT-5 Nano first, Gemini fallback).
+
+---
+
 ### 2026-05-27 — quality_check.py: OCR fallback, attachment-title mismatch detection, body-duplication splitter fix
 
 **What:** Three targeted fixes to `quality_check.py` following a `/quality-review` session.

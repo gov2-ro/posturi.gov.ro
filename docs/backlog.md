@@ -84,6 +84,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [ ] **Promote prompt v2 to default + backfill** — Change `PROMPT_VERSION = "v2"` and CLI `--prompt-version` default to `v2` in `llm-schema.py`. Then run `python llm-schema.py --provider gemini --prompt-version v2 --force` to refresh all 4357 postings under v2. Estimated cost: ~$2.67 (gemini-2.5-flash). Optional: tune boilerplate patterns based on a wider sample if any false-positives surface.
 - [ ] **Cross-posting LLM-variants dashboard** — top-level page (e.g. `/llm-variants/`) that aggregates `JobPostingSchemaVariant` data across all postings: per-(provider, model, prompt_version) cost/latency/throughput leaderboard, prompt-version comparison stats, ability to drill into a specific posting from there. Complements (but doesn't replace) the per-posting side-by-side viewer at `/job/<pk>/variants/`. Build after the per-posting viewer's reading experience is solid.
 - [ ] some posts cover more jobs, how to address?
+- [ ] go beyond schema org, extract easy to read attributes. `Rezumatul functiei` card on [cariere.gov.md](https://cariere.gov.md/ro/job/specialist-in-domeniul-perceperii-fiscale/32948). Those will also used as filters.
 
 
 ### Later

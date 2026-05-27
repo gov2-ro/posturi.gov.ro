@@ -613,37 +613,96 @@ def job_detail(request, pk):
 
 
 def variant_comparison(request, pk):
-    """Display all schema variants for a posting side-by-side."""
-    from apps.jobs.models import JobPostingSchemaVariant
+    """Field × variant matrix for LLM schema comparison."""
+    posting = get_object_or_404(
+        JobPosting.objects.select_related("employer", "judet"), pk=pk
+    )
+    all_variants = list(posting.schema_variants.all())
 
-    posting = get_object_or_404(JobPosting.objects.select_related("employer"), pk=pk)
-    variants = posting.schema_variants.all().order_by("-created_at")
+    # --- Parse toolbar filters from URL query string ---
+    prompt_filter = request.GET.getlist("prompt") or [PRODUCTION_PROMPT_VERSION]
+    providers_filter = request.GET.getlist("providers")  # empty = all providers
+    view_mode = request.GET.get("view", "rendered")
 
-    # Group by provider for easier display
-    variants_by_provider = {}
-    for variant in variants:
-        if variant.provider not in variants_by_provider:
-            variants_by_provider[variant.provider] = []
-        variants_by_provider[variant.provider].append(variant)
+    # --- Filter ---
+    included = [v for v in all_variants if v.prompt_version in prompt_filter]
+    if providers_filter:
+        included = [v for v in included if v.provider in providers_filter]
 
-    # Calculate min/max costs and latencies for comparison highlighting
-    if variants:
-        all_costs = [v.cost_usd for v in variants if v.cost_usd]
-        all_latencies = [v.latency_ms for v in variants if v.latency_ms]
-        min_cost = min(all_costs) if all_costs else None
-        max_cost = max(all_costs) if all_costs else None
-        min_latency = min(all_latencies) if all_latencies else None
-        max_latency = max(all_latencies) if all_latencies else None
-    else:
-        min_cost = max_cost = min_latency = max_latency = None
+    # --- Stable column order: (provider, model, prompt_version) ---
+    included.sort(key=lambda v: (v.provider, v.model, v.prompt_version))
 
-    context = {
-        'posting': posting,
-        'variants': variants,
-        'variants_by_provider': variants_by_provider,
-        'min_cost': min_cost,
-        'max_cost': max_cost,
-        'min_latency': min_latency,
-        'max_latency': max_latency,
+    # --- Toolbar option sets ---
+    all_providers = sorted({v.provider for v in all_variants})
+    all_prompts = sorted({v.prompt_version for v in all_variants})
+
+    # --- Min/max for metadata strip highlighting ---
+    costs = [v.cost_usd for v in included if v.cost_usd]
+    latencies = [v.latency_ms for v in included if v.latency_ms]
+    min_cost = min(costs) if costs else None
+    max_cost = max(costs) if costs else None
+    min_latency = min(latencies) if latencies else None
+    max_latency = max(latencies) if latencies else None
+
+    # --- Build comparison matrix ---
+    matrix = []
+    for key, label in _SCHEMA_SECTION_LABELS:
+        values = [
+            (v.schema_json.get(key) if isinstance(v.schema_json, dict) else None)
+            for v in included
+        ]
+        if not included:
+            continue
+        status = _section_status(values, key)
+        if status == "all_null":
+            continue
+
+        cells = []
+        for value in values:
+            if value is None or value == "":
+                html = ""
+                raw_json = "null"
+            elif isinstance(value, dict) and key in _STRUCTURED_RENDERERS:
+                rendered_text = _STRUCTURED_RENDERERS[key](value)
+                html = md.markdown(rendered_text, extensions=["nl2br"]) if rendered_text.strip() else ""
+                raw_json = json.dumps(value, indent=2, ensure_ascii=False)
+            else:
+                html = md.markdown(str(value), extensions=["nl2br"])
+                raw_json = json.dumps(str(value), ensure_ascii=False)
+            cells.append({"html": html, "raw_json": raw_json})
+
+        # merged_html used in diff-only mode for agree rows
+        merged_html = ""
+        if status == "agree":
+            for cell in cells:
+                if cell["html"]:
+                    merged_html = cell["html"]
+                    break
+
+        matrix.append({
+            "key": key,
+            "label": label,
+            "status": status,
+            "cells": cells,
+            "merged_html": merged_html,
+        })
+
+    ctx = {
+        "posting": posting,
+        "included_variants": included,
+        "matrix": matrix,
+        "view_mode": view_mode,
+        "prompt_filter": prompt_filter,
+        "providers_filter": providers_filter,
+        "all_providers": all_providers,
+        "all_prompts": all_prompts,
+        "variant_count": len(included),
+        "min_cost": min_cost,
+        "max_cost": max_cost,
+        "min_latency": min_latency,
+        "max_latency": max_latency,
     }
-    return render(request, 'jobs/variant_comparison.html', context)
+
+    if request.htmx:
+        return render(request, "jobs/partials/_variant_matrix.html", ctx)
+    return render(request, "jobs/variant_comparison.html", ctx)

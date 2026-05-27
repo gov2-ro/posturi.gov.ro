@@ -1,6 +1,6 @@
 # posturi.gov.ro scraper
 
-Alternative browser / explorer for [posturi.gov.ro](http://posturi.gov.ro). Scrapes the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → (optional) LLM-generated schema.org JSON.
+Alternative browser / explorer for [posturi.gov.ro](http://posturi.gov.ro). Scrapes the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → LLM-extracted structured display sections stored in Postgres.
 
 See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7Ue98SqNFQ/) gdocs
 
@@ -45,8 +45,6 @@ flowchart LR
 
     subgraph enrich["④ Enrich"]
         llmSchema["llm-schema.py"]
-        schemaJSON[/"data/schema/\n*.json"/]
-        llmSchema --> schemaJSON
     end
 
     subgraph serve["⑤ Serve"]
@@ -64,8 +62,8 @@ flowchart LR
     dlFiles --> extractCmd
 
     pg -->|"body_markdown\n+ attachment_text"| llmSchema
+    llmSchema -->|"schema_json"| pg
     pg --> webapp
-    schemaJSON --> webapp
 ```
 
 ### Quick start — run everything
@@ -97,9 +95,10 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
 | `schema` | `llm-schema.py` | `JobPosting.schema_json` JSONB |
 
-`--force` re-processes already-done rows for `import`, `extract`, and `infer`.
+`--force` re-processes already-done rows for `import`, `extract`, `infer`, and `schema`.
 `--limit N` restricts `infer` to N postings (useful for testing).
-`--provider gemini|openai|anthropic` sets the LLM used by the `infer` step (default: `gemini`).
+`--provider gemini|openai|anthropic` sets the LLM used by the `infer` and `schema` steps (default: `gemini`).
+`--no-llm` skips the LLM portion of `infer` only — the `schema` step is always LLM-driven; use `--skip schema` to omit it.
 
 ## Data quality
 

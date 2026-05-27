@@ -176,3 +176,30 @@ class CalendarEvent(models.Model):
 
     def __str__(self):
         return f"{self.data:%d.%m.%Y} — {self.eveniment[:60]}"
+
+
+class JobPostingSchemaVariant(models.Model):
+    posting = models.ForeignKey(JobPosting, on_delete=models.CASCADE, related_name="schema_variants")
+    provider = models.CharField(max_length=50)
+    model = models.CharField(max_length=100)
+    prompt_version = models.CharField(max_length=20, default="v1")
+    schema_json = models.JSONField()
+    input_tokens = models.IntegerField(null=True, blank=True)
+    output_tokens = models.IntegerField(null=True, blank=True)
+    cost_usd = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    latency_ms = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Variantă schemă LLM"
+        verbose_name_plural = "Variante schemă LLM"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["posting", "provider", "model", "prompt_version"],
+                name="unique_schema_variant",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.provider}/{self.model}@{self.prompt_version} — posting {self.posting_id}"

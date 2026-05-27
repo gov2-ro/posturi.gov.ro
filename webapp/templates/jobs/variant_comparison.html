@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Comparație variante schema — {{ posting.title }} — posturi.gov.ro{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8 max-w-7xl">
+  {% if posting %}
+    <div class="mb-6">
+      <a href="{% url 'job_detail' posting.pk %}" class="text-blue-600 hover:underline">← Înapoi la anunț</a>
+    </div>
+
+    <h1 class="text-3xl font-bold mb-2">{{ posting.title }}</h1>
+    <p class="text-gray-600 mb-6">{{ posting.employer.name }} • {{ posting.judet.name }}</p>
+
+    {% if variants %}
+      <div class="bg-gray-50 rounded-lg p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Variante Schema LLM ({{ variants.count }} total)</h2>
+
+        <div class="overflow-x-auto">
+          <table class="w-full border-collapse">
+            <thead class="bg-gray-200 sticky top-0">
+              <tr>
+                <th class="border px-3 py-2 text-left text-sm">Provider</th>
+                <th class="border px-3 py-2 text-left text-sm">Model</th>
+                <th class="border px-3 py-2 text-center text-sm">Prompt</th>
+                <th class="border px-3 py-2 text-right text-sm">Input (tokens)</th>
+                <th class="border px-3 py-2 text-right text-sm">Output (tokens)</th>
+                <th class="border px-3 py-2 text-right text-sm" {% if min_latency == max_latency %}title="Toate au același timp"{% endif %}>Latență (ms)</th>
+                <th class="border px-3 py-2 text-right text-sm" {% if min_cost == max_cost %}title="Toate costă la fel"{% endif %}>Cost (USD)</th>
+                <th class="border px-3 py-2 text-center text-sm">Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for variant in variants %}
+                <tr class="hover:bg-gray-100 {% cycle 'bg-white' 'bg-gray-50' %}">
+                  <td class="border px-3 py-2 text-sm font-medium">{{ variant.provider }}</td>
+                  <td class="border px-3 py-2 text-sm">{{ variant.model }}</td>
+                  <td class="border px-3 py-2 text-center text-xs text-gray-500">{{ variant.prompt_version }}</td>
+                  <td class="border px-3 py-2 text-right text-sm">{% if variant.input_tokens %}{{ variant.input_tokens|floatformat:0 }}{% else %}—{% endif %}</td>
+                  <td class="border px-3 py-2 text-right text-sm">{% if variant.output_tokens %}{{ variant.output_tokens|floatformat:0 }}{% else %}—{% endif %}</td>
+                  <td class="border px-3 py-2 text-right text-sm {% if variant.latency_ms and min_latency == variant.latency_ms %}bg-green-100{% elif variant.latency_ms and max_latency == variant.latency_ms %}bg-red-100{% endif %}">
+                    {% if variant.latency_ms %}{{ variant.latency_ms }}{% else %}—{% endif %}
+                  </td>
+                  <td class="border px-3 py-2 text-right text-sm font-mono {% if variant.cost_usd and min_cost == variant.cost_usd %}bg-green-100{% elif variant.cost_usd and max_cost == variant.cost_usd %}bg-red-100{% endif %}">
+                    {% if variant.cost_usd %}${{ variant.cost_usd|floatformat:6 }}{% else %}—{% endif %}
+                  </td>
+                  <td class="border px-3 py-2 text-center text-xs text-gray-500">{{ variant.created_at|date:"Y-m-d H:i" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if min_cost and max_cost and min_cost != max_cost %}
+          <p class="text-xs text-gray-600 mt-4">
+            💚 Verde = cel mai bun | 🔴 Roșu = cel mai prost
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {% for variant in variants %}
+          <div class="border rounded-lg p-6 bg-white shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold">{{ variant.provider }}/{{ variant.model }}</h3>
+              <span class="text-xs bg-gray-200 px-2 py-1 rounded">{{ variant.created_at|date:"Y-m-d H:i" }}</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 mb-6 text-sm">
+              <div>
+                <span class="text-gray-600">Input tokens:</span>
+                <div class="font-mono">{{ variant.input_tokens|default:"—" }}</div>
+              </div>
+              <div>
+                <span class="text-gray-600">Output tokens:</span>
+                <div class="font-mono">{{ variant.output_tokens|default:"—" }}</div>
+              </div>
+              <div>
+                <span class="text-gray-600">Latență:</span>
+                <div class="font-mono">{% if variant.latency_ms %}{{ variant.latency_ms }} ms{% else %}—{% endif %}</div>
+              </div>
+              <div>
+                <span class="text-gray-600">Cost:</span>
+                <div class="font-mono">{% if variant.cost_usd %}${{ variant.cost_usd|floatformat:6 }}{% else %}—{% endif %}</div>
+              </div>
+            </div>
+
+            <div class="border-t pt-4">
+              <h4 class="font-semibold text-sm mb-3">Schema JSON</h4>
+              <pre class="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-96">{{ variant.schema_json|safe }}</pre>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-8 p-4 bg-blue-50 rounded border-l-4 border-blue-400">
+        <p class="text-sm text-gray-700">
+          <strong>Cum să interpretez:</strong>
+          Costul și latența sunt calculate din răspunsurile API actuale. Puteți selecta modelul cu cel mai bun raport cost/latență/calitate pentru producție.
+        </p>
+      </div>
+
+    {% else %}
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <p class="text-gray-700 mb-4">Nu au fost generate variante schema pentru acest anunț.</p>
+        <p class="text-sm text-gray-600">
+          Rulați <code class="bg-gray-100 px-2 py-1 rounded">python llm-schema.py --compare --slug {{ posting.url|lower }}</code>
+          pentru a genera comparații LLM.
+        </p>
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="text-gray-600">Anunț nu găsit.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -468,3 +468,40 @@ def job_detail(request, pk):
         "schema_sections": schema_sections,
         "today": date.today(),
     })
+
+
+def variant_comparison(request, pk):
+    """Display all schema variants for a posting side-by-side."""
+    from apps.jobs.models import JobPostingSchemaVariant
+
+    posting = get_object_or_404(JobPosting.objects.select_related("employer"), pk=pk)
+    variants = posting.schema_variants.all().order_by("-created_at")
+
+    # Group by provider for easier display
+    variants_by_provider = {}
+    for variant in variants:
+        if variant.provider not in variants_by_provider:
+            variants_by_provider[variant.provider] = []
+        variants_by_provider[variant.provider].append(variant)
+
+    # Calculate min/max costs and latencies for comparison highlighting
+    if variants:
+        all_costs = [v.cost_usd for v in variants if v.cost_usd]
+        all_latencies = [v.latency_ms for v in variants if v.latency_ms]
+        min_cost = min(all_costs) if all_costs else None
+        max_cost = max(all_costs) if all_costs else None
+        min_latency = min(all_latencies) if all_latencies else None
+        max_latency = max(all_latencies) if all_latencies else None
+    else:
+        min_cost = max_cost = min_latency = max_latency = None
+
+    context = {
+        'posting': posting,
+        'variants': variants,
+        'variants_by_provider': variants_by_provider,
+        'min_cost': min_cost,
+        'max_cost': max_cost,
+        'min_latency': min_latency,
+        'max_latency': max_latency,
+    }
+    return render(request, 'jobs/variant_comparison.html', context)

@@ -69,3 +69,17 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [ ] **`Other Links` parsing is naive** — splits on comma and filters by `http` prefix. Misses cases where URLs themselves contain commas. Low priority; sample data clean for now.
 - [ ] **HTML sanitization in _render_schema_sections** — `section.html` is rendered with `|safe` in detail.html. Add `bleach.clean()` or equivalent allowlist sanitizer in `_render_schema_sections` (views.py) before appending to sections, to guard against LLM-echoed raw HTML. Same issue exists for `body_html`. Low-to-medium risk since source is a government domain pipeline, but worth hardening.
 - [ ] **Add --limit flag to llm-schema.py** — `pipeline.py --steps schema --limit N` silently ignores `--limit` since `llm-schema.py` has no such flag. Add `--limit N` arg to process only the first N unprocessed postings (useful for testing a batch of new postings without full run).
+
+
+## Misc
+- [x] **LLM provider comparison infrastructure** — Done 2026-05-27. Created `models_config.json` with 6 models (Gemini 3.1/2.5 Flash, GPT-5 Nano, GPT-4o Mini, Claude 3.5 Haiku, DeepSeek-V4-Flash) and pricing. `JobPostingSchemaVariant` model stores every LLM run with token counts, cost, latency. `llm-schema.py --compare` runs all 6 providers on same postings, saves variants only (doesn't overwrite production `schema_json`). Admin inline + standalone view at `/job/<id>/variants/` for side-by-side cost/latency/output comparison. Usage: `python llm-schema.py --compare --limit 5 --slug substring`.
+- [ ] extract in a config json (maybe with versions) the prompt being sent to LLMs, now  defined in llm-schema.py
+- [x] use OpenRouter for this, or `simonw/LLM` package? - which approach is cheaper? Resolution: **NEITHER** — direct SDK calls give better metrics
+- [ ] for debugging purposes show filters of is inferred, attachment text, schema in the UI browser
+
+
+### Later
+- [ ] one job posting might have more than one attachments? Do we ever have `other_links` ?
+- [ ] sometimes attachments might need to be OCR'ed?
+- [ ] enhance slugs – use the original? – add judet as folder? - use alias?
+- [ ] in site attachment renderer? doc/x, pdf

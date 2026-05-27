@@ -1,7 +1,10 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import CalendarEvent, Employer, EmployerAlias, JobPosting, JobPostingUpdate, Judet
+from .models import (
+    CalendarEvent, Employer, EmployerAlias, JobPosting, JobPostingUpdate,
+    JobPostingSchemaVariant, Judet
+)
 
 
 @admin.register(Judet)
@@ -39,6 +42,16 @@ class CalendarEventInline(admin.TabularInline):
     extra = 0
     fields = ("data", "ora", "eveniment")
     ordering = ("data", "id")
+
+
+class SchemaVariantInline(admin.TabularInline):
+    model = JobPostingSchemaVariant
+    extra = 0
+    can_delete = False
+    show_change_link = True
+    readonly_fields = ("provider", "model", "prompt_version", "input_tokens", "output_tokens", "cost_usd", "latency_ms", "created_at")
+    fields = readonly_fields
+    ordering = ("-created_at",)
 
 
 class InferenceConfidenceFilter(admin.SimpleListFilter):
@@ -129,7 +142,7 @@ class JobPostingAdmin(admin.ModelAdmin):
     search_fields = ("title", "employer__name", "url")
     date_hierarchy = "published_at"
     readonly_fields = ("created_at", "updated_at", "last_seen_at", "search_vector")
-    inlines = [CalendarEventInline]
+    inlines = [CalendarEventInline, SchemaVariantInline]
     actions = [reset_inferred]
     fieldsets = (
         (None, {"fields": ("url", "title", "employer", "judet", "tip", "detalii_raw")}),
@@ -210,3 +223,14 @@ class JobPostingUpdateAdmin(admin.ModelAdmin):
     @admin.display(boolean=True, description="Intrare nouă")
     def is_new_entry_display(self, obj):
         return obj.is_new_entry
+
+
+@admin.register(JobPostingSchemaVariant)
+class JobPostingSchemaVariantAdmin(admin.ModelAdmin):
+    list_display = ("posting", "provider", "model", "prompt_version", "input_tokens", "output_tokens", "cost_usd", "latency_ms", "created_at")
+    list_filter = ("provider", "model", "prompt_version", "created_at")
+    search_fields = ("posting__title", "posting__url")
+    raw_id_fields = ("posting",)
+    readonly_fields = ("created_at",)
+    date_hierarchy = "created_at"
+    ordering = ("-created_at",)

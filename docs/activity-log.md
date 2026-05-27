@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-05-27 — LLM provider comparison infrastructure
+
+**What:** Built end-to-end framework for comparing LLM providers on the same job postings without overwriting production schema:
+- **Config-driven models** (`models_config.json`): Defined 6 models across 4 providers (Gemini 3.1/2.5 Flash, GPT-5 Nano, GPT-4o Mini, Claude 3.5 Haiku, DeepSeek-V4-Flash) with input/output costs per million tokens and cache pricing.
+- **Variant storage** (`JobPostingSchemaVariant` model, migration 0007): Captures provider, model, prompt_version, schema output, token counts, cost (computed), latency_ms, created_at. Unique constraint on (posting, provider, model, prompt_version) for idempotent reruns.
+- **Refactored llm-schema.py**: Token capture from each provider's SDK response; `compute_cost()` function for real USD calculation; `write_variant()` for upsert to variants table.
+- **New `--compare` flag**: Runs all 6 providers on the same postings, stores results in variants only (never touches production `schema_json`). Usage: `python llm-schema.py --compare --limit 5 --slug substring`.
+- **Variant comparison view** (`/job/<id>/variants/`): Side-by-side display of all variants with cost/latency highlighting (green=best, red=worst), full schema preview per variant, provider/model/token metadata.
+- **Admin inline + standalone**: JobPostingAdmin now shows SchemaVariantInline; standalone JobPostingSchemaVariantAdmin allows filtering by provider/model/date.
+- **UI link**: Job detail page has "Dev → Comparație LLM" link in sidebar.
+
+**Why:** Choose the best LLM provider for production by comparing real token counts, costs, and latency on actual postings. Variant storage lets you A/B test multiple providers without disrupting the main pipeline.
+
+**Next:** Run `python llm-schema.py --compare --limit 100` to benchmark all 6 providers on a representative sample, then pick the winner based on cost/quality tradeoff.
+
 ### 2026-05-27 — Structured job detail display from schema_json
 
 Added `schema_json` JSONField to `JobPosting` (migration 0006). Rewrote `llm-schema.py` to extract 7 structured display sections (responsibilities, qualifications, skills, application_docs, salary, application_fee, work_conditions) from `body_markdown + attachment_text` via LLM, storing results in `jobs_jobposting.schema_json` directly via psycopg. Added `schema` pipeline step. Detail page now renders named structured sections instead of raw markdown blob when `schema_json` is populated, with fallback to `body_html`. Calendar reordered to appear after body content.

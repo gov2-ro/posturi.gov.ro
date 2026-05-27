@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 import re
+import psycopg
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -124,7 +125,7 @@ def iter_postings(conn, slug_filter=None, force=False):
                 "SELECT id, url, body_markdown, attachment_text, schema_json "
                 "FROM jobs_jobposting"
             )
-        for row_id, url, body, attachment, existing_schema in cur.fetchall():
+        for row_id, url, body, attachment, existing_schema in cur:
             if existing_schema is not None and not force:
                 print(f"Skipping {url.rstrip('/').split('/')[-1]} (already has schema_json)")
                 continue
@@ -132,6 +133,9 @@ def iter_postings(conn, slug_filter=None, force=False):
             if attachment and attachment.strip():
                 content += "\n\n---\n\n" + attachment.strip()
             if content:
+                if len(content) > 100_000:
+                    print(f"  ⚠ content truncated ({len(content)} chars) for {url.rstrip('/').split('/')[-1]}")
+                    content = content[:100_000]
                 yield row_id, url, content
 
 
@@ -156,14 +160,17 @@ if __name__ == '__main__':
     model = args.model or DEFAULTS[args.provider]
     print(f"Provider: {args.provider}, model: {model}")
 
-    import psycopg
     generate = make_generator(args.provider, model)
 
     with psycopg.connect(DATABASE_URL) as conn:
         for posting_id, url, content in iter_postings(conn, slug_filter=args.slug, force=args.force):
             slug = url.rstrip('/').split('/')[-1]
             print(f"Processing {slug}...")
-            schema = generate(content)
+            try:
+                schema = generate(content)
+            except Exception as e:
+                print(f"  ✗ API error: {e}")
+                continue
             if isinstance(schema, dict):
                 write_schema(conn, posting_id, schema)
                 print(f"  ✓ saved to DB (id={posting_id})")

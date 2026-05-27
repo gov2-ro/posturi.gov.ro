@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-05-27 — quality_check.py: OCR fallback, attachment-title mismatch detection, body-duplication splitter fix
+
+**What:** Three targeted fixes to `quality_check.py` following a `/quality-review` session.
+
+1. **OCR fallback for scanned PDFs** (`_extract_pdf`): if `pypdf` returns empty text and the file is > 50 KB, falls back to `pdftoppm -r 150 -png` (poppler) + `tesseract -l ron`. Tested: `eb59d7d2.pdf` (Consilier IA, Casa de Pensii Bucuresti) went from 0 → 9,878 extracted chars; content confirmed correct (Romanian-language OCR via `ron` model).
+
+2. **Attachment-title consistency check** (`_attachment_title_mismatch` + `_infer_anomaly_flags`): compares ≥ 2 meaningful title words (len ≥ 4, filtered by stop-word list) against the first 2,000 chars of the attachment text. If < 2 hit, emits `attachment_title_mismatch` anomaly flag. Correctly fires on `79a59ec1.doc` (nursing exam curriculum attached to an inspector/fochist posting). Verified live via Playwright that the wrong file is served by posturi.gov.ro itself — not a pipeline bug. `anomaly_score` denominator raised from 4 → 5.
+
+3. **Body duplication splitter** (`_check_body_duplication`): added a pre-normalisation step that converts Markdown trailing-space hard-breaks (`  \n`) to double-newlines before paragraph splitting. Previously the regex `\n{2,}` couldn't split Markdown-formatted bodies, leaving the entire body as one paragraph and making the check unable to fire.
+
+**Why:** The quality report showed `body_duplication_rate = 0.0` for all postings despite visible repeated paragraphs in several bodies; `eb59d7d2.pdf` was reported as `empty` despite being a real 742 KB document; and the attachment-mismatch bug (wrong file at source) had no detection path.
+
 ### 2026-05-27 — Prompt v2: Schema.org-aligned extraction with caching, structured output, and boilerplate stripping
 
 **What:** Rewrote the LLM-extraction pipeline for higher quality + lower cost. Output is now a superset of Schema.org JobPosting properties (flat keys named after JobPosting.responsibilities/educationRequirements/experienceRequirements/qualifications/skills/baseSalary/jobBenefits/workHours/jobLocation) plus three RO-specific custom keys (application_docs, application_fee, application_contact). Education and experience are now split out from the bundled-in-v1 `qualifications`; `baseSalary` and `application_fee` are structured `{minValue, maxValue, currency, unitText}` / `{amount, currency, account, details}` objects; `application_contact` captures the submission contact separately from the top-level CSV contact.

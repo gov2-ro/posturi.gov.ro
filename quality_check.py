@@ -183,15 +183,22 @@ def sample_diverse(rows: list, n: int, seed: int | None = None) -> list:
 
 
 def _check_body_duplication(body: str) -> bool:
-    """Return True if >40% of paragraphs appear to be duplicated.
+    """Return True if >35% of paragraphs appear to be duplicated.
 
     The CSV stores newlines as literal backslash-n, so we unescape before
     splitting into paragraphs to get meaningful boundaries.
+
+    The scraper emits Markdown trailing-space line breaks ("  \\n"), which
+    produce single newlines separated by two spaces after unescaping — not
+    double newlines.  We normalise those as paragraph boundaries too so that
+    the paragraph-level dedup check fires on that format.
     """
     if len(body) < 200:
         return False
     unescaped = body.replace("\\n", "\n")
-    paragraphs = [p.strip() for p in re.split(r"\n{2,}", unescaped) if p.strip()]
+    # Normalise "  \n" Markdown hard-breaks → paragraph boundary
+    normalised = re.sub(r"  \n", "\n\n", unescaped)
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", normalised) if p.strip() and len(p.strip()) > 20]
     if len(paragraphs) < 4:
         return False
     seen: dict[str, int] = {}
@@ -273,7 +280,38 @@ def _extract_doc(path: Path) -> str:
 def _extract_pdf(path: Path) -> str:
     from pypdf import PdfReader
     reader = PdfReader(str(path))
-    return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    text = "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    if text:
+        return text
+    # Empty — may be a scanned/image-only PDF.  Try pdftoppm + tesseract OCR
+    # if the file is large enough to plausibly contain real content.
+    if path.stat().st_size < 50_000:
+        return text
+    return _ocr_pdf(path)
+
+
+def _ocr_pdf(path: Path) -> str:
+    """Convert PDF pages to PNG via pdftoppm then OCR each with tesseract."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        prefix = os.path.join(tmpdir, "page")
+        r = subprocess.run(
+            ["pdftoppm", "-r", "150", "-png", str(path), prefix],
+            capture_output=True,
+        )
+        if r.returncode != 0:
+            return ""
+        pages = sorted(Path(tmpdir).glob("page-*.png"))
+        texts = []
+        for pg in pages:
+            result = subprocess.run(
+                ["tesseract", str(pg), "stdout", "-l", "ron"],
+                capture_output=True, text=True, encoding="utf-8",
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                texts.append(result.stdout.strip())
+        return "\n\n".join(texts)
 
 
 def extract_text(path: Path) -> str:
@@ -516,8 +554,38 @@ _CONTACT_IN_TEXT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Words too generic/short to be meaningful for title-vs-attachment matching
+_TITLE_STOP_WORDS = frozenset(
+    "de la a al ale în din cu și sau pentru pe prin privind conform "
+    "i ia ib ii iii iv v vi nr post posturi un o specialist".split()
+)
 
-def _infer_anomaly_flags(row: dict, body: str) -> list[str]:
+
+def _attachment_title_mismatch(title: str, attachment_text: str) -> bool:
+    """Return True if the attachment text does not mention the job title keywords.
+
+    Checks whether at least 2 meaningful words from the posting title appear
+    anywhere in the first 800 characters of the attachment text.  A low overlap
+    suggests the wrong file was linked to this posting.
+
+    Only fires when the attachment is long enough to be a real document (> 200
+    chars), to avoid false positives on stub files.
+    """
+    if not attachment_text or len(attachment_text.strip()) < 200:
+        return False
+    norm_title = _normalize(title)
+    title_words = [
+        w for w in re.split(r"\W+", norm_title)
+        if len(w) >= 4 and w not in _TITLE_STOP_WORDS
+    ]
+    if len(title_words) < 2:
+        return False
+    norm_att = _normalize(attachment_text[:2000])
+    hits = sum(1 for w in title_words if w in norm_att)
+    return hits < 2
+
+
+def _infer_anomaly_flags(row: dict, body: str, *, attachment_text: str = "") -> list[str]:
     flags = []
 
     has_contact_csv = any(
@@ -536,6 +604,10 @@ def _infer_anomaly_flags(row: dict, body: str) -> list[str]:
 
     if not body or len(body.strip()) < 100:
         flags.append("no_body")
+
+    title = row.get("Job Title", "")
+    if attachment_text and _attachment_title_mismatch(title, attachment_text):
+        flags.append("attachment_title_mismatch")
 
     return flags
 
@@ -582,7 +654,7 @@ def _llm_classify(title: str, provider: str) -> str:
     return "altele"
 
 
-def check_infer(row: dict, body: str, *, provider: str, use_llm: bool) -> dict:
+def check_infer(row: dict, body: str, *, provider: str, use_llm: bool, attachment_text: str = "") -> dict:
     title = row.get("Job Title", "")
     family, confidence = _infer_profession_family(title)
     source = "dict"
@@ -597,7 +669,7 @@ def check_infer(row: dict, body: str, *, provider: str, use_llm: bool) -> dict:
             confidence = 0.0
             source = "error"
 
-    anomaly_flags = _infer_anomaly_flags(row, body)
+    anomaly_flags = _infer_anomaly_flags(row, body, attachment_text=attachment_text)
 
     return {
         "profession_family": family,
@@ -611,7 +683,7 @@ def check_infer(row: dict, body: str, *, provider: str, use_llm: bool) -> dict:
         "languages": _infer_languages(body),
         "certifications": _infer_certifications(body),
         "anomaly_flags": anomaly_flags,
-        "anomaly_score": round(len(anomaly_flags) / 4, 3),
+        "anomaly_score": round(len(anomaly_flags) / 5, 3),
     }
 
 
@@ -963,7 +1035,7 @@ def main() -> None:
         attachment_text = att_result.get("text", "")
         combined_body = body + ("\n\n" + attachment_text if attachment_text else "")
 
-        infer_result = check_infer(row, combined_body, provider=args.provider, use_llm=use_llm)
+        infer_result = check_infer(row, combined_body, provider=args.provider, use_llm=use_llm, attachment_text=attachment_text)
         print(
             f"  Infer     {infer_result['profession_family']} "
             f"({infer_result['profession_family_confidence']:.2f}, {infer_result['profession_family_source']})  "

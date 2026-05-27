@@ -165,7 +165,7 @@ webapp/.venv/bin/python3 quality_check.py --provider anthropic
 webapp/.venv/bin/python3 quality_check.py --slugs 2a66f376.doc,67438cc9.docx
 ```
 
-Use the webapp venv because it has `docx2txt`, `python-docx`, and `pypdf`. After running, invoke `/quality-review` in Claude Code for a narrative assessment with root-cause analysis and recommended fixes.
+Use the webapp venv because it has `docx2txt`, `python-docx`, and `pypdf`. PDF OCR fallback requires system tools: `brew install poppler tesseract tesseract-lang` (poppler provides `pdftoppm`; `tesseract-lang` installs `ron` for Romanian). After running, invoke `/quality-review` in Claude Code for a narrative assessment with root-cause analysis and recommended fixes.
 
 ## Data
 

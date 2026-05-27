@@ -130,9 +130,25 @@ Each variant is stored in `JobPostingSchemaVariant` with:
 - Job detail page: click "Dev → Comparație LLM" to see all variants for a posting side-by-side
 
 **Configuration** (`models_config.json`):
-- Models: enable/disable flag per model, pricing
+- Models: enable/disable flag per model, pricing (including `cache_input_cost_per_million` for cache-hit billing)
 - Prompts: versioned prompts (v1, v2, etc.) centralized in config
 - `get_enabled_models()` respects `"enabled": true/false` flags
+
+### Prompt v2 (Schema.org-aligned)
+
+The `v2` prompt extracts a flat superset of [Schema.org JobPosting](https://schema.org/JobPosting) properties — keys named after JobPosting properties where they exist (`responsibilities`, `educationRequirements`, `experienceRequirements`, `qualifications`, `skills`, `baseSalary`, `jobBenefits`, `workHours`, `jobLocation`), plus three RO-government-specific custom keys (`application_docs`, `application_fee`, `application_contact`). `baseSalary`, `application_fee`, and `application_contact` are structured dicts; the rest are markdown strings or `null`.
+
+Pydantic models in `schema_models.py` are the single source of truth and feed each provider's native structured-output API:
+- **OpenAI**: `response_format={"type":"json_schema","strict":True,...}`
+- **Gemini**: `response_schema=JobPostingExtraction`
+- **Anthropic**: tool-use with `input_schema`
+- **DeepSeek**: `response_format={"type":"json_object"}` (loose) + Pydantic post-validation
+
+A cacheable system prefix (instructions + 2 few-shot examples) is sent on every call so providers can hit their prompt cache — measured ~94–99% input-cache hit rate by the 2nd call on OpenAI/DeepSeek.
+
+### Boilerplate stripping
+
+Before sending to the LLM, `boilerplate.py::strip_hg_1336()` removes generic eligibility lines from HG 1.336/2022 / Codul muncii / OUG 57/2019 art. 542 (cetățenia română, capacitate de muncă, condamnări, pedepse complementare, condițiile generice de studii/vechime etc.). These appear nearly verbatim on every posting and otherwise drown the `qualifications` field with legal citation. The art. 35 dosar list survives intact (it's the `application_docs` content). Measured 13–25% input-length reduction on sampled postings; the bigger win is `qualifications` becoming role-specific signal (76–295 chars) instead of ~2300 chars of legal boilerplate. Toggle off with `python llm-schema.py --no-strip`.
 
 ## Data quality
 

@@ -16,16 +16,87 @@ from apps.jobs.models import JobPosting
 FTS_CONFIG = "romanian_unaccent"
 PAGE_SIZE = 25
 
-# Ordered list of (schema_json key, Romanian display label)
+# Ordered list of (schema_json key, Romanian display label).
+# Covers both v2 keys (Schema.org-aligned: educationRequirements, baseSalary, etc.)
+# and the legacy v1 keys (qualifications-bundled, salary as prose, work_conditions).
+# Sections render in this order; absent keys are skipped silently, so a single
+# list serves both shapes during the v1 → v2 transition.
 _SCHEMA_SECTION_LABELS = [
-    ("responsibilities", "Atribuții principale"),
-    ("qualifications",   "Condiții de participare"),
-    ("skills",           "Competențe"),
-    ("application_docs", "Dosar de candidatură"),
-    ("salary",           "Salarizare"),
-    ("application_fee",  "Taxă de participare"),
-    ("work_conditions",  "Condiții de muncă"),
+    ("responsibilities",        "Atribuții principale"),
+    ("educationRequirements",   "Studii"),                # v2
+    ("experienceRequirements",  "Experiență"),            # v2
+    ("qualifications",          "Condiții specifice"),    # v2 label; v1 used "Condiții de participare"
+    ("skills",                  "Competențe"),
+    ("application_docs",        "Dosar de candidatură"),
+    ("baseSalary",              "Salarizare"),            # v2 structured
+    ("salary",                  "Salarizare"),            # v1 prose (back-compat)
+    ("application_fee",         "Taxă de participare"),
+    ("application_contact",     "Contact pentru depunere"),  # v2 structured
+    ("jobBenefits",             "Beneficii"),             # v2
+    ("workHours",               "Program de lucru"),      # v2
+    ("jobLocation",             "Locație"),               # v2
+    ("work_conditions",         "Condiții de muncă"),     # v1 (back-compat)
 ]
+
+
+def _render_base_salary(salary: dict) -> str:
+    """Render v2 baseSalary `{minValue, maxValue, currency, unitText}` to a
+    plain Romanian sentence. Returns "" when the dict is empty/null."""
+    if not isinstance(salary, dict):
+        return ""
+    mn = salary.get("minValue")
+    mx = salary.get("maxValue")
+    currency = salary.get("currency") or "RON"
+    unit = (salary.get("unitText") or "MONTH").lower()
+    unit_ro = {"hour": "/oră", "day": "/zi", "week": "/săptămână", "month": "/lună", "year": "/an"}.get(unit, "")
+    if mn is None and mx is None:
+        return ""
+    if mn is not None and mx is not None and mn != mx:
+        return f"{mn:g}–{mx:g} {currency}{unit_ro}"
+    return f"{(mn or mx):g} {currency}{unit_ro}"
+
+
+def _render_application_fee(fee: dict) -> str:
+    """Render v2 application_fee `{amount, currency, account, details}`."""
+    if not isinstance(fee, dict):
+        return ""
+    parts: list[str] = []
+    amount = fee.get("amount")
+    currency = fee.get("currency") or "RON"
+    if amount is not None:
+        parts.append(f"{amount:g} {currency}")
+    if fee.get("account"):
+        parts.append(f"Cont: {fee['account']}")
+    if fee.get("details"):
+        parts.append(str(fee["details"]))
+    return ". ".join(parts)
+
+
+def _render_application_contact(contact: dict) -> str:
+    """Render v2 application_contact `{name, phone, email, address}` to a
+    markdown bullet list."""
+    if not isinstance(contact, dict):
+        return ""
+    rows: list[str] = []
+    if contact.get("name"):
+        rows.append(f"- {contact['name']}")
+    if contact.get("phone"):
+        rows.append(f"- Telefon: {contact['phone']}")
+    if contact.get("email"):
+        rows.append(f"- Email: {contact['email']}")
+    if contact.get("address"):
+        rows.append(f"- Adresă: {contact['address']}")
+    return "\n".join(rows)
+
+
+# Per-key rendering hooks for keys whose value is a dict rather than a string.
+# Hook returns a markdown string that the standard markdown pipeline then turns
+# into HTML. Returning "" suppresses the section.
+_STRUCTURED_RENDERERS = {
+    "baseSalary":          _render_base_salary,
+    "application_fee":     _render_application_fee,
+    "application_contact": _render_application_contact,
+}
 
 
 def _render_schema_sections(schema_json: dict) -> list[dict] | None:
@@ -33,13 +104,24 @@ def _render_schema_sections(schema_json: dict) -> list[dict] | None:
 
     Sections whose value is None or empty string are omitted.
     Returns None if no sections have content (template falls back to body_html).
+    Handles both v1 (flat strings) and v2 (mixed strings + structured dicts) shapes.
     """
     sections = []
     for key, label in _SCHEMA_SECTION_LABELS:
         value = schema_json.get(key)
-        if value and str(value).strip():
-            html = md.markdown(str(value), extensions=["nl2br"])
-            sections.append({"label": label, "html": html})
+        if value is None:
+            continue
+        # v1 used plain strings for some keys that v2 stores as dicts (e.g.
+        # `application_fee`). Dispatch only when the value is actually a dict;
+        # otherwise treat as markdown for back-compat.
+        if isinstance(value, dict) and key in _STRUCTURED_RENDERERS:
+            rendered = _STRUCTURED_RENDERERS[key](value)
+        else:
+            rendered = str(value)
+        if not rendered.strip():
+            continue
+        html = md.markdown(rendered, extensions=["nl2br"])
+        sections.append({"label": label, "html": html})
     return sections or None
 
 

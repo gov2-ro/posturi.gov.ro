@@ -37,6 +37,9 @@ import psycopg
 from decimal import Decimal
 from dotenv import load_dotenv
 
+from boilerplate import strip_hg_1336
+from schema_models import JobPostingExtraction, openai_json_schema
+
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost/posturi_dev")
@@ -60,22 +63,35 @@ def get_enabled_models():
     return enabled
 
 DEFAULTS = {
-    'gemini':    'gemini-2-5-flash',
+    'gemini':    'gemini-2.5-flash',
     'openai':    'gpt-4o-mini',
     'anthropic': 'claude-3-5-haiku-20241022',
+    'deepseek':  'deepseek-v4-flash',
 }
 
 PROMPT_VERSION = "v1"
 
 
-def compute_cost(provider, model, input_tokens, output_tokens):
-    """Calculate cost in USD based on model pricing from config."""
-    if not input_tokens or not output_tokens:
+def compute_cost(provider, model, input_tokens, output_tokens, cached_input_tokens=0):
+    """Calculate cost in USD based on model pricing from config.
+
+    `cached_input_tokens` are billed at the model's `cache_input_cost_per_million`
+    rate when defined; the remaining (input_tokens - cached_input_tokens) are
+    billed at the standard `input_cost_per_million`.
+    """
+    if not input_tokens or output_tokens is None:
         return None
     try:
         model_config = MODELS_CONFIG["providers"][provider]["models"][model]
-        input_cost = Decimal(input_tokens) * Decimal(model_config["input_cost_per_million"]) / Decimal("1000000")
-        output_cost = Decimal(output_tokens) * Decimal(model_config["output_cost_per_million"]) / Decimal("1000000")
+        in_rate = Decimal(str(model_config["input_cost_per_million"]))
+        out_rate = Decimal(str(model_config["output_cost_per_million"]))
+        cache_rate = Decimal(str(model_config.get("cache_input_cost_per_million", model_config["input_cost_per_million"])))
+
+        cached = max(0, cached_input_tokens or 0)
+        uncached = max(0, input_tokens - cached)
+
+        input_cost = (Decimal(uncached) * in_rate + Decimal(cached) * cache_rate) / Decimal("1000000")
+        output_cost = Decimal(output_tokens) * out_rate / Decimal("1000000")
         return float(input_cost + output_cost)
     except (KeyError, TypeError):
         return None
@@ -97,72 +113,167 @@ def parse_json_response(text):
     return text
 
 
-def make_generator(provider, model, prompt):
-    """Returns a generate(content) function that yields (schema, input_tokens, output_tokens)."""
+def _validate_v2(raw) -> dict:
+    """Validate raw parsed JSON against the v2 Pydantic model. Returns a
+    JSON-safe dict. Raises pydantic.ValidationError on schema mismatch."""
+    if isinstance(raw, str):
+        raw = parse_json_response(raw)
+    if not isinstance(raw, dict):
+        raise ValueError(f"Expected dict, got {type(raw).__name__}: {repr(raw)[:120]}")
+    obj = JobPostingExtraction.model_validate(raw)
+    return obj.model_dump(mode="json")
+
+
+def make_generator(provider, model, system_prefix, prompt_version):
+    """Returns a generate(content) function that yields
+    (schema, input_tokens, output_tokens, cached_input_tokens).
+
+    `system_prefix` is the static instruction block sent on every call —
+    identical across calls so providers can cache it. `content` is the
+    per-posting body+attachment text.
+
+    For prompt_version == 'v2' we use provider-native structured output
+    (OpenAI strict json_schema, Gemini response_schema, Anthropic tool-use)
+    and validate against the JobPostingExtraction Pydantic model. For v1
+    we keep the loose JSON-parse path (back-compat).
+    """
+    use_schema = (prompt_version == "v2")
+
     if provider == 'gemini':
         from google import genai
         from google.genai import types as genai_types
         client = genai.Client(api_key=os.getenv('GOOGLE_API_KEY'))
+
         def generate(content):
+            cfg_kwargs = {
+                "system_instruction": system_prefix,
+                "temperature": 0.2,
+            }
+            if use_schema:
+                cfg_kwargs["response_mime_type"] = "application/json"
+                cfg_kwargs["response_schema"] = JobPostingExtraction
             resp = client.models.generate_content(
                 model=model,
-                contents=f"{prompt}\n\n{content}",
-                config=genai_types.GenerateContentConfig(temperature=0.2),
+                contents=content,
+                config=genai_types.GenerateContentConfig(**cfg_kwargs),
             )
-            schema = parse_json_response(resp.text)
-            input_tokens = resp.usage_metadata.prompt_token_count if hasattr(resp, 'usage_metadata') else None
-            output_tokens = resp.usage_metadata.candidates_token_count if hasattr(resp, 'usage_metadata') else None
-            return schema, input_tokens, output_tokens
+            raw = resp.parsed if use_schema and getattr(resp, "parsed", None) is not None else resp.text
+            if hasattr(raw, "model_dump"):
+                raw = raw.model_dump(mode="json")
+            schema = _validate_v2(raw) if use_schema else parse_json_response(raw)
+            usage = getattr(resp, "usage_metadata", None)
+            input_tokens = getattr(usage, "prompt_token_count", None) if usage else None
+            output_tokens = getattr(usage, "candidates_token_count", None) if usage else None
+            cached_tokens = getattr(usage, "cached_content_token_count", 0) if usage else 0
+            return schema, input_tokens, output_tokens, cached_tokens or 0
 
     elif provider == 'openai':
         import openai
         client = openai.OpenAI()
+
         def generate(content):
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {'role': 'system', 'content': 'You extract structured sections from Romanian job postings. Return only valid JSON.'},
-                    {'role': 'user', 'content': f"{prompt}\n\n{content}"},
+            kwargs = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prefix},
+                    {"role": "user", "content": content},
                 ],
-                max_tokens=2000,
-                temperature=0.2,
-            )
-            schema = parse_json_response(resp.choices[0].message.content)
-            input_tokens = resp.usage.prompt_tokens if hasattr(resp, 'usage') else None
-            output_tokens = resp.usage.completion_tokens if hasattr(resp, 'usage') else None
-            return schema, input_tokens, output_tokens
+                # GPT-5 family rejects `max_tokens` and requires `max_completion_tokens`;
+                # GPT-4o family accepts both. We use the new one uniformly.
+                "max_completion_tokens": 2000,
+            }
+            # GPT-5 reasoning models eat the completion budget with internal
+            # reasoning tokens (default reasoning_effort is high). For
+            # structured-extraction work no reasoning is needed — force minimal.
+            # They also reject custom temperature.
+            if model.startswith("gpt-5"):
+                kwargs["reasoning_effort"] = "minimal"
+            else:
+                kwargs["temperature"] = 0.2
+            if use_schema:
+                kwargs["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": openai_json_schema(),
+                }
+            resp = client.chat.completions.create(**kwargs)
+            text = resp.choices[0].message.content
+            schema = _validate_v2(text) if use_schema else parse_json_response(text)
+            usage = getattr(resp, "usage", None)
+            input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+            output_tokens = getattr(usage, "completion_tokens", None) if usage else None
+            cached_tokens = 0
+            details = getattr(usage, "prompt_tokens_details", None) if usage else None
+            if details is not None:
+                cached_tokens = getattr(details, "cached_tokens", 0) or 0
+            return schema, input_tokens, output_tokens, cached_tokens
 
     elif provider == 'anthropic':
         import anthropic
         client = anthropic.Anthropic()
+
+        tool_name = "extract_job_posting"
+        anthropic_tools = [{
+            "name": tool_name,
+            "description": "Return structured fields extracted from the job posting.",
+            "input_schema": JobPostingExtraction.model_json_schema(),
+        }]
+
         def generate(content):
-            msg = client.messages.create(
-                model=model,
-                max_tokens=2000,
-                messages=[{'role': 'user', 'content': f"{prompt}\n\n{content}"}],
-            )
-            schema = parse_json_response(msg.content[0].text)
-            input_tokens = msg.usage.input_tokens if hasattr(msg, 'usage') else None
-            output_tokens = msg.usage.output_tokens if hasattr(msg, 'usage') else None
-            return schema, input_tokens, output_tokens
+            kwargs = {
+                "model": model,
+                "max_tokens": 2000,
+                "system": [{
+                    "type": "text",
+                    "text": system_prefix,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                "messages": [{"role": "user", "content": content}],
+            }
+            if use_schema:
+                kwargs["tools"] = anthropic_tools
+                kwargs["tool_choice"] = {"type": "tool", "name": tool_name}
+            msg = client.messages.create(**kwargs)
+            if use_schema:
+                tool_block = next(b for b in msg.content if getattr(b, "type", "") == "tool_use")
+                schema = _validate_v2(tool_block.input)
+            else:
+                text_block = next(b for b in msg.content if getattr(b, "type", "") == "text")
+                schema = parse_json_response(text_block.text)
+            usage = getattr(msg, "usage", None)
+            input_tokens = getattr(usage, "input_tokens", None) if usage else None
+            output_tokens = getattr(usage, "output_tokens", None) if usage else None
+            cached_tokens = (getattr(usage, "cache_read_input_tokens", 0) or 0) if usage else 0
+            # Anthropic reports cache reads outside of input_tokens; fold them in
+            # so cost math matches: total billable input = input_tokens + cache_read
+            if cached_tokens and input_tokens is not None:
+                input_tokens = input_tokens + cached_tokens
+            return schema, input_tokens, output_tokens, cached_tokens
 
     elif provider == 'deepseek':
         import openai
         client = openai.OpenAI(api_key=os.getenv('DEEPSEEK_API_KEY'), base_url="https://api.deepseek.com")
+
         def generate(content):
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {'role': 'system', 'content': 'You extract structured sections from Romanian job postings. Return only valid JSON.'},
-                    {'role': 'user', 'content': f"{prompt}\n\n{content}"},
+            kwargs = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prefix},
+                    {"role": "user", "content": content},
                 ],
-                max_tokens=2000,
-                temperature=0.2,
-            )
-            schema = parse_json_response(resp.choices[0].message.content)
-            input_tokens = resp.usage.prompt_tokens if hasattr(resp, 'usage') else None
-            output_tokens = resp.usage.completion_tokens if hasattr(resp, 'usage') else None
-            return schema, input_tokens, output_tokens
+                "max_tokens": 2000,
+                "temperature": 0.2,
+            }
+            # DeepSeek supports loose JSON mode (no schema enforcement)
+            if use_schema:
+                kwargs["response_format"] = {"type": "json_object"}
+            resp = client.chat.completions.create(**kwargs)
+            text = resp.choices[0].message.content
+            schema = _validate_v2(text) if use_schema else parse_json_response(text)
+            usage = getattr(resp, "usage", None)
+            input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+            output_tokens = getattr(usage, "completion_tokens", None) if usage else None
+            cached_tokens = getattr(usage, "prompt_cache_hit_tokens", 0) if usage else 0
+            return schema, input_tokens, output_tokens, cached_tokens or 0
 
     else:
         raise ValueError(f"Unknown provider: {provider}")
@@ -170,11 +281,13 @@ def make_generator(provider, model, prompt):
     return generate
 
 
-def iter_postings(conn, slug_filter=None, force=False):
+def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True):
     """Yield (posting_id, url, combined_content) rows that need schema generation.
 
     Combines body_markdown (web page text) and attachment_text (extracted from
     attached docx/pdf) so the LLM sees the full picture for each posting.
+    When `strip_boilerplate` is True (default) the HG 1.336/2022 generic
+    eligibility lines are stripped before yielding — see boilerplate.py.
     Skips rows where schema_json is already set unless force=True.
     """
     with conn.cursor() as cur:
@@ -197,6 +310,8 @@ def iter_postings(conn, slug_filter=None, force=False):
             if attachment and attachment.strip():
                 content += "\n\n---\n\n" + attachment.strip()
             if content:
+                if strip_boilerplate:
+                    content = strip_hg_1336(content)
                 if len(content) > 100_000:
                     print(f"  ⚠ content truncated ({len(content)} chars) for {url.rstrip('/').split('/')[-1]}")
                     content = content[:100_000]
@@ -248,11 +363,12 @@ if __name__ == '__main__':
     parser.add_argument('--compare', action='store_true', help='Run all enabled providers and save variants only (does NOT overwrite schema_json)')
     parser.add_argument('--model-filter', default=None, help='Only test models matching this regex (e.g., "gemini-.*" or "gpt-.*")')
     parser.add_argument('--prompt-version', default='v1', help='Prompt version to use (from config; default v1)')
+    parser.add_argument('--no-strip', action='store_true', help='Do NOT strip HG 1.336/2022 boilerplate from the input (kept for comparison runs).')
     args = parser.parse_args()
 
     # Load the prompt version
-    prompt = get_prompt(args.prompt_version)
-    if not prompt:
+    system_prefix = get_prompt(args.prompt_version)
+    if not system_prefix:
         print(f"✗ Prompt version '{args.prompt_version}' not found in config")
         sys.exit(1)
 
@@ -275,8 +391,13 @@ if __name__ == '__main__':
 
         for provider, model in providers_to_run:
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
-            generate = make_generator(provider, model, prompt)
-            postings = iter_postings(conn, slug_filter=args.slug, force=args.force or args.compare)
+            generate = make_generator(provider, model, system_prefix, args.prompt_version)
+            postings = iter_postings(
+                conn,
+                slug_filter=args.slug,
+                force=args.force or args.compare,
+                strip_boilerplate=not args.no_strip,
+            )
             if args.limit:
                 postings = itertools.islice(postings, args.limit)
 
@@ -285,7 +406,7 @@ if __name__ == '__main__':
                 print(f"  {slug}...", end=' ', flush=True)
                 try:
                     t0 = time.monotonic()
-                    schema, input_tokens, output_tokens = generate(content)
+                    schema, input_tokens, output_tokens, cached_tokens = generate(content)
                     latency_ms = int((time.monotonic() - t0) * 1000)
                 except Exception as e:
                     print(f"✗ {e}")
@@ -295,12 +416,18 @@ if __name__ == '__main__':
                     print(f"✗ non-dict: {repr(schema)[:80]}")
                     continue
 
-                cost = compute_cost(provider, model, input_tokens, output_tokens)
+                cost = compute_cost(provider, model, input_tokens, output_tokens, cached_tokens)
                 write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms, args.prompt_version)
 
                 if not args.compare:
                     write_schema(conn, posting_id, schema)
 
-                token_info = f"in={input_tokens} out={output_tokens}" if input_tokens and output_tokens else "tokens=?"
+                tok_parts = []
+                if input_tokens and output_tokens:
+                    tok_parts.append(f"in={input_tokens}")
+                    if cached_tokens:
+                        tok_parts.append(f"cached={cached_tokens}")
+                    tok_parts.append(f"out={output_tokens}")
+                token_info = " ".join(tok_parts) if tok_parts else "tokens=?"
                 cost_info = f"${cost:.6f}" if cost else "cost=?"
                 print(f"✓ {latency_ms}ms {token_info} {cost_info}")

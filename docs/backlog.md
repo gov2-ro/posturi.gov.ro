@@ -73,13 +73,17 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 ## Misc
 - [x] **LLM provider comparison infrastructure** — Done 2026-05-27. Created `models_config.json` with 6 models (Gemini 3.1/2.5 Flash, GPT-5 Nano, GPT-4o Mini, Claude 3.5 Haiku, DeepSeek-V4-Flash) and pricing. `JobPostingSchemaVariant` model stores every LLM run with token counts, cost, latency. `llm-schema.py --compare` runs all 6 providers on same postings, saves variants only (doesn't overwrite production `schema_json`). Admin inline + standalone view at `/job/<id>/variants/` for side-by-side cost/latency/output comparison. Usage: `python llm-schema.py --compare --limit 5 --slug substring`.
-- [ ] extract in a config json (maybe with versions) the prompt being sent to LLMs, now  defined in llm-schema.py
+- [x] extract in a config json (maybe with versions) the prompt being sent to LLMs, now  defined in llm-schema.py
 - [x] use OpenRouter for this, or `simonw/LLM` package? - which approach is cheaper? Resolution: **NEITHER** — direct SDK calls give better metrics
+- [x] **Prompt v2: Schema.org-aligned extraction + caching + structured output + boilerplate strip** — Done 2026-05-27. Output now a flat superset of Schema.org JobPosting properties (responsibilities, educationRequirements, experienceRequirements, qualifications, skills, baseSalary `{minValue,maxValue,currency,unitText}`, jobBenefits, workHours, jobLocation) plus 3 RO-specific custom keys (application_docs, application_fee `{amount,currency,account,details}`, application_contact `{name,phone,email,address}`). New files: `schema_models.py` (Pydantic), `boilerplate.py` (`strip_hg_1336()`). `llm-schema.py` split into cacheable system_prefix + per-posting content; wired Anthropic explicit cache + OpenAI/DeepSeek/Gemini implicit caching; provider-native structured output (strict json_schema / response_schema / tool-use). Verification: 6 postings × 4 providers, all outputs Pydantic-valid, `qualifications` field shrunk from ~2300 chars HG 1.336 boilerplate to 36–109 chars role-specific signal. Cost per 1000 postings (with caching): gpt-5-nano $0.36, gemini-2.5-flash $0.61, deepseek $0.77, gpt-4o-mini $0.88. 14/14 renderer tests pass with v1 back-compat preserved. **Next:** promote v2 to default + run `python llm-schema.py --provider gemini --prompt-version v2 --force` to backfill remaining 4357 postings.
 - [ ] for debugging purposes show filters of is inferred, attachment text, schema in the UI browser
+- [ ] **Promote prompt v2 to default + backfill** — Change `PROMPT_VERSION = "v2"` and CLI `--prompt-version` default to `v2` in `llm-schema.py`. Then run `python llm-schema.py --provider gemini --prompt-version v2 --force` to refresh all 4357 postings under v2. Estimated cost: ~$2.67 (gemini-2.5-flash). Optional: tune boilerplate patterns based on a wider sample if any false-positives surface.
 
 
 ### Later
 - [ ] one job posting might have more than one attachments? Do we ever have `other_links` ?
+- [ ] assess extracted/inferred data quality, if not sure, send to smarter LLM?
 - [ ] sometimes attachments might need to be OCR'ed?
 - [ ] enhance slugs – use the original? – add judet as folder? - use alias?
 - [ ] in site attachment renderer? doc/x, pdf
+- [ ] propose a input form for posturi.gov.ro

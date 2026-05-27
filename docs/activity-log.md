@@ -2,6 +2,29 @@
 
 ## 2026
 
+### 2026-05-27 — Prompt v2: Schema.org-aligned extraction with caching, structured output, and boilerplate stripping
+
+**What:** Rewrote the LLM-extraction pipeline for higher quality + lower cost. Output is now a superset of Schema.org JobPosting properties (flat keys named after JobPosting.responsibilities/educationRequirements/experienceRequirements/qualifications/skills/baseSalary/jobBenefits/workHours/jobLocation) plus three RO-specific custom keys (application_docs, application_fee, application_contact). Education and experience are now split out from the bundled-in-v1 `qualifications`; `baseSalary` and `application_fee` are structured `{minValue, maxValue, currency, unitText}` / `{amount, currency, account, details}` objects; `application_contact` captures the submission contact separately from the top-level CSV contact.
+
+Three new pieces, plus a restructure of `llm-schema.py`:
+- **`schema_models.py`**: Pydantic `JobPostingExtraction` model. Single source of truth fed to each provider's native structured-output API (OpenAI strict json_schema, Gemini response_schema, Anthropic tool-use input_schema, DeepSeek loose json_object). `openai_json_schema()` mutates the Pydantic-generated schema to satisfy OpenAI strict mode (additionalProperties=false, required-lists-every-property).
+- **`boilerplate.py`**: `strip_hg_1336(text)` removes lines matching ~25 patterns covering the generic HG 1.336/2022 / Codul muncii / OUG 57/2019 art. 542 eligibility text that appears on nearly every posting (cetățenia română, capacitate de muncă, condamnări, pedepse complementare, clauze de confidențialitate, condițiile generice de studii/vechime etc.). Diacritic-tolerant; preserves the art. 35 dosar list (which IS the `application_docs` content). Measured 13–25% input-length reduction on 6 sampled postings; quality benefit (qualifications no longer drowning in boilerplate) is the bigger win.
+- **Prompt v2** in `models_config.json`: hybrid English imperative + Romanian vocabulary anchors (`atribuții`, `vechime în specialitate`, `taxa de concurs`, `dosar de candidatură` etc.), 2 few-shot examples (clean salary + attachment-only contact), explicit boilerplate-skip rule, field-by-field guidance with anti-patterns (e.g. "never set baseSalary for taxa de concurs").
+- **`llm-schema.py` refactor**: `make_generator(provider, model, system_prefix, prompt_version)` splits the static prompt prefix (cacheable) from the per-posting content (variable). Provider-side caching wired up: Anthropic explicit `cache_control:{type:ephemeral}` on the system block, OpenAI/DeepSeek implicit (consistent system message + >1024 tokens), Gemini via `system_instruction`. Structured output via each provider's native API for v2; legacy ad-hoc JSON parsing kept for v1. `compute_cost()` now accepts `cached_input_tokens` and uses the model's `cache_input_cost_per_million` rate when defined.
+
+Also fixed: `models_config.json` Gemini model IDs (dots not dashes — `gemini-2.5-flash` not `gemini-2-5-flash`); GPT-5 family needs `max_completion_tokens` and `reasoning_effort=minimal` (default reasoning eats the completion budget on extraction tasks).
+
+**Detail page (`webapp/apps/jobs/views.py`)**: `_SCHEMA_SECTION_LABELS` extended with the new v2 keys (+ corresponding Romanian labels: Studii, Experiență, Beneficii, Program de lucru, Locație, Contact pentru depunere). Three small render helpers `_render_base_salary`, `_render_application_fee`, `_render_application_contact` convert the structured dicts to markdown. Back-compat: v1 string-shaped values fall through the markdown path unchanged, so the existing 22 postings with v1 `schema_json` keep rendering.
+
+**Verification:**
+- 14/14 renderer tests pass (`webapp/tests/test_schema_detail.py`); covers v1 back-compat, v2 structured fields, and the three helper functions.
+- `boilerplate.py` smoke-tested against 6 real postings (ids 4437, 4509, 4590, 4897, 6717, 7519, 8268, 8694): role-specific content survives, HG 1.336 boilerplate removed, dosar list (application_docs) preserved.
+- `llm-schema.py --compare --prompt-version v2 --limit 5 --force` on all 4 enabled models (gemini-2.5-flash, gpt-5-nano, gpt-4o-mini, deepseek-v4-flash): all outputs validate against the Pydantic schema; cache hits visible from the second call (~94% on gpt-4o-mini, ~99% on deepseek). Per-1000-postings cost: gpt-5-nano $0.36, gemini-2.5-flash $0.61, deepseek $0.70, gpt-4o-mini $0.88 — so the full 4357-posting backfill costs under $4 on any provider. Sample output for posting 4437 (muncitor calificat) shows `qualifications` shrunk from ~2300 chars of HG 1.336 boilerplate (v1) to a single 76–295-char role-specific line (v2: "Nivel de acces la informații clasificate: Secret"), with `educationRequirements`/`experienceRequirements`/`application_contact` cleanly populated.
+
+**Why:** v1's `qualifications` was 80% legal-citation boilerplate on every posting — inflating output cost, hurting search relevance, and obscuring the role-specific signal in the UI. Splitting education + experience and structuring `baseSalary` unlocks future filters (salary range, min-experience). The Schema.org-aligned key names mean we can wrap the JSON in `@context/@type` at render time for JSON-LD / Google for Jobs SEO without changing the LLM pipeline.
+
+**Next:** promote v2 to default once spot-checked in the UI: change `PROMPT_VERSION = "v2"` in `llm-schema.py`, run `python llm-schema.py --provider gemini --prompt-version v2 --force` to backfill the remaining 4357 postings.
+
 ### 2026-05-27 — LLM provider comparison infrastructure (with model enable/disable + prompt versioning)
 
 **What:** Built end-to-end framework for comparing LLM providers and prompts on the same job postings without overwriting production schema:

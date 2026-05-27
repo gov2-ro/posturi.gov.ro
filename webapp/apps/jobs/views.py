@@ -349,7 +349,7 @@ def about(request):
     return render(request, "jobs/about.html", {})
 
 
-def stats_json(request):
+def _build_stats():
     today = date.today()
     total = JobPosting.objects.count()
     active = JobPosting.objects.filter(expires_at__gte=today).count()
@@ -362,7 +362,7 @@ def stats_json(request):
     )
     by_judet = list(
         JobPosting.objects.filter(judet__isnull=False)
-        .values("judet__name")
+        .values("judet__name", "judet__slug")
         .annotate(count=Count("id"))
         .order_by("-count")[:10]
     )
@@ -371,14 +371,55 @@ def stats_json(request):
         for flag in ("short_deadline", "missing_contact", "contact_in_attachment", "gender_criteria", "no_body", "frequent_repost")
     }
     inferred_count = JobPosting.objects.exclude(inferred={}).count()
-
-    return JsonResponse({
+    return {
         "total": total,
         "active": active,
         "inferred": inferred_count,
         "by_family": [{"family": x["inferred__profession_family"], "count": x["count"]} for x in by_family],
-        "by_judet": [{"judet": x["judet__name"], "count": x["count"]} for x in by_judet],
+        "by_judet": [{"judet": x["judet__name"], "slug": x["judet__slug"], "count": x["count"]} for x in by_judet],
         "anomaly_counts": anomaly_counts,
+    }
+
+
+def stats_json(request):
+    return JsonResponse(_build_stats())
+
+
+_ANOMALY_LABELS = {
+    "short_deadline": "Termen scurt",
+    "missing_contact": "Contact lipsă",
+    "contact_in_attachment": "Contact în atașament",
+    "gender_criteria": "Criteriu de gen",
+    "no_body": "Fără corp",
+    "frequent_repost": "Re-publicare frecventă",
+}
+
+
+def stats_dashboard(request):
+    data = _build_stats()
+    total = data["total"] or 1
+    max_family = data["by_family"][0]["count"] if data["by_family"] else 1
+    max_judet = data["by_judet"][0]["count"] if data["by_judet"] else 1
+    anomalies = [
+        {
+            "flag": flag,
+            "label": _ANOMALY_LABELS.get(flag, flag),
+            "count": count,
+            "pct": round(100 * count / total),
+        }
+        for flag, count in data["anomaly_counts"].items()
+    ]
+    return render(request, "jobs/stats.html", {
+        "total": data["total"],
+        "active": data["active"],
+        "active_pct": round(100 * data["active"] / total),
+        "inferred": data["inferred"],
+        "inferred_pct": round(100 * data["inferred"] / total),
+        "by_family": data["by_family"],
+        "max_family": max_family,
+        "by_judet": data["by_judet"],
+        "max_judet": max_judet,
+        "anomalies": anomalies,
     })
 
 

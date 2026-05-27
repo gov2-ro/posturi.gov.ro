@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Statistici{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-lg mx-auto px-4 sm:px-6 py-10">
+
+  <h1 class="font-display text-3xl italic font-semibold text-ink mb-1">Statistici</h1>
+  <p class="text-ink-muted text-sm mb-8 font-mono">Distribuție agregată a anunțurilor de angajare din sectorul public</p>
+
+  <!-- KPI tiles -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-gov">{{ total }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri totale</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-green-700">{{ active }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri active</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ active_pct }}% din total</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5 col-span-2 sm:col-span-1">
+      <div class="text-3xl font-display font-semibold text-ink">{{ inferred }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Clasificate automat</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ inferred_pct }}% din total</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+
+    <!-- By family -->
+    <section class="bg-white border border-border-warm rounded-lg p-6">
+      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top domenii profesionale</h2>
+      <div class="space-y-2">
+        {% for item in by_family %}
+        <div>
+          <div class="flex justify-between text-sm mb-0.5">
+            <a href="/?family={{ item.family }}" class="text-gov hover:underline capitalize">{{ item.family }}</a>
+            <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+          </div>
+          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_family 100 %}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-ink-muted text-sm italic">Nicio clasificare disponibilă.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- By judet -->
+    <section class="bg-white border border-border-warm rounded-lg p-6">
+      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top județe</h2>
+      <div class="space-y-2">
+        {% for item in by_judet %}
+        <div>
+          <div class="flex justify-between text-sm mb-0.5">
+            <a href="/?judet={{ item.slug }}" class="text-gov hover:underline">{{ item.judet }}</a>
+            <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+          </div>
+          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_judet 100 %}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-ink-muted text-sm italic">Niciun județ disponibil.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Anomalies -->
+  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Anomalii detectate</h2>
+    <p class="text-sm text-ink-muted mb-5">Euristici aplicate automat. Un anunț poate fi inclus în mai multe categorii.</p>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-border-warm text-left">
+            <th class="py-2 pr-4 font-semibold text-ink">Tip anomalie</th>
+            <th class="py-2 text-right font-semibold text-ink">Anunțuri</th>
+            <th class="py-2 pl-4 text-right font-mono text-xs text-ink-muted font-normal">% din total</th>
+            <th class="py-2 pl-4"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border-warm">
+          {% for a in anomalies %}
+          <tr class="hover:bg-parchment-dark/30 transition-colors">
+            <td class="py-2 pr-4">
+              <span class="text-ink">{{ a.label }}</span>
+              <span class="text-xs text-ink-faint font-mono ml-1">({{ a.flag }})</span>
+            </td>
+            <td class="py-2 text-right font-mono">{{ a.count }}</td>
+            <td class="py-2 pl-4 text-right font-mono text-xs text-ink-muted">{{ a.pct }}%</td>
+            <td class="py-2 pl-4">
+              {% if a.count %}
+              <a href="/?anomaly={{ a.flag }}" class="text-xs text-gov hover:underline whitespace-nowrap">filtrează &rarr;</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="text-xs text-ink-faint font-mono text-center">
+    Date disponibile și în format mașinistic:
+    <a href="/statistici.json" class="text-gov hover:underline">/statistici.json</a>
+  </p>
+
+</div>
+{% endblock %}

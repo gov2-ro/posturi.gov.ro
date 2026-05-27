@@ -186,6 +186,29 @@
     <!-- Main: body + calendar -->
     <div class="flex-1 min-w-0">
 
+      <!-- Structured sections (from schema_json) or raw body fallback -->
+      {% if schema_sections %}
+        {% for section in schema_sections %}
+        <div class="mb-6">
+          <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">
+            {{ section.label }}
+          </h2>
+          <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
+            {{ section.html|safe }}
+          </div>
+        </div>
+        {% endfor %}
+      {% elif body_html %}
+      <div class="mb-6">
+        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">
+          Detalii post
+        </h2>
+        <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
+          {{ body_html|safe }}
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Calendar timeline -->
       {% if posting.calendar_events.all %}
       <div class="mb-8">
@@ -211,18 +234,6 @@
             {% endfor %}
           </tbody>
         </table>
-      </div>
-      {% endif %}
-
-      <!-- Body content -->
-      {% if body_html %}
-      <div class="mb-6">
-        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">
-          Detalii post
-        </h2>
-        <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
-          {{ body_html|safe }}
-        </div>
       </div>
       {% endif %}
 

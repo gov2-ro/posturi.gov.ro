@@ -44,7 +44,8 @@
     {# View mode #}
     <fieldset>
       <legend class="text-xs font-semibold text-ink-muted uppercase tracking-wider mb-2">Afișare</legend>
-      <select name="view"
+      <label for="view-select" class="sr-only">Mod de afișare</label>
+      <select id="view-select" name="view"
               class="text-sm border border-border-warm rounded-md px-2 py-1.5 bg-white focus:ring-gov focus:border-gov">
         <option value="rendered"  {% if view_mode == "rendered"  %}selected{% endif %}>Redat</option>
         <option value="json"      {% if view_mode == "json"      %}selected{% endif %}>JSON brut</option>
@@ -72,7 +73,7 @@
     {# Variant count badge #}
     <div class="ml-auto self-center">
       <span class="inline-block bg-gov-light text-gov text-xs font-semibold px-2.5 py-1 rounded-full">
-        {{ variant_count }} variant{% if variant_count != 1 %}e{% endif %}
+        {{ variant_count }} variant{% if variant_count != 1 %}e{% else %}ă{% endif %}
       </span>
     </div>
   </form>

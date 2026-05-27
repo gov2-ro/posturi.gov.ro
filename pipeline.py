@@ -8,6 +8,7 @@ Steps (in order):
   import        manage.py import_csvs   — load CSVs into Postgres
   extract       manage.py extract_attachments  — extract text from downloaded files
   infer         manage.py infer_postings       — run metadata inference (dict + optional LLM)
+  schema        llm-schema.py                  — extract structured display sections → jobs_jobposting.schema_json
 
 Usage:
   python pipeline.py                          # run all steps
@@ -41,6 +42,7 @@ ALL_STEPS = [
     "import",
     "extract",
     "infer",
+    "schema",
 ]
 
 # Map step name → command (list of str/Path); placeholders filled in _build_cmd()
@@ -49,6 +51,7 @@ _SCRAPER_STEPS = {
     "fetch-detail": ROOT / "fetch-anunturi.py",
     "parse":        ROOT / "parse-anunturi.py",
     "download":     ROOT / "download-attachments.py",
+    "schema":       ROOT / "llm-schema.py",
 }
 
 _MANAGE_STEPS = {
@@ -80,7 +83,13 @@ def _build_cmd(
 ) -> list[str | Path]:
     """Return the subprocess command for a given step."""
     if step in _SCRAPER_STEPS:
-        return [sys.executable, _SCRAPER_STEPS[step]]
+        cmd: list[str | Path] = [sys.executable, _SCRAPER_STEPS[step]]
+        if step == "schema":
+            if force:
+                cmd.append("--force")
+            if provider:
+                cmd.extend(["--provider", provider])
+        return cmd
 
     if step not in _MANAGE_STEPS:
         raise ValueError(f"Unknown step: {step!r}")

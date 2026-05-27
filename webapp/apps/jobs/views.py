@@ -16,6 +16,32 @@ from apps.jobs.models import JobPosting
 FTS_CONFIG = "romanian_unaccent"
 PAGE_SIZE = 25
 
+# Ordered list of (schema_json key, Romanian display label)
+_SCHEMA_SECTION_LABELS = [
+    ("responsibilities", "Atribuții principale"),
+    ("qualifications",   "Condiții de participare"),
+    ("skills",           "Competențe"),
+    ("application_docs", "Dosar de candidatură"),
+    ("salary",           "Salarizare"),
+    ("application_fee",  "Taxă de participare"),
+    ("work_conditions",  "Condiții de muncă"),
+]
+
+
+def _render_schema_sections(schema_json: dict) -> list[dict] | None:
+    """Convert schema_json dict to a list of {label, html} dicts for the template.
+
+    Sections whose value is None or empty string are omitted.
+    Returns None if no sections have content (template falls back to body_html).
+    """
+    sections = []
+    for key, label in _SCHEMA_SECTION_LABELS:
+        value = schema_json.get(key)
+        if value and str(value).strip():
+            html = md.markdown(str(value), extensions=["nl2br"])
+            sections.append({"label": label, "html": html})
+    return sections or None
+
 
 def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_cats, expires_before, expires_after, families, seniorities, anomaly_flags=None):
     if q:
@@ -431,8 +457,14 @@ def job_detail(request, pk):
     body_html = ""
     if posting.body_markdown:
         body_html = md.markdown(posting.body_markdown, extensions=["nl2br", "tables"])
+
+    schema_sections = None
+    if posting.schema_json:
+        schema_sections = _render_schema_sections(posting.schema_json)
+
     return render(request, "jobs/detail.html", {
         "posting": posting,
         "body_html": body_html,
+        "schema_sections": schema_sections,
         "today": date.today(),
     })

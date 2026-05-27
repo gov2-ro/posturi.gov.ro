@@ -331,6 +331,7 @@ class Command(BaseCommand):
                     setweight(to_tsvector('romanian_unaccent', coalesce(j.title, '')), 'A')
                     || setweight(to_tsvector('romanian_unaccent', coalesce(e.name, '')), 'B')
                     || setweight(to_tsvector('romanian_unaccent', coalesce(j.body_markdown, '')), 'C')
+                    || setweight(to_tsvector('romanian_unaccent', coalesce(j.attachment_text, '')), 'D')
                 FROM jobs_employer AS e
                 WHERE j.employer_id = e.id
                 """

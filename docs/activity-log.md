@@ -2,6 +2,15 @@
 
 ## 2026
 
+### 2026-05-27 — FTS search_vector extended with attachment_text (weight D)
+
+**What:** Extended the full-text search index to include attachment content:
+- `import_csvs.py` `search_vector` SQL now includes `coalesce(j.attachment_text, '')` at weight D (lowest weight, after title A, employer B, body C).
+- Rebuilt `search_vector` for all 4,379 postings in-place; 2,630 postings (60%) had non-empty `attachment_text` incorporated into their index.
+- A small number of NOTICE warnings from PostgreSQL about words > 2,047 chars (e.g. base64 blobs in raw attachment text) are expected and benign — those tokens are simply skipped.
+
+**Why:** After boosting attachment coverage from 25% → 60% via `extract_attachments --force`, the search index still didn't see that text. Searching for contact info or role-specific keywords buried in a .docx now works.
+
 ### 2026-05-27 — Production deploy: Dockerfile + fly.toml + whitenoise
 
 **What:** Full production deployment configuration for Fly.io:

@@ -24,4 +24,4 @@ webapp/.env
 webapp/__pycache__/
 **/__pycache__/
 webapp/staticfiles/
-webapp/db.sqlite3
+webapp/db.sqlite3.superpowers/

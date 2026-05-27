@@ -1,0 +1,144 @@
+{% if included_variants %}
+
+  {# ── Metadata strip ── #}
+  <div class="overflow-x-auto mb-6">
+    <table class="w-full border-collapse text-sm">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="border border-border-warm px-3 py-2 text-left font-medium">Provider / Model</th>
+          <th class="border border-border-warm px-3 py-2 text-center font-medium">Prompt</th>
+          <th class="border border-border-warm px-3 py-2 text-right font-medium">Input (tok)</th>
+          <th class="border border-border-warm px-3 py-2 text-right font-medium">Output (tok)</th>
+          <th class="border border-border-warm px-3 py-2 text-right font-medium"
+              {% if min_latency == max_latency %}title="Toate au aceeași latență"{% endif %}>
+            Latență (ms)
+          </th>
+          <th class="border border-border-warm px-3 py-2 text-right font-medium"
+              {% if min_cost == max_cost %}title="Toate costă la fel"{% endif %}>
+            Cost (USD)
+          </th>
+          <th class="border border-border-warm px-3 py-2 text-center font-medium">Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for variant in included_variants %}
+        <tr class="hover:bg-parchment-dark">
+          <td class="border border-border-warm px-3 py-2 font-medium font-mono text-xs">
+            {{ variant.provider }}/{{ variant.model }}
+          </td>
+          <td class="border border-border-warm px-3 py-2 text-center">
+            <span class="inline-block bg-gray-200 text-xs px-1.5 py-0.5 rounded font-mono">
+              {{ variant.prompt_version }}
+            </span>
+          </td>
+          <td class="border border-border-warm px-3 py-2 text-right font-mono text-xs">
+            {% if variant.input_tokens %}{{ variant.input_tokens }}{% else %}—{% endif %}
+          </td>
+          <td class="border border-border-warm px-3 py-2 text-right font-mono text-xs">
+            {% if variant.output_tokens %}{{ variant.output_tokens }}{% else %}—{% endif %}
+          </td>
+          <td class="border border-border-warm px-3 py-2 text-right font-mono text-xs
+            {% if variant.latency_ms and min_latency == variant.latency_ms %}bg-green-100
+            {% elif variant.latency_ms and max_latency == variant.latency_ms %}bg-red-100
+            {% endif %}">
+            {% if variant.latency_ms %}{{ variant.latency_ms }}{% else %}—{% endif %}
+          </td>
+          <td class="border border-border-warm px-3 py-2 text-right font-mono text-xs
+            {% if variant.cost_usd and min_cost == variant.cost_usd %}bg-green-100
+            {% elif variant.cost_usd and max_cost == variant.cost_usd %}bg-red-100
+            {% endif %}">
+            {% if variant.cost_usd %}${{ variant.cost_usd|floatformat:6 }}{% else %}—{% endif %}
+          </td>
+          <td class="border border-border-warm px-3 py-2 text-center text-xs text-ink-muted">
+            {{ variant.created_at|date:"Y-m-d H:i" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if min_cost and max_cost and min_cost != max_cost %}
+    <p class="text-xs text-ink-muted mt-2">💚 Verde = cel mai bun | 🔴 Roșu = cel mai prost</p>
+    {% endif %}
+  </div>
+
+  {# ── Comparison matrix ── #}
+  {% if matrix %}
+  <div class="overflow-x-auto">
+    <table class="w-full border-collapse text-sm">
+      <thead>
+        <tr class="bg-parchment" style="position: sticky; top: 0; z-index: 10; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
+          <th class="border border-border-warm px-3 py-2 text-left bg-parchment min-w-[140px]">Câmp</th>
+          {% for variant in included_variants %}
+          <th class="border border-border-warm px-3 py-2 text-center bg-parchment min-w-[220px]">
+            <div class="font-medium font-mono text-xs leading-tight">
+              {{ variant.provider }}/{{ variant.model }}
+            </div>
+            <span class="inline-block bg-gray-200 text-xs px-1.5 py-0.5 rounded font-mono mt-1">
+              {{ variant.prompt_version }}
+            </span>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in matrix %}
+          {% if view_mode == "diff-only" and row.status == "agree" %}
+          {# Collapsed agree row in diff-only mode #}
+          <tr class="bg-gray-50">
+            <td class="border border-border-warm px-3 py-2 align-top">
+              <div class="text-xs text-ink-muted">{{ row.label }}</div>
+              <span class="inline-block bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded mt-1">
+                agree
+              </span>
+            </td>
+            <td class="border border-border-warm px-3 py-2 text-ink-muted text-xs italic align-top"
+                colspan="{{ included_variants|length }}">
+              {{ included_variants|length }}/{{ included_variants|length }} variants agree:
+              <div class="mt-1 not-italic text-ink prose prose-sm max-w-none">
+                {{ row.merged_html|safe }}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr class="{% cycle 'bg-white' 'bg-parchment' %}">
+            <td class="border border-border-warm px-3 py-2 align-top min-w-[140px]">
+              <div class="text-xs font-medium text-ink">{{ row.label }}</div>
+              {% if row.status == "agree" %}
+              <span class="inline-block bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded mt-1">agree</span>
+              {% elif row.status == "partial" %}
+              <span class="inline-block bg-yellow-100 text-yellow-800 text-xs px-1.5 py-0.5 rounded mt-1">partial</span>
+              {% elif row.status == "diverge" %}
+              <span class="inline-block bg-red-100 text-red-800 text-xs px-1.5 py-0.5 rounded mt-1">diverge</span>
+              {% endif %}
+            </td>
+            {% for cell in row.cells %}
+            <td class="border border-border-warm px-3 py-2 align-top
+              {% if row.status == "diverge" and cell.html %}bg-red-50{% endif %}">
+              {% if view_mode == "json" %}
+              <pre class="text-xs font-mono overflow-auto max-h-80 whitespace-pre-wrap bg-gray-50 p-2 rounded">{{ cell.raw_json }}</pre>
+              {% elif cell.html %}
+              <div class="prose prose-sm max-w-none text-xs">{{ cell.html|safe }}</div>
+              {% else %}
+              <span class="text-ink-faint">—</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+{% else %}
+  {# Empty state — no variants generated yet #}
+  <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+    <p class="text-gray-700 mb-4">Nu au fost generate variante schema pentru acest anunț.</p>
+    <p class="text-sm text-gray-600">
+      Rulați
+      <code class="bg-gray-100 px-2 py-1 rounded">python llm-schema.py --compare --slug {{ posting.url|lower }}</code>
+      pentru a genera comparații LLM.
+    </p>
+  </div>
+{% endif %}

@@ -38,16 +38,16 @@
             {% if variant.output_tokens %}{{ variant.output_tokens }}{% else %}—{% endif %}
           </td>
           <td class="border border-border-warm px-3 py-2 text-right font-mono text-xs
-            {% if variant.latency_ms and min_latency == variant.latency_ms %}bg-green-100
-            {% elif variant.latency_ms and max_latency == variant.latency_ms %}bg-red-100
+            {% if variant.latency_ms is not None and min_latency == variant.latency_ms %}bg-green-100
+            {% elif variant.latency_ms is not None and max_latency == variant.latency_ms %}bg-red-100
             {% endif %}">
-            {% if variant.latency_ms %}{{ variant.latency_ms }}{% else %}—{% endif %}
+            {% if variant.latency_ms is not None %}{{ variant.latency_ms }}{% else %}—{% endif %}
           </td>
           <td class="border border-border-warm px-3 py-2 text-right font-mono text-xs
-            {% if variant.cost_usd and min_cost == variant.cost_usd %}bg-green-100
-            {% elif variant.cost_usd and max_cost == variant.cost_usd %}bg-red-100
+            {% if variant.cost_usd is not None and min_cost == variant.cost_usd %}bg-green-100
+            {% elif variant.cost_usd is not None and max_cost == variant.cost_usd %}bg-red-100
             {% endif %}">
-            {% if variant.cost_usd %}${{ variant.cost_usd|floatformat:6 }}{% else %}—{% endif %}
+            {% if variant.cost_usd is not None %}${{ variant.cost_usd|floatformat:6 }}{% else %}—{% endif %}
           </td>
           <td class="border border-border-warm px-3 py-2 text-center text-xs text-ink-muted">
             {{ variant.created_at|date:"Y-m-d H:i" }}

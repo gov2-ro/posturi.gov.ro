@@ -157,6 +157,11 @@ def test_rendered_view_returns_200_with_all_non_null_statuses(posting_with_4_v2_
     )
     assert resp.status_code == 200
     content = resp.content.decode()
+    # The matrix rows for our 3 non-null statuses must appear with Romanian labels
+    assert "Studii" in content          # educationRequirements row — agree
+    assert "Condiții specifice" in content  # qualifications row — partial
+    assert "Atribuții principale" in content  # responsibilities row — diverge
+    # And the status chips themselves
     assert "agree" in content
     assert "partial" in content
     assert "diverge" in content
@@ -227,6 +232,28 @@ def test_json_view_shows_raw_json(posting_with_4_v2_variants):
     # JSON view should expose the raw string values
     assert "Elaborează documente" in content
     assert "Studii superioare" in content
+
+
+# ---------------------------------------------------------------------------
+# HTMX partial dispatch test
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_htmx_request_returns_partial_not_full_page(posting_with_4_v2_variants):
+    """When HX-Request header is present, view returns the matrix partial (no <html>)."""
+    client = Client()
+    resp = client.get(
+        f"/job/{posting_with_4_v2_variants.pk}/variants/?prompt=v2&view=rendered",
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    content = resp.content.decode()
+    # Partial response must not contain a full HTML document
+    assert "<html" not in content
+    assert "<head" not in content
+    # But must still contain the matrix content
+    assert "Studii" in content
+    assert "agree" in content
 
 
 # ---------------------------------------------------------------------------

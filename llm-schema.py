@@ -44,7 +44,7 @@ Use null for any section not mentioned in the posting.
 Return only valid JSON. No explanation, no markdown code blocks."""
 
 DEFAULTS = {
-    'gemini':    'gemini/gemini-2.5-flash',
+    'gemini':    'gemini-2.5-flash',
     'openai':    'gpt-4o',
     'anthropic': 'claude-3-5-haiku-20241022',
 }
@@ -68,11 +68,12 @@ def parse_json_response(text):
 
 def make_generator(provider, model):
     if provider == 'gemini':
-        import llm
-        m = llm.get_model(model)
-        m.key = os.getenv('GOOGLE_API_KEY')
+        import google.generativeai as genai
+        genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+        m = genai.GenerativeModel(model)
         def generate(content):
-            return parse_json_response(m.prompt(f"{PROMPT}\n\n{content}").text())
+            resp = m.generate_content(f"{PROMPT}\n\n{content}")
+            return parse_json_response(resp.text)
 
     elif provider == 'openai':
         import openai
@@ -155,6 +156,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', default=None, help='Override default model for the provider')
     parser.add_argument('--slug', default=None, help='Process only postings whose URL contains this string')
     parser.add_argument('--force', action='store_true', help='Re-generate even if schema_json already set')
+    parser.add_argument('--limit', type=int, default=None, help='Process at most N postings')
     args = parser.parse_args()
 
     model = args.model or DEFAULTS[args.provider]
@@ -163,7 +165,11 @@ if __name__ == '__main__':
     generate = make_generator(args.provider, model)
 
     with psycopg.connect(DATABASE_URL) as conn:
-        for posting_id, url, content in iter_postings(conn, slug_filter=args.slug, force=args.force):
+        postings = iter_postings(conn, slug_filter=args.slug, force=args.force)
+        if args.limit:
+            import itertools
+            postings = itertools.islice(postings, args.limit)
+        for posting_id, url, content in postings:
             slug = url.rstrip('/').split('/')[-1]
             print(f"Processing {slug}...")
             try:

@@ -10,11 +10,11 @@
           <th class="border border-border-warm px-3 py-2 text-right font-medium">Input (tok)</th>
           <th class="border border-border-warm px-3 py-2 text-right font-medium">Output (tok)</th>
           <th class="border border-border-warm px-3 py-2 text-right font-medium"
-              {% if min_latency == max_latency %}title="Toate au aceeași latență"{% endif %}>
+              {% if min_latency and min_latency == max_latency %}title="Toate au aceeași latență"{% endif %}>
             Latență (ms)
           </th>
           <th class="border border-border-warm px-3 py-2 text-right font-medium"
-              {% if min_cost == max_cost %}title="Toate costă la fel"{% endif %}>
+              {% if min_cost and min_cost == max_cost %}title="Toate costă la fel"{% endif %}>
             Cost (USD)
           </th>
           <th class="border border-border-warm px-3 py-2 text-center font-medium">Data</th>
@@ -62,8 +62,9 @@
   </div>
 
   {# ── Comparison matrix ── #}
+  {# overflow-auto + max-h gives a single scroll container so position:sticky works #}
   {% if matrix %}
-  <div class="overflow-x-auto">
+  <div class="overflow-auto" style="max-height: calc(100vh - 220px);">
     <table class="w-full border-collapse text-sm">
       <thead>
         <tr class="bg-parchment" style="position: sticky; top: 0; z-index: 10; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">

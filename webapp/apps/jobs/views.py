@@ -637,8 +637,8 @@ def variant_comparison(request, pk):
     all_prompts = sorted({v.prompt_version for v in all_variants})
 
     # --- Min/max for metadata strip highlighting ---
-    costs = [v.cost_usd for v in included if v.cost_usd]
-    latencies = [v.latency_ms for v in included if v.latency_ms]
+    costs = [v.cost_usd for v in included if v.cost_usd is not None]
+    latencies = [v.latency_ms for v in included if v.latency_ms is not None]
     min_cost = min(costs) if costs else None
     max_cost = max(costs) if costs else None
     min_latency = min(latencies) if latencies else None
@@ -647,12 +647,12 @@ def variant_comparison(request, pk):
     # --- Build comparison matrix ---
     matrix = []
     for key, label in _SCHEMA_SECTION_LABELS:
+        if not included:
+            break
         values = [
             (v.schema_json.get(key) if isinstance(v.schema_json, dict) else None)
             for v in included
         ]
-        if not included:
-            continue
         status = _section_status(values, key)
         if status == "all_null":
             continue

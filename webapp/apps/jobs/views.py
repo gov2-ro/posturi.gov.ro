@@ -1,5 +1,9 @@
 from datetime import date, datetime, time
 from datetime import timezone as dt_timezone
+import json
+import re
+import unicodedata
+from typing import Literal
 
 import markdown as md
 from django.contrib.postgres.search import SearchQuery, SearchRank
@@ -97,6 +101,62 @@ _STRUCTURED_RENDERERS = {
     "application_fee":     _render_application_fee,
     "application_contact": _render_application_contact,
 }
+
+# Sentinel for "null / empty" in section-status normalization.
+_NULL = object()
+
+PRODUCTION_PROMPT_VERSION = "v2"
+
+
+def _normalize_section_value(value):
+    """Normalize a section value for diff comparison.
+
+    Returns the _NULL sentinel for None or "". For dicts, returns a
+    canonical JSON string (sort_keys=True). For strings, applies NFKC
+    normalization, lowercases, collapses whitespace, and strips leading
+    bullet markers per line.
+    """
+    if value is None or value == "":
+        return _NULL
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True, ensure_ascii=False)
+    s = unicodedata.normalize("NFKC", str(value)).lower()
+    result_lines = []
+    for line in s.splitlines():
+        line = re.sub(r"^-\s+", "", line)          # strip leading "- " bullets
+        line = re.sub(r"\s+", " ", line).strip()   # collapse whitespace
+        if line:
+            result_lines.append(line)
+    return re.sub(r"\s+", " ", " ".join(result_lines)).strip()
+
+
+def _section_status(
+    values: list, key: str
+) -> Literal["agree", "partial", "diverge", "all_null"]:
+    """Compute the agreement status for one matrix row.
+
+    Args:
+        values: raw section values from each included variant, in column order.
+        key:    the schema_json key for this row (unused in logic; kept for
+                signature compatibility with the spec).
+
+    Returns:
+        "all_null"  — every value normalizes to null/empty (row omitted).
+        "agree"     — all non-null values normalize equal AND no nulls present.
+        "partial"   — all non-null values normalize equal AND ≥1 null present.
+        "diverge"   — ≥2 distinct non-null normalized values.
+    """
+    normalized = [_normalize_section_value(v) for v in values]
+    non_null = [n for n in normalized if n is not _NULL]
+    if not non_null:
+        return "all_null"
+    distinct_non_null = set(non_null)
+    has_null = any(n is _NULL for n in normalized)
+    if len(distinct_non_null) == 1 and not has_null:
+        return "agree"
+    if len(distinct_non_null) == 1 and has_null:
+        return "partial"
+    return "diverge"
 
 
 def _render_schema_sections(schema_json: dict) -> list[dict] | None:

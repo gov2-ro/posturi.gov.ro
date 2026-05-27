@@ -12,7 +12,16 @@ python fetch-index.py                 # stops early at first page with no change
 python fetch-anunturi.py
 python parse-anunturi.py
 python download-attachments.py
-python llm-schema.py                  # extracts 7 structured sections (responsibilities, qualifications, skills, etc.) from body+attachment → stores in JobPosting.schema_json; --provider gemini|openai|anthropic; --slug <fragment>; --force to re-generate
+python llm-schema.py                  # extracts 7 structured sections → JobPosting.schema_json
+  # Single provider (production):
+  python llm-schema.py --provider gemini --limit 10
+  # Compare all enabled models (stores variants only, no schema_json overwrite):
+  python llm-schema.py --compare --limit 10
+  # Filter by model (regex):
+  python llm-schema.py --compare --model-filter "gemini-.*" --limit 5
+  # Test prompt versions:
+  python llm-schema.py --compare --prompt-version v2 --limit 10
+  # Models + pricing defined in models_config.json; enable/disable via "enabled" flag
 # Data quality testing:
 .venv/bin/python3 quality_check.py --no-llm          # fast: CSV + attachment + infer, no LLM
 .venv/bin/python3 quality_check.py --provider anthropic  # full pass incl. schema.org generation

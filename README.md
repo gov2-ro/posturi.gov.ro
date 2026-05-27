@@ -97,8 +97,42 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 
 `--force` re-processes already-done rows for `import`, `extract`, `infer`, and `schema`.
 `--limit N` restricts `infer` to N postings (useful for testing).
-`--provider gemini|openai|anthropic` sets the LLM used by the `infer` and `schema` steps (default: `gemini`).
+`--provider gemini|openai|anthropic|deepseek` sets the LLM used by the `infer` and `schema` steps (default: `gemini`).
 `--no-llm` skips the LLM portion of `infer` only — the `schema` step is always LLM-driven; use `--skip schema` to omit it.
+
+### LLM Provider Comparison
+
+Compare multiple LLM providers and prompt versions on the same postings without overwriting production results:
+
+```bash
+# Run all enabled models (respects enable/disable flags in models_config.json)
+python llm-schema.py --compare --limit 10
+
+# Test specific models by regex
+python llm-schema.py --compare --model-filter "gemini-.*" --limit 5
+python llm-schema.py --compare --model-filter "gpt-.*" --limit 5
+
+# Test different prompt versions (when multiple versions exist in config)
+python llm-schema.py --compare --prompt-version v2 --limit 10
+
+# Combine: test GPT models with prompt v2
+python llm-schema.py --model-filter "gpt-.*" --prompt-version v2 --limit 3
+```
+
+Each variant is stored in `JobPostingSchemaVariant` with:
+- Provider, model, prompt version
+- Token counts (input/output)
+- Cost (USD) calculated from config pricing
+- Latency (ms)
+
+**View results:**
+- Django admin: `Admin → Schema LLM variants` (filter by provider/model/date)
+- Job detail page: click "Dev → Comparație LLM" to see all variants for a posting side-by-side
+
+**Configuration** (`models_config.json`):
+- Models: enable/disable flag per model, pricing
+- Prompts: versioned prompts (v1, v2, etc.) centralized in config
+- `get_enabled_models()` respects `"enabled": true/false` flags
 
 ## Data quality
 

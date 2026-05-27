@@ -181,6 +181,7 @@ def job_list(request):
         "anomaly_choices": [
             ("short_deadline", "Termen scurt"),
             ("missing_contact", "Contact lipsă"),
+            ("contact_in_attachment", "Contact doar în atașament"),
             ("gender_criteria", "Criteriu de gen"),
             ("no_body", "Fără corp"),
             ("frequent_repost", "Re-publicare frecventă"),
@@ -367,7 +368,7 @@ def stats_json(request):
     )
     anomaly_counts = {
         flag: JobPosting.objects.filter(inferred__anomaly_flags__contains=[flag]).count()
-        for flag in ("short_deadline", "missing_contact", "gender_criteria", "no_body", "frequent_repost")
+        for flag in ("short_deadline", "missing_contact", "contact_in_attachment", "gender_criteria", "no_body", "frequent_repost")
     }
     inferred_count = JobPosting.objects.exclude(inferred={}).count()
 

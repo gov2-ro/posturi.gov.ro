@@ -3,6 +3,7 @@ import pytest
 from apps.jobs.management.commands.infer_postings import (
     _extract_salary_range,
     _infer_computer,
+    _infer_experience,
     _infer_remote,
     _infer_work_type,
 )
@@ -156,6 +157,49 @@ class TestExtractSalaryRange:
         mn, mx = _extract_salary_range(schema)
         assert mn == 3750
         assert mx == 4200
+
+
+# ---------------------------------------------------------------------------
+# _infer_experience (nu este cazul)
+# ---------------------------------------------------------------------------
+
+class TestInferExperience:
+    def test_numeric_years(self):
+        yrs, flag = _infer_experience("Minim 3 ani experienta in specialitate.")
+        assert yrs == 3
+        assert flag is False
+
+    def test_nu_este_cazul(self):
+        yrs, flag = _infer_experience("Experiență: nu este cazul.")
+        assert yrs == 0
+        assert flag is True
+
+    def test_nu_se_solicita_experienta(self):
+        yrs, flag = _infer_experience("Nu se solicită experiență în muncă.")
+        assert yrs == 0
+        assert flag is True
+
+    def test_fara_experienta_munca(self):
+        yrs, flag = _infer_experience("Fara experienta in munca.")
+        assert yrs == 0
+        assert flag is True
+
+    def test_no_match_returns_none(self):
+        yrs, flag = _infer_experience("Candidatul trebuie să cunoască legislația.")
+        assert yrs is None
+        assert flag is False
+
+    def test_numeric_overrides_no_experience_phrase(self):
+        # If a body somehow contains both, the numeric match wins
+        yrs, flag = _infer_experience("Minim 2 ani experienta; nu este cazul pentru formare.")
+        assert yrs == 2
+        assert flag is False
+
+    def test_diacritic_variants(self):
+        # Diacritic-free variant should still match
+        yrs, flag = _infer_experience("Experienta: nu este cazul.")
+        assert yrs == 0
+        assert flag is True
 
 
 # ---------------------------------------------------------------------------

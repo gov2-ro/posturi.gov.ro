@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-05-28 — "Nu este cazul" experience flag in inference pipeline
+
+**What:** `_infer_experience` in `infer_postings.py` now returns a `(experience_years, no_experience_required)` tuple. When the posting body explicitly states that no experience is required ("nu este cazul", "nu se solicită experiență", "fara experienta in munca", etc.), it returns `(0, True)` instead of `(None, False)`. A numeric year count always takes precedence over the no-experience phrases. The `no_experience_required` flag is stored in the `inferred` JSONB column alongside `experience_years`.
+
+**Why:** Postings with "nu este cazul" were previously indistinguishable from postings that simply didn't mention experience. The flag enables filtering for true entry-level positions.
+
+**Tests:** 7 new tests in `TestInferExperience` class (77 total, all passing).
+
+---
+
 ### 2026-05-28 — HTML sanitization of rendered Markdown output
 
 **What:** Added `nh3` (Rust-backed HTML sanitizer) to the webapp. All Markdown-rendered HTML now passes through `_sanitize()` before reaching templates, covering both `body_html` in `job_detail` and all `schema_json` sections in `_render_schema_sections`.

@@ -187,6 +187,14 @@ _EXPERIENCE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Patterns that explicitly state no experience is required
+_NO_EXPERIENCE_RE = re.compile(
+    r"nu\s+este\s+cazul|nu\s+se\s+solicit[aă]\s+(?:experien[tț][aă]|vechime)|"
+    r"fara\s+experien[tț][aă]\s+(?:in\s+)?(?:munc[aă]|specialitate)|"
+    r"nu\s+necesita\s+experien[tț][aă]|experienta\s+nu\s+este\s+obligatorie",
+    re.IGNORECASE,
+)
+
 
 def _infer_studies(body: str) -> str | None:
     norm = _normalize(body)
@@ -196,11 +204,21 @@ def _infer_studies(body: str) -> str | None:
     return None
 
 
-def _infer_experience(body: str) -> int | None:
-    m = _EXPERIENCE_RE.search(body)
+def _infer_experience(body: str) -> tuple[int | None, bool]:
+    """Return (experience_years, no_experience_required).
+
+    no_experience_required=True when the posting explicitly states that no
+    experience is needed ("nu este cazul", "nu se solicită experiență", etc.).
+    In that case experience_years is 0.  If a numeric year count is found it
+    takes precedence over the no-experience phrases.
+    """
+    norm = _normalize(body)
+    m = _EXPERIENCE_RE.search(norm)
     if m:
-        return int(m.group(1))
-    return None
+        return int(m.group(1)), False
+    if _NO_EXPERIENCE_RE.search(norm):
+        return 0, True
+    return None, False
 
 
 # ---------------------------------------------------------------------------
@@ -531,7 +549,7 @@ def infer_posting(
 
     # Layer 3: studies, experience, skills, languages, certifications
     studies = _infer_studies(body)
-    experience = _infer_experience(body)
+    experience, no_experience_required = _infer_experience(body)
     skills = _infer_skills(body)
     languages = _infer_languages(body)
     certifications = _infer_certifications(body)
@@ -557,6 +575,7 @@ def infer_posting(
         "grade": grade,
         "studies_required": studies,
         "experience_years": experience,
+        "no_experience_required": no_experience_required,
         "skills": skills,
         "languages": languages,
         "certifications": certifications,

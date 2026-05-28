@@ -118,7 +118,27 @@
         </div>
 
         <!-- Reset -->
-        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after or families or seniorities or anomaly_flags or work_types or remote or computer or exp_levels or studies_levels or salary_bucket %}
+        <!-- Dev filters -->
+        <div class="mb-4 border border-dashed border-amber-300 rounded p-2 bg-amber-50/40">
+          <div class="text-xs font-semibold uppercase tracking-widest text-amber-700 mb-2">Dev</div>
+          {% for param, label, active in dev_filters %}
+          <div class="mb-1.5">
+            <div class="text-xs text-ink-faint mb-0.5">{{ label }}</div>
+            <div class="flex gap-3">
+              {% for val, vlabel in dev_filter_options %}
+              <label class="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="{{ param }}" value="{{ val }}"
+                       class="accent-amber-600"
+                       {% if active == val %}checked{% endif %}>
+                <span class="text-xs text-ink-muted">{{ vlabel }}</span>
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+
+        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after or families or seniorities or anomaly_flags or work_types or remote or computer or exp_levels or studies_levels or salary_bucket or dev_schema or dev_inferred or dev_variants %}
           <a href="/" class="block text-center text-xs text-gov hover:underline mt-2 py-1">
             ✕ Șterge filtrele
           </a>

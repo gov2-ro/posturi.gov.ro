@@ -208,6 +208,7 @@ def _apply_filters(
     expires_before, expires_after, families, seniorities, anomaly_flags=None,
     work_types=None, remote=None, computer=None, exp_levels=None,
     studies_levels=None, salary_bucket=None,
+    dev_schema=None, dev_inferred=None, dev_variants=None,
 ):
     if q:
         qs = qs.filter(search_vector=SearchQuery(q, config=FTS_CONFIG, search_type="plain"))
@@ -269,6 +270,18 @@ def _apply_filters(
                 if hi is not None:
                     qs = qs.filter(inferred__salary_min__lt=hi)
                 break
+    if dev_schema == "yes":
+        qs = qs.filter(schema_json__isnull=False)
+    elif dev_schema == "no":
+        qs = qs.filter(schema_json__isnull=True)
+    if dev_inferred == "yes":
+        qs = qs.exclude(Q(inferred={}) | Q(inferred__isnull=True))
+    elif dev_inferred == "no":
+        qs = qs.filter(Q(inferred={}) | Q(inferred__isnull=True))
+    if dev_variants == "yes":
+        qs = qs.filter(schema_variants__isnull=False).distinct()
+    elif dev_variants == "no":
+        qs = qs.filter(schema_variants__isnull=True)
     return qs
 
 
@@ -291,6 +304,9 @@ def job_list(request):
     exp_levels = request.GET.getlist("exp_level")
     studies_levels = request.GET.getlist("studies_level")
     salary_bucket = request.GET.get("salary_bucket", "")
+    dev_schema = request.GET.get("dev_schema", "")
+    dev_inferred = request.GET.get("dev_inferred", "")
+    dev_variants = request.GET.get("dev_variants", "")
 
     filter_kwargs = dict(
         q=q,
@@ -310,6 +326,9 @@ def job_list(request):
         exp_levels=exp_levels,
         studies_levels=studies_levels,
         salary_bucket=salary_bucket,
+        dev_schema=dev_schema,
+        dev_inferred=dev_inferred,
+        dev_variants=dev_variants,
     )
 
     base_qs = JobPosting.objects.all()
@@ -483,6 +502,15 @@ def job_list(request):
         "exp_levels": exp_levels,
         "studies_levels": studies_levels,
         "salary_bucket": salary_bucket,
+        "dev_schema": dev_schema,
+        "dev_inferred": dev_inferred,
+        "dev_variants": dev_variants,
+        "dev_filters": [
+            ("dev_schema",   "Schema JSON",      dev_schema),
+            ("dev_inferred", "Inferred meta",    dev_inferred),
+            ("dev_variants", "LLM variants",     dev_variants),
+        ],
+        "dev_filter_options": [("", "—"), ("yes", "Da"), ("no", "Nu")],
         "judet_options": judet_options,
         "level_options": level_options,
         "type_options": type_options,
@@ -531,6 +559,9 @@ def _filter_kwargs_from_request(request):
         exp_levels=request.GET.getlist("exp_level"),
         studies_levels=request.GET.getlist("studies_level"),
         salary_bucket=request.GET.get("salary_bucket", ""),
+        dev_schema=request.GET.get("dev_schema", ""),
+        dev_inferred=request.GET.get("dev_inferred", ""),
+        dev_variants=request.GET.get("dev_variants", ""),
     )
 
 

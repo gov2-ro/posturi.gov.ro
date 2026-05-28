@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-05-28 — Survey: scanned-PDF frequency in attachments
+
+**What:** Ran a pypdf-based survey across all 750 PDFs in `data/downloads/`. For each file, extracted text from the first 3 pages and classified as "text-extractable" (≥50 chars), "likely scanned" (< 50 chars but file > 30 KB), or other.
+
+**Results:**
+- Text-extractable: **361 / 750 (48.1%)**
+- Likely scanned (image-only): **389 / 750 (51.9%)**
+- Parse errors: 0 (pypdf handled all files, though many had malformed xref tables)
+
+**Why:** Quality check showed that the OCR fallback (poppler + tesseract) in `quality_check.py` fired correctly on at least one known scanned PDF. This survey quantifies the scope — just over half the attachments need OCR to be readable.
+
+**Next step (backlog):** Run OCR backfill on the 389 scanned PDFs, store extracted text in `data/attachments_text/<slug>.txt`, and feed into quality_check.py and potentially the LLM extraction pipeline.
+
+---
+
 ### 2026-05-28 — LLM variants dashboard (/llm-variante/)
 
 **What:** New page at `/llm-variante/` showing a per-(provider, model, prompt_version) leaderboard table with: run count, average cost (¢/post), total cost ($), average latency (ms), average input/output token counts. Rows are grouped by prompt version. Nav link "LLM" added to the site header.

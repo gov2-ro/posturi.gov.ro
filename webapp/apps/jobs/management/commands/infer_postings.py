@@ -16,6 +16,8 @@ import os
 import re
 import time
 import unicodedata
+
+from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -658,26 +660,26 @@ class Command(BaseCommand):
 
         done = llm_calls = errors = 0
 
-        for posting in qs.iterator(chunk_size=200):
-            try:
-                inferred = infer_posting(
-                    posting,
-                    provider=provider,
-                    use_llm=use_llm,
-                    frequent_repost_ids=frequent_repost_ids,
-                )
-                if inferred["profession_family_source"] == "llm":
-                    llm_calls += 1
-                elif inferred["profession_family_source"] == "error":
+        with tqdm(qs.iterator(chunk_size=200), total=total, unit="post", dynamic_ncols=True) as bar:
+            for posting in bar:
+                bar.set_description((posting.title or "")[:50])
+                try:
+                    inferred = infer_posting(
+                        posting,
+                        provider=provider,
+                        use_llm=use_llm,
+                        frequent_repost_ids=frequent_repost_ids,
+                    )
+                    if inferred["profession_family_source"] == "llm":
+                        llm_calls += 1
+                    elif inferred["profession_family_source"] == "error":
+                        errors += 1
+                    JobPosting.objects.filter(pk=posting.pk).update(inferred=inferred)
+                    done += 1
+                except Exception as exc:
+                    tqdm.write(f"  Error on pk={posting.pk} '{posting.title[:60]}': {exc}")
                     errors += 1
-                JobPosting.objects.filter(pk=posting.pk).update(inferred=inferred)
-                done += 1
-            except Exception as exc:
-                self.stderr.write(f"  Error on pk={posting.pk} '{posting.title[:60]}': {exc}")
-                errors += 1
-
-            if done % 500 == 0:
-                self.stdout.write(f"  {done}/{total} done, {llm_calls} LLM calls, {errors} errors")
+                bar.set_postfix(done=done, llm=llm_calls, err=errors)
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -692,14 +694,15 @@ class Command(BaseCommand):
         total = qs.count()
         self.stdout.write(f"Conditions-only pass: {total} postings…")
         done = errors = 0
-        for posting in qs.iterator(chunk_size=200):
-            try:
-                inferred = infer_conditions_only(posting)
-                JobPosting.objects.filter(pk=posting.pk).update(inferred=inferred)
-                done += 1
-            except Exception as exc:
-                self.stderr.write(f"  Error on pk={posting.pk}: {exc}")
-                errors += 1
-            if done % 500 == 0:
-                self.stdout.write(f"  {done}/{total} done, {errors} errors")
+        with tqdm(qs.iterator(chunk_size=200), total=total, unit="post", dynamic_ncols=True) as bar:
+            for posting in bar:
+                bar.set_description((posting.title or "")[:50])
+                try:
+                    inferred = infer_conditions_only(posting)
+                    JobPosting.objects.filter(pk=posting.pk).update(inferred=inferred)
+                    done += 1
+                except Exception as exc:
+                    tqdm.write(f"  Error on pk={posting.pk}: {exc}")
+                    errors += 1
+                bar.set_postfix(done=done, err=errors)
         self.stdout.write(self.style.SUCCESS(f"Done. {done} updated, {errors} errors."))

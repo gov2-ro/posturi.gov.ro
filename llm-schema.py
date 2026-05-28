@@ -34,6 +34,7 @@ import sys
 import time
 import itertools
 import psycopg
+from tqdm import tqdm
 from decimal import Decimal
 from dotenv import load_dotenv
 
@@ -304,7 +305,6 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True):
             )
         for row_id, url, body, attachment, existing_schema in cur:
             if existing_schema is not None and not force:
-                print(f"Skipping {url.rstrip('/').split('/')[-1]} (already has schema_json)")
                 continue
             content = (body or "").strip()
             if attachment and attachment.strip():
@@ -316,6 +316,23 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True):
                     print(f"  ⚠ content truncated ({len(content)} chars) for {url.rstrip('/').split('/')[-1]}")
                     content = content[:100_000]
                 yield row_id, url, content
+
+
+def count_postings(conn, slug_filter=None, force=False):
+    """Return the number of postings that iter_postings would yield."""
+    with conn.cursor() as cur:
+        if slug_filter:
+            cur.execute(
+                "SELECT COUNT(*) FROM jobs_jobposting WHERE url LIKE %s"
+                + ("" if force else " AND (body_markdown IS NOT NULL OR attachment_text IS NOT NULL)"),
+                (f"%{slug_filter}%",),
+            )
+        else:
+            if force:
+                cur.execute("SELECT COUNT(*) FROM jobs_jobposting")
+            else:
+                cur.execute("SELECT COUNT(*) FROM jobs_jobposting WHERE schema_json IS NULL")
+        return cur.fetchone()[0]
 
 
 def write_schema(conn, posting_id, schema):
@@ -392,42 +409,47 @@ if __name__ == '__main__':
         for provider, model in providers_to_run:
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
             generate = make_generator(provider, model, system_prefix, args.prompt_version)
+            force_flag = args.force or args.compare
+            total = count_postings(conn, slug_filter=args.slug, force=force_flag)
+            if args.limit:
+                total = min(total, args.limit)
             postings = iter_postings(
                 conn,
                 slug_filter=args.slug,
-                force=args.force or args.compare,
+                force=force_flag,
                 strip_boilerplate=not args.no_strip,
             )
             if args.limit:
                 postings = itertools.islice(postings, args.limit)
 
-            for posting_id, url, content in postings:
-                slug = url.rstrip('/').split('/')[-1]
-                print(f"  {slug}...", end=' ', flush=True)
-                try:
-                    t0 = time.monotonic()
-                    schema, input_tokens, output_tokens, cached_tokens = generate(content)
-                    latency_ms = int((time.monotonic() - t0) * 1000)
-                except Exception as e:
-                    print(f"✗ {e}")
-                    continue
+            with tqdm(postings, total=total, unit="post", dynamic_ncols=True) as bar:
+                for posting_id, url, content in bar:
+                    slug = url.rstrip('/').split('/')[-1]
+                    bar.set_description(slug[:55])
+                    try:
+                        t0 = time.monotonic()
+                        schema, input_tokens, output_tokens, cached_tokens = generate(content)
+                        latency_ms = int((time.monotonic() - t0) * 1000)
+                    except Exception as e:
+                        tqdm.write(f"  ✗ {slug}: {e}")
+                        continue
 
-                if not isinstance(schema, dict):
-                    print(f"✗ non-dict: {repr(schema)[:80]}")
-                    continue
+                    if not isinstance(schema, dict):
+                        tqdm.write(f"  ✗ {slug}: non-dict: {repr(schema)[:80]}")
+                        continue
 
-                cost = compute_cost(provider, model, input_tokens, output_tokens, cached_tokens)
-                write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms, args.prompt_version)
+                    cost = compute_cost(provider, model, input_tokens, output_tokens, cached_tokens)
+                    write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms, args.prompt_version)
 
-                if not args.compare:
-                    write_schema(conn, posting_id, schema)
+                    if not args.compare:
+                        write_schema(conn, posting_id, schema)
 
-                tok_parts = []
-                if input_tokens and output_tokens:
-                    tok_parts.append(f"in={input_tokens}")
-                    if cached_tokens:
-                        tok_parts.append(f"cached={cached_tokens}")
-                    tok_parts.append(f"out={output_tokens}")
-                token_info = " ".join(tok_parts) if tok_parts else "tokens=?"
-                cost_info = f"${cost:.6f}" if cost else "cost=?"
-                print(f"✓ {latency_ms}ms {token_info} {cost_info}")
+                    tok_parts = []
+                    if input_tokens and output_tokens:
+                        tok_parts.append(f"in={input_tokens}")
+                        if cached_tokens:
+                            tok_parts.append(f"cached={cached_tokens}")
+                        tok_parts.append(f"out={output_tokens}")
+                    token_info = " ".join(tok_parts) if tok_parts else "tokens=?"
+                    cost_info = f"${cost:.6f}" if cost else "cost=?"
+                    bar.set_postfix_str(f"✓ {latency_ms}ms {token_info} {cost_info}")

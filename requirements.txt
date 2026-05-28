@@ -28,6 +28,7 @@ python-dotenv>=1.0
 dj-database-url>=2.2
 django-htmx>=1.21
 markdown>=3.7
+nh3>=0.2
 icalendar>=6.0
 
 # Dev / test

@@ -6,6 +6,7 @@ from datetime import timezone as dt_timezone
 from typing import Literal
 
 import markdown as md
+import nh3
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
@@ -18,6 +19,19 @@ from icalendar import Calendar, Event
 from apps.jobs.models import JobPosting, JobPostingSchemaVariant
 
 FTS_CONFIG = "romanian_unaccent"
+
+# Safe HTML tags/attrs produced by markdown rendering (no iframes, scripts, etc.)
+_ALLOWED_TAGS = {
+    "p", "br", "ul", "ol", "li", "strong", "b", "em", "i",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+    "table", "thead", "tbody", "tr", "th", "td",
+    "blockquote", "pre", "code", "a",
+}
+_ALLOWED_ATTRS = {"a": {"href", "title"}, "td": {"colspan", "rowspan"}, "th": {"colspan", "rowspan"}}
+
+
+def _sanitize(html: str) -> str:
+    return nh3.clean(html, tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRS)
 PAGE_SIZE = 25
 
 # Ordered list of (schema_json key, Romanian display label).
@@ -180,7 +194,7 @@ def _render_schema_sections(schema_json: dict) -> list[dict] | None:
             rendered = str(value)
         if not rendered.strip():
             continue
-        html = md.markdown(rendered, extensions=["nl2br"])
+        html = _sanitize(md.markdown(rendered, extensions=["nl2br"]))
         sections.append({"label": label, "html": html})
     return sections or None
 
@@ -787,7 +801,7 @@ def job_detail(request, pk):
     )
     body_html = ""
     if posting.body_markdown:
-        body_html = md.markdown(posting.body_markdown, extensions=["nl2br", "tables"])
+        body_html = _sanitize(md.markdown(posting.body_markdown, extensions=["nl2br", "tables"]))
 
     schema_sections = None
     if posting.schema_json:

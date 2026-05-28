@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-05-28 — HTML sanitization of rendered Markdown output
+
+**What:** Added `nh3` (Rust-backed HTML sanitizer) to the webapp. All Markdown-rendered HTML now passes through `_sanitize()` before reaching templates, covering both `body_html` in `job_detail` and all `schema_json` sections in `_render_schema_sections`.
+
+**Why:** The `body_markdown` field and `schema_json` section values both originate from external data (scraped HTML converted to Markdown, then LLM-transformed). Passing rendered output through a tight allowlist (block/inline/table/link tags; no iframes, scripts, forms, event handlers) eliminates the XSS vector if either source is ever compromised or contains injected content.
+
+**Allowlist:** `_ALLOWED_TAGS` covers `p br ul ol li strong b em i h1–h6 table thead tbody tr th td blockquote pre code a`; `_ALLOWED_ATTRS` limits `a[href, title]`, `td/th[colspan, rowspan]`. `nh3` added to `requirements.txt`.
+
+---
+
 ### 2026-05-28 — Job condition attributes: extraction, badges, detail grid, browse facets
 
 **What:** Added a new Layer 3 extension to the inference pipeline and surfaced the extracted data across the UI.

@@ -9,7 +9,7 @@ import markdown as md
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q, Subquery
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.feedgenerator import Atom1Feed
@@ -279,8 +279,9 @@ def _apply_filters(
     elif dev_inferred == "no":
         qs = qs.filter(Q(inferred={}) | Q(inferred__isnull=True))
     _has_variant = Exists(JobPostingSchemaVariant.objects.filter(posting=OuterRef("pk")))
+    _variant_count = JobPostingSchemaVariant.objects.filter(posting=OuterRef("pk")).values("posting").annotate(n=Count("id")).values("n")
     if dev_variants == "yes":
-        qs = qs.filter(_has_variant)
+        qs = qs.annotate(_vc=Subquery(_variant_count)).filter(_vc__gte=2)
     elif dev_variants == "no":
         qs = qs.exclude(_has_variant)
     return qs

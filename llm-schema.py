@@ -9,7 +9,7 @@ unless --force is passed.
 Models and prompts are defined in models_config.json.
 
 Usage:
-    python llm-schema.py                                    # default provider (gemini) + v1 prompt
+    python llm-schema.py                                    # default provider (gemini) + v2 prompt
     python llm-schema.py --provider anthropic
     python llm-schema.py --provider openai --model gpt-4o-mini
     python llm-schema.py --slug subinginer-gradul-i        # single posting by URL fragment
@@ -69,7 +69,7 @@ DEFAULTS = {
     'deepseek':  'deepseek-v4-flash',
 }
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 
 def compute_cost(provider, model, input_tokens, output_tokens, cached_input_tokens=0):
@@ -362,7 +362,7 @@ if __name__ == '__main__':
     parser.add_argument('--limit', type=int, default=None, help='Process at most N postings')
     parser.add_argument('--compare', action='store_true', help='Run all enabled providers and save variants only (does NOT overwrite schema_json)')
     parser.add_argument('--model-filter', default=None, help='Only test models matching this regex (e.g., "gemini-.*" or "gpt-.*")')
-    parser.add_argument('--prompt-version', default='v1', help='Prompt version to use (from config; default v1)')
+    parser.add_argument('--prompt-version', default='v2', help='Prompt version to use (from config; default v2)')
     parser.add_argument('--no-strip', action='store_true', help='Do NOT strip HG 1.336/2022 boilerplate from the input (kept for comparison runs).')
     args = parser.parse_args()
 

@@ -41,7 +41,8 @@ FAMILIES: dict[str, list[str]] = {
         "software", "baze de date", "digital",
     ],
     "sănătate": [
-        "medic", "asistent medical", "infirmier", "infirmiera", "ingrijitor",
+        "medic", "asistent medical", "infirmier", "infirmiera",
+        "ingrijitor bolnavi", "ingrijitor pacienti", "ingrijitor spital",
         "farmacist", "kinetoterapeut", "stomatolog", "psiholog", "moasa",
         "labrant", "brancardier", "ambulantier", "biolog", "chimist",
         "fizician", "biochimist", "radiolog", "fizio", "balneolog", "ergoterapeut",
@@ -67,7 +68,8 @@ FAMILIES: dict[str, list[str]] = {
         "stivuitorist", "fochist", "lacatus", "tamplar", "zidar", "zugrav",
         "pavator", "dulgher", "vopsitor", "timonist",
         "muncitor", "muncitor necalificat", "muncitor calificat",
-        "ingrijitor cladiri", "paznic", "portar",
+        "ingrijitor", "ingrijitor cladiri", "ingrijitor scoala", "ingrijitor gradinita",
+        "ingrijitor camin", "ingrijitor spatii", "paznic", "portar",
     ],
     "social": [
         "asistent social", "inspector social", "mediator", "ingrijitor domiciliu",
@@ -80,7 +82,8 @@ FAMILIES: dict[str, list[str]] = {
         "conservator", "bibliotecar", "redactor", "consultant cultural",
     ],
     "ordine publică": [
-        "politist", "pompier", "jandarm", "ofiter", "subofiter", "agent paza",
+        "politist", "pompier", "jandarm", "ofiter", "subofiter",
+        "agent paza", "agent securitate", "ofiter securitate",
         "inspector isu", "inspector protectia muncii", "protectie civila",
         "svsu", "situatii urgenta", "aparare civila", "psi",
     ],

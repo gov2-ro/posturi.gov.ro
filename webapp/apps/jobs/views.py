@@ -9,13 +9,13 @@ import markdown as md
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.feedgenerator import Atom1Feed
 from icalendar import Calendar, Event
 
-from apps.jobs.models import JobPosting
+from apps.jobs.models import JobPosting, JobPostingSchemaVariant
 
 FTS_CONFIG = "romanian_unaccent"
 PAGE_SIZE = 25
@@ -278,10 +278,11 @@ def _apply_filters(
         qs = qs.exclude(Q(inferred={}) | Q(inferred__isnull=True))
     elif dev_inferred == "no":
         qs = qs.filter(Q(inferred={}) | Q(inferred__isnull=True))
+    _has_variant = Exists(JobPostingSchemaVariant.objects.filter(posting=OuterRef("pk")))
     if dev_variants == "yes":
-        qs = qs.filter(schema_variants__isnull=False).distinct()
+        qs = qs.filter(_has_variant)
     elif dev_variants == "no":
-        qs = qs.filter(schema_variants__isnull=True)
+        qs = qs.exclude(_has_variant)
     return qs
 
 

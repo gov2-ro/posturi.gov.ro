@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-05-28 — LLM variants dashboard (/llm-variante/)
+
+**What:** New page at `/llm-variante/` showing a per-(provider, model, prompt_version) leaderboard table with: run count, average cost (¢/post), total cost ($), average latency (ms), average input/output token counts. Rows are grouped by prompt version. Nav link "LLM" added to the site header.
+
+**Why:** After running llm-schema.py `--compare` across multiple models, there was no quick way to see relative cost/speed without querying the database manually. The dashboard shows what data exists and serves as a backfill progress indicator.
+
+**Implementation:** `llm_variants_dashboard` view aggregates `JobPostingSchemaVariant` with `values("provider", "model", "prompt_version").annotate(count, avg_cost, total_cost, avg_latency, avg_input, avg_output)`. Template uses `regroup` tag to group by prompt version. Renders gracefully with a "no variants yet" message when the table is empty.
+
+---
+
 ### 2026-05-28 — "Nu este cazul" experience flag in inference pipeline
 
 **What:** `_infer_experience` in `infer_postings.py` now returns a `(experience_years, no_experience_required)` tuple. When the posting body explicitly states that no experience is required ("nu este cazul", "nu se solicită experiență", "fara experienta in munca", etc.), it returns `(0, True)` instead of `(None, False)`. A numeric year count always takes precedence over the no-experience phrases. The `no_experience_required` flag is stored in the `inferred` JSONB column alongside `experience_years`.

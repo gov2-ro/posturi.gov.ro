@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}LLM Variante — Statistici modele{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
+
+  <div class="mb-6">
+    <h1 class="font-display text-3xl font-semibold italic text-ink leading-tight">
+      LLM Variante
+    </h1>
+    <p class="text-ink-muted text-sm mt-1">
+      {{ total_variants }} extracții indexate pe {{ total_postings_with_variants }} postări ·
+      cost și latență per model
+    </p>
+  </div>
+
+  {% if leaderboard %}
+
+  {# Group rows by prompt_version #}
+  {% regroup leaderboard by prompt_version as version_groups %}
+
+  {% for group in version_groups %}
+  <div class="mb-8">
+    <h2 class="text-sm font-semibold uppercase tracking-widest text-ink-muted mb-3">
+      Prompt {{ group.grouper }}
+    </h2>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border-collapse">
+        <thead>
+          <tr class="border-b border-border-warm text-xs uppercase tracking-wide text-ink-muted text-left">
+            <th class="py-2 pr-4 font-semibold">Provider</th>
+            <th class="py-2 pr-4 font-semibold">Model</th>
+            <th class="py-2 pr-4 font-semibold text-right">Rulări</th>
+            <th class="py-2 pr-4 font-semibold text-right">Cost mediu (¢/post)</th>
+            <th class="py-2 pr-4 font-semibold text-right">Cost total ($)</th>
+            <th class="py-2 pr-4 font-semibold text-right">Latență medie (ms)</th>
+            <th class="py-2 pr-4 font-semibold text-right">Input mediu (tok)</th>
+            <th class="py-2 pr-4 font-semibold text-right">Output mediu (tok)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in group.list %}
+          <tr class="border-b border-border-warm/50 hover:bg-surface-warm/40 transition-colors">
+            <td class="py-2 pr-4 font-medium text-ink">{{ row.provider }}</td>
+            <td class="py-2 pr-4 font-mono text-xs text-ink-muted">{{ row.model }}</td>
+            <td class="py-2 pr-4 text-right tabular-nums">{{ row.count }}</td>
+            <td class="py-2 pr-4 text-right tabular-nums font-mono text-xs">{{ row.cost_per_1k }}</td>
+            <td class="py-2 pr-4 text-right tabular-nums font-mono text-xs">{{ row.total_cost_display }}</td>
+            <td class="py-2 pr-4 text-right tabular-nums">{{ row.avg_latency_display }}</td>
+            <td class="py-2 pr-4 text-right tabular-nums">{{ row.avg_input_display }}</td>
+            <td class="py-2 pr-4 text-right tabular-nums">{{ row.avg_output_display }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% else %}
+  <div class="text-ink-muted text-sm py-12 text-center">
+    <p>Nu există variante LLM înregistrate încă.</p>
+    <p class="mt-1 text-xs">Rulează <code class="font-mono bg-surface-warm px-1">python llm-schema.py --compare --limit 50</code> pentru a genera variante.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

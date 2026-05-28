@@ -10,7 +10,7 @@ import nh3
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, OuterRef, Q, Subquery
+from django.db.models import Avg, Count, Exists, OuterRef, Q, Subquery, Sum
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.feedgenerator import Atom1Feed
@@ -791,6 +791,49 @@ def stats_dashboard(request):
         "by_judet": data["by_judet"],
         "max_judet": max_judet,
         "anomalies": anomalies,
+    })
+
+
+def llm_variants_dashboard(request):
+    """Per-(provider, model, prompt_version) leaderboard with cost/latency/count stats."""
+    rows = (
+        JobPostingSchemaVariant.objects
+        .values("provider", "model", "prompt_version")
+        .annotate(
+            count=Count("id"),
+            avg_cost=Avg("cost_usd"),
+            total_cost=Sum("cost_usd"),
+            avg_latency=Avg("latency_ms"),
+            avg_input=Avg("input_tokens"),
+            avg_output=Avg("output_tokens"),
+        )
+        .order_by("prompt_version", "provider", "model")
+    )
+
+    total_variants = JobPostingSchemaVariant.objects.count()
+    total_postings_with_variants = (
+        JobPostingSchemaVariant.objects.values("posting_id").distinct().count()
+    )
+
+    # Compute cost per 1000 postings for each row
+    leaderboard = []
+    for r in rows:
+        avg_cost = float(r["avg_cost"] or 0)
+        total_cost = float(r["total_cost"] or 0)
+        leaderboard.append({
+            **r,
+            "avg_cost_display": f"{avg_cost * 1000:.4f}" if avg_cost else "—",
+            "cost_per_1k": f"{avg_cost * 1000:.4f}" if avg_cost else "—",
+            "total_cost_display": f"{total_cost:.4f}" if total_cost else "—",
+            "avg_latency_display": f"{int(r['avg_latency'] or 0):,}" if r["avg_latency"] else "—",
+            "avg_input_display": f"{int(r['avg_input'] or 0):,}" if r["avg_input"] else "—",
+            "avg_output_display": f"{int(r['avg_output'] or 0):,}" if r["avg_output"] else "—",
+        })
+
+    return render(request, "jobs/llm_variants.html", {
+        "leaderboard": leaderboard,
+        "total_variants": total_variants,
+        "total_postings_with_variants": total_postings_with_variants,
     })
 
 

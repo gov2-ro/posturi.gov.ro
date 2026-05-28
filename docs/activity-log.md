@@ -17,6 +17,27 @@
 
 ---
 
+### 2026-05-28 — LLM variants dashboard: quality metrics added
+
+**What:** Extended `/llm-variante/` with three quality signals per (provider, model, prompt_version):
+
+- **Completitudine** — avg % of 10 key fields filled across all runs. Color-coded: green ≥70%, amber ≥50%, red <50%.
+- **Dezacord** — for postings with ≥2 variants at the same prompt_version, % of field-comparisons where this model is the minority (has value when others don't, or null when others do). Computed on 6 multi-model postings at v2.
+- **Solo** — count of times this model is the *only* one with a value for a field (hallucination proxy).
+
+A collapsible **Completitudine per câmp** section shows a per-field heatmap (each cell = % fill rate for that field/model combination).
+
+**Notable findings from live data (v2, 6 comparable postings):**
+- `gpt-5-nano`: highest completeness (63%) but also highest disagreement (18%) and 7 solo values — most likely to hallucinate
+- `gemini-2.5-flash` (production, 380 runs): 46% completeness, 5% disagreement, 1 solo — consistent but often leaves `responsibilities` and `skills` empty
+- `deepseek-v4-flash`: 55% completeness, 0% disagreement, 0 solos — most conservative
+- `baseSalary`: 0% across all models (good — models aren't guessing salary when absent)
+- `responsibilities`: 0% for deepseek, 0% for gpt-4o-mini, 10% for gemini, 83% for gpt-5-nano
+
+**New filter `dict_get`** added to `jobs_extras.py` for dynamic dict key lookup in templates.
+
+---
+
 ### 2026-05-28 — LLM variants dashboard (/llm-variante/)
 
 **What:** New page at `/llm-variante/` showing a per-(provider, model, prompt_version) leaderboard table with: run count, average cost (¢/post), total cost ($), average latency (ms), average input/output token counts. Rows are grouped by prompt version. Nav link "LLM" added to the site header.

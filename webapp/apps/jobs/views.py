@@ -794,8 +794,112 @@ def stats_dashboard(request):
     })
 
 
+# Fields we care about for quality scoring (v2 keys; v1 back-compat keys omitted)
+_QUALITY_FIELDS = [
+    "responsibilities", "educationRequirements", "experienceRequirements",
+    "qualifications", "skills", "application_docs", "baseSalary",
+    "application_contact", "jobBenefits", "workHours",
+]
+
+
+def _is_field_present(value) -> bool:
+    """True when a schema_json field value is non-null and non-empty."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        return any(v not in (None, "", []) for v in value.values())
+    return bool(value)
+
+
+def _compute_variant_quality() -> dict:
+    """Return quality stats keyed by (provider, model, prompt_version).
+
+    Stats:
+      completeness        – avg % of key fields filled across all runs
+      field_fill_rates    – {field: pct} for each key field
+      disagreement_rate   – for postings with ≥2 variants at same pv,
+                            % of field-comparisons where this model is the minority
+      solo_count          – times this model is the *only* one with a value
+                            for a field (on multi-variant postings)
+      comparable_postings – number of postings used for disagree/solo stats
+    """
+    all_variants = list(
+        JobPostingSchemaVariant.objects.values(
+            "id", "posting_id", "provider", "model", "prompt_version", "schema_json"
+        )
+    )
+    if not all_variants:
+        return {}
+
+    # ----- completeness per model key -----
+    from collections import defaultdict
+    field_hits: dict[tuple, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    model_counts: dict[tuple, int] = defaultdict(int)
+
+    for v in all_variants:
+        key = (v["provider"], v["model"], v["prompt_version"])
+        model_counts[key] += 1
+        sj = v["schema_json"] or {}
+        for f in _QUALITY_FIELDS:
+            if _is_field_present(sj.get(f)):
+                field_hits[key][f] += 1
+
+    # ----- disagreement + solo per model key -----
+    # group variants by (posting_id, prompt_version)
+    from itertools import groupby
+    posting_groups: dict[tuple, list] = defaultdict(list)
+    for v in all_variants:
+        posting_groups[(v["posting_id"], v["prompt_version"])].append(v)
+
+    disagree_checks: dict[tuple, int] = defaultdict(int)
+    disagree_hits: dict[tuple, int] = defaultdict(int)
+    solo_count: dict[tuple, int] = defaultdict(int)
+    comparable_postings: dict[tuple, set] = defaultdict(set)
+
+    for (posting_id, pv), group in posting_groups.items():
+        if len(group) < 2:
+            continue
+        model_keys_in_group = [(g["provider"], g["model"], g["prompt_version"]) for g in group]
+        for f in _QUALITY_FIELDS:
+            presences = {
+                (g["provider"], g["model"], g["prompt_version"]): _is_field_present((g["schema_json"] or {}).get(f))
+                for g in group
+            }
+            have_count = sum(presences.values())
+            majority_has = have_count > len(group) / 2
+            for mkey, has_value in presences.items():
+                comparable_postings[mkey].add(posting_id)
+                disagree_checks[mkey] += 1
+                if has_value != majority_has:
+                    disagree_hits[mkey] += 1
+                if has_value and have_count == 1:
+                    solo_count[mkey] += 1
+
+    # ----- assemble results -----
+    result = {}
+    for key, total in model_counts.items():
+        fills = field_hits[key]
+        field_fill_rates = {
+            f: round(100 * fills.get(f, 0) / total)
+            for f in _QUALITY_FIELDS
+        }
+        completeness = round(sum(field_fill_rates.values()) / len(_QUALITY_FIELDS))
+        checks = disagree_checks[key]
+        disagreement_rate = round(100 * disagree_hits[key] / checks) if checks else None
+        result[key] = {
+            "completeness": completeness,
+            "field_fill_rates": field_fill_rates,
+            "disagreement_rate": disagreement_rate,
+            "solo_count": solo_count.get(key, 0),
+            "comparable_postings": len(comparable_postings.get(key, set())),
+        }
+    return result
+
+
 def llm_variants_dashboard(request):
-    """Per-(provider, model, prompt_version) leaderboard with cost/latency/count stats."""
+    """Per-(provider, model, prompt_version) leaderboard with cost/latency/quality stats."""
     rows = (
         JobPostingSchemaVariant.objects
         .values("provider", "model", "prompt_version")
@@ -815,25 +919,33 @@ def llm_variants_dashboard(request):
         JobPostingSchemaVariant.objects.values("posting_id").distinct().count()
     )
 
-    # Compute cost per 1000 postings for each row
+    quality = _compute_variant_quality()
+
     leaderboard = []
     for r in rows:
         avg_cost = float(r["avg_cost"] or 0)
         total_cost = float(r["total_cost"] or 0)
+        key = (r["provider"], r["model"], r["prompt_version"])
+        q = quality.get(key, {})
         leaderboard.append({
             **r,
-            "avg_cost_display": f"{avg_cost * 1000:.4f}" if avg_cost else "—",
             "cost_per_1k": f"{avg_cost * 1000:.4f}" if avg_cost else "—",
             "total_cost_display": f"{total_cost:.4f}" if total_cost else "—",
             "avg_latency_display": f"{int(r['avg_latency'] or 0):,}" if r["avg_latency"] else "—",
             "avg_input_display": f"{int(r['avg_input'] or 0):,}" if r["avg_input"] else "—",
             "avg_output_display": f"{int(r['avg_output'] or 0):,}" if r["avg_output"] else "—",
+            "completeness": q.get("completeness"),
+            "field_fill_rates": q.get("field_fill_rates", {}),
+            "disagreement_rate": q.get("disagreement_rate"),
+            "solo_count": q.get("solo_count", 0),
+            "comparable_postings": q.get("comparable_postings", 0),
         })
 
     return render(request, "jobs/llm_variants.html", {
         "leaderboard": leaderboard,
         "total_variants": total_variants,
         "total_postings_with_variants": total_postings_with_variants,
+        "quality_fields": _QUALITY_FIELDS,
     })
 
 

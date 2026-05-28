@@ -28,6 +28,14 @@ def work_type_label(value):
 
 
 @register.filter
+def dict_get(d, key):
+    """Look up a dict value by variable key: {{ mydict|dict_get:key }}"""
+    if not isinstance(d, dict):
+        return None
+    return d.get(key)
+
+
+@register.filter
 def as_list(value):
     """Wrap a scalar in a list so templates can use `in` membership tests."""
     if value is None or value == "":

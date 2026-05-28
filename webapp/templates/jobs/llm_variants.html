@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jobs_extras %}
 
 {% block title %}LLM Variante — Statistici modele{% endblock %}
 
@@ -11,7 +12,7 @@
     </h1>
     <p class="text-ink-muted text-sm mt-1">
       {{ total_variants }} extracții indexate pe {{ total_postings_with_variants }} postări ·
-      cost și latență per model
+      cost, latență și calitate per model
     </p>
   </div>
 
@@ -21,41 +22,116 @@
   {% regroup leaderboard by prompt_version as version_groups %}
 
   {% for group in version_groups %}
-  <div class="mb-8">
-    <h2 class="text-sm font-semibold uppercase tracking-widest text-ink-muted mb-3">
+  <div class="mb-10">
+    <h2 class="text-sm font-semibold uppercase tracking-widest text-ink-muted mb-4">
       Prompt {{ group.grouper }}
     </h2>
 
-    <div class="overflow-x-auto">
+    <!-- Summary leaderboard table -->
+    <div class="overflow-x-auto mb-6">
       <table class="w-full text-sm border-collapse">
         <thead>
           <tr class="border-b border-border-warm text-xs uppercase tracking-wide text-ink-muted text-left">
-            <th class="py-2 pr-4 font-semibold">Provider</th>
-            <th class="py-2 pr-4 font-semibold">Model</th>
-            <th class="py-2 pr-4 font-semibold text-right">Rulări</th>
-            <th class="py-2 pr-4 font-semibold text-right">Cost mediu (¢/post)</th>
-            <th class="py-2 pr-4 font-semibold text-right">Cost total ($)</th>
-            <th class="py-2 pr-4 font-semibold text-right">Latență medie (ms)</th>
-            <th class="py-2 pr-4 font-semibold text-right">Input mediu (tok)</th>
-            <th class="py-2 pr-4 font-semibold text-right">Output mediu (tok)</th>
+            <th class="py-2 pr-3 font-semibold">Provider</th>
+            <th class="py-2 pr-3 font-semibold">Model</th>
+            <th class="py-2 pr-3 font-semibold text-right">Rulări</th>
+            <th class="py-2 pr-3 font-semibold text-right">Cost/post (¢)</th>
+            <th class="py-2 pr-3 font-semibold text-right">Total ($)</th>
+            <th class="py-2 pr-3 font-semibold text-right">Latență ms</th>
+            <th class="py-2 pr-3 font-semibold text-right">Completitudine</th>
+            <th class="py-2 pr-3 font-semibold text-right">Dezacord</th>
+            <th class="py-2 pr-3 font-semibold text-right">Solo</th>
           </tr>
         </thead>
         <tbody>
           {% for row in group.list %}
           <tr class="border-b border-border-warm/50 hover:bg-surface-warm/40 transition-colors">
-            <td class="py-2 pr-4 font-medium text-ink">{{ row.provider }}</td>
-            <td class="py-2 pr-4 font-mono text-xs text-ink-muted">{{ row.model }}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{{ row.count }}</td>
-            <td class="py-2 pr-4 text-right tabular-nums font-mono text-xs">{{ row.cost_per_1k }}</td>
-            <td class="py-2 pr-4 text-right tabular-nums font-mono text-xs">{{ row.total_cost_display }}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{{ row.avg_latency_display }}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{{ row.avg_input_display }}</td>
-            <td class="py-2 pr-4 text-right tabular-nums">{{ row.avg_output_display }}</td>
+            <td class="py-2 pr-3 font-medium text-ink">{{ row.provider }}</td>
+            <td class="py-2 pr-3 font-mono text-xs text-ink-muted">{{ row.model }}</td>
+            <td class="py-2 pr-3 text-right tabular-nums">{{ row.count }}</td>
+            <td class="py-2 pr-3 text-right tabular-nums font-mono text-xs">{{ row.cost_per_1k }}</td>
+            <td class="py-2 pr-3 text-right tabular-nums font-mono text-xs">{{ row.total_cost_display }}</td>
+            <td class="py-2 pr-3 text-right tabular-nums">{{ row.avg_latency_display }}</td>
+            <!-- Completeness with color coding -->
+            <td class="py-2 pr-3 text-right tabular-nums">
+              {% if row.completeness is not None %}
+                <span class="{% if row.completeness >= 70 %}text-green-700{% elif row.completeness >= 40 %}text-amber-700{% else %}text-red-700{% endif %} font-semibold">
+                  {{ row.completeness }}%
+                </span>
+              {% else %}—{% endif %}
+            </td>
+            <!-- Disagreement rate with tooltip hint -->
+            <td class="py-2 pr-3 text-right tabular-nums">
+              {% if row.disagreement_rate is not None %}
+                <span class="{% if row.disagreement_rate <= 10 %}text-green-700{% elif row.disagreement_rate <= 25 %}text-amber-700{% else %}text-red-700{% endif %}"
+                      title="{{ row.comparable_postings }} postări comparabile">
+                  {{ row.disagreement_rate }}%
+                </span>
+              {% else %}
+                <span class="text-ink-faint text-xs">n/a</span>
+              {% endif %}
+            </td>
+            <!-- Solo value count (hallucination proxy) -->
+            <td class="py-2 pr-3 text-right tabular-nums">
+              {% if row.solo_count > 0 %}
+                <span class="{% if row.solo_count > 5 %}text-red-700{% elif row.solo_count > 2 %}text-amber-700{% else %}text-ink-muted{% endif %}">
+                  {{ row.solo_count }}
+                </span>
+              {% else %}
+                <span class="text-ink-faint">0</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    <!-- Per-field fill rates heatmap -->
+    <details class="mb-4">
+      <summary class="text-xs text-ink-muted cursor-pointer hover:text-ink select-none mb-2">
+        Completitudine per câmp ▾
+      </summary>
+      <div class="overflow-x-auto mt-3">
+        <table class="text-xs border-collapse">
+          <thead>
+            <tr class="text-ink-muted text-left">
+              <th class="py-1 pr-4 font-semibold min-w-32">Model</th>
+              {% for f in quality_fields %}
+              <th class="py-1 pr-2 font-mono text-center whitespace-nowrap" title="{{ f }}">
+                {{ f|slice:":12" }}{% if f|length > 12 %}…{% endif %}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in group.list %}
+            <tr class="border-t border-border-warm/30">
+              <td class="py-1 pr-4 font-medium text-ink-muted">{{ row.provider }}/{{ row.model|slice:":20" }}</td>
+              {% for f in quality_fields %}
+              <td class="py-1 pr-2 text-center tabular-nums">
+                {% with v=row.field_fill_rates|dict_get:f %}
+                <span class="inline-block w-8 text-center rounded-sm py-0.5
+                  {% if v >= 80 %}bg-green-100 text-green-800
+                  {% elif v >= 50 %}bg-amber-100 text-amber-800
+                  {% elif v > 0 %}bg-red-100 text-red-700
+                  {% else %}bg-gray-100 text-gray-400{% endif %}">
+                  {{ v|default:"0" }}
+                </span>
+                {% endwith %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-ink-faint mt-2">
+        Valori = % postări în care câmpul este completat. Verde ≥80%, galben ≥50%, roșu &lt;50%.
+        "Solo" = model este singurul cu valoare (posibilă halucinație).
+      </p>
+    </details>
+
   </div>
   {% endfor %}
 

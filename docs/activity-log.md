@@ -2,6 +2,31 @@
 
 ## 2026
 
+### 2026-05-28 — Job condition attributes: extraction, badges, detail grid, browse facets
+
+**What:** Added a new Layer 3 extension to the inference pipeline and surfaced the extracted data across the UI.
+
+**Inference (`infer_postings.py`):**
+- Four new helpers: `_infer_work_type` (norma_intreaga / norma_partiala / schimburi, with confidence scoring), `_infer_remote` (telemuncă/remote/hibrid → `true` or `null`), `_infer_computer` (regex + skill cross-check → `true/false/null` + `basic/advanced`), `_extract_salary_range` (denormalizes `schema_json.baseSalary.minValue/maxValue`).
+- New `--conditions-only` flag re-runs just these fields without touching `profession_family`, `seniority`, or anomaly flags — safe for backfill.
+- All fields stored in existing `inferred` JSONB column (no migration). `conditions_inferred_at` timestamp marks which postings have been processed.
+
+**New management command (`infer_conditions_llm.py`):** LLM queue for postings where `work_type` confidence is 0.0 and body ≥ 250 chars. Sends a minimal 3-field prompt (work_type / remote_eligible / requires_computer), updates `inferred` in-place.
+
+**Browse view (`views.py`):** `_apply_filters` extended with 6 new params (`work_type`, `remote`, `computer`, `exp_level`, `studies_level`, `salary_bucket`). Matching facet count queries added. Salary facet conditionally shown only when ≥ 100 postings have salary data. Salary and experience are bucketed.
+
+**Result row badges:** New condition pill row below existing badge row — shows normă, telemuncă, calculator, experience when non-null.
+
+**Detail page grid:** "Condiții la locul de muncă" 6-tile grid (program / telemuncă / calculator / experiență / studii / salariu) inserted before the schema sections. Renders only when ≥ 2 attributes are non-null; null attributes show `—`.
+
+**Sidebar facets (list.html):** 6 new facet groups in order: Tip normă, Experiență minimă, Studii minime, Calculator, Telemuncă, Salariu (conditional).
+
+**Tests:** 32 new tests in `test_condition_inference.py` covering all 4 helpers + 5 view integration tests. Full suite: 70/70 passing.
+
+**Why:** Users had no way to filter by work schedule, remote eligibility, or computer requirements without reading every posting in full. The hybrid approach (local regex for ~85% coverage, LLM queue for the rest) keeps cost near zero for the bulk of postings.
+
+---
+
 ### 2026-05-27 — LLM comparison analysis document
 
 **What:** Wrote `docs/llm-comparison-analysis.md` — a standalone analysis of the 4-model benchmark (GPT-5 Nano, Gemini 2.5 Flash, DeepSeek-V4-Flash, GPT-4o Mini) run with prompt v2 on 5 postings.

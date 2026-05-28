@@ -239,6 +239,130 @@ def _infer_certifications(body: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Work condition inference (Layer 3 extension)
+# ---------------------------------------------------------------------------
+
+# Work type patterns (diacritic-tolerant: matched against _normalize()'d text)
+_WORK_TYPE_NORMA_INTREAGA = re.compile(
+    r"norma?\s+intreaga|8\s*h\s*/\s*zi|norma?\s+completa|40\s*h\s*/\s*sapt|timp\s+normal",
+    re.IGNORECASE,
+)
+_WORK_TYPE_NORMA_PARTIALA = re.compile(
+    r"norma?\s+partiala|0[,\.]\s*5\s*norma?|4\s*h\s*/\s*zi|fractiune\s+de\s+norma?|part[\s.-]?time",
+    re.IGNORECASE,
+)
+_WORK_TYPE_SCHIMBURI = re.compile(
+    r"schimburi|tura\s+de\s+noapte|lucrul?\s+in\s+ture|program\s+de\s+noapte|\bture\b",
+    re.IGNORECASE,
+)
+
+_REMOTE_RE = re.compile(
+    r"telemunca|munca\s+la\s+distanta|remote|hibrid|lucru\s+de\s+acasa",
+    re.IGNORECASE,
+)
+
+_COMPUTER_TRUE_RE = re.compile(
+    r"operare\s+(?:pc|calculator)|ms\s+office|microsoft\s+office|\bexcel\b|\bcunostinte\s+it\b|"
+    r"\bseap\b|\bsap\b|utilizare\s+calculator|cunostinte\s+informatica|"
+    r"\bword\b|\bpowerpoint\b|\becdl\b|\bforexebug\b|\bsicap\b|\bsar\b|"
+    r"cunostinte\s+(?:avansate\s+(?:de\s+)?)?calculator",
+    re.IGNORECASE,
+)
+
+_COMPUTER_SKILL_KW: frozenset[str] = frozenset({
+    "excel", "word", "powerpoint", "microsoft office", "ms office",
+    "seap", "sicap", "sap", "forexebug",
+})
+_COMPUTER_FALSE_RE = re.compile(
+    r"nu\s+se\s+solicit[aă]\s+.{0,30}(?:calculator|it\b|pc\b|informatic[aă])",
+    re.IGNORECASE,
+)
+_COMPUTER_ADVANCED_RE = re.compile(
+    r"cunostinte\s+avansate|nivel\s+ridicat|\bavansat\b",
+    re.IGNORECASE,
+)
+
+
+def _infer_work_type(body: str, work_hours_text: str | None) -> tuple[str | None, float]:
+    """Returns (work_type, confidence). work_type ∈ {norma_intreaga, norma_partiala, schimburi, None}."""
+    norm = _normalize(body)
+    matches: dict[str, int] = {}
+
+    for value, pattern in [
+        ("norma_intreaga", _WORK_TYPE_NORMA_INTREAGA),
+        ("norma_partiala", _WORK_TYPE_NORMA_PARTIALA),
+        ("schimburi", _WORK_TYPE_SCHIMBURI),
+    ]:
+        found = len(pattern.findall(norm))
+        if found:
+            matches[value] = found
+
+    if matches:
+        best = max(matches, key=lambda k: matches[k])
+        total_matches = sum(matches.values())
+        confidence = 0.95 if total_matches >= 2 else 0.75
+        return best, confidence
+
+    # Fallback: try to normalize from workHours text
+    if work_hours_text:
+        wh_norm = _normalize(work_hours_text)
+        for value, pattern in [
+            ("norma_intreaga", _WORK_TYPE_NORMA_INTREAGA),
+            ("norma_partiala", _WORK_TYPE_NORMA_PARTIALA),
+            ("schimburi", _WORK_TYPE_SCHIMBURI),
+        ]:
+            if pattern.search(wh_norm):
+                return value, 0.70
+
+    body_len = len(body.strip())
+    if body_len < 250:
+        return None, 0.0  # not enough signal, skip LLM
+    return None, 0.0  # queue for LLM (caller checks confidence == 0.0 with None type)
+
+
+def _infer_remote(body: str) -> bool | None:
+    """Returns True if remote/hybrid mentioned, None otherwise (not False)."""
+    norm = _normalize(body)
+    if _REMOTE_RE.search(norm):
+        return True
+    return None
+
+
+def _infer_computer(body: str, existing_skills: list[str]) -> tuple[bool | None, str | None]:
+    """Returns (requires_computer, computer_level)."""
+    norm = _normalize(body)
+
+    # Explicit negation first
+    if _COMPUTER_FALSE_RE.search(norm):
+        return False, None
+
+    # Positive: regex match or any computer-related skill already extracted from this body
+    skills_lower = {s.lower() for s in existing_skills}
+    if _COMPUTER_TRUE_RE.search(norm) or bool(skills_lower & _COMPUTER_SKILL_KW):
+        level = "advanced" if _COMPUTER_ADVANCED_RE.search(norm) else "basic"
+        return True, level
+
+    return None, None
+
+
+def _extract_salary_range(schema_json: dict | None) -> tuple[int | None, int | None]:
+    """Denormalizes baseSalary.minValue/maxValue from schema_json."""
+    if not isinstance(schema_json, dict):
+        return None, None
+    salary = schema_json.get("baseSalary")
+    if not isinstance(salary, dict):
+        return None, None
+    try:
+        mn = salary.get("minValue")
+        mx = salary.get("maxValue")
+        mn = int(mn) if mn is not None else None
+        mx = int(mx) if mx is not None else None
+        return mn, mx
+    except (TypeError, ValueError):
+        return None, None
+
+
+# ---------------------------------------------------------------------------
 # Anomaly flags
 # ---------------------------------------------------------------------------
 
@@ -407,6 +531,15 @@ def infer_posting(
     languages = _infer_languages(body)
     certifications = _infer_certifications(body)
 
+    # Layer 3 (conditions): work type, remote, computer, salary
+    work_hours_text = None
+    if isinstance(posting.schema_json, dict):
+        work_hours_text = posting.schema_json.get("workHours")
+    work_type, work_type_confidence = _infer_work_type(body, work_hours_text)
+    remote_eligible = _infer_remote(body)
+    requires_computer, computer_level = _infer_computer(body, skills)
+    salary_min, salary_max = _extract_salary_range(posting.schema_json)
+
     # Layer 4: anomaly flags
     anomaly_flags = _infer_anomaly_flags(posting, frequent_repost_ids=frequent_repost_ids)
     anomaly_score = round(len(anomaly_flags) / 5, 3)
@@ -424,6 +557,14 @@ def infer_posting(
         "certifications": certifications,
         "anomaly_flags": anomaly_flags,
         "anomaly_score": anomaly_score,
+        "work_type": work_type,
+        "work_type_confidence": work_type_confidence,
+        "remote_eligible": remote_eligible,
+        "requires_computer": requires_computer,
+        "computer_level": computer_level,
+        "salary_min": salary_min,
+        "salary_max": salary_max,
+        "conditions_inferred_at": datetime.now(tz=timezone.utc).isoformat(),
         "inferred_at": datetime.now(tz=timezone.utc).isoformat(),
     }
 
@@ -431,6 +572,31 @@ def infer_posting(
 # ---------------------------------------------------------------------------
 # Management command
 # ---------------------------------------------------------------------------
+
+def infer_conditions_only(posting: JobPosting) -> dict:
+    """Re-compute only the condition fields and merge into existing inferred dict."""
+    body = (posting.body_markdown or "") + "\n\n" + (posting.attachment_text or "")
+    skills = _infer_skills(body)
+    work_hours_text = None
+    if isinstance(posting.schema_json, dict):
+        work_hours_text = posting.schema_json.get("workHours")
+    work_type, work_type_confidence = _infer_work_type(body, work_hours_text)
+    remote_eligible = _infer_remote(body)
+    requires_computer, computer_level = _infer_computer(body, skills)
+    salary_min, salary_max = _extract_salary_range(posting.schema_json)
+    existing = posting.inferred or {}
+    return {
+        **existing,
+        "work_type": work_type,
+        "work_type_confidence": work_type_confidence,
+        "remote_eligible": remote_eligible,
+        "requires_computer": requires_computer,
+        "computer_level": computer_level,
+        "salary_min": salary_min,
+        "salary_max": salary_max,
+        "conditions_inferred_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+
 
 class Command(BaseCommand):
     help = "Infer metadata from title + body and populate JobPosting.inferred."
@@ -459,10 +625,20 @@ class Command(BaseCommand):
             default=None,
             help="Process at most N postings (useful for testing).",
         )
+        parser.add_argument(
+            "--conditions-only",
+            action="store_true",
+            help="Re-run only the work-condition fields (work_type, remote, computer, salary) "
+                 "without touching profession_family, seniority, anomaly_flags, etc.",
+        )
 
     def handle(self, *args, **opts):
         use_llm = not opts["no_llm"]
         provider = opts["provider"]
+
+        if opts["conditions_only"]:
+            self._handle_conditions_only(opts)
+            return
 
         qs = JobPosting.objects.all().order_by("id")
         if not opts["force"]:
@@ -505,3 +681,22 @@ class Command(BaseCommand):
                 f"Done. {done} updated, {llm_calls} LLM calls, {errors} errors."
             )
         )
+
+    def _handle_conditions_only(self, opts):
+        qs = JobPosting.objects.all().order_by("id")
+        if opts["limit"]:
+            qs = qs[: opts["limit"]]
+        total = qs.count()
+        self.stdout.write(f"Conditions-only pass: {total} postings…")
+        done = errors = 0
+        for posting in qs.iterator(chunk_size=200):
+            try:
+                inferred = infer_conditions_only(posting)
+                JobPosting.objects.filter(pk=posting.pk).update(inferred=inferred)
+                done += 1
+            except Exception as exc:
+                self.stderr.write(f"  Error on pk={posting.pk}: {exc}")
+                errors += 1
+            if done % 500 == 0:
+                self.stdout.write(f"  {done}/{total} done, {errors} errors")
+        self.stdout.write(self.style.SUCCESS(f"Done. {done} updated, {errors} errors."))

@@ -50,6 +50,26 @@
           </span>
         {% endif %}
       </div>
+
+      <!-- Condition badges -->
+      {% with cond=posting.inferred %}
+      {% if cond.work_type or cond.remote_eligible or cond.requires_computer != None or cond.experience_years %}
+      <div class="flex flex-wrap gap-1 mt-1">
+        {% if cond.work_type %}
+          <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">{{ cond.work_type|work_type_label }}</span>
+        {% endif %}
+        {% if cond.remote_eligible %}
+          <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">Telemuncă</span>
+        {% endif %}
+        {% if cond.requires_computer %}
+          <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">Calculator</span>
+        {% endif %}
+        {% if cond.experience_years %}
+          <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">Min. {{ cond.experience_years }} ani</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endwith %}
     </div>
 
     <!-- Right: deadline -->

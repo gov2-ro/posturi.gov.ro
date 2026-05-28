@@ -15,6 +15,28 @@ def days_until(value):
     return (target - today).days
 
 
+_WORK_TYPE_LABELS = {
+    "norma_intreaga": "Normă întreagă",
+    "norma_partiala": "Normă parțială",
+    "schimburi": "Schimburi",
+}
+
+
+@register.filter
+def work_type_label(value):
+    return _WORK_TYPE_LABELS.get(value, value)
+
+
+@register.filter
+def as_list(value):
+    """Wrap a scalar in a list so templates can use `in` membership tests."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
 @register.simple_tag(takes_context=True)
 def querystring(context, **kwargs):
     """Return current query string with specified keys replaced/removed (None removes)."""

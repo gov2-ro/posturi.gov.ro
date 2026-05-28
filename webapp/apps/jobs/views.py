@@ -9,7 +9,7 @@ import markdown as md
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.feedgenerator import Atom1Feed
@@ -185,7 +185,30 @@ def _render_schema_sections(schema_json: dict) -> list[dict] | None:
     return sections or None
 
 
-def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_cats, expires_before, expires_after, families, seniorities, anomaly_flags=None):
+# Salary bucket definitions: (label, min_value, max_value_exclusive)
+_SALARY_BUCKETS = [
+    ("sub-3000",    0,    3000),
+    ("3000-4000",   3000, 4000),
+    ("4000-5000",   4000, 5000),
+    ("5000-7000",   5000, 7000),
+    ("peste-7000",  7000, None),
+]
+
+# Experience bucket definitions: (label, min_years, max_years_exclusive)
+_EXP_BUCKETS = [
+    ("fara",  0,  1),
+    ("1-2",   1,  3),
+    ("3-5",   3,  6),
+    ("5plus", 5,  None),
+]
+
+
+def _apply_filters(
+    qs, *, q, judet_slugs, levels, types, categories, employer_cats,
+    expires_before, expires_after, families, seniorities, anomaly_flags=None,
+    work_types=None, remote=None, computer=None, exp_levels=None,
+    studies_levels=None, salary_bucket=None,
+):
     if q:
         qs = qs.filter(search_vector=SearchQuery(q, config=FTS_CONFIG, search_type="plain"))
     if judet_slugs:
@@ -215,6 +238,37 @@ def _apply_filters(qs, *, q, judet_slugs, levels, types, categories, employer_ca
     if anomaly_flags:
         for flag in anomaly_flags:
             qs = qs.filter(inferred__anomaly_flags__contains=[flag])
+    if work_types:
+        qs = qs.filter(inferred__work_type__in=work_types)
+    if remote:
+        qs = qs.filter(inferred__remote_eligible=True)
+    if computer == "solicitat":
+        qs = qs.filter(inferred__requires_computer=True)
+    elif computer == "nesolicitat":
+        qs = qs.exclude(inferred__requires_computer=True)
+    if exp_levels:
+        exp_q = None
+        for bucket_key in exp_levels:
+            for label, lo, hi in _EXP_BUCKETS:
+                if label == bucket_key:
+                    if hi is None:
+                        clause = Q(inferred__experience_years__gte=lo)
+                    elif lo == 0:
+                        clause = Q(inferred__experience_years__isnull=True) | Q(inferred__experience_years__lt=hi)
+                    else:
+                        clause = Q(inferred__experience_years__gte=lo, inferred__experience_years__lt=hi)
+                    exp_q = clause if exp_q is None else exp_q | clause
+        if exp_q:
+            qs = qs.filter(exp_q)
+    if studies_levels:
+        qs = qs.filter(inferred__studies_required__in=studies_levels)
+    if salary_bucket:
+        for label, lo, hi in _SALARY_BUCKETS:
+            if label == salary_bucket:
+                qs = qs.filter(inferred__salary_min__isnull=False, inferred__salary_min__gte=lo)
+                if hi is not None:
+                    qs = qs.filter(inferred__salary_min__lt=hi)
+                break
     return qs
 
 
@@ -231,6 +285,12 @@ def job_list(request):
     seniorities = request.GET.getlist("seniority")
     anomaly_flags = request.GET.getlist("anomaly")
     sort = request.GET.get("sort", "")
+    work_types = request.GET.getlist("work_type")
+    remote = request.GET.get("remote", "")
+    computer = request.GET.get("computer", "")
+    exp_levels = request.GET.getlist("exp_level")
+    studies_levels = request.GET.getlist("studies_level")
+    salary_bucket = request.GET.get("salary_bucket", "")
 
     filter_kwargs = dict(
         q=q,
@@ -244,6 +304,12 @@ def job_list(request):
         families=families,
         seniorities=seniorities,
         anomaly_flags=anomaly_flags,
+        work_types=work_types,
+        remote=remote,
+        computer=computer,
+        exp_levels=exp_levels,
+        studies_levels=studies_levels,
+        salary_bucket=salary_bucket,
     )
 
     base_qs = JobPosting.objects.all()
@@ -321,6 +387,78 @@ def job_list(request):
         .order_by("-count")
     ]
 
+    _WORK_TYPE_LABELS = {
+        "norma_intreaga": "Normă întreagă",
+        "norma_partiala": "Normă parțială",
+        "schimburi": "Schimburi",
+    }
+    work_type_options = [
+        {"value": x["inferred__work_type"], "label": _WORK_TYPE_LABELS.get(x["inferred__work_type"], x["inferred__work_type"]), "count": x["count"]}
+        for x in facet_qs("work_types")
+        .values("inferred__work_type")
+        .annotate(count=Count("id"))
+        .exclude(inferred__work_type=None)
+        .order_by("-count")
+    ]
+
+    _EXP_LABELS = {"fara": "Fără experiență", "1-2": "1–2 ani", "3-5": "3–5 ani", "5plus": "5+ ani"}
+    exp_level_options = []
+    _exp_facet_qs = facet_qs("exp_levels")
+    for bucket_key, lo, hi in _EXP_BUCKETS:
+        if hi is None:
+            count = _exp_facet_qs.filter(inferred__experience_years__gte=lo).count()
+        elif lo == 0:
+            count = _exp_facet_qs.filter(
+                Q(inferred__experience_years__isnull=True) | Q(inferred__experience_years__lt=hi)
+            ).count()
+        else:
+            count = _exp_facet_qs.filter(
+                inferred__experience_years__gte=lo, inferred__experience_years__lt=hi
+            ).count()
+        if count:
+            exp_level_options.append({"value": bucket_key, "label": _EXP_LABELS[bucket_key], "count": count})
+
+    _STUDIES_LABELS = {
+        "doctorat": "Doctorat",
+        "master": "Master / Magistru",
+        "licenta": "Licență",
+        "postliceala": "Postliceală",
+        "liceala": "Liceală",
+        "generala": "Generală",
+    }
+    studies_level_options = [
+        {"value": x["inferred__studies_required"], "label": _STUDIES_LABELS.get(x["inferred__studies_required"], x["inferred__studies_required"]), "count": x["count"]}
+        for x in facet_qs("studies_levels")
+        .values("inferred__studies_required")
+        .annotate(count=Count("id"))
+        .exclude(inferred__studies_required=None)
+        .order_by("-count")
+    ]
+
+    _computer_facet_qs = facet_qs("computer")
+    computer_options = []
+    solicitat_count = _computer_facet_qs.filter(inferred__requires_computer=True).count()
+    nesolicitat_count = _computer_facet_qs.exclude(inferred__requires_computer=True).count()
+    if solicitat_count:
+        computer_options.append({"value": "solicitat", "label": "Solicitat", "count": solicitat_count})
+    if nesolicitat_count:
+        computer_options.append({"value": "nesolicitat", "label": "Nesolicitat", "count": nesolicitat_count})
+
+    remote_count = facet_qs("remote").filter(inferred__remote_eligible=True).count()
+
+    # Salary facet — only show if enough postings have salary data
+    salary_options = []
+    salary_with_data = JobPosting.objects.filter(inferred__salary_min__isnull=False).count()
+    if salary_with_data >= 100:
+        _salary_facet_qs = facet_qs("salary_bucket")
+        for label, lo, hi in _SALARY_BUCKETS:
+            q_filter = Q(inferred__salary_min__isnull=False, inferred__salary_min__gte=lo)
+            if hi is not None:
+                q_filter &= Q(inferred__salary_min__lt=hi)
+            count = _salary_facet_qs.filter(q_filter).count()
+            if count:
+                salary_options.append({"value": label, "label": label.replace("-", " – ").replace("sub", "sub ").replace("peste", "peste "), "count": count})
+
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get("page", 1))
 
@@ -339,6 +477,12 @@ def job_list(request):
         "seniorities": seniorities,
         "anomaly_flags": anomaly_flags,
         "sort": sort,
+        "work_types": work_types,
+        "remote": remote,
+        "computer": computer,
+        "exp_levels": exp_levels,
+        "studies_levels": studies_levels,
+        "salary_bucket": salary_bucket,
         "judet_options": judet_options,
         "level_options": level_options,
         "type_options": type_options,
@@ -346,6 +490,12 @@ def job_list(request):
         "employer_cat_options": employer_cat_options,
         "family_options": family_options,
         "seniority_options": seniority_options,
+        "work_type_options": work_type_options,
+        "exp_level_options": exp_level_options,
+        "studies_level_options": studies_level_options,
+        "computer_options": computer_options,
+        "remote_count": remote_count,
+        "salary_options": salary_options,
         "anomaly_choices": [
             ("short_deadline", "Termen scurt"),
             ("missing_contact", "Contact lipsă"),
@@ -375,6 +525,12 @@ def _filter_kwargs_from_request(request):
         families=request.GET.getlist("family"),
         seniorities=request.GET.getlist("seniority"),
         anomaly_flags=request.GET.getlist("anomaly"),
+        work_types=request.GET.getlist("work_type"),
+        remote=request.GET.get("remote", ""),
+        computer=request.GET.get("computer", ""),
+        exp_levels=request.GET.getlist("exp_level"),
+        studies_levels=request.GET.getlist("studies_level"),
+        salary_bucket=request.GET.get("salary_bucket", ""),
     )
 
 

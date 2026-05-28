@@ -61,8 +61,28 @@
         {% include "jobs/partials/facet_group.html" with label="Nivel" items=level_options name="level" active_values=levels %}
         {% include "jobs/partials/facet_group.html" with label="Tip" items=type_options name="type" active_values=types %}
         {% include "jobs/partials/facet_group.html" with label="Categorie" items=categorie_options name="categorie" active_values=categories %}
-        {% include "jobs/partials/facet_group.html" with label="Angajator" items=employer_cat_options name="employer_cat" active_values=employer_cats %}
         {% include "jobs/partials/facet_group.html" with label="Grad/funcție" items=seniority_options name="seniority" active_values=seniorities %}
+        {% include "jobs/partials/facet_group.html" with label="Tip normă" items=work_type_options name="work_type" active_values=work_types %}
+        {% include "jobs/partials/facet_group.html" with label="Experiență minimă" items=exp_level_options name="exp_level" active_values=exp_levels %}
+        {% include "jobs/partials/facet_group.html" with label="Studii minime" items=studies_level_options name="studies_level" active_values=studies_levels %}
+        {% include "jobs/partials/facet_group.html" with label="Calculator" items=computer_options name="computer" active_values=computer|as_list %}
+
+        <!-- Telemuncă single checkbox -->
+        {% if remote_count %}
+        <div class="mb-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-2">Telemuncă</div>
+          <label class="flex items-center gap-2 py-0.5 cursor-pointer group">
+            <input type="checkbox" name="remote" value="1"
+                   class="facet-check accent-gov shrink-0"
+                   {% if remote %}checked{% endif %}>
+            <span class="text-sm text-ink group-hover:text-gov transition-colors flex-1">Disponibil remote</span>
+            <span class="text-xs text-ink-faint font-mono shrink-0">{{ remote_count }}</span>
+          </label>
+        </div>
+        {% endif %}
+
+        {% include "jobs/partials/facet_group.html" with label="Salariu" items=salary_options name="salary_bucket" active_values=salary_bucket|as_list %}
+        {% include "jobs/partials/facet_group.html" with label="Angajator" items=employer_cat_options name="employer_cat" active_values=employer_cats %}
 
         <!-- Anomaly flags filter -->
         <div class="mb-4">
@@ -98,7 +118,7 @@
         </div>
 
         <!-- Reset -->
-        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after or families or seniorities or anomaly_flags %}
+        {% if q or judet_slugs or levels or types or categories or employer_cats or expires_before or expires_after or families or seniorities or anomaly_flags or work_types or remote or computer or exp_levels or studies_levels or salary_bucket %}
           <a href="/" class="block text-center text-xs text-gov hover:underline mt-2 py-1">
             ✕ Șterge filtrele
           </a>

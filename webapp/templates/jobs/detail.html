@@ -194,6 +194,71 @@
     <!-- Main: body + calendar -->
     <div class="flex-1 min-w-0">
 
+      <!-- Condiții la locul de muncă -->
+      {% with cond=posting.inferred %}
+      {% if cond %}
+      {% with wt=cond.work_type re=cond.remote_eligible rc=cond.requires_computer exp=cond.experience_years st=cond.studies_required smn=cond.salary_min smx=cond.salary_max %}
+      {% if wt or re or rc != None or exp or st or smn %}
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-4
+                  bg-amber-50/30 border border-amber-200/60 rounded-lg mb-6 text-sm">
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs font-semibold uppercase tracking-widest text-ink-faint">Program</span>
+          {% if wt %}
+            <span class="font-medium text-ink">{{ wt|work_type_label }}</span>
+          {% else %}
+            <span class="text-ink-faint">—</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs font-semibold uppercase tracking-widest text-ink-faint">Telemuncă</span>
+          {% if re %}
+            <span class="font-medium text-ink">Da</span>
+          {% else %}
+            <span class="text-ink-faint">—</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs font-semibold uppercase tracking-widest text-ink-faint">Calculator</span>
+          {% if rc == True %}
+            <span class="font-medium text-ink">Solicitat{% if cond.computer_level == 'advanced' %} (avansat){% endif %}</span>
+          {% elif rc == False %}
+            <span class="font-medium text-ink">Nesolicitat</span>
+          {% else %}
+            <span class="text-ink-faint">—</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs font-semibold uppercase tracking-widest text-ink-faint">Experiență</span>
+          {% if exp %}
+            <span class="font-medium text-ink">Min. {{ exp }} ani</span>
+          {% else %}
+            <span class="text-ink-faint">—</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs font-semibold uppercase tracking-widest text-ink-faint">Studii</span>
+          {% if st %}
+            <span class="font-medium text-ink">{{ st|capfirst }}</span>
+          {% else %}
+            <span class="text-ink-faint">—</span>
+          {% endif %}
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <span class="text-xs font-semibold uppercase tracking-widest text-ink-faint">Salariu</span>
+          {% if smn or smx %}
+            <span class="font-medium text-ink font-mono">
+              {% if smn and smx and smn != smx %}{{ smn }}–{{ smx }}{% elif smn %}{{ smn }}{% else %}{{ smx }}{% endif %} RON
+            </span>
+          {% else %}
+            <span class="text-ink-faint">—</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+      {% endwith %}
+      {% endif %}
+      {% endwith %}
+
       <!-- Structured sections (from schema_json) or raw body fallback -->
       {% if schema_sections %}
         {% for section in schema_sections %}

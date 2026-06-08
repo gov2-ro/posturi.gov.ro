@@ -8,8 +8,8 @@
   <h1 class="font-display text-3xl italic font-semibold text-ink mb-1">Statistici</h1>
   <p class="text-ink-muted text-sm mb-8 font-mono">Distribuție agregată a anunțurilor de angajare din sectorul public</p>
 
-  <!-- KPI tiles -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+  <!-- KPI tiles — row 1 -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
     <div class="bg-white border border-border-warm rounded-lg p-5">
       <div class="text-3xl font-display font-semibold text-gov">{{ total }}</div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri totale</div>
@@ -18,11 +18,34 @@
       <div class="text-3xl font-display font-semibold text-green-700">{{ active }}</div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri active</div>
       <div class="text-xs text-ink-faint mt-0.5">{{ active_pct }}% din total</div>
+      {% if avg_deadline_days %}<div class="text-xs text-ink-faint mt-1">avg {{ avg_deadline_days }} zile</div>{% endif %}
     </div>
     <div class="bg-white border border-border-warm rounded-lg p-5 col-span-2 sm:col-span-1">
       <div class="text-3xl font-display font-semibold text-ink">{{ inferred }}</div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Clasificate automat</div>
       <div class="text-xs text-ink-faint mt-0.5">{{ inferred_pct }}% din total</div>
+    </div>
+  </div>
+
+  <!-- KPI tiles — row 2 -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ unique_employers }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori unici</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ unique_judete }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Județe acoperite</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ new_7days }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Noi (7 zile)</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ new_7days_pct }}% din total</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ with_salary }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Cu salariu</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ with_salary_pct }}% din total</div>
     </div>
   </div>
 
@@ -69,6 +92,91 @@
     </section>
 
   </div>
+
+  <!-- Row 2: Seniority, Studies, Employer Category -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-10">
+
+    <!-- By seniority -->
+    <section class="bg-white border border-border-warm rounded-lg p-6">
+      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top niveluri de senioritate</h2>
+      <div class="space-y-2">
+        {% for item in by_seniority %}
+        <div>
+          <div class="flex justify-between text-sm mb-0.5">
+            <a href="/?seniority={{ item.seniority }}" class="text-gov hover:underline capitalize">{{ item.seniority }}</a>
+            <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+          </div>
+          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_seniority 100 %}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-ink-muted text-sm italic">Nicio clasificare disponibilă.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- By studies -->
+    <section class="bg-white border border-border-warm rounded-lg p-6">
+      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top studii minime</h2>
+      <div class="space-y-2">
+        {% for item in by_studies %}
+        <div>
+          <div class="flex justify-between text-sm mb-0.5">
+            <a href="/?studies_level={{ item.studies }}" class="text-gov hover:underline capitalize">{{ item.studies }}</a>
+            <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+          </div>
+          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_studies 100 %}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-ink-muted text-sm italic">Nicio clasificare disponibilă.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- By employer category -->
+    <section class="bg-white border border-border-warm rounded-lg p-6">
+      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top tip angajator</h2>
+      <div class="space-y-2">
+        {% for item in by_employer_cat %}
+        <div>
+          <div class="flex justify-between text-sm mb-0.5">
+            <a href="/?employer_cat={{ item.category }}" class="text-gov hover:underline capitalize">{{ item.category }}</a>
+            <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+          </div>
+          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_employer_cat 100 %}%"></div>
+          </div>
+        </div>
+        {% empty %}
+        <p class="text-ink-muted text-sm italic">Niciun tip disponibil.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Monthly trends -->
+  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Trend lunar (12 luni)</h2>
+    <div class="space-y-2">
+      {% for item in monthly_trends %}
+      <div>
+        <div class="flex justify-between text-sm mb-0.5">
+          <span class="text-ink-muted font-mono text-xs">{{ item.month|date:"M Y" }}</span>
+          <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+        </div>
+        <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_monthly 100 %}%"></div>
+        </div>
+      </div>
+      {% empty %}
+      <p class="text-ink-muted text-sm italic">Niciun trend disponibil.</p>
+      {% endfor %}
+    </div>
+  </section>
 
   <!-- Anomalies -->
   <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">

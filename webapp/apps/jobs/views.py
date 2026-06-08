@@ -1,7 +1,7 @@
 import json
 import re
 import unicodedata
-from datetime import date, datetime, time
+from datetime import date, datetime, timedelta, time
 from datetime import timezone as dt_timezone
 from typing import Literal
 
@@ -10,13 +10,14 @@ import nh3
 from django.contrib.postgres.search import SearchQuery, SearchRank
 from django.contrib.syndication.views import Feed
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, Exists, OuterRef, Q, Subquery, Sum
+from django.db.models import Avg, Count, Exists, ExpressionWrapper, F, OuterRef, Q, Subquery, Sum
+from django.db.models.functions import TruncMonth
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.feedgenerator import Atom1Feed
 from icalendar import Calendar, Event
 
-from apps.jobs.models import JobPosting, JobPostingSchemaVariant
+from apps.jobs.models import Employer, JobPosting, JobPostingSchemaVariant, Judet
 
 FTS_CONFIG = "romanian_unaccent"
 
@@ -497,6 +498,14 @@ def job_list(request):
     paginator = Paginator(qs, PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get("page", 1))
 
+    page_num = int(request.GET.get("page", 1))
+    active_filters = [q, judet_slugs, levels, types, categories, employer_cats,
+                      expires_before, expires_after, families, seniorities,
+                      anomaly_flags, work_types, remote, computer, exp_levels,
+                      studies_levels, salary_bucket, dev_schema, dev_inferred, dev_variants]
+    is_unfiltered = page_num == 1 and not any(active_filters)
+    quick_stats = _build_quick_stats() if is_unfiltered else None
+
     ctx = {
         "page_obj": page_obj,
         "total_count": paginator.count,
@@ -549,6 +558,8 @@ def job_list(request):
             ("frequent_repost", "Re-publicare frecventă"),
         ],
         "today": date.today(),
+        "is_unfiltered": is_unfiltered,
+        "quick_stats": quick_stats,
     }
 
     if request.htmx:
@@ -737,18 +748,84 @@ def _build_stats():
         .annotate(count=Count("id"))
         .order_by("-count")[:10]
     )
+    by_seniority = list(
+        JobPosting.objects.exclude(inferred__seniority=None)
+        .exclude(inferred__seniority="")
+        .values("inferred__seniority")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:10]
+    )
+    by_studies = list(
+        JobPosting.objects.exclude(inferred__studies_required=None)
+        .exclude(inferred__studies_required="")
+        .values("inferred__studies_required")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:10]
+    )
+    by_employer_cat = list(
+        JobPosting.objects.exclude(employer_category="")
+        .exclude(employer_category=None)
+        .values("employer_category")
+        .annotate(count=Count("id"))
+        .order_by("-count")[:10]
+    )
+    monthly_trends = list(
+        JobPosting.objects.annotate(month=TruncMonth("published_at"))
+        .filter(month__isnull=False)
+        .values("month")
+        .annotate(count=Count("id"))
+        .order_by("-month")[:12]
+    )
+    monthly_trends.reverse()
+
     anomaly_counts = {
         flag: JobPosting.objects.filter(inferred__anomaly_flags__contains=[flag]).count()
         for flag in ("short_deadline", "missing_contact", "contact_in_attachment", "gender_criteria", "no_body", "frequent_repost")
     }
     inferred_count = JobPosting.objects.exclude(inferred={}).count()
+
+    unique_employers = Employer.objects.filter(postings__isnull=False).distinct().count()
+    unique_judete = Judet.objects.filter(postings__isnull=False).distinct().count()
+    new_7days = JobPosting.objects.filter(published_at__gte=today - timedelta(days=7)).count()
+    with_salary = JobPosting.objects.filter(inferred__salary_min__isnull=False).count()
+
+    avg_deadline_days = None
+    duration_stats = JobPosting.objects.filter(expires_at__isnull=False)
+    if duration_stats.exists():
+        from django.db.models import DurationField
+        duration = Avg(ExpressionWrapper(F("expires_at") - F("published_at"), output_field=DurationField()))
+        result = duration_stats.aggregate(avg_duration=duration)
+        if result["avg_duration"]:
+            avg_deadline_days = int(result["avg_duration"].total_seconds() / 86400)
+
     return {
         "total": total,
         "active": active,
         "inferred": inferred_count,
         "by_family": [{"family": x["inferred__profession_family"], "count": x["count"]} for x in by_family],
         "by_judet": [{"judet": x["judet__name"], "slug": x["judet__slug"], "count": x["count"]} for x in by_judet],
+        "by_seniority": [{"seniority": x["inferred__seniority"], "count": x["count"]} for x in by_seniority],
+        "by_studies": [{"studies": x["inferred__studies_required"], "count": x["count"]} for x in by_studies],
+        "by_employer_cat": [{"category": x["employer_category"], "count": x["count"]} for x in by_employer_cat],
+        "monthly_trends": [{"month": x["month"], "count": x["count"]} for x in monthly_trends],
         "anomaly_counts": anomaly_counts,
+        "unique_employers": unique_employers,
+        "unique_judete": unique_judete,
+        "new_7days": new_7days,
+        "with_salary": with_salary,
+        "avg_deadline_days": avg_deadline_days,
+    }
+
+
+def _build_quick_stats():
+    today = date.today()
+    return {
+        "active": JobPosting.objects.filter(expires_at__gte=today).count(),
+        "judete": Judet.objects.filter(postings__isnull=False).distinct().count(),
+        "employers": Employer.objects.filter(postings__isnull=False).distinct().count(),
+        "families": JobPosting.objects.exclude(inferred__profession_family=None)
+                    .exclude(inferred__profession_family="")
+                    .values("inferred__profession_family").distinct().count(),
     }
 
 
@@ -771,6 +848,11 @@ def stats_dashboard(request):
     total = data["total"] or 1
     max_family = data["by_family"][0]["count"] if data["by_family"] else 1
     max_judet = data["by_judet"][0]["count"] if data["by_judet"] else 1
+    max_seniority = data["by_seniority"][0]["count"] if data["by_seniority"] else 1
+    max_studies = data["by_studies"][0]["count"] if data["by_studies"] else 1
+    max_employer_cat = data["by_employer_cat"][0]["count"] if data["by_employer_cat"] else 1
+    max_monthly = max((x["count"] for x in data["monthly_trends"]), default=1)
+
     anomalies = [
         {
             "flag": flag,
@@ -780,16 +862,32 @@ def stats_dashboard(request):
         }
         for flag, count in data["anomaly_counts"].items()
     ]
+
     return render(request, "jobs/stats.html", {
         "total": data["total"],
         "active": data["active"],
         "active_pct": round(100 * data["active"] / total),
+        "avg_deadline_days": data["avg_deadline_days"],
         "inferred": data["inferred"],
         "inferred_pct": round(100 * data["inferred"] / total),
+        "unique_employers": data["unique_employers"],
+        "unique_judete": data["unique_judete"],
+        "new_7days": data["new_7days"],
+        "new_7days_pct": round(100 * data["new_7days"] / total) if total else 0,
+        "with_salary": data["with_salary"],
+        "with_salary_pct": round(100 * data["with_salary"] / total) if total else 0,
         "by_family": data["by_family"],
         "max_family": max_family,
         "by_judet": data["by_judet"],
         "max_judet": max_judet,
+        "by_seniority": data["by_seniority"],
+        "max_seniority": max_seniority,
+        "by_studies": data["by_studies"],
+        "max_studies": max_studies,
+        "by_employer_cat": data["by_employer_cat"],
+        "max_employer_cat": max_employer_cat,
+        "monthly_trends": data["monthly_trends"],
+        "max_monthly": max_monthly,
         "anomalies": anomalies,
     })
 

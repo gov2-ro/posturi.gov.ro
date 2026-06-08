@@ -25,7 +25,7 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [ ] **Drop CSV layer eventually** — the scraper → CSV → DB pipeline is 3 hops. Once Slice 2 is stable, port `fetch-index.py`, `fetch-anunturi.py`, and `parse-anunturi.py` into Django management commands that write straight to the DB. The CSVs become an optional export.
 - [x] **Add `agent de securitate` / `agent securitate` / `ofiter securitate` to FAMILIES["ordine publică"]** — added to both `quality_check.py` and `infer_postings.py`. Done 2026-05-28.
 - [x] **`ingrijitor` (bare) misclassifies non-healthcare employers as `sănătate`** — removed bare `ingrijitor` from `sănătate` (replaced with `ingrijitor bolnavi/pacienti/spital`); added bare `ingrijitor` + contextual variants (`ingrijitor scoala/gradinita/camin/spatii/cladiri`) to `tehnic`. Fixed in both files. Done 2026-05-28.
-- [ ] **`attachment_title_mismatch` anomaly: verify upstream on posturi.gov.ro** — posting `inspector-de-specialitate-i-referent-de-specialitate-i-contractari-fochist` at Spitalul Municipal Bârlad has a `.doc` attachment (79a59ec1.doc) containing a 2024 nursing exam curriculum, not the inspector/fochist posting. Confirmed live via Playwright: the site itself serves the wrong file. Not a pipeline bug — upstream data error. Operator could notify posturi.gov.ro admin. Identified 2026-05-27.
+ 
 
 ## Slice 2 prep (Browse / Search UI)
 
@@ -82,11 +82,12 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] use OpenRouter for this, or `simonw/LLM` package? - which approach is cheaper? Resolution: **NEITHER** — direct SDK calls give better metrics
 - [x] **Prompt v2: Schema.org-aligned extraction + caching + structured output + boilerplate strip** — Done 2026-05-27. Output now a flat superset of Schema.org JobPosting properties (responsibilities, educationRequirements, experienceRequirements, qualifications, skills, baseSalary `{minValue,maxValue,currency,unitText}`, jobBenefits, workHours, jobLocation) plus 3 RO-specific custom keys (application_docs, application_fee `{amount,currency,account,details}`, application_contact `{name,phone,email,address}`). New files: `schema_models.py` (Pydantic), `boilerplate.py` (`strip_hg_1336()`). `llm-schema.py` split into cacheable system_prefix + per-posting content; wired Anthropic explicit cache + OpenAI/DeepSeek/Gemini implicit caching; provider-native structured output (strict json_schema / response_schema / tool-use). Verification: 6 postings × 4 providers, all outputs Pydantic-valid, `qualifications` field shrunk from ~2300 chars HG 1.336 boilerplate to 36–109 chars role-specific signal. Cost per 1000 postings (with caching): gpt-5-nano $0.36, gemini-2.5-flash $0.61, deepseek $0.77, gpt-4o-mini $0.88. 14/14 renderer tests pass with v1 back-compat preserved. **Next:** promote v2 to default + run `python llm-schema.py --provider gemini --prompt-version v2 --force` to backfill remaining 4357 postings.
 - [ ] Expereință: wehere explicit, ie: "nu este cazul", flag as _nu necesită_
-- [ ] for debugging purposes show filters of is inferred, attachment text, schema in the UI browser
+- [x] for debugging purposes show filters of is inferred, attachment text, schema in the UI browser
 - [ ] **Promote prompt v2 to default + backfill** — Change `PROMPT_VERSION = "v2"` and CLI `--prompt-version` default to `v2` in `llm-schema.py`. Then run `python llm-schema.py --provider gemini --prompt-version v2 --force` to refresh all 4357 postings under v2. Estimated cost: ~$2.67 (gemini-2.5-flash). Optional: tune boilerplate patterns based on a wider sample if any false-positives surface.
-- [ ] **Cross-posting LLM-variants dashboard** — top-level page (e.g. `/llm-variants/`) that aggregates `JobPostingSchemaVariant` data across all postings: per-(provider, model, prompt_version) cost/latency/throughput leaderboard, prompt-version comparison stats, ability to drill into a specific posting from there. Complements (but doesn't replace) the per-posting side-by-side viewer at `/job/<pk>/variants/`. Build after the per-posting viewer's reading experience is solid.
+- [x] **Cross-posting LLM-variants dashboard** — top-level page (e.g. `/llm-variants/`) that aggregates `JobPostingSchemaVariant` data across all postings: per-(provider, model, prompt_version) cost/latency/throughput leaderboard, prompt-version comparison stats, ability to drill into a specific posting from there. Complements (but doesn't replace) the per-posting side-by-side viewer at `/job/<pk>/variants/`. Build after the per-posting viewer's reading experience is solid.
+- [ ] prepare shared hosting web app. static or php. 
 - [ ] some posts cover more jobs, how to address?
-- [ ] go beyond schema org, extract easy to read attributes. `Rezumatul functiei` card on [cariere.gov.md](https://cariere.gov.md/ro/job/specialist-in-domeniul-perceperii-fiscale/32948). Those will also used as filters.
+- [x] go beyond schema org, extract easy to read attributes. `Rezumatul functiei` card on [cariere.gov.md](https://cariere.gov.md/ro/job/specialist-in-domeniul-perceperii-fiscale/32948). Those will also used as filters.
 
 
 ### Later
@@ -96,3 +97,4 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [ ] enhance slugs – use the original? – add judet as folder? - use alias?
 - [ ] in site attachment renderer? doc/x, pdf
 - [ ] propose a input form for posturi.gov.ro
+- [ ] **upload cv, get job recommendations**

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load jobs_extras %}
 
 {% block title %}Statistici Angajatori{% endblock %}
 
@@ -110,6 +111,112 @@
       {% endfor %}
     </div>
   </section>
+
+  <!-- Top employers by judet -->
+  <section class="mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după județ</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {% for judet, employers in top_employers_by_judet.items %}
+      <div class="bg-white border border-border-warm rounded-lg p-6">
+        <h3 class="font-semibold text-ink mb-3">{{ judet }}</h3>
+        <div class="space-y-2">
+          {% for emp in employers %}
+          <div>
+            <div class="flex justify-between text-sm mb-0.5">
+              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
+              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
+            </div>
+            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_judet|dict_get:judet 100 %}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Top employers by profession family -->
+  {% if top_employers_by_family %}
+  <section class="mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după domeniu</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {% for family, employers in top_employers_by_family.items %}
+      <div class="bg-white border border-border-warm rounded-lg p-6">
+        <h3 class="font-semibold text-ink mb-3 capitalize">{{ family }}</h3>
+        <div class="space-y-2">
+          {% for emp in employers %}
+          <div>
+            <div class="flex justify-between text-sm mb-0.5">
+              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
+              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
+            </div>
+            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_family|dict_get:family 100 %}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Top employers by job level -->
+  {% if top_employers_by_nivel %}
+  <section class="mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după nivel</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {% for nivel, employers in top_employers_by_nivel.items %}
+      <div class="bg-white border border-border-warm rounded-lg p-6">
+        <h3 class="font-semibold text-ink mb-3 capitalize">{{ nivel }}</h3>
+        <div class="space-y-2">
+          {% for emp in employers %}
+          <div>
+            <div class="flex justify-between text-sm mb-0.5">
+              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
+              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
+            </div>
+            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_nivel|dict_get:nivel 100 %}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Top employers by seniority -->
+  {% if top_employers_by_seniority %}
+  <section class="mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după grad/funcție</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {% for seniority, employers in top_employers_by_seniority.items %}
+      <div class="bg-white border border-border-warm rounded-lg p-6">
+        <h3 class="font-semibold text-ink mb-3 capitalize">{{ seniority }}</h3>
+        <div class="space-y-2">
+          {% for emp in employers %}
+          <div>
+            <div class="flex justify-between text-sm mb-0.5">
+              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
+              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
+            </div>
+            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_seniority|dict_get:seniority 100 %}%"></div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
   <!-- Interpretation -->
   <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 text-sm text-ink">

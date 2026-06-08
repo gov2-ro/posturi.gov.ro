@@ -123,7 +123,9 @@ class JobPosting(models.Model):
             models.Index(fields=["published_at"]),
             models.Index(fields=["employer"]),
             models.Index(fields=["judet"]),
+            models.Index(fields=["job_level"]),
             GinIndex(fields=["search_vector"]),
+            GinIndex(fields=["inferred"]),
         ]
 
     def __str__(self):

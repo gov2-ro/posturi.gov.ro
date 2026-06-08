@@ -982,6 +982,54 @@ def _build_employer_stats():
 
     avg_postings = round(total_postings / total_with_postings, 2) if total_with_postings else 0
 
+    top_employers_by_judet = {}
+    judete = JobPosting.objects.filter(judet__isnull=False).values_list('judet__slug', 'judet__name').distinct().order_by('judet__name')
+    for judet_slug, judet_name in judete:
+        top_five = list(
+            JobPosting.objects.filter(judet__slug=judet_slug)
+            .values('employer__id', 'employer__name', 'employer__slug')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:5]
+        )
+        if top_five:
+            top_employers_by_judet[judet_name] = top_five
+
+    top_employers_by_family = {}
+    families = JobPosting.objects.exclude(inferred__profession_family=None).exclude(inferred__profession_family='altele').values_list('inferred__profession_family', flat=True).distinct().order_by('inferred__profession_family')
+    for family in families:
+        top_five = list(
+            JobPosting.objects.filter(inferred__profession_family=family)
+            .values('employer__id', 'employer__name', 'employer__slug')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:5]
+        )
+        if top_five:
+            top_employers_by_family[family] = top_five
+
+    top_employers_by_nivel = {}
+    niveluri = JobPosting.objects.exclude(job_level='').values_list('job_level', flat=True).distinct().order_by('job_level')
+    for nivel in niveluri:
+        top_five = list(
+            JobPosting.objects.filter(job_level=nivel)
+            .values('employer__id', 'employer__name', 'employer__slug')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:5]
+        )
+        if top_five:
+            top_employers_by_nivel[nivel] = top_five
+
+    top_employers_by_seniority = {}
+    seniorities = JobPosting.objects.exclude(inferred__seniority=None).values_list('inferred__seniority', flat=True).distinct().order_by('inferred__seniority')
+    for seniority in seniorities:
+        top_five = list(
+            JobPosting.objects.filter(inferred__seniority=seniority)
+            .values('employer__id', 'employer__name', 'employer__slug')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:5]
+        )
+        if top_five:
+            top_employers_by_seniority[seniority] = top_five
+
     return {
         'total_employers': total_employers,
         'active_employers': active_employers,
@@ -992,6 +1040,10 @@ def _build_employer_stats():
         'distribution': distribution,
         'top_ten_count': top_ten_count,
         'concentration_pct': round(100 * top_ten_count / total_postings) if total_postings else 0,
+        'top_employers_by_judet': top_employers_by_judet,
+        'top_employers_by_family': top_employers_by_family,
+        'top_employers_by_nivel': top_employers_by_nivel,
+        'top_employers_by_seniority': top_employers_by_seniority,
     }
 
 
@@ -1000,6 +1052,22 @@ def employers_dashboard(request):
     max_employer = max((x.get('posting_count') or x.get('active_count') for x in data['top_employers']), default=1)
     max_active = max((x['active_count'] for x in data['top_active']), default=1)
     max_distribution = max((x['count'] for x in data['distribution']), default=1)
+
+    max_by_judet = {}
+    for judet, employers in data['top_employers_by_judet'].items():
+        max_by_judet[judet] = max((x['count'] for x in employers), default=1)
+
+    max_by_family = {}
+    for family, employers in data['top_employers_by_family'].items():
+        max_by_family[family] = max((x['count'] for x in employers), default=1)
+
+    max_by_nivel = {}
+    for nivel, employers in data['top_employers_by_nivel'].items():
+        max_by_nivel[nivel] = max((x['count'] for x in employers), default=1)
+
+    max_by_seniority = {}
+    for seniority, employers in data['top_employers_by_seniority'].items():
+        max_by_seniority[seniority] = max((x['count'] for x in employers), default=1)
 
     return render(request, 'jobs/employers_dashboard.html', {
         'total_employers': data['total_employers'],
@@ -1014,6 +1082,14 @@ def employers_dashboard(request):
         'max_distribution': max_distribution,
         'concentration_pct': data['concentration_pct'],
         'top_ten_count': data['top_ten_count'],
+        'top_employers_by_judet': data['top_employers_by_judet'],
+        'max_by_judet': max_by_judet,
+        'top_employers_by_family': data['top_employers_by_family'],
+        'max_by_family': max_by_family,
+        'top_employers_by_nivel': data['top_employers_by_nivel'],
+        'max_by_nivel': max_by_nivel,
+        'top_employers_by_seniority': data['top_employers_by_seniority'],
+        'max_by_seniority': max_by_seniority,
     })
 
 

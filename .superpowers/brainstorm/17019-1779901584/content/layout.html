@@ -1,0 +1,177 @@
+<h2>Side-by-side viewer: which layout?</h2>
+<p class="subtitle">Per-posting variant comparison page. Same data, three layouts. Click to select.</p>
+
+<div class="cards" style="grid-template-columns: 1fr;">
+
+  <!-- A: Matrix -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; background: #fafafa;">
+      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Posting #4437 — Muncitor calificat (lăcătuș) · U.M. 02384 București</div>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+        <thead>
+          <tr style="background: #eee;">
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd; width: 130px;">Câmp</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">gemini-2.5-flash</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">gpt-4o-mini</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">gpt-5-nano</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">deepseek-v4-flash</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600; background: #f5f5f5;">Studii</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Școală profesională sau curs de calificare.</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Școală profesională sau curs de calificare.</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Școală profesională sau curs de calificare</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Școală profesională sau curs de calificare</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600; background: #f5f5f5;">Experiență</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Minim 9 ani.</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Minim 9 ani.</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Minim 9 ani</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Minim 9 ani</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600; background: #f5f5f5;">Cond. specifice</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">- Nivelul de acces la informaţii clasificate este Secret...</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; background: #fff8e1;">- Nivel acces clasificate: Secret.<br>- Acord scris pentru verificare...</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; background: #fff8e1;">- Nivelul de acces: Secret (Cerință specifică)</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">- Nivel de acces la informații clasificate: Secret...</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600; background: #f5f5f5;">Salarizare</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600; background: #f5f5f5;">Atribuții</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; background: #ffe9e9;">- execută lucrări de tâmplă... [hallucinated]</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+          </tr>
+          <tr>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600; background: #f5f5f5;">Locație</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">U.M. 02384 București, Șos. de Centură nr. 44, Tunari, Ilfov.</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">U.M. 02384 București, Șos. de Centură nr. 44, Tunari, Ilfov.</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">U.M. 02384 București, Șoseaua de centură nr. 44, Tunari, Ilfov</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">U.M. 02384 București, Șoseaua de Centură nr. 44, Tunari, Ilfov</td>
+          </tr>
+          <tr style="background: #fafafa;">
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600;">cost / latență</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-family: monospace;">$0.00067 · 11s</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-family: monospace; background: #ffe9e9;">$0.00076 · 20s</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-family: monospace; background: #e8f5e9;">$0.00049 · 4s</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-family: monospace;">$0.00049 · 13s</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body">
+      <h3>A. Matrix (rows = fields, cols = variants)</h3>
+      <p>Equivalent fields align horizontally. Disagreements jump out — see the wording differences in <em>Cond. specifice</em>, the hallucinated <em>Atribuții</em> in gpt-5-nano. Metadata row pinned at bottom. Wide table; needs horizontal scroll past ~4–5 variants.</p>
+    </div>
+  </div>
+
+  <!-- B: Cards in columns -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; background: #fafafa;">
+      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Posting #4437 — Muncitor calificat</div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; font-size: 10.5px;">
+        <!-- gemini card -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+          <div style="font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 6px;">gemini-2.5-flash</div>
+          <div style="font-family: monospace; font-size: 9px; color: #888; margin-bottom: 8px;">$0.00067 · 11s · v2</div>
+          <div style="color: #555; font-size: 9px;"><b>Studii:</b> Școală profesională.<br><br><b>Experiență:</b> Minim 9 ani.<br><br><b>Cond. specifice:</b> Nivel acces: Secret...<br><br><b>Salarizare:</b> —<br><br><b>Locație:</b> U.M. 02384 București...</div>
+        </div>
+        <!-- gpt-4o-mini card -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+          <div style="font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 6px;">gpt-4o-mini</div>
+          <div style="font-family: monospace; font-size: 9px; color: #888; margin-bottom: 8px;">$0.00076 · 20s · v2</div>
+          <div style="color: #555; font-size: 9px;"><b>Studii:</b> Școală profesională.<br><br><b>Experiență:</b> Minim 9 ani.<br><br><b>Cond. specifice:</b> Nivel acces: Secret. Acord scris...<br><br><b>Salarizare:</b> —<br><br><b>Locație:</b> U.M. 02384 București...</div>
+        </div>
+        <!-- gpt-5-nano card -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+          <div style="font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 6px;">gpt-5-nano</div>
+          <div style="font-family: monospace; font-size: 9px; color: #888; margin-bottom: 8px;">$0.00049 · 4s · v2</div>
+          <div style="color: #555; font-size: 9px;"><b>Studii:</b> Școală profesională<br><br><b>Experiență:</b> Minim 9 ani<br><br><b>Cond. specifice:</b> Nivel acces: Secret<br><br><b>Atribuții:</b> execută lucrări de tâmplă...<br><br><b>Locație:</b> U.M. 02384 București...</div>
+        </div>
+        <!-- deepseek card -->
+        <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+          <div style="font-weight: 600; border-bottom: 1px solid #eee; padding-bottom: 4px; margin-bottom: 6px;">deepseek-v4-flash</div>
+          <div style="font-family: monospace; font-size: 9px; color: #888; margin-bottom: 8px;">$0.00049 · 13s · v2</div>
+          <div style="color: #555; font-size: 9px;"><b>Studii:</b> Școală profesională<br><br><b>Experiență:</b> Minim 9 ani<br><br><b>Cond. specifice:</b> Nivel acces: Secret...<br><br><b>Salarizare:</b> —<br><br><b>Locație:</b> U.M. 02384 București...</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Cards in columns (one card per variant)</h3>
+      <p>Each variant reads as a coherent document, top-to-bottom. Easier to "read one model in full". Harder to spot per-field disagreements because your eye has to jump across 4 columns at different vertical offsets. Scales worse than matrix beyond ~3 variants.</p>
+    </div>
+  </div>
+
+  <!-- C: Focused (matrix + raw JSON toggle) -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; background: #fafafa;">
+      <div style="font-size: 11px; color: #666; margin-bottom: 8px;">Posting #4437 — Muncitor calificat</div>
+
+      <!-- Toolbar -->
+      <div style="background: white; border: 1px solid #ddd; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; display: flex; gap: 12px; font-size: 10px;">
+        <span><b>Prompt:</b>
+          <span style="background: #1976d2; color: white; padding: 1px 6px; border-radius: 3px;">v2</span>
+          <span style="color: #666; padding: 1px 6px;">v1</span>
+        </span>
+        <span><b>View:</b>
+          <span style="background: #333; color: white; padding: 1px 6px; border-radius: 3px;">rendered</span>
+          <span style="color: #666; padding: 1px 6px;">JSON</span>
+          <span style="color: #666; padding: 1px 6px;">diff-only</span>
+        </span>
+        <span style="margin-left: auto; color: #666;">4 variants</span>
+      </div>
+
+      <!-- Same matrix as A, with diff-only toggle showing the differing row would be the highlight -->
+      <table style="width: 100%; border-collapse: collapse; font-size: 10.5px;">
+        <thead>
+          <tr style="background: #eee;">
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">Câmp</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">gemini</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">gpt-4o-mini</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">gpt-5-nano</th>
+            <th style="padding: 4px 6px; text-align: left; border: 1px solid #ddd;">deepseek</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: #fff8e1;">
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600;">Cond. specifice <span style="background: #fbc02d; color: white; padding: 0 4px; font-size: 9px; border-radius: 3px;">diverg</span></td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Nivel acces: Secret...</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Nivel acces: Secret. Acord scris...</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Nivel acces: Secret (Cerință specifică)</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">Nivel acces: Secret...</td>
+          </tr>
+          <tr style="background: #ffe9e9;">
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600;">Atribuții <span style="background: #c62828; color: white; padding: 0 4px; font-size: 9px; border-radius: 3px;">3 null / 1 ≠</span></td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd;">execută lucrări de tâmplă... [posibil hallucinated]</td>
+            <td style="padding: 4px 6px; border: 1px solid #ddd; color: #999;">—</td>
+          </tr>
+          <tr style="background: #e8f5e9;">
+            <td style="padding: 4px 6px; border: 1px solid #ddd; font-weight: 600;">Studii <span style="background: #2e7d32; color: white; padding: 0 4px; font-size: 9px; border-radius: 3px;">agree</span></td>
+            <td colspan="4" style="padding: 4px 6px; border: 1px solid #ddd;">Școală profesională sau curs de calificare. (4/4 modele)</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="font-size: 9px; color: #666; margin-top: 6px;">↑ <em>diff-only</em> mode collapses rows where all variants agree (a single merged row); rows with divergence stay expanded and get tagged.</div>
+    </div>
+    <div class="card-body">
+      <h3>C. Matrix + smart diff (recommended)</h3>
+      <p>Same matrix as A, but with two switches: <b>prompt-version filter</b> (default v2; can show v1 too) and <b>view mode</b> (rendered / JSON / diff-only). In <em>diff-only</em>, rows where all variants agree collapse into one merged row; divergent rows stay expanded with a status tag (<em>agree</em>, <em>diverg</em>, <em>3 null / 1 ≠</em>). Focus on what's actually different.</p>
+    </div>
+  </div>
+
+</div>

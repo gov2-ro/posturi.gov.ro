@@ -88,6 +88,8 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [ ] prepare shared hosting web app. static or php. 
 - [ ] some posts cover more jobs, how to address?
 - [x] go beyond schema org, extract easy to read attributes. `Rezumatul functiei` card on [cariere.gov.md](https://cariere.gov.md/ro/job/specialist-in-domeniul-perceperii-fiscale/32948). Those will also used as filters.
+- [ ] stats, show all judete. norm to population
+- [ ] angajator profile?
 
 
 ### Later

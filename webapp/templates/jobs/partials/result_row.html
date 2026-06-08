@@ -12,7 +12,7 @@
       </a>
 
       <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
-        <span class="font-medium text-ink-muted truncate max-w-xs">{{ posting.employer.name }}</span>
+        <a href="{{ posting.employer.get_absolute_url }}" class="font-medium text-ink-muted hover:text-gov hover:underline truncate max-w-xs">{{ posting.employer.name }}</a>
         {% if posting.judet %}
           <span class="text-ink-faint">·</span>
           <span>{{ posting.judet.name }}</span>

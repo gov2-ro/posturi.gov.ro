@@ -892,6 +892,49 @@ def stats_dashboard(request):
     })
 
 
+def employer_profile(request, slug):
+    employer = get_object_or_404(Employer, slug=slug)
+    today = date.today()
+
+    all_postings = employer.postings.select_related("judet").order_by("-published_at")
+    active = all_postings.filter(expires_at__gte=today)
+    expired = all_postings.filter(expires_at__lt=today)
+
+    by_judet = list(
+        employer.postings.filter(judet__isnull=False)
+        .values("judet__name", "judet__slug")
+        .annotate(count=Count("id"))
+        .order_by("-count")
+    )
+
+    top_category = (
+        employer.postings.exclude(employer_category="")
+        .values("employer_category")
+        .annotate(n=Count("id"))
+        .order_by("-n")
+        .values_list("employer_category", flat=True)
+        .first()
+    )
+
+    aliases = list(employer.aliases.values_list("alias_name", flat=True))
+    max_judet = max((x["count"] for x in by_judet), default=1)
+
+    return render(request, "jobs/employer_profile.html", {
+        "employer": employer,
+        "top_category": top_category,
+        "aliases": aliases,
+        "total": all_postings.count(),
+        "active_count": active.count(),
+        "expired_count": expired.count(),
+        "unique_judete": len(by_judet),
+        "by_judet": by_judet,
+        "max_judet": max_judet,
+        "active_postings": active[:50],
+        "recent_expired": expired[:25],
+        "today": today,
+    })
+
+
 # Fields we care about for quality scoring (v2 keys; v1 back-compat keys omitted)
 _QUALITY_FIELDS = [
     "responsibilities", "educationRequirements", "experienceRequirements",

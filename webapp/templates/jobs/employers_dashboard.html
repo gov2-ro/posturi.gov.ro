@@ -50,46 +50,6 @@
     </div>
   </div>
 
-  <!-- Top employers by total postings -->
-  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top 20 angajatori (după total anunțuri)</h2>
-    <div class="space-y-2">
-      {% for item in top_employers %}
-      <div>
-        <div class="flex justify-between text-sm mb-0.5">
-          <a href="/angajator/{{ item.slug }}/" class="text-gov hover:underline">{{ item.name }}</a>
-          <span class="text-ink-muted font-mono text-xs">{{ item.posting_count }}</span>
-        </div>
-        <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
-          <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.posting_count max_employer 100 %}%"></div>
-        </div>
-      </div>
-      {% empty %}
-      <p class="text-ink-muted text-sm italic">Niciun angajator disponibil.</p>
-      {% endfor %}
-    </div>
-  </section>
-
-  <!-- Top employers by active postings -->
-  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top 20 angajatori (după anunțuri active)</h2>
-    <div class="space-y-2">
-      {% for item in top_active %}
-      <div>
-        <div class="flex justify-between text-sm mb-0.5">
-          <a href="/angajator/{{ item.slug }}/" class="text-gov hover:underline">{{ item.name }}</a>
-          <span class="text-ink-muted font-mono text-xs">{{ item.active_count }}</span>
-        </div>
-        <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
-          <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.active_count max_active 100 %}%"></div>
-        </div>
-      </div>
-      {% empty %}
-      <p class="text-ink-muted text-sm italic">Niciun angajator cu anunțuri active.</p>
-      {% endfor %}
-    </div>
-  </section>
-
   <!-- Distribution histogram -->
   <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
     <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Distribuție frecvenței postărilor</h2>
@@ -112,111 +72,39 @@
     </div>
   </section>
 
-  <!-- Top employers by judet -->
-  <section class="mb-10">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după județ</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {% for judet, employers in top_employers_by_judet.items %}
-      <div class="bg-white border border-border-warm rounded-lg p-6">
-        <h3 class="font-semibold text-ink mb-3">{{ judet }}</h3>
-        <div class="space-y-2">
-          {% for emp in employers %}
-          <div>
-            <div class="flex justify-between text-sm mb-0.5">
-              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
-              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
-            </div>
-            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
-              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_judet|dict_get:judet 100 %}%"></div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
+  <!-- Top employers with judet filter -->
+  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
+    <div class="mb-6">
+      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top angajatori{% if selected_judet %} în {{ selected_judet }}{% endif %}</h2>
 
-  <!-- Top employers by profession family -->
-  {% if top_employers_by_family %}
-  <section class="mb-10">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după domeniu</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {% for family, employers in top_employers_by_family.items %}
-      <div class="bg-white border border-border-warm rounded-lg p-6">
-        <h3 class="font-semibold text-ink mb-3 capitalize">{{ family }}</h3>
-        <div class="space-y-2">
-          {% for emp in employers %}
-          <div>
-            <div class="flex justify-between text-sm mb-0.5">
-              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
-              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
-            </div>
-            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
-              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_family|dict_get:family 100 %}%"></div>
-            </div>
-          </div>
+      <div class="flex items-center gap-3">
+        <label class="text-sm text-ink-muted font-semibold">Județ:</label>
+        <select name="judet" onchange="window.location.href = this.value ? '?judet=' + this.value : '/angajatori/'"
+                class="bg-white border border-border-warm px-3 py-2 text-sm text-ink focus:outline-none focus:border-gov rounded">
+          <option value="">Toate județele</option>
+          {% for jud in judet_list %}
+            <option value="{{ jud.slug }}" {% if jud.slug == judet_filter %}selected{% endif %}>{{ jud.name }}</option>
           {% endfor %}
-        </div>
+        </select>
       </div>
-      {% endfor %}
     </div>
-  </section>
-  {% endif %}
 
-  <!-- Top employers by job level -->
-  {% if top_employers_by_nivel %}
-  <section class="mb-10">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după nivel</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {% for nivel, employers in top_employers_by_nivel.items %}
-      <div class="bg-white border border-border-warm rounded-lg p-6">
-        <h3 class="font-semibold text-ink mb-3 capitalize">{{ nivel }}</h3>
-        <div class="space-y-2">
-          {% for emp in employers %}
-          <div>
-            <div class="flex justify-between text-sm mb-0.5">
-              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
-              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
-            </div>
-            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
-              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_nivel|dict_get:nivel 100 %}%"></div>
-            </div>
-          </div>
-          {% endfor %}
+    <div class="space-y-2">
+      {% for item in top_employers %}
+      <div>
+        <div class="flex justify-between text-sm mb-0.5">
+          <a href="/angajator/{{ item.employer__slug }}/" class="text-gov hover:underline">{{ item.employer__name }}</a>
+          <span class="text-ink-muted font-mono text-xs">{{ item.count }}</span>
+        </div>
+        <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.count max_employer 100 %}%"></div>
         </div>
       </div>
+      {% empty %}
+      <p class="text-ink-muted text-sm italic">Niciun angajator disponibil.</p>
       {% endfor %}
     </div>
   </section>
-  {% endif %}
-
-  <!-- Top employers by seniority -->
-  {% if top_employers_by_seniority %}
-  <section class="mb-10">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-6">Top angajatori după grad/funcție</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {% for seniority, employers in top_employers_by_seniority.items %}
-      <div class="bg-white border border-border-warm rounded-lg p-6">
-        <h3 class="font-semibold text-ink mb-3 capitalize">{{ seniority }}</h3>
-        <div class="space-y-2">
-          {% for emp in employers %}
-          <div>
-            <div class="flex justify-between text-sm mb-0.5">
-              <a href="/angajator/{{ emp.employer__slug }}/" class="text-gov hover:underline text-sm">{{ emp.employer__name }}</a>
-              <span class="text-ink-muted font-mono text-xs">{{ emp.count }}</span>
-            </div>
-            <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
-              <div class="h-full bg-gov rounded-full" style="width: {% widthratio emp.count max_by_seniority|dict_get:seniority 100 %}%"></div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
 
   <!-- Interpretation -->
   <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 text-sm text-ink">
@@ -225,7 +113,8 @@
       Angajatorii sunt <strong>extrem de dispersați</strong>. Din {{ total_employers }} angajatori, doar {{ distribution.0.count }} ({{ distribution.0.pct }}%) postează o singură dată. Doar {{ distribution.3.count }} ({{ distribution.3.pct }}%) postează 10+ anunțuri. Chiar și top 10 angajatori generează doar {{ concentration_pct }}% din total — nu există dominanță.
     </p>
     <p>
-      <strong>Interpretare:</strong> Angajarea în sectorul public este foarte distribuită — multe instituții mici postează ocazional, nu o mână de mari angajatori care domină piața.
+      <span class="font-semibold">Cum să folosești:</span>
+      Folosește dropdown-ul "Județ" pentru a vedea care sunt cei mai activi angajatori într-o anumită județ. Fără filtru, vezi top 30 angajatori la nivel național.
     </p>
   </div>
 

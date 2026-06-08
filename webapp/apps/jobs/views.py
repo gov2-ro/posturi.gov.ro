@@ -1053,43 +1053,48 @@ def employers_dashboard(request):
     max_active = max((x['active_count'] for x in data['top_active']), default=1)
     max_distribution = max((x['count'] for x in data['distribution']), default=1)
 
-    max_by_judet = {}
-    for judet, employers in data['top_employers_by_judet'].items():
-        max_by_judet[judet] = max((x['count'] for x in employers), default=1)
+    judet_filter = request.GET.get('judet', '')
+    judet_list = list(Judet.objects.all().order_by('name'))
 
-    max_by_family = {}
-    for family, employers in data['top_employers_by_family'].items():
-        max_by_family[family] = max((x['count'] for x in employers), default=1)
+    if judet_filter:
+        judet_obj = get_object_or_404(Judet, slug=judet_filter)
+        top_employers_filtered = list(
+            JobPosting.objects.filter(judet=judet_obj)
+            .values('employer__id', 'employer__name', 'employer__slug')
+            .annotate(count=Count('id'))
+            .order_by('-count')[:30]
+        )
+        selected_judet = judet_obj.name
+    else:
+        top_employers_filtered = [
+            {
+                'employer__id': x['id'],
+                'employer__name': x['name'],
+                'employer__slug': x['slug'],
+                'count': x['posting_count'],
+            }
+            for x in data['top_employers']
+        ]
+        selected_judet = None
 
-    max_by_nivel = {}
-    for nivel, employers in data['top_employers_by_nivel'].items():
-        max_by_nivel[nivel] = max((x['count'] for x in employers), default=1)
-
-    max_by_seniority = {}
-    for seniority, employers in data['top_employers_by_seniority'].items():
-        max_by_seniority[seniority] = max((x['count'] for x in employers), default=1)
+    max_filtered = max((x['count'] for x in top_employers_filtered), default=1)
 
     return render(request, 'jobs/employers_dashboard.html', {
         'total_employers': data['total_employers'],
         'active_employers': data['active_employers'],
         'total_postings': data['total_postings'],
         'avg_postings': data['avg_postings'],
-        'top_employers': data['top_employers'],
-        'max_employer': max_employer,
+        'top_employers': top_employers_filtered,
+        'max_employer': max_filtered,
         'top_active': data['top_active'],
         'max_active': max_active,
         'distribution': data['distribution'],
         'max_distribution': max_distribution,
         'concentration_pct': data['concentration_pct'],
         'top_ten_count': data['top_ten_count'],
-        'top_employers_by_judet': data['top_employers_by_judet'],
-        'max_by_judet': max_by_judet,
-        'top_employers_by_family': data['top_employers_by_family'],
-        'max_by_family': max_by_family,
-        'top_employers_by_nivel': data['top_employers_by_nivel'],
-        'max_by_nivel': max_by_nivel,
-        'top_employers_by_seniority': data['top_employers_by_seniority'],
-        'max_by_seniority': max_by_seniority,
+        'judet_list': judet_list,
+        'judet_filter': judet_filter,
+        'selected_judet': selected_judet,
     })
 
 

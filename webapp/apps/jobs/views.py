@@ -935,6 +935,88 @@ def employer_profile(request, slug):
     })
 
 
+def _build_employer_stats():
+    today = date.today()
+    total_employers = Employer.objects.count()
+    active_employers = Employer.objects.filter(
+        postings__expires_at__gte=today
+    ).distinct().count()
+
+    top_employers = list(
+        Employer.objects.annotate(posting_count=Count('postings'))
+        .filter(posting_count__gt=0)
+        .values('id', 'name', 'slug', 'posting_count')
+        .order_by('-posting_count')[:20]
+    )
+
+    top_active = list(
+        Employer.objects.annotate(
+            active_count=Count('postings', filter=Q(postings__expires_at__gte=today))
+        )
+        .filter(active_count__gt=0)
+        .values('id', 'name', 'slug', 'active_count')
+        .order_by('-active_count')[:20]
+    )
+
+    employers_with_counts = Employer.objects.annotate(
+        posting_count=Count('postings')
+    ).filter(posting_count__gt=0)
+
+    total_with_postings = employers_with_counts.count()
+    one_post = employers_with_counts.filter(posting_count=1).count()
+    two_five = employers_with_counts.filter(posting_count__gte=2, posting_count__lte=5).count()
+    six_ten = employers_with_counts.filter(posting_count__gte=6, posting_count__lte=10).count()
+    ten_plus = employers_with_counts.filter(posting_count__gt=10).count()
+
+    total_postings = JobPosting.objects.count()
+    top_ten_count = JobPosting.objects.filter(
+        employer__in=[e['id'] for e in Employer.objects.annotate(posting_count=Count('postings')).filter(posting_count__gt=0).order_by('-posting_count')[:10].values('id')]
+    ).count()
+
+    distribution = [
+        {'range': '1', 'label': '1 anunț', 'count': one_post, 'pct': round(100 * one_post / total_with_postings) if total_with_postings else 0},
+        {'range': '2-5', 'label': '2–5 anunțuri', 'count': two_five, 'pct': round(100 * two_five / total_with_postings) if total_with_postings else 0},
+        {'range': '6-10', 'label': '6–10 anunțuri', 'count': six_ten, 'pct': round(100 * six_ten / total_with_postings) if total_with_postings else 0},
+        {'range': '10+', 'label': '10+ anunțuri', 'count': ten_plus, 'pct': round(100 * ten_plus / total_with_postings) if total_with_postings else 0},
+    ]
+
+    avg_postings = round(total_postings / total_with_postings, 2) if total_with_postings else 0
+
+    return {
+        'total_employers': total_employers,
+        'active_employers': active_employers,
+        'total_postings': total_postings,
+        'avg_postings': avg_postings,
+        'top_employers': top_employers,
+        'top_active': top_active,
+        'distribution': distribution,
+        'top_ten_count': top_ten_count,
+        'concentration_pct': round(100 * top_ten_count / total_postings) if total_postings else 0,
+    }
+
+
+def employers_dashboard(request):
+    data = _build_employer_stats()
+    max_employer = max((x.get('posting_count') or x.get('active_count') for x in data['top_employers']), default=1)
+    max_active = max((x['active_count'] for x in data['top_active']), default=1)
+    max_distribution = max((x['count'] for x in data['distribution']), default=1)
+
+    return render(request, 'jobs/employers_dashboard.html', {
+        'total_employers': data['total_employers'],
+        'active_employers': data['active_employers'],
+        'total_postings': data['total_postings'],
+        'avg_postings': data['avg_postings'],
+        'top_employers': data['top_employers'],
+        'max_employer': max_employer,
+        'top_active': data['top_active'],
+        'max_active': max_active,
+        'distribution': data['distribution'],
+        'max_distribution': max_distribution,
+        'concentration_pct': data['concentration_pct'],
+        'top_ten_count': data['top_ten_count'],
+    })
+
+
 # Fields we care about for quality scoring (v2 keys; v1 back-compat keys omitted)
 _QUALITY_FIELDS = [
     "responsibilities", "educationRequirements", "experienceRequirements",

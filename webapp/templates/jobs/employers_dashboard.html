@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Statistici Angajatori{% endblock %}
+
+{% block content %}
+<div class="max-w-screen-lg mx-auto px-4 sm:px-6 py-10">
+
+  <h1 class="font-display text-3xl italic font-semibold text-ink mb-1">Angajatori</h1>
+  <p class="text-ink-muted text-sm mb-8 font-mono">Distribuție și concentrare a angajatorilor care postează în sectorul public</p>
+
+  <!-- KPI tiles — row 1 -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-gov">{{ total_employers }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori unici</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-green-700">{{ active_employers }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Cu anunțuri active</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ concentration_pct }}% total anunțuri în top 10</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5 col-span-2 sm:col-span-1">
+      <div class="text-3xl font-display font-semibold text-ink">{{ avg_postings }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Mediu anunțuri/angajator</div>
+    </div>
+  </div>
+
+  <!-- KPI tiles — row 2 -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ distribution.0.count }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Postări o dată</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ distribution.0.pct }}% angajatori</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ distribution.1.count }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">2–5 postări</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ distribution.1.pct }}% angajatori</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ distribution.2.count }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">6–10 postări</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ distribution.2.pct }}% angajatori</div>
+    </div>
+    <div class="bg-white border border-border-warm rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink">{{ distribution.3.count }}</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">10+ postări</div>
+      <div class="text-xs text-ink-faint mt-0.5">{{ distribution.3.pct }}% angajatori</div>
+    </div>
+  </div>
+
+  <!-- Top employers by total postings -->
+  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top 20 angajatori (după total anunțuri)</h2>
+    <div class="space-y-2">
+      {% for item in top_employers %}
+      <div>
+        <div class="flex justify-between text-sm mb-0.5">
+          <a href="/angajator/{{ item.slug }}/" class="text-gov hover:underline">{{ item.name }}</a>
+          <span class="text-ink-muted font-mono text-xs">{{ item.posting_count }}</span>
+        </div>
+        <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.posting_count max_employer 100 %}%"></div>
+        </div>
+      </div>
+      {% empty %}
+      <p class="text-ink-muted text-sm italic">Niciun angajator disponibil.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Top employers by active postings -->
+  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top 20 angajatori (după anunțuri active)</h2>
+    <div class="space-y-2">
+      {% for item in top_active %}
+      <div>
+        <div class="flex justify-between text-sm mb-0.5">
+          <a href="/angajator/{{ item.slug }}/" class="text-gov hover:underline">{{ item.name }}</a>
+          <span class="text-ink-muted font-mono text-xs">{{ item.active_count }}</span>
+        </div>
+        <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-full bg-gov rounded-full" style="width: {% widthratio item.active_count max_active 100 %}%"></div>
+        </div>
+      </div>
+      {% empty %}
+      <p class="text-ink-muted text-sm italic">Niciun angajator cu anunțuri active.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Distribution histogram -->
+  <section class="bg-white border border-border-warm rounded-lg p-6 mb-10">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Distribuție frecvenței postărilor</h2>
+    <p class="text-sm text-ink-muted mb-5">Cum sunt distribuiți angajatorii după numărul de anunțuri postate (concentrare).</p>
+    <div class="space-y-3">
+      {% for bucket in distribution %}
+      <div>
+        <div class="flex justify-between text-sm mb-0.5">
+          <span class="text-ink font-medium">{{ bucket.label }}</span>
+          <span class="text-ink-muted font-mono text-xs">{{ bucket.count }} angajatori</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-3 bg-parchment-dark rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width: {% widthratio bucket.count max_distribution 100 %}%"></div>
+          </div>
+          <span class="text-xs text-ink-faint font-mono whitespace-nowrap">{{ bucket.pct }}%</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- Interpretation -->
+  <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 text-sm text-ink">
+    <p class="mb-3">
+      <span class="font-semibold">Ce spun aceste date:</span>
+      Angajatorii sunt <strong>extrem de dispersați</strong>. Din {{ total_employers }} angajatori, doar {{ distribution.0.count }} ({{ distribution.0.pct }}%) postează o singură dată. Doar {{ distribution.3.count }} ({{ distribution.3.pct }}%) postează 10+ anunțuri. Chiar și top 10 angajatori generează doar {{ concentration_pct }}% din total — nu există dominanță.
+    </p>
+    <p>
+      <strong>Interpretare:</strong> Angajarea în sectorul public este foarte distribuită — multe instituții mici postează ocazional, nu o mână de mari angajatori care domină piața.
+    </p>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+Options -Indexes
+
+RewriteEngine On
+
+# Block direct access to the SQLite file
+<Files posturi.sqlite>
+    Order allow,deny
+    Deny from all
+</Files>
+<Files "*.sqlite">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Static files are served directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Everything else → index.php
+RewriteRule ^ index.php [L,QSA]

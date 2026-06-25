@@ -80,6 +80,7 @@ def _build_cmd(
     no_llm: bool,
     provider: str,
     limit: int | None,
+    since: int | None,
 ) -> list[str | Path]:
     """Return the subprocess command for a given step."""
     if step in _SCRAPER_STEPS:
@@ -89,6 +90,8 @@ def _build_cmd(
                 cmd.append("--force")
             if provider:
                 cmd.extend(["--provider", provider])
+        if step == "download" and since is not None:
+            cmd.extend(["--since", str(since)])
         return cmd
 
     if step not in _MANAGE_STEPS:
@@ -181,6 +184,13 @@ def main() -> None:
         help="Pass --limit N to infer step (useful for testing).",
     )
     parser.add_argument(
+        "--since",
+        type=int,
+        default=None,
+        metavar="DAYS",
+        help="Pass --since N to download step: only process rows published in the last N days.",
+    )
+    parser.add_argument(
         "--continue-on-error",
         action="store_true",
         help="Log failures and continue rather than aborting.",
@@ -231,6 +241,7 @@ def main() -> None:
             no_llm=args.no_llm,
             provider=args.provider,
             limit=args.limit,
+            since=args.since,
         )
         ok = _run_step(step, cmd, continue_on_error=args.continue_on_error)
         if not ok:

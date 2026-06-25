@@ -25,3 +25,6 @@ webapp/__pycache__/
 **/__pycache__/
 webapp/staticfiles/
 webapp/db.sqlite3.superpowers/
+
+# PHP webapp export
+posturi.sqlite

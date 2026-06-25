@@ -51,6 +51,8 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 ## Tooling & ops
 
+- [ ] **Daily fetch cron — design** — think through what a production daily pipeline run should look like: which steps to run, in what order, with what flags (e.g. `--skip infer,schema --since N`); whether `parse` and `import` need a `--since` equivalent or are fast enough to run in full; where the cron lives (Fly.io scheduled machine? GitHub Actions? crontab on a VPS?); alerting on failure; and whether `infer`/`schema` should run on a slower cadence (weekly?) vs every fetch. Context: `pipeline.py --skip infer,schema --since N` is the current candidate for the fast daily scrape; `download-attachments.py` now supports `--since DAYS`.
+
 - [x] **Install `black` in the venv** — already in `requirements.txt`; black 26.5.1 confirmed present. Done.
 - [x] **Test suite** — done 2026-05-27. pytest-django + factory-boy installed. `tests/test_import_idempotency.py` covers: (1) idempotency (run twice, counts unchanged), (2) expected records created, (3) update-existing-fields. All 3 pass in 0.25s. `pytest.ini` configured.
 - [x] **CI** — GitHub Actions: lint (ruff), tests, migrations check. Added `.github/workflows/ci.yml` (Python 3.13, Postgres 17 service, ruff lint + makemigrations --check + pytest). Done 2026-05-27.

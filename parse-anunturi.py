@@ -1,4 +1,3 @@
-
 folder_path = 'data/anunturi'
 output_csv_path = 'data/anunturi/anunturi.csv'
 output_calendar_path = 'data/calendar.csv'
@@ -28,6 +27,10 @@ def _parse_index_date(raw):
         month_num = _RO_MONTHS.get(m.group(2).lower())
         if month_num:
             return f"{m.group(3)}-{month_num:02d}-{int(m.group(1)):02d}"
+    # New format: "Data publicării: DD.MM.YYYY"
+    m = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', raw)
+    if m:
+        return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
     return ''
 
 
@@ -52,7 +55,6 @@ _INDEX_DATES = _load_index_dates()
 DATE_RE = re.compile(r'\b(\d{1,2}\.\d{2}\.\d{4})\b')
 TIME_RE = re.compile(r'ora\s+(\d{1,2}[:.]\d{2})', re.IGNORECASE)
 PHONE_RE = re.compile(r'\b(0[0-9]{9})\b')
-# Formatted phone candidate: 0 followed by digits+separators totalling ~10 digits
 PHONE_CANDIDATE_RE = re.compile(r'\b0[\d\s.\-–/]{9,14}\d\b')
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-z]{2,}')
 NR_POSTURI_RE = re.compile(r'(\d+)\s+post(?:uri|ul)?\b', re.IGNORECASE)
@@ -62,7 +64,21 @@ DEADLINE_BODY_RE = re.compile(
 )
 
 
-def extract_card_fields(soup):
+# --- HTML version detection ---
+
+def _is_new_html(soup):
+    """Detect new site HTML (pg-* classes) vs old site HTML."""
+    return bool(
+        soup.select_one('.pg-title')
+        or soup.select_one('.pg-jobcard')
+        or soup.select_one('.pg-wrap')
+    )
+
+
+# --- Card field extraction ---
+
+def _extract_card_fields_old(soup):
+    """Extract labeled card fields from old site HTML."""
     fields = {}
     for wrapper in soup.select('.card-job-post-category-wrapper'):
         label_el = wrapper.select_one('.card-job-post-category-title-wrapper')
@@ -74,6 +90,59 @@ def extract_card_fields(soup):
         fields[label] = value
     return fields
 
+
+def _extract_card_fields_new(soup):
+    """Extract card fields from new site HTML (pg-* classes).
+
+    Pills appear in order: [Permanence, Employment type, Function level]
+    e.g.: "Permanent", "Funcție contractuală", "Funcții de execuție"
+    """
+    fields = {}
+
+    # Location from subline (employer · county)
+    subline = soup.select_one('.pg-subline')
+    if subline:
+        fields['locatie'] = subline.get_text(' ', strip=True)
+
+    # Pills
+    pills = soup.select('.pg-pills span.pg-pill')
+    pill_texts = [p.get_text(strip=True) for p in pills]
+
+    # Permanence (tip): first pill or one matching Permanent/Temporar
+    for pt in pill_texts:
+        if pt.lower() in ('permanent', 'temporar'):
+            fields['tip'] = pt
+            break
+    if 'tip' not in fields and pill_texts:
+        fields['tip'] = pill_texts[0]
+
+    # Employment type (angajator category): "Funcție contractuală" / "Funcție publică"
+    for pt in pill_texts:
+        if pt.lower().startswith('funcție'):
+            fields['angajator'] = pt
+            break
+
+    # Function level (nivel): "Funcții de execuție" / "Funcții de conducere"
+    for pt in pill_texts:
+        if pt.lower().startswith('funcții'):
+            fields['nivel'] = pt
+            break
+
+    # Categorie is not directly represented in new pills
+    fields['categorie'] = ''
+
+    return fields
+
+
+def extract_card_fields(soup):
+    """Extract card fields, dispatching on old vs new HTML."""
+    if _is_new_html(soup):
+        return _extract_card_fields_new(soup)
+    else:
+        return _extract_card_fields_old(soup)
+
+
+# --- Calendar extraction ---
 
 def _p_lines(p):
     """Split a <p> tag into lines on <br/> boundaries."""
@@ -125,7 +194,31 @@ def extract_calendar(body_soup):
     return rows
 
 
+# --- Contact extraction ---
+
+def _extract_contact_structured(soup):
+    """Extract contact info from new pg-contact-row elements."""
+    telefon = ''
+    email = ''
+    angajator_contact = ''
+    for row in soup.select('.pg-contact-row'):
+        key_el = row.select_one('.pg-mini-k')
+        val_el = row.select_one('.pg-mini-v')
+        if not key_el or not val_el:
+            continue
+        key = key_el.get_text(strip=True).lower()
+        val = val_el.get_text(strip=True)
+        if key == 'telefon':
+            telefon = val
+        elif key == 'email':
+            email = val
+        elif key == 'angajator':
+            angajator_contact = val
+    return telefon, email, angajator_contact
+
+
 def extract_contact(body_text):
+    """Extract contact info from body text via regex (used for old HTML or fallback)."""
     phones = PHONE_RE.findall(body_text)
     if not phones:
         for m in PHONE_CANDIDATE_RE.finditer(body_text):
@@ -147,6 +240,8 @@ def extract_contact(body_text):
     )
 
 
+# --- Calendar date helpers ---
+
 def _find_calendar_date(calendar_rows, keywords):
     for eveniment, data, ora in calendar_rows:
         if any(kw.lower() in eveniment.lower() for kw in keywords):
@@ -154,33 +249,84 @@ def _find_calendar_date(calendar_rows, keywords):
     return ''
 
 
+# --- URL reconstruction ---
+
 def source_url_from_path(file_path):
     """Reconstruct the posting URL from the cached HTML path.
 
-    Files are saved by fetch-anunturi.py at
-    data/anunturi/YYYY/MM/DD/<slug>.html, where <slug> is the last path
-    segment of the original /anunt/<slug>/ URL.
+    Handles both old (/anunt/{slug}/) and new (/joburi/{slug}/) URL patterns.
+    The slug is the same in both cases, but we now default to /joburi/ for new fetches.
+    Old cached files still use /anunt/ in the join key.
+
+    The caller (_INDEX_DATES lookup) uses this reconstructed URL as the join key
+    to the index CSV (posturi_gov_ro.csv), which now contains /joburi/ URLs.
     """
     slug = os.path.splitext(os.path.basename(file_path))[0]
-    return f'https://posturi.gov.ro/anunt/{slug}/'
+    # Try new URL first (matches current index CSV format)
+    return f'https://posturi.gov.ro/joburi/{slug}/'
 
+
+def _try_index_lookup(src_url):
+    """Try to find index dates with URL fallback (old /anunt/ → new /joburi/)."""
+    if src_url in _INDEX_DATES:
+        return _INDEX_DATES[src_url]
+    # Fallback: try the other URL scheme
+    if '/joburi/' in src_url:
+        alt_url = src_url.replace('/joburi/', '/anunt/')
+        if alt_url in _INDEX_DATES:
+            return _INDEX_DATES[alt_url]
+    elif '/anunt/' in src_url:
+        alt_url = src_url.replace('/anunt/', '/joburi/')
+        if alt_url in _INDEX_DATES:
+            return _INDEX_DATES[alt_url]
+    return ('', '')
+
+
+# --- Main job extraction ---
 
 def extract_job_details(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
 
     soup = BeautifulSoup(html_content, 'html.parser')
+    is_new = _is_new_html(soup)
 
-    try:
-        job_title = soup.select_one('.titlu h1').text.strip()
-    except AttributeError:
-        job_title = ''
+    # --- Job title ---
+    job_title = ''
+    if is_new:
+        title_el = soup.select_one('h1.pg-title')
+        if title_el:
+            job_title = title_el.text.strip()
+    else:
+        try:
+            job_title = soup.select_one('.titlu h1').text.strip()
+        except AttributeError:
+            job_title = ''
 
-    try:
-        employer = soup.select_one('.caseta .ang').text.strip()
-    except AttributeError:
-        employer = ''
+    # --- Employer ---
+    employer = ''
+    if is_new:
+        # From structured contact row
+        for row in soup.select('.pg-contact-row'):
+            key_el = row.select_one('.pg-mini-k')
+            val_el = row.select_one('.pg-mini-v')
+            if key_el and val_el and key_el.get_text(strip=True).lower() == 'angajator':
+                employer = val_el.get_text(strip=True)
+                break
+        # Fallback: from subline
+        if not employer:
+            subline = soup.select_one('.pg-subline')
+            if subline:
+                spans = subline.find_all('span')
+                if spans:
+                    employer = spans[0].get_text(strip=True)
+    else:
+        try:
+            employer = soup.select_one('.caseta .ang').text.strip()
+        except AttributeError:
+            employer = ''
 
+    # --- Card fields ---
     card = extract_card_fields(soup)
     location = card.get('locatie', '')
     nivel = card.get('nivel', '')
@@ -188,39 +334,89 @@ def extract_job_details(file_path):
     tip_angajator = card.get('angajator', '')
     categorie = card.get('categorie', '')
 
-    announcement_link_tag = soup.find('a', string='Anunt')
-    announcement_url = announcement_link_tag['href'] if announcement_link_tag else ''
+    # --- Announcement URL ---
+    announcement_url = ''
+    if is_new:
+        # New site: a.pg-btn-pill with href to wp-content/uploads
+        btn = soup.select_one('a.pg-btn-pill')
+        if btn:
+            announcement_url = btn.get('href', '')
+    else:
+        # Old site: <a> with text "Anunt"
+        announcement_link_tag = soup.find('a', string='Anunt')
+        if announcement_link_tag:
+            announcement_url = announcement_link_tag['href']
 
-    # If a rectification notice is present, prefer the corrected document
-    corrected_link = soup.find('a', string=re.compile(r'Document\s+ata[șş]at\s+corectat', re.IGNORECASE))
+    # Corrected document override (both old and new)
+    corrected_link = soup.find('a', string=re.compile(r'Document\s+ata[şș]at\s+corectat', re.IGNORECASE))
     if corrected_link:
         href = corrected_link.get('href', '')
         if href.startswith('https://posturi.gov.ro/wp-content/uploads/'):
             announcement_url = href
 
+    # --- Main body markdown ---
     main_body_markdown = ''
-    if announcement_link_tag:
-        main_body_html = ''
-        for sibling in announcement_link_tag.find_all_next():
-            if sibling.name == 'nav':
-                break
-            main_body_html += str(sibling)
-        main_body_markdown = md(main_body_html).replace('\n', '\\n')
+    if is_new:
+        prose = soup.select_one('.pg-prose')
+        if prose:
+            main_body_markdown = md(str(prose)).replace('\n', '\\n')
+    else:
+        announcement_link_tag = soup.find('a', string='Anunt')
+        if announcement_link_tag:
+            main_body_html = ''
+            for sibling in announcement_link_tag.find_all_next():
+                if sibling.name == 'nav':
+                    break
+                main_body_html += str(sibling)
+            main_body_markdown = md(main_body_html).replace('\n', '\\n')
 
+    # --- Other links ---
     other_links = []
     for link in soup.find_all('a', href=True):
         url = link['href']
         if url.startswith('https://posturi.gov.ro/wp-content/uploads/') and url != announcement_url:
             other_links.append(url)
 
-    body_soup = soup.select_one('.entry-content')
-    body_text = body_soup.get_text('\n') if body_soup else ''
+    # --- Body text and contact ---
+    if is_new:
+        prose = soup.select_one('.pg-prose')
+        body_text = prose.get_text('\n') if prose else ''
+        # Try structured contact first
+        s_phone, s_email, s_ang = _extract_contact_structured(soup)
+        # Fall back to regex for phone/email/person if structured is empty
+        contact_telefon = s_phone
+        contact_email = s_email
+        if not contact_telefon or not contact_email:
+            r_phone, r_email, r_pers = extract_contact(body_text)
+            if not contact_telefon:
+                contact_telefon = r_phone
+            if not contact_email:
+                contact_email = r_email
+        contact_persoana = ''
+        # Still regex for person name
+        m = re.search(
+            r'persoan[aă]\s+de\s+contact\s*:?\s*([A-ZĂÎȘȚÂ][^\n,;.]{2,50})',
+            body_text, re.IGNORECASE
+        )
+        if m:
+            contact_persoana = m.group(1).strip()
+    else:
+        body_soup = soup.select_one('.entry-content')
+        body_text = body_soup.get_text('\n') if body_soup else ''
+        contact_telefon, contact_email, contact_persoana = extract_contact(body_text)
 
-    contact_telefon, contact_email, contact_persoana = extract_contact(body_text)
+    # --- Nr posturi ---
     nr_posturi_m = NR_POSTURI_RE.search(body_text[:2000])
     nr_posturi = nr_posturi_m.group(1) if nr_posturi_m else ''
 
-    calendar_rows = extract_calendar(body_soup)
+    # --- Calendar ---
+    if is_new:
+        prose = soup.select_one('.pg-prose')
+        calendar_rows = extract_calendar(prose)
+    else:
+        body_soup = soup.select_one('.entry-content')
+        calendar_rows = extract_calendar(body_soup)
+
     data_limita = _find_calendar_date(calendar_rows, ['depunere', 'inscriere', 'dosar', 'limita'])
     if not data_limita:
         m = DEADLINE_BODY_RE.search(body_text)
@@ -230,8 +426,21 @@ def extract_job_details(file_path):
     data_interviu = _find_calendar_date(calendar_rows, ['interviu'])
     data_rezultate = _find_calendar_date(calendar_rows, ['final', 'rezultat final', 'rezultate finale'])
 
+    # --- Index dates ---
     src_url = source_url_from_path(file_path)
-    date_posted, valid_through = _INDEX_DATES.get(src_url, ('', ''))
+    date_posted, valid_through = _try_index_lookup(src_url)
+
+    # --- Also try to get dates from new detail page meta line ---
+    if not valid_through and is_new:
+        deadline_el = soup.select_one('.pg-meta-deadline')
+        if deadline_el:
+            valid_through = deadline_el.get_text(strip=True)
+    if not date_posted and is_new:
+        meta_line = soup.select_one('.pg-meta-line')
+        if meta_line:
+            m = re.search(r'Publicat pe (\d{4}-\d{2}-\d{2})', meta_line.get_text())
+            if m:
+                date_posted = m.group(1)
 
     return {
         'source_url': src_url,
@@ -269,6 +478,7 @@ def save_to_csv(data_list, path):
         'Data Limita Depunere', 'Data Proba Scrisa', 'Data Interviu', 'Data Rezultate Finale',
         'Data Publicare', 'Data Expirare',
     ]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
@@ -299,6 +509,7 @@ def save_to_csv(data_list, path):
 
 
 def save_calendar(data_list, path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=['url', 'eveniment', 'data', 'ora'])
         writer.writeheader()

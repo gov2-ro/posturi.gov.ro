@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-08-01 — Rewrote scraping pipeline for redesigned posturi.gov.ro
+
+**What:** Rewrote `fetch-index.py`, `fetch-anunturi.py`, and `parse-anunturi.py` to work with the completely rebuilt posturi.gov.ro website (WordPress + Astra 4.12.3 + Elementor + custom "PG" plugin).
+
+**Changes:**
+- `fetch-index.py`: New base URL, listing URL (`/toate-posturile/?pg_page=N`), pagination (`nav.pg-arc-pagi`), and all selectors rewritten for `article.pg-card` → `div.pg-card-h`, `div.pg-card-inst`, `a.pg-card-link`, `span.pg-tag`, `div.pg-card-deadline`, `div.pg-card-published`, `div.pg-card-city span`.
+- `fetch-anunturi.py`: Updated `base_url` to HTTPS, `parse_romanian_date()` now handles the new `Data publicării: DD.MM.YYYY` format, `extract_main_content()` targets `div.pg-wrap.pg-job-single`.
+- `parse-anunturi.py`: Dual support for old (`/anunt/`, `.titlu h1`, `.caseta .ang`) and new (`/joburi/`, `h1.pg-title`, `.pg-contact-row`, `.pg-prose`, `a.pg-btn-pill`) HTML structures. Auto-detection via `.pg-title`/`.pg-jobcard` presence. Structured contact extraction from `.pg-contact-row` elements. `_try_index_lookup()` falls back between old/new URL schemes for index CSV date matching.
+
+**Why:** The site was rebuilt entirely — every selector, URL pattern, and data structure changed. The old `/page/N/` listing, `article.box` cards, and `/anunt/{slug}/` detail pages no longer exist.
+
+**Backward compatibility:** `parse-anunturi.py` handles both old and new HTML, so the existing 6,275 cached detail pages don't need re-fetching.
+
+---
+
 ### 2026-05-28 — Survey: scanned-PDF frequency in attachments
 
 **What:** Ran a pypdf-based survey across all 750 PDFs in `data/downloads/`. For each file, extracted text from the first 3 pages and classified as "text-extractable" (≥50 chars), "likely scanned" (< 50 chars but file > 30 KB), or other.

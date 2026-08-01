@@ -87,14 +87,16 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] for debugging purposes show filters of is inferred, attachment text, schema in the UI browser
 - [ ] **Promote prompt v2 to default + backfill** — Change `PROMPT_VERSION = "v2"` and CLI `--prompt-version` default to `v2` in `llm-schema.py`. Then run `python llm-schema.py --provider gemini --prompt-version v2 --force` to refresh all 4357 postings under v2. Estimated cost: ~$2.67 (gemini-2.5-flash). Optional: tune boilerplate patterns based on a wider sample if any false-positives surface.
 - [x] **Cross-posting LLM-variants dashboard** — top-level page (e.g. `/llm-variants/`) that aggregates `JobPostingSchemaVariant` data across all postings: per-(provider, model, prompt_version) cost/latency/throughput leaderboard, prompt-version comparison stats, ability to drill into a specific posting from there. Complements (but doesn't replace) the per-posting side-by-side viewer at `/job/<pk>/variants/`. Build after the per-posting viewer's reading experience is solid.
-- [ ] prepare shared hosting web app. static or php. 
+- [x] prepare shared hosting web app. static or php. — Done 2026-06-25 (`ad710df`: webapp-php/ + export-to-sqlite.py + deploy-php.sh).
 - [ ] some posts cover more jobs, how to address?
 - [x] go beyond schema org, extract easy to read attributes. `Rezumatul functiei` card on [cariere.gov.md](https://cariere.gov.md/ro/job/specialist-in-domeniul-perceperii-fiscale/32948). Those will also used as filters.
 - [ ] stats, show all judete. norm to population
-- [ ] angajator profile?
+- [x] angajator profile? — Done 2026-06-09 (`8ff209b`: employer profile page in Django, `pages/employer.php` in PHP).
 
 
 ### Later
+- [ ] scrape anunturi job-uri din site-uri individuale, vezi stiri.gov2.ro Ex: https://www.umpcultura.ro/ctg_3_oportunitati-de-angajare_pg_0.htm 
+    - [ ] check against posturi.gov.ro
 - [ ] one job posting might have more than one attachments? Do we ever have `other_links` ?
 - [ ] assess extracted/inferred data quality, if not sure, send to smarter LLM?
 - [ ] sometimes attachments might need to be OCR'ed?

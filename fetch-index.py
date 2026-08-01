@@ -1,9 +1,36 @@
-import requests, csv, random, time, os
+import requests, csv, random, time, os, re, unicodedata
 from bs4 import BeautifulSoup
 from datetime import datetime
 
 output_csv = "data/posturi_gov_ro.csv"
+base_url = "https://posturi.gov.ro"
+listing_url = f"{base_url}/toate-posturile/"
 fieldnames = ['pozitie', 'url', 'angajator', 'detalii', 'publicat_in', 'expira_in', 'judet', 'url_judet', 'tip', 'updates']
+
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Referer': base_url,
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Cache-Control': 'max-age=0',
+    'TE': 'Trailers'
+}
+
+
+def slugify_county(name):
+    """Convert a Romanian county display name to the pg_city slug format.
+
+    e.g. 'Bistrița-Năsăud' → 'bistrita-nasaud', 'Satu Mare' → 'satu-mare'
+    """
+    # Decompose unicode and strip diacritics
+    nfkd = unicodedata.normalize('NFKD', name)
+    ascii_name = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    # Lowercase, replace non-alphanumeric with hyphens, collapse hyphens
+    slug = re.sub(r'[^a-z0-9]+', '-', ascii_name.lower()).strip('-')
+    return slug
+
 
 def load_existing_data():
     try:
@@ -16,7 +43,9 @@ def load_existing_data():
     except FileNotFoundError:
         return {}
 
+
 def save_data(jobs):
+    os.makedirs(os.path.dirname(output_csv), exist_ok=True)
     with open(output_csv, "w", newline="", encoding="utf-8") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
@@ -24,41 +53,44 @@ def save_data(jobs):
             writer.writerow(job)
     print(f"Data saved to {output_csv}")
 
+
 def write_header():
     if not os.path.exists(output_csv) or os.stat(output_csv).st_size == 0:
+        os.makedirs(os.path.dirname(output_csv), exist_ok=True)
         with open(output_csv, "w", newline="", encoding="utf-8") as csv_file:
             writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
             writer.writeheader()
 
-def get_total_pages(base_url):
-    url = base_url + "/page/1/"
-    response = requests.get(url, timeout=30, headers={
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': base_url,
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0',
-        'TE': 'Trailers'
-    })
+
+def get_total_pages():
+    """Discover the total number of listing pages from pagination nav."""
+    url = f"{listing_url}?pg_page=1"
+    response = requests.get(url, timeout=30, headers=HEADERS)
     soup = BeautifulSoup(response.content, 'html.parser')
 
-    pagination_div = soup.select_one('div.ast-pagination')
-    if pagination_div:
-        next_link = pagination_div.find('a', class_='next page-numbers')
-        if next_link:
-            last_page_link = next_link.find_previous_sibling('a')
-            if last_page_link and last_page_link.text.strip().isdigit():
-                max_pages = int(last_page_link.text.strip())
-            else:
-                max_pages = 1
-        else:
-            max_pages = 1
-    else:
-        max_pages = 1
+    pagi_nav = soup.select_one('nav.pg-arc-pagi')
+    if not pagi_nav:
+        print("Warning: pagination nav not found, assuming 1 page")
+        return 1
 
-    return max_pages
+    # Find all numeric page links, excluding prev/next/dots
+    page_links = pagi_nav.select('a.page-numbers')
+    max_page = 1
+    for link in page_links:
+        if 'prev' in link.get('class', []) or 'next' in link.get('class', []):
+            continue
+        text = link.text.strip()
+        if text.isdigit():
+            max_page = max(max_page, int(text))
+
+    # Also check the current page span
+    current_span = pagi_nav.select_one('span.page-numbers.current')
+    if current_span and current_span.text.strip().isdigit():
+        # Current page might be higher than linked pages (e.g. if on last page)
+        pass
+
+    print(f"Discovered {max_page} pages")
+    return max_page
 
 
 def compare_and_update(existing_job, new_job):
@@ -80,43 +112,71 @@ def compare_and_update(existing_job, new_job):
     else:
         return existing_job, False
 
-def scrape_and_save_page(url, page_number, existing_data):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Referer': 'http://posturi.gov.ro',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0',
-        'TE': 'Trailers'
-    }
-    response = requests.get(url, headers=headers, timeout=30)
+
+def scrape_and_save_page(page_number, existing_data):
+    """Scrape a single listing page, updating existing_data in place."""
+    url = f"{listing_url}?pg_page={page_number}"
+    response = requests.get(url, headers=HEADERS, timeout=30)
     soup = BeautifulSoup(response.content, 'html.parser')
 
     new_entries = 0
     updated_entries = 0
 
-    article_boxes = soup.select('article.box')
+    cards = soup.select('article.pg-card')
 
-    for box in article_boxes:
+    for card in cards:
         job = {}
-        job['pozitie'] = box.select_one('div.title a').text
-        job['url'] = box.select_one('div.title a')['href']
-        job['angajator'] = box.select_one('div.angajator').text
-        job['detalii'] = ', '.join([n.text for n in box.select('div.n')])
 
-        data_div = box.select_one('li.data div.data')
-        data_items = [item.strip() for item in data_div.stripped_strings]
-        job['publicat_in'] = data_items[0]
-        job['expira_in'] = data_items[1]
+        # Title
+        title_el = card.select_one('div.pg-card-h')
+        job['pozitie'] = title_el.text.strip() if title_el else ''
 
-        locatie_div = box.select_one('li.locatie div.locatie')
-        job['judet'] = locatie_div.text.strip()
-        job['url_judet'] = locatie_div.a['href']
+        # URL
+        link_el = card.select_one('a.pg-card-link')
+        job['url'] = link_el['href'] if link_el else ''
 
-        job['tip'] = box.select_one('div.dosar').text
+        # Employer
+        inst_el = card.select_one('div.pg-card-inst')
+        job['angajator'] = inst_el.text.strip() if inst_el else ''
 
+        # Tags (detalii): join all tag spans
+        tag_els = card.select('span.pg-tag')
+        job['detalii'] = ', '.join(t.text.strip() for t in tag_els)
+
+        # Published date
+        pub_el = card.select_one('div.pg-card-published')
+        job['publicat_in'] = pub_el.text.strip() if pub_el else ''
+
+        # Expiration (relative: "X zile rămase")
+        deadline_el = card.select_one('div.pg-card-deadline')
+        job['expira_in'] = deadline_el.text.strip() if deadline_el else ''
+
+        # County (display name from the city badge span)
+        city_el = card.select_one('div.pg-card-city span')
+        county_display = city_el.text.strip() if city_el else ''
+        job['judet'] = county_display
+
+        # County filter URL
+        if county_display:
+            job['url_judet'] = f"{base_url}/toate-posturile/?pg_city={slugify_county(county_display)}"
+        else:
+            job['url_judet'] = ''
+
+        # Type (permanence: last tag — "Permanent" or "Temporar")
+        if tag_els:
+            # The last tag is usually the permanence indicator
+            last_tag = tag_els[-1].text.strip()
+            # Check class for more precision
+            tag_classes = ' '.join(tag_els[-1].get('class', []))
+            if 'permanent' in tag_classes.lower() or 'temporar' in tag_classes.lower():
+                job['tip'] = last_tag
+            else:
+                # Fallback: use last tag text
+                job['tip'] = last_tag
+        else:
+            job['tip'] = ''
+
+        # Track changes
         if job['url'] in existing_data:
             existing_job = existing_data[job['url']]
             updated_job, was_updated = compare_and_update(existing_job, job)
@@ -128,29 +188,40 @@ def scrape_and_save_page(url, page_number, existing_data):
             existing_data[job['url']] = job
             new_entries += 1
 
-    print(f"Page {page_number}: {new_entries} new entries, {updated_entries} updated entries, {len(article_boxes) - new_entries - updated_entries} unchanged entries.")
+    unchanged = len(cards) - new_entries - updated_entries
+    print(f"Page {page_number}: {new_entries} new, {updated_entries} updated, {unchanged} unchanged ({len(cards)} total)")
     return new_entries, updated_entries
 
-def scrape_all_pages(base_url, max_pages):
+
+def scrape_all_pages():
     existing_data = load_existing_data()
-    total_new_entries = 0
-    total_updated_entries = 0
+    max_pages = get_total_pages()
+    total_new = 0
+    total_updated = 0
+    skip_count = 0
 
     for page_number in range(1, max_pages + 1):
-        url = f"{base_url}/page/{page_number}/"
-        print(f"Scraping page {page_number}...")
-        new_entries, updated_entries = scrape_and_save_page(url, page_number, existing_data)
-        total_new_entries += new_entries
-        total_updated_entries += updated_entries
+        print(f"Scraping page {page_number}/{max_pages}...")
+        new_entries, updated_entries = scrape_and_save_page(page_number, existing_data)
+        total_new += new_entries
+        total_updated += updated_entries
+
         if new_entries or updated_entries:
             save_data(existing_data)
-        sleep_time = random.uniform(0.5, 1.1)
-        time.sleep(sleep_time)
+            skip_count = 0
+        else:
+            skip_count += 1
+            # Stop early if 3 consecutive pages have no changes
+            if skip_count >= 3:
+                print(f"No changes on last {skip_count} pages, stopping early.")
+                break
 
-    print(f"Scraping complete. Total new entries: {total_new_entries}, Total updated entries: {total_updated_entries}")
+        time.sleep(random.uniform(0.5, 1.1))
+
+    print(f"Scraping complete. Total: {total_new} new, {total_updated} updated")
+    return existing_data
+
 
 if __name__ == "__main__":
-    base_url = "http://posturi.gov.ro"
-    max_pages = get_total_pages(base_url)
     write_header()
-    scrape_all_pages(base_url, max_pages)
+    scrape_all_pages()

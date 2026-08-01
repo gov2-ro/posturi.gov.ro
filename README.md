@@ -1,6 +1,8 @@
 # posturi.gov.ro scraper
 
-Alternative browser / explorer for [posturi.gov.ro](http://posturi.gov.ro). Scrapes the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → LLM-extracted structured display sections stored in Postgres.
+Alternative browser / explorer for [posturi.gov.ro](https://posturi.gov.ro). Scrapes the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → LLM-extracted structured display sections stored in Postgres.
+
+**Site redesigned 2026-07**: The site now runs on WordPress + Astra + Elementor with a custom PG plugin. The pipeline handles both old (`/anunt/{slug}/`) and new (`/joburi/{slug}/`) URL schemes. See `docs/activity-log.md` (2026-08-01) for details.
 
 See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7Ue98SqNFQ/) gdocs
 
@@ -53,9 +55,9 @@ flowchart LR
         webapp --> browser
     end
 
-    web -->|"index pages"| fetchIdx
-    web -->|"detail pages"| fetchDetail
-    web -->|"attachments"| download
+    web -->|"/toate-posturile/?pg_page=N"| fetchIdx
+    web -->|"/joburi/{slug}/"| fetchDetail
+    web -->|"wp-content/uploads/"| download
 
     htmlCache --> parseScript
     anunturiCSV & calendarCSV --> importCSVs

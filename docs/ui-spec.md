@@ -3,6 +3,10 @@
 > Draft spec for a job-seeker-first explorer over the scraped + enriched
 > dataset. Phasing in the "Phased roadmap" section is a recommendation,
 > not a commitment. Stack/deployment choices are deferred.
+>
+> **Note (2026-08):** The stack/deployment section below prescribes Django+HTMX on Fly.io,
+> but the current production deployment is PHP+SQLite on shared hosting
+> (`webapp-php/` + `deploy-php.sh`, added 2026-06-25).
 
 ## Context
 

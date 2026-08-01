@@ -7,10 +7,10 @@ See README.md for project overview, pipeline, and data structure.
 ## Running scripts
 
 ```bash
-python fetch-index.py   # preferred index scraper: scans all pages
-python fetch-index.py                 # stops early at first page with no changes
-python fetch-anunturi.py
-python parse-anunturi.py
+# Scraping (site: WordPress + Astra + Elementor + custom PG plugin as of 2026-08)
+python fetch-index.py   # scrapes /toate-posturile/?pg_page=N → data/posturi_gov_ro.csv
+python fetch-anunturi.py  # fetches /joburi/{slug}/ detail pages → data/anunturi/**/*.html
+python parse-anunturi.py  # parses cached HTML (both old /anunt/ and new /joburi/ structures)
 python download-attachments.py
 python llm-schema.py                  # extracts 7 structured sections → JobPosting.schema_json
   # Single provider (production):
@@ -29,6 +29,14 @@ python llm-schema.py                  # extracts 7 structured sections → JobPo
 ```
 
 ## Key behaviors
+
+**Site redesigned 2026-07** — posturi.gov.ro was rebuilt with WordPress + Astra + Elementor. The pipeline was updated 2026-08-01 to handle both old and new HTML structures. `parse-anunturi.py` auto-detects old vs new HTML and applies the correct selectors.
+
+**New URL scheme**:
+- Listing: `/toate-posturile/?pg_page=N` (was `/page/N/`)
+- Detail: `/joburi/{slug}/` (was `/anunt/{slug}/`)
+- Pagination: `nav.pg-arc-pagi` with `a.page-numbers` (was `div.ast-pagination`)
+- Job cards: `article.pg-card` (was `article.box`)
 
 **Two index scripts** — `fetch-index.py` always scans all pages and is preferred. The old early-stop version has been deleted.
 

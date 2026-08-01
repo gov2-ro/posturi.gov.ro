@@ -199,6 +199,7 @@ def scrape_all_pages():
     total_new = 0
     total_updated = 0
     skip_count = 0
+    seen_any_change = False
 
     for page_number in range(1, max_pages + 1):
         print(f"Scraping page {page_number}/{max_pages}...")
@@ -209,10 +210,12 @@ def scrape_all_pages():
         if new_entries or updated_entries:
             save_data(existing_data)
             skip_count = 0
+            seen_any_change = True
         else:
             skip_count += 1
-            # Stop early if 3 consecutive pages have no changes
-            if skip_count >= 3:
+            # Only stop early if we've seen at least one change this run
+            # (prevents stopping on pages 1-3 when re-running after a partial scrape)
+            if seen_any_change and skip_count >= 3:
                 print(f"No changes on last {skip_count} pages, stopping early.")
                 break
 

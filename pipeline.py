@@ -8,7 +8,8 @@ Steps (in order):
   import        manage.py import_csvs   — load CSVs into Postgres
   extract       manage.py extract_attachments  — extract text from downloaded files
   infer         manage.py infer_postings       — run metadata inference (dict + optional LLM)
-  schema        llm-schema.py                  — extract structured display sections → jobs_jobposting.schema_json
+  schema        llm-schema.py                  — extract structured display sections → schema_json
+  export-sqlite export-to-sqlite.py            — PostgreSQL → active-only posturi.sqlite
 
 Usage:
   python pipeline.py                          # run all steps
@@ -16,6 +17,7 @@ Usage:
   python pipeline.py --skip download,infer
   python pipeline.py --force --no-llm
   python pipeline.py --steps infer --provider anthropic --limit 100
+  python pipeline.py --steps export-sqlite    # rebuild SQLite only
 """
 from __future__ import annotations
 
@@ -43,15 +45,17 @@ ALL_STEPS = [
     "extract",
     "infer",
     "schema",
+    "export-sqlite",
 ]
 
 # Map step name → command (list of str/Path); placeholders filled in _build_cmd()
 _SCRAPER_STEPS = {
-    "fetch-index":  ROOT / "fetch-index.py",
-    "fetch-detail": ROOT / "fetch-anunturi.py",
-    "parse":        ROOT / "parse-anunturi.py",
-    "download":     ROOT / "download-attachments.py",
-    "schema":       ROOT / "llm-schema.py",
+    "fetch-index":   ROOT / "fetch-index.py",
+    "fetch-detail":  ROOT / "fetch-anunturi.py",
+    "parse":         ROOT / "parse-anunturi.py",
+    "download":      ROOT / "download-attachments.py",
+    "schema":        ROOT / "llm-schema.py",
+    "export-sqlite": ROOT / "export-to-sqlite.py",
 }
 
 _MANAGE_STEPS = {
@@ -92,6 +96,8 @@ def _build_cmd(
                 cmd.extend(["--provider", provider])
         if step == "download" and since is not None:
             cmd.extend(["--since", str(since)])
+        if step == "export-sqlite":
+            cmd.append("--active-only")
         return cmd
 
     if step not in _MANAGE_STEPS:

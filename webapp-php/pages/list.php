@@ -217,7 +217,7 @@ $salary_options = [];
 
 // ---- Render ----
 if (!$is_htmx) {
-    $page_title = 'Posturi publice';
+    $page_title = 'Căutare';
     require __DIR__ . '/../inc/header.php';
 }
 

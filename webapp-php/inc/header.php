@@ -1,14 +1,14 @@
 <?php
 // $page_title is set by the calling page
-$_title = isset($page_title) ? $page_title . ' — Posturi publice' : 'Posturi publice';
+$_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.gov2.ro';
 ?><!doctype html>
 <html lang="ro">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= e($_title) ?></title>
-  <link rel="alternate" type="application/atom+xml" title="Posturi publice — Atom" href="/posturi.atom">
-  <link rel="alternate" type="application/json" title="Posturi publice — JSON" href="/posturi.json">
+  <link rel="alternate" type="application/atom+xml" title="posturi.gov2.ro — Atom" href="/posturi.atom">
+  <link rel="alternate" type="application/json" title="posturi.gov2.ro — JSON" href="/posturi.json">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -63,14 +63,22 @@ $_title = isset($page_title) ? $page_title . ' — Posturi publice' : 'Posturi p
 </head>
 <body class="min-h-screen flex flex-col font-sans">
 
+<div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4">
+  <span>
+    <span class="font-mono text-xs uppercase tracking-wide font-semibold">WIP / MVP — versiune în lucru.</span>
+    <span class="flex-1 text-xs truncate">Acesta nu este un proiect oficial al Guvernului României. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a></span>
+    <button onclick="document.getElementById('wip-banner').remove()" class="text-yellow-700 hover:text-yellow-950 text-lg leading-none shrink-0" aria-label="Închide">&times;</button>
+  </span>
+</div>
+
 <header class="bg-gov text-white border-b border-gov">
   <div class="max-w-screen-xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
     <a href="/" class="flex items-center gap-3 group">
       <span class="font-display italic text-xl font-semibold text-white leading-none tracking-tight">
-        posturi<span class="text-blue-300">.</span>gov<span class="text-blue-300">.</span>ro
+        posturi<span class="text-blue-300">.</span>gov<span class="text-blue-300">2</span><span class="text-blue-300">.</span>ro
       </span>
       <span class="hidden sm:inline text-xs text-blue-200 font-mono uppercase tracking-widest mt-0.5 opacity-70">
-        / explorator independent
+        / alpha · WIP
       </span>
     </a>
     <nav class="flex items-center gap-4 text-sm text-blue-100">

@@ -32,9 +32,9 @@ function ical_escape(string $s): string {
 
 echo "BEGIN:VCALENDAR\r\n";
 echo "VERSION:2.0\r\n";
-echo "PRODID:-//posturi.gov.ro//Posturi Publice//RO\r\n";
-echo "X-WR-CALNAME:Posturi publice Romania\r\n";
-echo "X-WR-CALDESC:Termene de depunere — posturi.gov.ro\r\n";
+echo "PRODID:-//posturi.gov2.ro//RO\r\n";
+echo "X-WR-CALNAME:posturi.gov2.ro\r\n";
+echo "X-WR-CALDESC:Termene de depunere — posturi.gov2.ro\r\n";
 echo "CALSCALE:GREGORIAN\r\n";
 
 foreach ($rows as $r) {
@@ -51,7 +51,7 @@ foreach ($rows as $r) {
     $parts[] = 'URL: ' . $r['url'];
 
     echo "BEGIN:VEVENT\r\n";
-    echo "UID:posturi-gov-ro-{$r['id']}@posturi.gov.ro\r\n";
+    echo "UID:posturi-gov2-ro-{$r['id']}@posturi.gov2.ro\r\n";
     echo "SUMMARY:" . ical_escape($title) . "\r\n";
     echo "DTSTART;VALUE=DATE:{$dtstart}\r\n";
     echo "DTEND;VALUE=DATE:{$dtend}\r\n";

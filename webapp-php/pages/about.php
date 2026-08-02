@@ -6,10 +6,12 @@ require __DIR__ . '/../inc/header.php';
   <h1 class="font-display text-3xl italic font-semibold text-ink mb-6">Despre</h1>
 
   <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
-    <p>
-      <strong>posturi.gov.ro</strong> este un explorator independent al anunțurilor de angajare din sectorul public din România,
-      fără nicio afiliere oficială cu posturi.gov.ro sau cu autoritățile publice.
+<mark>⚠️ WIP / MVP - versiune in lucru</mark>
+  <p>
+      <strong>posturi.gov2.ro</strong> este un explorator independent, fără nicio afiliere oficială cu posturi.gov.ro sau cu autoritățile publice.
     </p>
+
+ 
     <p>
       Datele sunt preluate periodic de pe portalul oficial <a href="https://posturi.gov.ro" class="text-gov hover:underline" target="_blank" rel="noopener">posturi.gov.ro</a>
       și procesate automat pentru a permite căutare avansată, filtrare și statistici.
@@ -21,13 +23,10 @@ require __DIR__ . '/../inc/header.php';
       <li>Clasificare automată a anunțurilor (domeniu profesional, nivel de experiență, studii)</li>
       <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a></li>
     </ul>
-    <h2>Date și actualizare</h2>
+    <hr />
+    <!-- <h2>Contact</h2> -->
     <p>
-      Baza de date se actualizează zilnic. Toate datele provin exclusiv din surse publice.
-    </p>
-    <h2>Contact</h2>
-    <p>
-      Proiect open-source. Întrebări și feedback: <a href="mailto:pax@mioritics.ro" class="text-gov hover:underline">pax@mioritics.ro</a>
+        &rarr; &nbsp; <a href="https://forms.gle/96WusM2qr4pbUXhW7" target=_blank><u>Acceptăm sugestii</u></a> (gForm)
     </p>
   </div>
 </div>

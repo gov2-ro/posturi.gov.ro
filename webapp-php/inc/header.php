@@ -1,6 +1,20 @@
 <?php
 // $page_title is set by the calling page
 $_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.gov2.ro';
+
+// Last data update — used in header and footer
+if (!isset($_last_updated)) {
+    try {
+        $_last_updated = db()->query("SELECT MAX(last_seen_at) FROM job_postings")->fetchColumn();
+    } catch (Exception $e) {
+        $_last_updated = null;
+    }
+}
+if ($_last_updated) {
+    $_last_updated_fmt = (new DateTime(substr($_last_updated, 0, 10)))->format('d.m.Y');
+} else {
+    $_last_updated_fmt = null;
+}
 ?><!doctype html>
 <html lang="ro">
 <head>
@@ -63,12 +77,10 @@ $_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.g
 </head>
 <body class="min-h-screen flex flex-col font-sans">
 
-<div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4">
-  <span>
-    <span class="font-mono text-xs uppercase tracking-wide font-semibold">WIP / MVP — versiune în lucru.</span>
-    <span class="flex-1 text-xs truncate">Acesta nu este un proiect oficial al Guvernului României. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a></span>
-    <button onclick="document.getElementById('wip-banner').remove()" class="text-yellow-700 hover:text-yellow-950 text-lg leading-none shrink-0" aria-label="Închide">&times;</button>
-  </span>
+<div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4 text-center">
+  <span class="font-mono text-xs uppercase tracking-wide font-semibold">WIP / MVP — versiune în lucru.</span>
+  <span class="flex-1 text-xs truncate">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului româniei. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a></span>
+  <button onclick="document.getElementById('wip-banner').remove()" class="text-yellow-700 hover:text-yellow-950 text-lg leading-none shrink-0" aria-label="Închide">&times;</button>
 </div>
 
 <header class="bg-gov text-white border-b border-gov">
@@ -80,6 +92,11 @@ $_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.g
       <span class="hidden sm:inline text-xs text-blue-200 font-mono uppercase tracking-widest mt-0.5 opacity-70">
         / alpha · WIP
       </span>
+      <?php if ($_last_updated_fmt): ?>
+      <span class="hidden sm:inline text-xs text-blue-300 font-mono mt-0.5 opacity-60">
+        actualizat <?= $_last_updated_fmt ?>
+      </span>
+      <?php endif; ?>
     </a>
     <nav class="flex items-center gap-4 text-sm text-blue-100">
       <a href="/" class="hover:text-white transition-colors">Căutare</a>

@@ -28,3 +28,4 @@ webapp/db.sqlite3.superpowers/
 
 # PHP webapp export
 posturi.sqlite
+webapp-php/posturi.sqlite

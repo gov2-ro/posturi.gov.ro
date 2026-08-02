@@ -2,8 +2,9 @@
 """Export PostgreSQL data to posturi.sqlite for the PHP shared-hosting webapp.
 
 Usage:
-    python export-to-sqlite.py                    # uses DATABASE_URL or postgres://localhost/posturi_dev
-    DATABASE_URL=postgres://... python export-to-sqlite.py
+    python export-to-sqlite.py                    # all postings → webapp-php/posturi.sqlite
+    python export-to-sqlite.py --active-only      # active postings only (for deployment)
+    DATABASE_URL=postgres://... python export-to-sqlite.py --active-only
     python export-to-sqlite.py --out /path/to/posturi.sqlite
 
 Output: posturi.sqlite with tables:
@@ -143,7 +144,7 @@ def fmt_date(v) -> str | None:
     return str(v)
 
 
-def export(pg, con: sqlite3.Connection):
+def export(pg, con: sqlite3.Connection, active_only: bool = False):
     cur = pg.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     print("Exporting judete...", end=" ", flush=True)
@@ -160,8 +161,10 @@ def export(pg, con: sqlite3.Connection):
                     [(r["id"], r["name"], r["slug"]) for r in rows])
     print(f"{len(rows)} rows")
 
-    print("Exporting job_postings...", end=" ", flush=True)
-    cur.execute("""
+    active_filter = "WHERE jp.expires_at >= CURRENT_DATE" if active_only else ""
+    label = "active " if active_only else ""
+    print(f"Exporting {label}job_postings...", end=" ", flush=True)
+    cur.execute(f"""
         SELECT
             jp.id, jp.url, jp.title,
             jp.employer_id,
@@ -182,6 +185,7 @@ def export(pg, con: sqlite3.Connection):
         FROM jobs_jobposting jp
         JOIN jobs_employer e ON e.id = jp.employer_id
         LEFT JOIN jobs_judet j ON j.id = jp.judet_id
+        {active_filter}
         ORDER BY jp.id
     """)
 
@@ -243,9 +247,14 @@ def export(pg, con: sqlite3.Connection):
     print(f" {total} rows")
 
     print("Exporting calendar_events...", end=" ", flush=True)
-    cur.execute("""
+    ce_filter = (
+        "WHERE posting_id IN (SELECT id FROM jobs_jobposting WHERE expires_at >= CURRENT_DATE)"
+        if active_only else ""
+    )
+    cur.execute(f"""
         SELECT id, posting_id, eveniment, data, ora
         FROM jobs_calendarevent
+        {ce_filter}
         ORDER BY id
     """)
     rows = cur.fetchall()
@@ -292,7 +301,9 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
 
 def main():
     ap = argparse.ArgumentParser(description="Export PostgreSQL → posturi.sqlite")
-    ap.add_argument("--out", default="posturi.sqlite", help="Output SQLite file path")
+    ap.add_argument("--out", default="webapp-php/posturi.sqlite", help="Output SQLite file path")
+    ap.add_argument("--active-only", action="store_true",
+                    help="Only export postings with expires_at >= today")
     args = ap.parse_args()
 
     out_path = args.out
@@ -308,7 +319,7 @@ def main():
     try:
         create_schema(con)
         with con:
-            export(pg, con)
+            export(pg, con, active_only=args.active_only)
         con.execute("PRAGMA optimize;")
         con.commit()
         print(f"\nDone. SQLite file: {out_path}")

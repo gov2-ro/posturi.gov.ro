@@ -1,16 +1,12 @@
 <?php
 /**
  * PDO singleton for posturi.sqlite.
- * Place posturi.sqlite in the same directory as this file (or adjust the path).
+ * The export script generates posturi.sqlite directly in this directory.
  */
 function db(): PDO {
     static $pdo = null;
     if ($pdo === null) {
-        // Production: same dir as webapp-php/. Dev: one level up (project root).
         $path = __DIR__ . '/posturi.sqlite';
-        if (!file_exists($path)) {
-            $path = dirname(__DIR__) . '/posturi.sqlite';
-        }
         if (!file_exists($path)) {
             http_response_code(503);
             header('Content-Type: text/plain; charset=utf-8');

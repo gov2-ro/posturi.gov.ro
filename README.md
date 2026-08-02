@@ -50,8 +50,17 @@ flowchart LR
     end
 
     subgraph serve["⑤ Serve"]
-        webapp["Django webapp"]
+        direction TB
+        pg[/"PostgreSQL"/]
+        sqliteExport["export-to-sqlite.py\n--active-only"]
+        sqliteDB[/"posturi.sqlite\n(active only)"/]
+        webapp["Django webapp\n(local dev)"]
+        phpApp["PHP webapp\n(shared hosting)"]
         browser(["browser"])
+        
+        pg --> sqliteExport --> sqliteDB --> phpApp
+        pg --> webapp
+        phpApp --> browser
         webapp --> browser
     end
 
@@ -241,4 +250,37 @@ python3 -m venv .venv
 .venv/bin/python webapp/manage.py migrate
 .venv/bin/python webapp/manage.py runserver
 ```
+
+## PHP webapp (shared hosting)
+
+A lightweight PHP frontend that runs on commodity shared hosting (cPanel). Reads from a read-only SQLite database — no Python, no web server config, just PHP + SQLite.
+
+### Export & deploy
+
+```bash
+# Generate active-only SQLite + push to shared host
+./deploy-php.sh user@host ~/posturi.gov2.ro
+
+# Or set env vars
+DEPLOY_HOST=user@host DEPLOY_PATH=~/posturi.gov2.ro ./deploy-php.sh
+```
+
+The deploy script:
+1. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`
+2. Rsyncs the entire `webapp-php/` folder to the remote host
+
+The full archive stays in PostgreSQL; the deployed SQLite only contains currently active postings.
+
+### Structure
+
+| Path | Purpose |
+|------|---------|
+| `index.php` | Front controller — routes `/`, `/job/123/`, `/angajatori/`, `/statistici/`, `/despre/` |
+| `db.php` | PDO singleton for `posturi.sqlite` |
+| `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries |
+| `pages/` | List, detail, employer list, employer detail, stats, about |
+| `feeds/` | Atom, JSON API, iCal endpoints |
+| `partials/` | Result list partial (HTMX-compatible) |
+| `inc/` | Header/footer HTML |
+| `.htaccess` | URL rewriting, blocks direct access to `*.sqlite` |
 

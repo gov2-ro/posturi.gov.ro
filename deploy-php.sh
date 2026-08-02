@@ -18,17 +18,14 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "==> Exporting PostgreSQL → SQLite..."
-python "$SCRIPT_DIR/export-to-sqlite.py" --out "$SCRIPT_DIR/posturi.sqlite"
+echo "==> Exporting PostgreSQL → SQLite (active only)..."
+python "$SCRIPT_DIR/export-to-sqlite.py" --active-only --out "$SCRIPT_DIR/webapp-php/posturi.sqlite"
 
 echo "==> Deploying webapp-php/ to ${DEPLOY_HOST}:${DEPLOY_PATH}/"
 rsync -avz --delete \
     --exclude='.DS_Store' \
-    --exclude='*.sqlite' \
+    --no-perms --no-owner --no-group --omit-dir-times \
     "$SCRIPT_DIR/webapp-php/" \
     "${DEPLOY_HOST}:${DEPLOY_PATH}/"
-
-echo "==> Deploying posturi.sqlite to ${DEPLOY_HOST}:${DEPLOY_PATH}/posturi.sqlite"
-rsync -avz "$SCRIPT_DIR/posturi.sqlite" "${DEPLOY_HOST}:${DEPLOY_PATH}/posturi.sqlite"
 
 echo "==> Done."

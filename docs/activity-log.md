@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-08-02 — PHP webapp packaging: active-only SQLite export + streamlined deploy
+
+**What:** Refactored the `export-to-sqlite.py` → `deploy-php.sh` packaging so the PHP webapp folder is fully self-contained with an active-only database.
+
+**Changes:**
+- `export-to-sqlite.py`: Added `--active-only` flag that filters `WHERE expires_at >= CURRENT_DATE` on both `job_postings` and `calendar_events` queries in PostgreSQL, keeping the exported SQLite small and focused. Default `--out` path changed to `webapp-php/posturi.sqlite`.
+- `deploy-php.sh`: Uses `--active-only` and explicit `--out` path; removed separate DB rsync step (DB is inside `webapp-php/` now). Added `--no-perms --no-owner --no-group --omit-dir-times` flags to rsync for shared-hosting compatibility.
+- `webapp-php/db.php`: Removed parent-directory fallback — DB lives at `__DIR__/posturi.sqlite` only.
+- `.gitignore`: Added `webapp-php/posturi.sqlite`.
+
+**Why:** The full data archive stays in PostgreSQL; the deployed webapp only needs active postings. Packaging the SQLite inside `webapp-php/` makes the folder self-contained — one rsync deploys everything.
+
+---
+
 ### 2026-08-01 — Rewrote scraping pipeline for redesigned posturi.gov.ro
 
 **What:** Rewrote `fetch-index.py`, `fetch-anunturi.py`, and `parse-anunturi.py` to work with the completely rebuilt posturi.gov.ro website (WordPress + Astra 4.12.3 + Elementor + custom "PG" plugin).

@@ -83,6 +83,16 @@ flowchart LR
 python pipeline.py
 ```
 
+### Full update → deploy
+
+```bash
+# Scrape, parse, import, LLM enrich, export SQLite — then push to shared host
+python pipeline.py && ./deploy-php.sh user@host ~/posturi.gov2.ro
+
+# Quick refresh: skip slow steps that haven't changed
+python pipeline.py --skip download,extract,infer,schema && ./deploy-php.sh user@host ~/posturi.gov2.ro
+```
+
 ### Selective runs
 
 ```bash

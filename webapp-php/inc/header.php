@@ -79,7 +79,7 @@ if ($_last_updated) {
 
 <div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4 text-center">
   <span class="font-mono text-xs uppercase tracking-wide font-semibold">WIP / MVP — versiune în lucru.</span>
-  <span class="flex-1 text-xs truncate">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului româniei. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a></span>
+  <span class="flex-1 text-xs truncate">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului româniei. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a> (gForm)</span>
   <button onclick="document.getElementById('wip-banner').remove()" class="text-yellow-700 hover:text-yellow-950 text-lg leading-none shrink-0" aria-label="Închide">&times;</button>
 </div>
 

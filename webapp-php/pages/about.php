@@ -26,8 +26,9 @@ require __DIR__ . '/../inc/header.php';
     <hr />
     <!-- <h2>Contact</h2> -->
     <p>
-        &rarr; &nbsp; <a href="https://forms.gle/96WusM2qr4pbUXhW7" target=_blank><u>Acceptăm sugestii</u></a> (gForm)
+        &rarr; &nbsp; <a href="https://forms.gle/96WusM2qr4pbUXhW7" target=_blank><u>Acceptăm sugestii</u></a> (gForm) &emsp; &starf; &emsp; gh: <a href="https://github.com/gov2-ro/posturi.gov.ro"><u>gov2-ro/posturi.gov.ro</u></a> 
     </p>
+    
   </div>
 </div>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

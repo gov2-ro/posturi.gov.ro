@@ -15,7 +15,12 @@ selenium/geckodriver.log
 /data/cached-responses/*
 /testbench/
 */scraping.log
-
+Archive.zip
+*/Archive.zip
+*/*.zip 
+*zip
+posturi.sqlite
+*/posturi.sqlite
 # virtualenv
 .venv/
 # webapp

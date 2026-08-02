@@ -23,19 +23,20 @@ import sys
 from datetime import date
 from urllib.parse import urlparse
 
-import psycopg2
-import psycopg2.extras
+import psycopg
+from psycopg.rows import dict_row
 
 
 def pg_connect():
     db_url = os.environ.get("DATABASE_URL", "postgres://localhost/posturi_dev")
     r = urlparse(db_url)
-    return psycopg2.connect(
+    return psycopg.connect(
         dbname=r.path.lstrip("/"),
         user=r.username,
         password=r.password,
         host=r.hostname or "localhost",
         port=r.port or 5432,
+        row_factory=dict_row,
     )
 
 
@@ -145,7 +146,7 @@ def fmt_date(v) -> str | None:
 
 
 def export(pg, con: sqlite3.Connection, active_only: bool = False):
-    cur = pg.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur = pg.cursor()
 
     print("Exporting judete...", end=" ", flush=True)
     cur.execute("SELECT id, name, slug FROM jobs_judet ORDER BY id")

@@ -16,6 +16,33 @@
 
 ---
 
+### 2026-08-02 — Rebrand to posturi.gov2.ro, WIP/alpha banners, last-updated date
+
+**What:** Updated all PHP webapp branding from "posturi.gov.ro" to "posturi.gov2.ro" with alpha/WIP disclaimers throughout.
+
+**Changes:**
+- Header: logo reads `posturi.gov2.ro`, tagline `alpha · WIP`
+- Yellow dismissable banner on every page: "WIP / MVP — versiune în lucru. Nu este un proiect oficial al Guvernului României." with link to Google Form feedback
+- Footer: same WIP disclaimer + feedback link
+- `MAX(last_seen_at)` queried once in header.php, displayed in both header and footer as "actualizat DD.MM.YYYY"
+- Page titles, feed metadata (Atom, iCal, JSON) updated throughout
+- about.php: simplified for alpha launch, added feedback link
+
+**Why:** Preparing for public alpha. Clear disclaimers that this is unofficial, with a feedback channel.
+
+---
+
+### 2026-08-02 — Fixed export-to-sqlite.py: psycopg2 → psycopg3
+
+**What:** `export-to-sqlite.py` imported `psycopg2` but the project venv only has `psycopg` v3 (3.3.4). The import error caused the export step to fail silently, leaving a stale SQLite.
+
+**Fix:** Switched imports and API calls:
+- `import psycopg2` / `psycopg2.extras` → `import psycopg` / `psycopg.rows.dict_row`
+- `psycopg2.connect(...)` → `psycopg.connect(..., row_factory=dict_row)`
+- `pg.cursor(cursor_factory=DictCursor)` → `pg.cursor()` (row_factory set on connection)
+
+---
+
 ### 2026-08-01 — Rewrote scraping pipeline for redesigned posturi.gov.ro
 
 **What:** Rewrote `fetch-index.py`, `fetch-anunturi.py`, and `parse-anunturi.py` to work with the completely rebuilt posturi.gov.ro website (WordPress + Astra 4.12.3 + Elementor + custom "PG" plugin).

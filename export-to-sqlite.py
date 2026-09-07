@@ -72,6 +72,7 @@ CREATE TABLE job_postings (
     judet_id                INTEGER REFERENCES judete(id),
     judet_name              TEXT NOT NULL DEFAULT '',
     judet_slug              TEXT NOT NULL DEFAULT '',
+    locality                TEXT NOT NULL DEFAULT '',
     detalii_raw             TEXT NOT NULL DEFAULT '',
     published_at            TEXT,
     expires_at              TEXT,
@@ -94,6 +95,7 @@ CREATE TABLE job_postings (
     updated_at              TEXT,
     last_seen_at            TEXT,
     other_links             TEXT NOT NULL DEFAULT '[]',
+    attachment_meta         TEXT NOT NULL DEFAULT '[]',
     inferred                TEXT NOT NULL DEFAULT '{}',
     schema_json             TEXT,
     -- extracted inferred fields for fast filtering
@@ -105,12 +107,27 @@ CREATE TABLE job_postings (
     inf_requires_computer   INTEGER,
     inf_experience_years    REAL,
     inf_studies_required    TEXT,
+    -- Prompt v3 structured extraction (empty until llm-schema.py --prompt-version v3 runs).
+    -- Scalars get columns; lists are JSON arrays queried with LIKE '%"value"%',
+    -- the same shape inf_anomaly_flags already uses.
+    v3_eqf_level            INTEGER,
+    v3_study_level          TEXT NOT NULL DEFAULT '',
+    v3_isced_fields         TEXT NOT NULL DEFAULT '[]',
+    v3_study_labels         TEXT NOT NULL DEFAULT '[]',
+    v3_skills               TEXT NOT NULL DEFAULT '[]',
+    v3_languages            TEXT NOT NULL DEFAULT '[]',
+    v3_credentials          TEXT NOT NULL DEFAULT '[]',
+    v3_policy_domains       TEXT NOT NULL DEFAULT '[]',
+    v3_exam_stages          TEXT NOT NULL DEFAULT '[]',
+    v3_positions            INTEGER,
     inf_salary_min          REAL,
     inf_salary_max          REAL
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
 CREATE INDEX idx_jp_judet      ON job_postings(judet_id);
+CREATE INDEX idx_jp_locality   ON job_postings(locality);
+CREATE INDEX idx_jp_eqf        ON job_postings(v3_eqf_level);
 CREATE INDEX idx_jp_expires    ON job_postings(expires_at);
 CREATE INDEX idx_jp_published  ON job_postings(published_at DESC);
 CREATE INDEX idx_jp_level      ON job_postings(job_level);
@@ -173,6 +190,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             jp.judet_id,
             COALESCE(j.name, '') AS judet_name,
             COALESCE(j.slug, '') AS judet_slug,
+            jp.locality,
             jp.detalii_raw, jp.published_at, jp.expires_at, jp.tip,
             jp.job_level, jp.job_type, jp.employer_category, jp.categorie,
             jp.announcement_url, jp.body_markdown, jp.nr_posturi,
@@ -181,6 +199,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             jp.data_interviu, jp.data_rezultate_finale,
             jp.created_at, jp.updated_at, jp.last_seen_at,
             jp.other_links::text AS other_links,
+            jp.attachment_meta::text AS attachment_meta,
             jp.inferred::text AS inferred,
             jp.schema_json::text AS schema_json
         FROM jobs_jobposting jp
@@ -199,6 +218,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         except (json.JSONDecodeError, TypeError):
             pass
 
+        v3 = _v3_columns(r["schema_json"])
+
         anomaly_flags = inferred.get("anomaly_flags") or []
         requires_computer = inferred.get("requires_computer")
         if requires_computer is True:
@@ -212,6 +233,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             r["id"], r["url"], r["title"] or "",
             r["employer_id"], r["employer_name"],
             r["judet_id"], r["judet_name"], r["judet_slug"],
+            r["locality"] or "",
             r["detalii_raw"] or "",
             fmt_date(r["published_at"]), fmt_date(r["expires_at"]),
             r["tip"] or "",
@@ -224,8 +246,12 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             fmt_date(r["data_interviu"]), fmt_date(r["data_rezultate_finale"]),
             fmt_date(r["created_at"]), fmt_date(r["updated_at"]), fmt_date(r["last_seen_at"]),
             r["other_links"] or "[]",
+            r["attachment_meta"] or "[]",
             r["inferred"] or "{}",
             r["schema_json"],
+            v3["eqf_level"], v3["study_level"], v3["isced_fields"], v3["study_labels"],
+            v3["skills"], v3["languages"], v3["credentials"],
+            v3["policy_domains"], v3["exam_stages"], v3["positions"],
             inferred.get("profession_family"),
             inferred.get("seniority"),
             json.dumps(anomaly_flags, ensure_ascii=False),
@@ -269,11 +295,56 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     print("Building FTS5 index...", end=" ", flush=True)
     con.execute("""
         INSERT INTO job_postings_fts(rowid, title, employer_name, judet_name, body_text)
-        SELECT id, title, employer_name, judet_name,
+        SELECT id, title, employer_name, TRIM(locality || ' ' || judet_name),
                COALESCE(body_markdown, '')
         FROM job_postings
     """)
     print("done")
+
+
+def _v3_columns(schema_json_text) -> dict:
+    """Flatten prompt-v3 `schema_json` into queryable SQLite columns.
+
+    Returns empty defaults for a v2 row or no schema at all, so the browse
+    facets simply stay empty until a v3 extraction has run.
+    """
+    empty = {
+        "eqf_level": None, "study_level": "", "isced_fields": "[]", "study_labels": "[]",
+        "skills": "[]", "languages": "[]", "credentials": "[]",
+        "policy_domains": "[]", "exam_stages": "[]", "positions": None,
+    }
+    if not schema_json_text:
+        return empty
+    try:
+        s = json.loads(schema_json_text)
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(s, dict) or "education" not in s:
+        return empty  # v2 payload
+
+    def dumps(seq):
+        return json.dumps(sorted({x for x in seq if x}), ensure_ascii=False)
+
+    edu = s.get("education") or {}
+    fields = edu.get("fields_of_study") or []
+    langs = s.get("language_list") or []
+
+    return {
+        "eqf_level": edu.get("eqf_level"),
+        "study_level": edu.get("minimum_level") or "",
+        "isced_fields": dumps(f.get("isced_field") for f in fields),
+        "study_labels": dumps(f.get("label_ro") for f in fields),
+        "skills": dumps(k.get("label") for k in (s.get("skill_list") or [])),
+        # "en:B2" keeps language and level together for a single LIKE probe.
+        "languages": dumps(
+            f"{l.get('iso_code') or l.get('language')}:{l.get('cefr') or ''}".rstrip(":")
+            for l in langs
+        ),
+        "credentials": dumps(c.get("kind") for c in (s.get("credentials") or [])),
+        "policy_domains": dumps(s.get("policy_domains") or []),
+        "exam_stages": dumps(s.get("exam_stages") or []),
+        "positions": len(s.get("positions") or []) or None,
+    }
 
 
 def _insert_postings(con: sqlite3.Connection, batch: list):
@@ -281,7 +352,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         INSERT INTO job_postings(
             id, url, title,
             employer_id, employer_name,
-            judet_id, judet_name, judet_slug,
+            judet_id, judet_name, judet_slug, locality,
             detalii_raw, published_at, expires_at, tip,
             job_level, job_type, employer_category, categorie,
             announcement_url, body_markdown, nr_posturi,
@@ -289,13 +360,16 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
             data_limita_depunere, data_proba_scrisa,
             data_interviu, data_rezultate_finale,
             created_at, updated_at, last_seen_at,
-            other_links, inferred, schema_json,
+            other_links, attachment_meta, inferred, schema_json,
+            v3_eqf_level, v3_study_level, v3_isced_fields, v3_study_labels,
+            v3_skills, v3_languages, v3_credentials,
+            v3_policy_domains, v3_exam_stages, v3_positions,
             inf_profession_family, inf_seniority, inf_anomaly_flags,
             inf_work_type, inf_remote_eligible, inf_requires_computer,
             inf_experience_years, inf_studies_required,
             inf_salary_min, inf_salary_max
         ) VALUES (
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
         )
     """, batch)
 

@@ -6,7 +6,9 @@
 function db(): PDO {
     static $pdo = null;
     if ($pdo === null) {
-        $path = __DIR__ . '/posturi.sqlite';
+        // POSTURI_DB lets a test or a preview point at another export without
+        // touching the deployed file. Unset in production.
+        $path = getenv('POSTURI_DB') ?: __DIR__ . '/posturi.sqlite';
         if (!file_exists($path)) {
             http_response_code(503);
             header('Content-Type: text/plain; charset=utf-8');

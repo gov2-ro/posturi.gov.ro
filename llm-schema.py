@@ -28,6 +28,7 @@ Usage:
 
 import argparse
 import json
+from pathlib import Path
 import os
 import re
 import sys
@@ -39,13 +40,23 @@ from decimal import Decimal
 from dotenv import load_dotenv
 
 from boilerplate import strip_hg_1336
-from schema_models import JobPostingExtraction, openai_json_schema
+from schema_models import (
+    EXTRACTION_MODELS,
+    JobPostingExtraction,
+    json_schema_for,
+    model_for_version,
+    openai_json_schema,
+)
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://localhost/posturi_dev")
 
-with open("models_config.json") as f:
+# Resolve relative to this file, not the working directory — the module is
+# imported by tests and by tooling that does not run from the repo root.
+CONFIG_PATH = Path(__file__).resolve().parent / "models_config.json"
+
+with open(CONFIG_PATH, encoding="utf-8") as f:
     MODELS_CONFIG = json.load(f)
 
 
@@ -114,14 +125,17 @@ def parse_json_response(text):
     return text
 
 
-def _validate_v2(raw) -> dict:
-    """Validate raw parsed JSON against the v2 Pydantic model. Returns a
-    JSON-safe dict. Raises pydantic.ValidationError on schema mismatch."""
+def _validate_extraction(raw, prompt_version) -> dict:
+    """Validate raw parsed JSON against a prompt version's Pydantic model.
+
+    Returns a JSON-safe dict. Raises pydantic.ValidationError on mismatch.
+    """
     if isinstance(raw, str):
         raw = parse_json_response(raw)
     if not isinstance(raw, dict):
         raise ValueError(f"Expected dict, got {type(raw).__name__}: {repr(raw)[:120]}")
-    obj = JobPostingExtraction.model_validate(raw)
+    model = model_for_version(prompt_version) or JobPostingExtraction
+    obj = model.model_validate(raw)
     return obj.model_dump(mode="json")
 
 
@@ -133,12 +147,13 @@ def make_generator(provider, model, system_prefix, prompt_version):
     identical across calls so providers can cache it. `content` is the
     per-posting body+attachment text.
 
-    For prompt_version == 'v2' we use provider-native structured output
-    (OpenAI strict json_schema, Gemini response_schema, Anthropic tool-use)
-    and validate against the JobPostingExtraction Pydantic model. For v1
-    we keep the loose JSON-parse path (back-compat).
+    Any prompt version with a Pydantic model in schema_models.EXTRACTION_MODELS
+    (v2, v3) uses provider-native structured output — OpenAI strict json_schema,
+    Gemini response_schema, Anthropic tool-use — and is validated against that
+    model. v1 keeps the loose JSON-parse path for back-compat.
     """
-    use_schema = (prompt_version == "v2")
+    use_schema = prompt_version in EXTRACTION_MODELS
+    extraction_model = model_for_version(prompt_version)
 
     if provider == 'gemini':
         from google import genai
@@ -152,7 +167,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
             }
             if use_schema:
                 cfg_kwargs["response_mime_type"] = "application/json"
-                cfg_kwargs["response_schema"] = JobPostingExtraction
+                cfg_kwargs["response_schema"] = extraction_model
             resp = client.models.generate_content(
                 model=model,
                 contents=content,
@@ -161,7 +176,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
             raw = resp.parsed if use_schema and getattr(resp, "parsed", None) is not None else resp.text
             if hasattr(raw, "model_dump"):
                 raw = raw.model_dump(mode="json")
-            schema = _validate_v2(raw) if use_schema else parse_json_response(raw)
+            schema = _validate_extraction(raw, prompt_version) if use_schema else parse_json_response(raw)
             usage = getattr(resp, "usage_metadata", None)
             input_tokens = getattr(usage, "prompt_token_count", None) if usage else None
             output_tokens = getattr(usage, "candidates_token_count", None) if usage else None
@@ -194,11 +209,11 @@ def make_generator(provider, model, system_prefix, prompt_version):
             if use_schema:
                 kwargs["response_format"] = {
                     "type": "json_schema",
-                    "json_schema": openai_json_schema(),
+                    "json_schema": json_schema_for(prompt_version),
                 }
             resp = client.chat.completions.create(**kwargs)
             text = resp.choices[0].message.content
-            schema = _validate_v2(text) if use_schema else parse_json_response(text)
+            schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
             usage = getattr(resp, "usage", None)
             input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
             output_tokens = getattr(usage, "completion_tokens", None) if usage else None
@@ -216,7 +231,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
         anthropic_tools = [{
             "name": tool_name,
             "description": "Return structured fields extracted from the job posting.",
-            "input_schema": JobPostingExtraction.model_json_schema(),
+            "input_schema": (extraction_model or JobPostingExtraction).model_json_schema(),
         }]
 
         def generate(content):
@@ -236,7 +251,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
             msg = client.messages.create(**kwargs)
             if use_schema:
                 tool_block = next(b for b in msg.content if getattr(b, "type", "") == "tool_use")
-                schema = _validate_v2(tool_block.input)
+                schema = _validate_extraction(tool_block.input, prompt_version)
             else:
                 text_block = next(b for b in msg.content if getattr(b, "type", "") == "text")
                 schema = parse_json_response(text_block.text)
@@ -269,7 +284,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 kwargs["response_format"] = {"type": "json_object"}
             resp = client.chat.completions.create(**kwargs)
             text = resp.choices[0].message.content
-            schema = _validate_v2(text) if use_schema else parse_json_response(text)
+            schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
             usage = getattr(resp, "usage", None)
             input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
             output_tokens = getattr(usage, "completion_tokens", None) if usage else None
@@ -282,7 +297,23 @@ def make_generator(provider, model, system_prefix, prompt_version):
     return generate
 
 
-def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True):
+def _selection_where(slug_filter=None, active_only=False):
+    """Build the shared WHERE clause for posting selection.
+
+    Returns (sql_fragment, params) — used by both iter_postings and
+    count_postings so the progress total always matches what is processed.
+    """
+    conds, params = [], []
+    if slug_filter:
+        conds.append("url LIKE %s")
+        params.append(f"%{slug_filter}%")
+    if active_only:
+        conds.append("expires_at >= CURRENT_DATE")
+    return (" WHERE " + " AND ".join(conds) if conds else ""), params
+
+
+def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
+                  active_only=False):
     """Yield (posting_id, url, combined_content) rows that need schema generation.
 
     Combines body_markdown (web page text) and attachment_text (extracted from
@@ -291,18 +322,13 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True):
     eligibility lines are stripped before yielding — see boilerplate.py.
     Skips rows where schema_json is already set unless force=True.
     """
+    where, params = _selection_where(slug_filter, active_only)
     with conn.cursor() as cur:
-        if slug_filter:
-            cur.execute(
-                "SELECT id, url, body_markdown, attachment_text, schema_json "
-                "FROM jobs_jobposting WHERE url LIKE %s",
-                (f"%{slug_filter}%",),
-            )
-        else:
-            cur.execute(
-                "SELECT id, url, body_markdown, attachment_text, schema_json "
-                "FROM jobs_jobposting"
-            )
+        cur.execute(
+            "SELECT id, url, body_markdown, attachment_text, schema_json "
+            "FROM jobs_jobposting" + where,
+            params,
+        )
         for row_id, url, body, attachment, existing_schema in cur:
             if existing_schema is not None and not force:
                 continue
@@ -318,20 +344,13 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True):
                 yield row_id, url, content
 
 
-def count_postings(conn, slug_filter=None, force=False):
+def count_postings(conn, slug_filter=None, force=False, active_only=False):
     """Return the number of postings that iter_postings would yield."""
+    where, params = _selection_where(slug_filter, active_only)
+    if not force:
+        where += (" AND " if where else " WHERE ") + "schema_json IS NULL"
     with conn.cursor() as cur:
-        if slug_filter:
-            cur.execute(
-                "SELECT COUNT(*) FROM jobs_jobposting WHERE url LIKE %s"
-                + ("" if force else " AND (body_markdown IS NOT NULL OR attachment_text IS NOT NULL)"),
-                (f"%{slug_filter}%",),
-            )
-        else:
-            if force:
-                cur.execute("SELECT COUNT(*) FROM jobs_jobposting")
-            else:
-                cur.execute("SELECT COUNT(*) FROM jobs_jobposting WHERE schema_json IS NULL")
+        cur.execute("SELECT COUNT(*) FROM jobs_jobposting" + where, params)
         return cur.fetchone()[0]
 
 
@@ -379,7 +398,11 @@ if __name__ == '__main__':
     parser.add_argument('--limit', type=int, default=None, help='Process at most N postings')
     parser.add_argument('--compare', action='store_true', help='Run all enabled providers and save variants only (does NOT overwrite schema_json)')
     parser.add_argument('--model-filter', default=None, help='Only test models matching this regex (e.g., "gemini-.*" or "gpt-.*")')
-    parser.add_argument('--prompt-version', default='v2', help='Prompt version to use (from config; default v2)')
+    parser.add_argument('--prompt-version', default=PROMPT_VERSION,
+                        help='Prompt version from models_config.json. v2 = descriptive, '
+                             'v3 = descriptive + structured match keys (default: %(default)s)')
+    parser.add_argument('--active-only', action='store_true',
+                        help='Only process postings whose deadline has not passed (expires_at >= today).')
     parser.add_argument('--no-strip', action='store_true', help='Do NOT strip HG 1.336/2022 boilerplate from the input (kept for comparison runs).')
     args = parser.parse_args()
 
@@ -410,7 +433,7 @@ if __name__ == '__main__':
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
             generate = make_generator(provider, model, system_prefix, args.prompt_version)
             force_flag = args.force or args.compare
-            total = count_postings(conn, slug_filter=args.slug, force=force_flag)
+            total = count_postings(conn, slug_filter=args.slug, force=force_flag, active_only=args.active_only)
             if args.limit:
                 total = min(total, args.limit)
             postings = iter_postings(
@@ -418,6 +441,7 @@ if __name__ == '__main__':
                 slug_filter=args.slug,
                 force=force_flag,
                 strip_boilerplate=not args.no_strip,
+                active_only=args.active_only,
             )
             if args.limit:
                 postings = itertools.islice(postings, args.limit)

@@ -20,11 +20,18 @@ if ($uri === '/posturi.json') { require __DIR__ . '/feeds/jobs.json.php';  exit;
 if ($uri === '/posturi.atom') { require __DIR__ . '/feeds/jobs.atom.php';  exit; }
 if ($uri === '/posturi.ics')  { require __DIR__ . '/feeds/jobs.ics.php';   exit; }
 
+// Crawler surface
+if ($uri === '/robots.txt') { require __DIR__ . '/pages/robots.php';  exit; }
+if ($uri === '/sitemap.xml') { require __DIR__ . '/pages/sitemap.php'; exit; }
+
 // Route pages
 if ($uri === '/' || $uri === '') {
     require __DIR__ . '/pages/list.php';
-} elseif (preg_match('#^/job/(\d+)/?$#', $uri, $m)) {
+} elseif (preg_match('#^/job/(\d+)(?:-[^/]*)?/?$#', $uri, $m)) {
+    // `/job/1234/` and `/job/1234-anything/` both resolve; detail.php redirects
+    // to the canonical slug form.
     $_GET['id'] = $m[1];
+    $requested_path = $uri;
     require __DIR__ . '/pages/detail.php';
 } elseif ($uri === '/angajatori' || $uri === '/angajatori/') {
     require __DIR__ . '/pages/employers.php';

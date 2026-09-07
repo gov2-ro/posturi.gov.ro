@@ -9,12 +9,15 @@ Usage:
 from __future__ import annotations
 
 import os
+import subprocess
+from collections import Counter
 from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
+from apps.jobs.attachments import classify_attachment
 from apps.jobs.models import JobPosting
 
 
@@ -32,9 +35,41 @@ def _extract_docx(path: Path) -> str:
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
 
+#: Converters for legacy .doc, tried in order. The first one present on the
+#: machine that produces output wins.
+_DOC_CONVERTERS = (
+    ["textutil", "-convert", "txt", "-stdout"],  # macOS, built in
+    ["antiword"],                                # Debian/Ubuntu: apt install antiword
+    ["catdoc"],                                  # ditto: apt install catdoc
+)
+
+
 def _extract_doc(path: Path) -> str:
-    import docx2txt
-    return docx2txt.process(str(path)) or ""
+    """Legacy Word .doc (OLE2 compound file) -> plain text.
+
+    `docx2txt` only understands the ZIP-based .docx container and raises
+    KeyError/BadZipFile on a real .doc, which `extract_text` swallowed into an
+    empty string -- so 167 active postings silently had no attachment text at
+    all, and the LLM extraction ran on the web body alone. `quality_check.py`
+    was switched to `textutil` in May 2026; this command was not.
+
+    Some servers hand out a genuine .docx under a .doc name, so sniff the
+    container first rather than trusting the extension.
+    """
+    with open(path, "rb") as fh:
+        if fh.read(2) == b"PK":          # ZIP magic -> actually a .docx
+            return _extract_docx(path)
+
+    for argv in _DOC_CONVERTERS:
+        try:
+            result = subprocess.run(
+                [*argv, str(path)], capture_output=True, text=True, timeout=60,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue  # converter not installed, or a pathological file
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout
+    return ""
 
 
 def _extract_pdf(path: Path) -> str:
@@ -44,23 +79,35 @@ def _extract_pdf(path: Path) -> str:
     return "\n".join(pages).strip()
 
 
-def extract_text(path: Path) -> str:
-    """Return extracted plain text from path, or empty string on failure."""
+def extract_text(path: Path) -> tuple[str, str]:
+    """Return (text, reason). `reason` is empty on success, else why it failed.
+
+    Previously this swallowed every exception into "", so a systematically
+    broken extractor was indistinguishable from a genuinely empty document --
+    which is how a .doc extractor that failed on 100% of its input went
+    unnoticed.
+    """
     suffix = path.suffix.lower()
+    extractor = {".docx": _extract_docx, ".doc": _extract_doc, ".pdf": _extract_pdf}.get(suffix)
+    if extractor is None:
+        return "", f"unsupported extension {suffix or '(none)'}"
     try:
-        if suffix == ".docx":
-            return _extract_docx(path)
-        if suffix == ".doc":
-            return _extract_doc(path)
-        if suffix == ".pdf":
-            return _extract_pdf(path)
-    except Exception:
-        return ""
-    return ""
+        text = extractor(path)
+    except Exception as exc:
+        return "", f"{type(exc).__name__}: {exc}"
+    if not text.strip():
+        # Almost always a scanned PDF with no text layer.
+        return "", "no text layer / empty document"
+    return text, ""
 
 
-def extract_for_posting(posting: JobPosting, downloads_dir: Path) -> str:
-    """Collect text from all attachment files linked to a posting."""
+def extract_for_posting(posting: JobPosting, downloads_dir: Path) -> tuple[str, list[str], list[dict]]:
+    """Collect text from every attachment linked to a posting.
+
+    Returns (combined_text, failures) where each failure is
+    "<filename>: <reason>", so a systematic extractor breakage shows up in the
+    run summary instead of looking like a pile of empty documents.
+    """
     urls = []
     if posting.announcement_url:
         urls.append(posting.announcement_url)
@@ -68,15 +115,30 @@ def extract_for_posting(posting: JobPosting, downloads_dir: Path) -> str:
         urls.extend(posting.other_links)
 
     parts: list[str] = []
-    for url in urls:
+    failures: list[str] = []
+    meta: list[dict] = []
+    for i, url in enumerate(urls):
+        role = "announcement" if (i == 0 and posting.announcement_url) else "other"
         path = _local_path(url, downloads_dir)
         if path is None:
+            failures.append(f"{url.rstrip('/').split('/')[-1]}: not downloaded")
+            meta.append({"url": url, "ext": "", "bytes": None, "kind": None, "role": role})
             continue
-        text = extract_text(path)
+        text, reason = extract_text(path)
         if text.strip():
             parts.append(text.strip())
+        else:
+            failures.append(f"{path.name}: {reason}")
+        meta.append({
+            "url": url,
+            "ext": path.suffix.lstrip(".").upper(),
+            "bytes": path.stat().st_size,
+            # None for an ordinary announcement, which is ~89% of them.
+            "kind": classify_attachment(text),
+            "role": role,
+        })
 
-    return "\n\n".join(parts)
+    return "\n\n".join(parts), failures, meta
 
 
 class Command(BaseCommand):
@@ -121,12 +183,19 @@ class Command(BaseCommand):
         self.stdout.write(f"Processing {total} postings (downloads: {downloads_dir})…")
 
         done = extracted = skipped = errors = 0
+        failure_reasons: Counter[str] = Counter()
 
         for posting in qs.iterator(chunk_size=200):
             try:
-                text = extract_for_posting(posting, downloads_dir)
-                JobPosting.objects.filter(pk=posting.pk).update(attachment_text=text)
+                text, failures, meta = extract_for_posting(posting, downloads_dir)
+                JobPosting.objects.filter(pk=posting.pk).update(
+                    attachment_text=text, attachment_meta=meta,
+                )
                 done += 1
+                for f in failures:
+                    # Group by reason, not by file, so "docx2txt fails on every
+                    # .doc" reads as one line rather than 167.
+                    failure_reasons[f.split(": ", 1)[-1].split(":")[0]] += 1
                 if text.strip():
                     extracted += 1
                 else:
@@ -142,5 +211,9 @@ class Command(BaseCommand):
                 )
 
         self.stdout.write(self.style.SUCCESS(
-            f"Done. {extracted} extracted, {skipped} no file found, {errors} errors."
+            f"Done. {extracted} extracted, {skipped} with no usable text, {errors} errors."
         ))
+        if failure_reasons:
+            self.stdout.write("Attachments that yielded no text, by reason:")
+            for reason, count in failure_reasons.most_common():
+                self.stdout.write(f"  {count:6}  {reason}")

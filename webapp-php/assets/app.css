@@ -1,0 +1,83 @@
+/*
+ * Source stylesheet. Build with `npm run css`; the compiled
+ * webapp-php/static/app.css is committed so the shared host needs no
+ * toolchain. Replaces the cdn.tailwindcss.com play script, which compiled
+ * every page in the browser.
+ */
+@import "./fonts.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: theme("colors.parchment");
+    color: theme("colors.ink");
+  }
+
+  /* Facet disclosures: no native triangle, caret flips when open. */
+  summary { list-style: none; cursor: pointer; }
+  summary::-webkit-details-marker { display: none; }
+  details[open] > summary .facet-caret { transform: rotate(180deg); }
+
+  /* The search field's own clear button duplicates ours. */
+  input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: theme("colors.parchment-dark"); }
+  ::-webkit-scrollbar-thumb { background: #9C948A; border-radius: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* htmx loading indicator */
+  #results.htmx-request { opacity: 0.5; transition: opacity 200ms ease; }
+
+  .facet-check:checked + span { color: theme("colors.gov"); font-weight: 500; }
+
+  /* Rendered posting body (Markdown → HTML) */
+  .prose-body h1,
+  .prose-body h2,
+  .prose-body h3 {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 600;
+    margin-top: 1.25em;
+    margin-bottom: 0.4em;
+    line-height: 1.2;
+  }
+  .prose-body h1 { font-size: 1.35rem; }
+  .prose-body h2 { font-size: 1.15rem; }
+  .prose-body h3 { font-size: 1rem; }
+  .prose-body p { margin-bottom: 0.75em; line-height: 1.65; }
+  .prose-body ul, .prose-body ol { margin-bottom: 0.75em; padding-left: 1.4em; }
+  .prose-body ul { list-style: disc; }
+  .prose-body ol { list-style: decimal; }
+  .prose-body li { margin-bottom: 0.25em; line-height: 1.6; }
+  .prose-body strong { font-weight: 600; }
+  .prose-body a { color: theme("colors.gov"); text-decoration: underline; }
+
+  /* Wide tables scroll inside their own box rather than the page. */
+  .prose-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1em;
+    font-size: 0.85rem;
+    display: block;
+    overflow-x: auto;
+  }
+  .prose-body th,
+  .prose-body td {
+    border: 1px solid theme("colors.border-warm");
+    padding: 0.4em 0.6em;
+    text-align: left;
+  }
+  .prose-body th { background: theme("colors.parchment-dark"); font-weight: 600; }
+}

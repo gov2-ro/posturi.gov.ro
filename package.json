@@ -1,0 +1,12 @@
+{
+  "name": "posturi-gov2-assets",
+  "private": true,
+  "description": "Build step for the PHP webapp's stylesheet. Output is committed so the shared host needs no toolchain.",
+  "scripts": {
+    "css": "tailwindcss -i webapp-php/assets/app.css -o webapp-php/static/app.css --minify",
+    "css:watch": "tailwindcss -i webapp-php/assets/app.css -o webapp-php/static/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "3.4.19"
+  }
+}

@@ -153,3 +153,302 @@ if __name__ == "__main__":
     import json
 
     print(json.dumps(JobPostingExtraction.model_json_schema(), indent=2, ensure_ascii=False))
+
+
+# ===========================================================================
+# Prompt v3 — granular, match-oriented extraction
+# ===========================================================================
+# v2 answers "what does this posting say?". v3 answers "can this candidate
+# apply?", which is a different question and needs a different shape.
+#
+# The rule throughout: anything a filter or a CV match depends on gets a
+# *controlled* value, and the original Romanian is kept beside it in a
+# `verbatim` field for display. Free text cannot be matched; enums can.
+#
+# Vocabularies are the ones a Europass CV already carries, so the two sides can
+# be compared without a translation layer:
+#   EQF 1-8         qualification level        (Europass "Education", ISCED-mapped)
+#   ISCED-F 2013    broad field of education   (Europass "Field of study")
+#   CEFR A1-C2      language proficiency       (Europass "Language skills")
+#   ESCO skill type knowledge / skill / transversal / language
+# See docs/metadata-schema-v3.md for the full mapping table.
+
+#: Romanian study levels, ordered, with their EQF equivalents.
+StudyLevel = Literal[
+    "generala",      # 8 clase                      — EQF 2
+    "profesionala",  # școală profesională, calificare — EQF 3
+    "liceala",       # bacalaureat / studii medii   — EQF 4
+    "postliceala",   # școală postliceală           — EQF 5
+    "licenta",       # studii superioare / licență  — EQF 6
+    "master",        # master / studii aprofundate  — EQF 7
+    "doctorat",      # doctorat                     — EQF 8
+]
+
+STUDY_LEVEL_TO_EQF: dict[str, int] = {
+    "generala": 2, "profesionala": 3, "liceala": 4,
+    "postliceala": 5, "licenta": 6, "master": 7, "doctorat": 8,
+}
+
+#: ISCED-F 2013 broad fields. Codes are the standard ones; a Europass CV's
+#: field of study resolves to the same list.
+IscedField = Literal[
+    "00_generale",
+    "01_educatie",
+    "02_arte_umanioare",
+    "03_stiinte_sociale",
+    "04_afaceri_administratie_drept",
+    "05_stiinte_naturale_matematica",
+    "06_tic",
+    "07_inginerie_constructii",
+    "08_agricultura_silvicultura_veterinara",
+    "09_sanatate_asistenta_sociala",
+    "10_servicii",
+]
+
+#: ESCO skills-pillar concept types.
+SkillType = Literal["knowledge", "skill", "transversal", "language"]
+
+Proficiency = Literal["baza", "mediu", "avansat"]
+
+CefrLevel = Literal["A1", "A2", "B1", "B2", "C1", "C2"]
+
+#: Subject-matter domain, distinct from the profession. Adapted from the
+#: `Domenii` facet on cariere.gov.md, which separates *what field the work is
+#: in* from *what job it is* — a distinction our profession_family alone misses.
+PolicyDomain = Literal[
+    "achizitii_publice", "administratie_publica", "agricultura_alimentatie",
+    "aparare_securitate", "asistenta_sociala", "constructii_urbanism",
+    "cultura_patrimoniu", "demografie_migratie", "drept_justitie",
+    "economie_finante", "educatie_cercetare", "energie", "mediu",
+    "fonduri_europene", "relatii_munca", "resurse_umane", "sanatate_publica",
+    "securitate_sanatate_munca", "sport_tineret", "tehnologia_informatiei",
+    "comunicare_media", "transporturi", "turism", "altele",
+]
+
+ContractDuration = Literal["nedeterminata", "determinata", "sezonier", "proiect"]
+WorkSchedule = Literal["norma_intreaga", "norma_partiala", "schimburi", "tura_noapte", "flexibil"]
+RemoteMode = Literal["la_sediu", "hibrid", "telemunca"]
+
+
+class FieldOfStudy(BaseModel):
+    """One acceptable field of study. Postings usually list several as
+    alternatives — "geografie/silvicultură/geologie" is three entries, not one
+    string, so that a CV in any one of them matches."""
+
+    label_ro: str = Field(description="Field as written in the posting, e.g. 'silvicultură'.")
+    isced_field: Optional[IscedField] = Field(
+        default=None, description="ISCED-F 2013 broad field this belongs to."
+    )
+
+
+class EducationRequirement(BaseModel):
+    """Structured form of `educationRequirements`."""
+
+    minimum_level: Optional[StudyLevel] = Field(
+        default=None, description="Lowest study level that qualifies."
+    )
+    eqf_level: Optional[int] = Field(
+        default=None, ge=1, le=8,
+        description="EQF level matching minimum_level (generala 2 … doctorat 8).",
+    )
+    fields_of_study: list[FieldOfStudy] = Field(
+        default_factory=list,
+        description="Acceptable fields, as alternatives. Empty when any field qualifies.",
+    )
+    specialization: Optional[str] = Field(
+        default=None, description="Narrower specialisation if named, e.g. 'medicină de familie'."
+    )
+    required: bool = Field(
+        default=True, description="False when the posting frames this as an advantage, not a condition."
+    )
+    verbatim: Optional[str] = Field(default=None, description="The original sentence, for display.")
+
+
+class SkillRequirement(BaseModel):
+    """One competence, normalised to a short tag so it can be matched.
+
+    "Cunoștințe avansate de operare sisteme GIS (lucrul cu baze de date,
+    elaborare și actualizare hărți tematice, analiză spațială)" becomes
+    label='GIS', type='knowledge', proficiency='avansat', required=True —
+    with the sentence kept in `evidence`.
+    """
+
+    label: str = Field(
+        description="Short canonical tag: 'GIS', 'Microsoft Excel', 'AutoCAD', "
+                    "'analiză spațială', 'lucru în echipă'. Not a sentence."
+    )
+    type: SkillType = Field(
+        default="skill",
+        description="ESCO pillar: knowledge (a subject), skill (an ability), "
+                    "transversal (soft), language.",
+    )
+    proficiency: Optional[Proficiency] = Field(
+        default=None, description="Only when the posting says so ('cunoștințe avansate')."
+    )
+    required: bool = Field(default=True, description="False for 'constituie un avantaj'.")
+    evidence: Optional[str] = Field(default=None, description="Phrase the tag was taken from.")
+
+
+class LanguageRequirement(BaseModel):
+    """Europass-compatible language requirement."""
+
+    language: str = Field(description="Language name in Romanian, e.g. 'engleză'.")
+    iso_code: Optional[str] = Field(default=None, description="ISO 639-1, e.g. 'en'.")
+    cefr: Optional[CefrLevel] = Field(
+        default=None, description="CEFR level if stated or clearly implied."
+    )
+    required: bool = Field(default=True)
+
+
+class ExperienceRequirement(BaseModel):
+    """Structured form of `experienceRequirements`."""
+
+    years_minimum: Optional[float] = Field(
+        default=None, ge=0, le=50,
+        description="Minimum years. Use 0.5 for '6 luni'. Null if unstated.",
+    )
+    in_specialty: bool = Field(
+        default=False,
+        description="True for 'vechime în specialitate', false for general 'vechime în muncă'.",
+    )
+    domain: Optional[str] = Field(default=None, description="Field the experience must be in.")
+    none_required: bool = Field(
+        default=False, description="True when the posting explicitly says no experience is needed."
+    )
+    verbatim: Optional[str] = Field(default=None)
+
+
+class Credential(BaseModel):
+    """Licence, authorisation, certificate or clearance the role requires.
+
+    Kept apart from skills because these are documents a candidate either holds
+    or does not — the cheapest, hardest filter there is.
+    """
+
+    label: str = Field(description="e.g. 'permis categoria B', 'certificat OAMGMAMR', 'autorizație ISCIR'.")
+    kind: Literal["permis_conducere", "certificat_profesional", "autorizatie", "aviz_medical",
+                  "acces_informatii_clasificate", "altele"] = Field(default="altele")
+    issuer: Optional[str] = Field(default=None, description="Issuing body if named.")
+    required: bool = Field(default=True)
+
+
+class ContractTerms(BaseModel):
+    """How the work is organised."""
+
+    duration: Optional[ContractDuration] = Field(default=None)
+    duration_months: Optional[int] = Field(
+        default=None, ge=1, description="Length when the contract is fixed-term."
+    )
+    schedule: Optional[WorkSchedule] = Field(default=None)
+    hours_per_week: Optional[float] = Field(default=None, ge=1, le=80)
+    remote_mode: Optional[RemoteMode] = Field(default=None)
+    probation_months: Optional[int] = Field(default=None, ge=0, description="Perioadă de probă.")
+    shift_work: bool = Field(default=False, description="Ture / gărzi / weekend work.")
+
+
+class PositionRequirement(BaseModel):
+    """One advertised role, with its own requirements.
+
+    8.4% of active postings advertise several distinct roles at once — "1 post
+    de expert IT senior; 2 posturi de expert administrație publică I", each with
+    its own studies and tenure (3 years vs 7). A single flat extraction cannot
+    hold two contradictory requirement sets, and the first v3 run showed what
+    happens when it tries: the model returned null for education, skills,
+    occupation and seniority rather than pick one, losing everything.
+    """
+
+    title: str = Field(description="Role title as advertised, without the count.")
+    count: Optional[int] = Field(default=None, ge=1, description="How many seats for this role.")
+    education: Optional[EducationRequirement] = Field(default=None)
+    experience: Optional[ExperienceRequirement] = Field(default=None)
+    skill_list: list[SkillRequirement] = Field(default_factory=list)
+    credentials: list[Credential] = Field(default_factory=list)
+    seniority_hint: Optional[str] = Field(default=None)
+
+
+class JobPostingExtractionV3(JobPostingExtraction):
+    """v3 = every v2 field, unchanged, plus the structured layer.
+
+    Inheriting rather than replacing keeps the detail page, the feeds and the
+    v2 back-compat renderer working on a v3 row without any change: the
+    verbatim strings are still there, and the new fields are additive.
+    """
+
+    # --- structured requirements (the match keys) ---
+    education: Optional[EducationRequirement] = Field(
+        default=None, description="Structured form of educationRequirements."
+    )
+    experience: Optional[ExperienceRequirement] = Field(
+        default=None, description="Structured form of experienceRequirements."
+    )
+    skill_list: list[SkillRequirement] = Field(
+        default_factory=list, description="Normalised competence tags. Structured form of `skills`."
+    )
+    language_list: list[LanguageRequirement] = Field(
+        default_factory=list, description="Language requirements with CEFR levels."
+    )
+    credentials: list[Credential] = Field(
+        default_factory=list, description="Licences, authorisations, certificates, clearances."
+    )
+    contract: Optional[ContractTerms] = Field(
+        default=None, description="Structured form of workHours plus contract terms."
+    )
+
+    # --- classification ---
+    policy_domains: list[PolicyDomain] = Field(
+        default_factory=list,
+        description="Subject-matter domains, at most three, most specific first.",
+    )
+    occupation_title: Optional[str] = Field(
+        default=None,
+        description="Job title normalised to its common form, without grade, "
+                    "count or department: 'Inspector de specialitate', 'Asistent medical generalist'.",
+    )
+    seniority_hint: Optional[Literal["debutant", "asistent", "practicant", "specialist",
+                                     "principal", "superior", "conducere"]] = Field(
+        default=None, description="Career stage the title or text implies."
+    )
+
+    #: Filled only when the posting advertises MORE THAN ONE distinct role.
+    #: The flat fields above always describe the first/primary role, so a
+    #: consumer that ignores `positions` still gets usable data.
+    positions: list[PositionRequirement] = Field(
+        default_factory=list,
+        description="One entry per advertised role when the posting covers several. "
+                    "Empty for an ordinary single-role posting.",
+    )
+
+    # --- selection process ---
+    exam_stages: list[Literal["selectie_dosare", "proba_scrisa", "proba_practica",
+                              "proba_sportiva", "interviu", "proba_orala", "test_psihologic"]] = Field(
+        default_factory=list, description="Competition stages named in the posting."
+    )
+    bibliography_topics: list[str] = Field(
+        default_factory=list,
+        description="Subjects from the bibliografie/tematică, as short topic labels "
+                    "('Codul administrativ', 'achiziții publice'), not full legal citations.",
+    )
+
+
+#: Prompt version → Pydantic model. `llm-schema.py` looks the model up here
+#: rather than hard-coding one, so adding v4 is a one-line change.
+EXTRACTION_MODELS: dict[str, type[BaseModel]] = {
+    "v2": JobPostingExtraction,
+    "v3": JobPostingExtractionV3,
+}
+
+#: Versions that use provider-native structured output. v1 is free-form JSON.
+STRUCTURED_VERSIONS = frozenset(EXTRACTION_MODELS)
+
+
+def model_for_version(prompt_version: str) -> type[BaseModel] | None:
+    """Return the Pydantic model for a prompt version, or None for free-form."""
+    return EXTRACTION_MODELS.get(prompt_version)
+
+
+def json_schema_for(prompt_version: str) -> dict:
+    """OpenAI strict `response_format` payload for a prompt version."""
+    model = EXTRACTION_MODELS[prompt_version]
+    schema = model.model_json_schema()
+    _make_strict(schema)
+    return {"name": model.__name__, "schema": schema, "strict": True}

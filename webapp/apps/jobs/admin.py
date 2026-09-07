@@ -109,6 +109,35 @@ class AnomalyFilter(admin.SimpleListFilter):
         return queryset
 
 
+class JudetResolutionFilter(admin.SimpleListFilter):
+    """Surface postings whose county the normaliser could not identify.
+
+    `judet_raw` is written only when `apps.jobs.judete.normalize_judet` failed,
+    so a non-empty value means the source used a spelling we do not know — the
+    posting then answers to no county filter at all and needs either a new
+    ALIASES entry or a scraper fix.
+    """
+
+    title = "Județ — rezolvare"
+    parameter_name = "judet_resolution"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("unresolved", "Nerecunoscut (judet_raw setat)"),
+            ("missing", "Lipsă complet"),
+            ("with_locality", "Cu localitate"),
+            ("no_locality", "Fără localitate"),
+        ]
+
+    def queryset(self, request, queryset):
+        return {
+            "unresolved": lambda: queryset.exclude(judet_raw=""),
+            "missing": lambda: queryset.filter(judet__isnull=True),
+            "with_locality": lambda: queryset.exclude(locality=""),
+            "no_locality": lambda: queryset.filter(locality=""),
+        }.get(self.value(), lambda: queryset)()
+
+
 @admin.action(description="Șterge datele inferred (reprogramează inferența)")
 def reset_inferred(modeladmin, request, queryset):
     queryset.update(inferred={})
@@ -120,6 +149,7 @@ class JobPostingAdmin(admin.ModelAdmin):
         "title",
         "employer",
         "judet",
+        "locality",
         "published_at",
         "expires_at",
         "nr_posturi",
@@ -131,6 +161,7 @@ class JobPostingAdmin(admin.ModelAdmin):
     list_select_related = ("employer", "judet")
     list_filter = (
         "judet",
+        JudetResolutionFilter,
         "job_level",
         "job_type",
         "categorie",
@@ -139,13 +170,13 @@ class JobPostingAdmin(admin.ModelAdmin):
         InferenceConfidenceFilter,
         AnomalyFilter,
     )
-    search_fields = ("title", "employer__name", "url")
+    search_fields = ("title", "employer__name", "url", "locality")
     date_hierarchy = "published_at"
     readonly_fields = ("created_at", "updated_at", "last_seen_at", "search_vector")
     inlines = [CalendarEventInline, SchemaVariantInline]
     actions = [reset_inferred]
     fieldsets = (
-        (None, {"fields": ("url", "title", "employer", "judet", "tip", "detalii_raw")}),
+        (None, {"fields": ("url", "title", "employer", "judet", "locality", "judet_raw", "tip", "detalii_raw")}),
         ("Date publicare / expirare", {"fields": ("published_at", "expires_at")}),
         (
             "Detalii anunț",

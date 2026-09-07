@@ -1,178 +1,180 @@
 <?php
 // Variables expected from parent scope:
-// $postings, $total_count, $page, $num_pages, $PAGE_SIZE, $q
-// $judet_slugs, $levels, $types, $categories, $emp_cats, $exp_before, $exp_after
+// $postings, $total_count, $page, $num_pages, $PAGE_SIZE, $q, $is_htmx
+// $active_chips, $relaxations
 $today = date('Y-m-d');
 $start = ($page - 1) * $PAGE_SIZE + 1;
 $end   = min($page * $PAGE_SIZE, $total_count);
+$chips = $active_chips ?? [];
 ?>
 
+<?php if (!empty($is_htmx)): ?>
+  <!-- Out-of-band updates for the chrome that lives outside #results -->
+  <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only" hx-swap-oob="true"><?= $total_count ?> rezultate</p>
+  <span id="filter-count" hx-swap-oob="true"
+        class="<?= $chips ? '' : 'hidden ' ?>inline-flex min-w-[1.25rem] justify-center rounded-full bg-gov px-1.5 py-0.5 text-xs font-mono text-white"><?= count($chips) ?></span>
+  <span id="drawer-count" hx-swap-oob="true"><?= $total_count ?></span>
+<?php endif; ?>
+
 <!-- Top bar: count + pagination info -->
-<div class="flex items-center justify-between mb-3 pb-2 border-b border-border-warm">
+<div class="mb-3 flex items-center justify-between border-b border-border-warm pb-2">
   <div class="text-sm text-ink-muted">
     <?php if ($total_count): ?>
       <span class="font-mono font-medium text-ink"><?= $total_count ?></span>
-      postur<?= $total_count !== 1 ? 'i' : '...' ?> găsite
+      <?= $total_count === 1 ? 'post găsit' : 'posturi găsite' ?>
     <?php else: ?>
       Niciun rezultat
     <?php endif; ?>
     <?php if ($q): ?>
-      <span class="ml-1">pentru <em class="text-ink">"<?= e($q) ?>"</em></span>
+      <span class="ml-1">pentru <em class="text-ink">„<?= e($q) ?>”</em></span>
     <?php endif; ?>
   </div>
   <?php if ($total_count && $num_pages > 1): ?>
-    <span class="text-xs text-ink-faint font-mono">pag. <?= $page ?>/<?= $num_pages ?></span>
+    <span class="font-mono text-xs text-ink-muted">pag. <?= $page ?>/<?= $num_pages ?></span>
   <?php endif; ?>
 </div>
 
-<!-- Active filter chips -->
-<?php if ($q || $judet_slugs || $levels || $types || $categories || $emp_cats || $exp_before || $exp_after): ?>
-<div class="flex flex-wrap gap-1.5 mb-3">
-  <?php if ($q): ?>
-    <a href="<?= e(qs_with('q', null)) ?>" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-colors">
-      "<?= e($q) ?>" ×
+<!-- Active filter chips — one per value, each removing only itself -->
+<?php if ($chips): ?>
+<div class="mb-3 flex flex-wrap items-center gap-1.5">
+  <?php foreach ($chips as $chip): ?>
+    <a href="<?= e($chip['href']) ?>"
+       data-chip-param="<?= e($chip['param']) ?>"
+       data-chip-value="<?= e($chip['value']) ?>"
+       class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-gov-light px-2.5 py-1 text-xs text-gov transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700">
+      <?php if ($chip['group'] !== ''): ?><span class="opacity-70"><?= e($chip['group']) ?>:</span><?php endif; ?>
+      <span class="font-medium"><?= e($chip['label']) ?></span>
+      <span aria-hidden="true" class="text-sm leading-none">×</span>
+      <span class="sr-only">— elimină filtrul</span>
     </a>
+  <?php endforeach; ?>
+  <?php if (count($chips) > 1): ?>
+    <a href="/" class="px-2 py-1 text-xs text-ink-muted underline hover:text-gov">Șterge tot</a>
   <?php endif; ?>
-  <?php foreach ($judet_slugs as $s): ?>
-    <a href="<?= e(qs_with('judet', null)) ?>" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:text-red-700 transition-colors">
-      Județ: <?= e($s) ?> ×
-    </a>
-  <?php endforeach; ?>
-  <?php foreach ($levels as $l): ?>
-    <a href="<?= e(qs_with('level', null)) ?>" class="inline-flex items-center gap-1 px-2 py-0.5 bg-gov-light text-gov text-xs border border-blue-200 hover:bg-red-50 hover:text-red-700 transition-colors">
-      <?= e($l) ?> ×
-    </a>
-  <?php endforeach; ?>
 </div>
 <?php endif; ?>
 
 <!-- Results list -->
 <?php if ($postings): ?>
-  <div class="divide-y divide-border-warm border-t border-border-warm">
+  <ul class="divide-y divide-border-warm border-t border-border-warm">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
         $days = days_until($p['expires_at']);
     ?>
-    <article class="py-4 group hover:bg-parchment-dark transition-colors -mx-1 px-1">
+    <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-parchment-dark">
       <div class="flex items-start justify-between gap-4">
-        <div class="flex-1 min-w-0">
-          <a href="/job/<?= $p['id'] ?>/" class="block group-hover:text-gov transition-colors">
-            <h2 class="font-display text-base font-semibold italic text-ink group-hover:text-gov leading-snug">
+        <div class="min-w-0 flex-1">
+          <h2 class="font-display text-base font-semibold italic leading-snug text-ink">
+            <a href="<?= e(job_url($p)) ?>" class="inline-block py-0.5 transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-gov">
               <?= e($p['title']) ?>
-            </h2>
-          </a>
+            </a>
+          </h2>
           <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
             <a href="/angajator/<?= e($p['employer_slug_display'] ?? $p['employer_slug'] ?? '') ?>/"
-               class="font-medium text-ink-muted hover:text-gov hover:underline truncate max-w-xs">
+               class="max-w-xs truncate py-1 font-medium text-ink-muted hover:text-gov hover:underline">
               <?= e($p['employer_name']) ?>
             </a>
-            <?php if ($p['judet_name']): ?>
-              <span class="text-ink-faint">·</span>
-              <span><?= e($p['judet_name']) ?></span>
+            <?php if ($place = place_label($p)): ?>
+              <span aria-hidden="true" class="text-ink-muted">·</span>
+              <span><?= e($place) ?></span>
             <?php endif; ?>
             <?php if ($p['published_at']): ?>
-              <span class="text-ink-faint">·</span>
-              <span class="font-mono"><?= fmt_date($p['published_at']) ?></span>
+              <span aria-hidden="true" class="text-ink-muted">·</span>
+              <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>" class="font-mono"><?= fmt_date($p['published_at']) ?></time>
             <?php endif; ?>
           </div>
 
           <!-- Badges -->
           <div class="mt-2 flex flex-wrap gap-1.5">
             <?php if ($p['job_level']): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-slate-100 text-slate-700 border border-slate-200' ?>">
+              <span class="px-1.5 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'border border-blue-200 bg-blue-50 text-blue-800' : 'border border-slate-200 bg-slate-100 text-slate-700' ?>">
                 <?= e($p['job_level']) ?>
               </span>
             <?php endif; ?>
             <?php if ($p['job_type']): ?>
-              <span class="px-1.5 py-0.5 text-xs bg-slate-100 text-slate-600 border border-slate-200"><?= e($p['job_type']) ?></span>
+              <span class="border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700"><?= e($p['job_type']) ?></span>
             <?php endif; ?>
             <?php if ($p['categorie']): ?>
-              <span class="px-1.5 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200' ?>">
+              <span class="px-1.5 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-amber-200 bg-amber-50 text-amber-800' ?>">
                 <?= e($p['categorie']) ?>
               </span>
             <?php endif; ?>
             <?php if (($p['nr_posturi'] ?? 0) > 1): ?>
-              <span class="px-1.5 py-0.5 text-xs bg-gov-light text-gov border border-blue-200 font-mono">
+              <span class="border border-blue-200 bg-gov-light px-1.5 py-0.5 font-mono text-xs text-gov">
                 <?= $p['nr_posturi'] ?> posturi
               </span>
             <?php endif; ?>
           </div>
 
-          <!-- Inferred condition badges -->
-          <?php $wt = $inferred['work_type'] ?? ''; $re = $inferred['remote_eligible'] ?? false;
-                $rc = $inferred['requires_computer'] ?? null; $exp = $inferred['experience_years'] ?? null; ?>
-          <?php if ($wt || $re || $rc !== null || $exp): ?>
-          <div class="flex flex-wrap gap-1 mt-1">
-            <?php if ($wt): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded"><?= e(work_type_label($wt)) ?></span>
-            <?php endif; ?>
-            <?php if ($re): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">Telemuncă</span>
-            <?php endif; ?>
-            <?php if ($rc): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">Calculator</span>
-            <?php endif; ?>
-            <?php if ($exp): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium bg-stone-50 text-stone-600 border border-stone-200 rounded">Min. <?= $exp ?> ani</span>
-            <?php endif; ?>
+          <!-- Derived attributes. Visually separated from the badges above,
+               which come straight from the source; these are inferred. -->
+          <?php $meta = inferred_meta($p); ?>
+          <?php if ($meta): ?>
+          <div class="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
+            <abbr title="Atribute deduse automat din textul anunțului — pot fi incomplete sau greșite. Vezi metodologia."
+                  class="cursor-help font-mono text-[10px] uppercase tracking-wider text-ink-muted no-underline decoration-dotted underline-offset-2 [text-decoration:underline]">auto</abbr>
+            <?php foreach ($meta as $k => $item): ?>
+              <?php if ($k): ?><span aria-hidden="true" class="text-border-warm">·</span><?php endif; ?>
+              <span><?= e($item) ?></span>
+            <?php endforeach; ?>
           </div>
           <?php endif; ?>
         </div>
 
         <!-- Deadline badge -->
-        <div class="shrink-0 text-right min-w-[80px]">
+        <div class="min-w-[80px] shrink-0 text-right">
           <?php if ($p['expires_at'] && $days !== null): ?>
             <?php if ($days < 0): ?>
-              <span class="text-xs text-ink-faint font-mono">Expirat</span>
+              <span class="font-mono text-xs text-ink-muted">Expirat</span>
             <?php elseif ($days === 0): ?>
-              <span class="text-xs font-semibold text-red-600 font-mono">Azi!</span>
+              <span class="font-mono text-xs font-semibold text-red-700">Azi!</span>
             <?php elseif ($days <= 3): ?>
-              <span class="text-xs font-semibold text-red-600 font-mono"><?= $days ?>z !</span>
+              <span class="font-mono text-xs font-semibold text-red-700"><?= e(days_label($days)) ?></span>
             <?php elseif ($days <= 7): ?>
-              <span class="text-xs font-medium text-amber-700 font-mono"><?= $days ?>z</span>
+              <span class="font-mono text-xs font-medium text-amber-800"><?= e(days_label($days)) ?></span>
             <?php else: ?>
-              <span class="text-xs text-ink-muted font-mono"><?= $days ?>z</span>
+              <span class="font-mono text-xs text-ink-muted"><?= e(days_label($days)) ?></span>
             <?php endif; ?>
-            <div class="text-xs text-ink-faint font-mono mt-0.5"><?= fmt_date($p['expires_at']) ?></div>
+            <time datetime="<?= e(substr($p['expires_at'], 0, 10)) ?>" class="mt-0.5 block font-mono text-xs text-ink-muted"><?= fmt_date($p['expires_at']) ?></time>
           <?php endif; ?>
         </div>
       </div>
-    </article>
+    </li>
     <?php endforeach; ?>
-  </div>
+  </ul>
 
   <!-- Pagination -->
   <?php if ($num_pages > 1): ?>
-  <nav class="mt-6 flex items-center justify-between text-sm">
-    <div class="text-xs text-ink-faint font-mono"><?= $start ?>–<?= $end ?> din <?= $total_count ?></div>
+  <nav class="mt-6 flex items-center justify-between text-sm" aria-label="Paginare rezultate">
+    <div class="font-mono text-xs text-ink-muted"><?= $start ?>–<?= $end ?> din <?= $total_count ?></div>
     <div class="flex items-center gap-1">
       <?php if ($page > 1): ?>
-        <a href="<?= e(qs_page($page - 1)) ?>"
+        <a href="<?= e(qs_page($page - 1)) ?>" rel="prev" aria-label="Pagina anterioară"
            hx-get="<?= e(qs_page($page - 1)) ?>"
            hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
-           class="px-3 py-1 border border-border-warm text-ink-muted hover:text-gov hover:border-gov transition-colors">
+           class="border border-border-warm px-3 py-1 text-ink-muted transition-colors hover:border-gov hover:text-gov">
           ← Prev
         </a>
       <?php endif; ?>
 
       <?php for ($i = max(1, $page - 3); $i <= min($num_pages, $page + 3); $i++): ?>
         <?php if ($i === $page): ?>
-          <span class="px-3 py-1 bg-gov text-white text-sm font-mono"><?= $i ?></span>
+          <span aria-current="page" class="bg-gov px-3 py-1 font-mono text-sm text-white"><?= $i ?></span>
         <?php else: ?>
-          <a href="<?= e(qs_page($i)) ?>"
+          <a href="<?= e(qs_page($i)) ?>" aria-label="Pagina <?= $i ?>"
              hx-get="<?= e(qs_page($i)) ?>"
              hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
-             class="px-3 py-1 border border-border-warm text-ink-muted hover:text-gov hover:border-gov transition-colors font-mono text-xs">
+             class="border border-border-warm px-3 py-1 font-mono text-xs text-ink-muted transition-colors hover:border-gov hover:text-gov">
             <?= $i ?>
           </a>
         <?php endif; ?>
       <?php endfor; ?>
 
       <?php if ($page < $num_pages): ?>
-        <a href="<?= e(qs_page($page + 1)) ?>"
+        <a href="<?= e(qs_page($page + 1)) ?>" rel="next" aria-label="Pagina următoare"
            hx-get="<?= e(qs_page($page + 1)) ?>"
            hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
-           class="px-3 py-1 border border-border-warm text-ink-muted hover:text-gov hover:border-gov transition-colors">
+           class="border border-border-warm px-3 py-1 text-ink-muted transition-colors hover:border-gov hover:text-gov">
           Următor →
         </a>
       <?php endif; ?>
@@ -181,9 +183,28 @@ $end   = min($page * $PAGE_SIZE, $total_count);
   <?php endif; ?>
 
 <?php else: ?>
-  <div class="py-16 text-center">
-    <div class="font-display text-4xl text-ink-faint italic mb-3">—</div>
-    <p class="text-ink-muted text-sm">Niciun anunț nu corespunde filtrelor selectate.</p>
-    <a href="/" class="mt-4 inline-block text-sm text-gov hover:underline">Șterge filtrele</a>
+  <div class="py-12 text-center">
+    <div class="mb-3 font-display text-4xl italic text-ink-muted">—</div>
+    <p class="text-sm text-ink-muted">Niciun anunț nu corespunde filtrelor selectate.</p>
+
+    <?php if (!empty($relaxations)): ?>
+      <p class="mt-6 text-xs uppercase tracking-widest text-ink-muted">Încearcă fără</p>
+      <div class="mt-2 flex flex-wrap justify-center gap-2">
+        <?php foreach ($relaxations as $r): ?>
+          <a href="<?= e($r['href']) ?>"
+             data-chip-param="<?= e($r['param']) ?>"
+             data-chip-value="<?= e($r['value']) ?>"
+             class="inline-flex items-center gap-1.5 rounded-full border border-border-warm bg-white px-3 py-1.5 text-xs text-ink transition-colors hover:border-gov hover:text-gov">
+            <?php if ($r['group'] !== ''): ?><span class="opacity-70"><?= e($r['group']) ?>:</span><?php endif; ?>
+            <span class="font-medium"><?= e($r['label']) ?></span>
+            <span class="font-mono text-ink-muted">+<?= $r['gain'] ?></span>
+          </a>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($chips): ?>
+      <a href="/" class="mt-6 inline-block text-sm text-gov hover:underline">Șterge toate filtrele</a>
+    <?php endif; ?>
   </div>
 <?php endif; ?>

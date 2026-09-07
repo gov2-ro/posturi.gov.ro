@@ -182,10 +182,25 @@ _STUDIES_LEVELS = [
     ("generala",     r"\bgenerala\b|\bgeneral[aă]\b|\bstudii\s+generale\b|\b[48]\s*clase\b"),
 ]
 
-_EXPERIENCE_RE = re.compile(
+# Romanian postings overwhelmingly put the label first — "Vechime în muncă:
+# minim 3 ani" — so match that shape preferentially and non-greedily, taking the
+# first year count after the label.
+_EXPERIENCE_LABEL_FIRST_RE = re.compile(
+    r"(?:vechime|experienta|experien[tț][aă])[^.\n]{0,60}?(\d+)\s*ani?\b",
+    re.IGNORECASE,
+)
+
+# Fallback for "3 ani de vechime", where the number leads.
+_EXPERIENCE_NUMBER_FIRST_RE = re.compile(
     r"(\d+)\s*ani?\s*(?:de\s*)?(?:vechime|experienta|experien[tț][aă]|munca|munc[aă]|activitate)",
     re.IGNORECASE,
 )
+
+# "Să aibă vârsta de minim 21 ani" is an age limit, not tenure. _normalize()
+# collapses newlines, so such a line runs straight into the next one
+# ("…21 ani  Vechime in munca: minim 1 ani") and the number-first pattern
+# happily reads 21 years of experience off a driver's licence requirement.
+_AGE_CONTEXT_RE = re.compile(r"(?:varsta|virsta)[^.]{0,40}$", re.IGNORECASE)
 
 # Patterns that explicitly state no experience is required
 _NO_EXPERIENCE_RE = re.compile(
@@ -213,9 +228,16 @@ def _infer_experience(body: str) -> tuple[int | None, bool]:
     takes precedence over the no-experience phrases.
     """
     norm = _normalize(body)
-    m = _EXPERIENCE_RE.search(norm)
+
+    m = _EXPERIENCE_LABEL_FIRST_RE.search(norm)
     if m:
         return int(m.group(1)), False
+
+    for m in _EXPERIENCE_NUMBER_FIRST_RE.finditer(norm):
+        if _AGE_CONTEXT_RE.search(norm[max(0, m.start() - 45):m.start()]):
+            continue  # an age limit that ran into the next line
+        return int(m.group(1)), False
+
     if _NO_EXPERIENCE_RE.search(norm):
         return 0, True
     return None, False
@@ -245,20 +267,39 @@ _CERT_RE = re.compile(
 
 
 def _infer_skills(body: str) -> list[str]:
-    norm_body = body.lower()
-    return [kw for kw in _SKILLS_KW if kw.lower() in norm_body]
+    """Keyword scan for concrete, checkable skills.
+
+    Matches on word boundaries, not substrings. A plain `in` test made "SAR"
+    fire on *nece**sar**e* / *comi**sar** / **sar**cini — i.e. on 99.5% of
+    Romanian postings — and "atestat" on the boilerplate "starea de sănătate
+    atestată". Both were noise dressed up as data.
+    """
+    norm_body = _normalize(body)
+    return [kw for kw in _SKILLS_KW if _kw_match(_normalize(kw), norm_body)]
 
 
 def _infer_languages(body: str) -> list[str]:
+    # Canonical spelling, so "engleză" and "engleza" are one tag, not two.
+    canonical = {
+        "engleza": "engleză", "franceza": "franceză", "germana": "germană",
+        "italiana": "italiană", "spaniola": "spaniolă", "rusa": "rusă",
+        "maghiara": "maghiară",
+    }
     seen: dict[str, str] = {}
     for m in _LANGUAGE_RE.finditer(body):
         norm = _normalize(m.group(1))
-        seen[norm] = m.group(1).lower()
+        seen[norm] = canonical.get(norm, m.group(1).lower())
     return list(seen.values())
 
 
 def _infer_certifications(body: str) -> list[str]:
-    return [m.group(0) for m in _CERT_RE.finditer(body)]
+    """De-duplicated on case and whitespace — the source writes "Certificat de
+    absolvire", "certificat de absolvire" and "certificat\xa0 de absolvire"."""
+    seen: dict[str, str] = {}
+    for m in _CERT_RE.finditer(body):
+        raw = re.sub(r"\s+", " ", m.group(0).replace("\xa0", " ")).strip()
+        seen.setdefault(_normalize(raw), raw)
+    return list(seen.values())
 
 
 # ---------------------------------------------------------------------------
@@ -532,7 +573,16 @@ def infer_posting(
     family, confidence = _infer_profession_family(title)
     source = "dict"
 
-    if use_llm and confidence < 0.5:
+    previous = posting.inferred or {}
+    if not use_llm and previous.get("profession_family_source") == "llm" and confidence < 0.5:
+        # --no-llm means "don't call the LLM on this run", not "throw away what
+        # a paid LLM run already established". Without this, a --force --no-llm
+        # pass (say, to pick up a regex fix elsewhere) silently downgrades every
+        # LLM-classified posting to the dictionary's 'altele'.
+        family = previous.get("profession_family", family)
+        confidence = previous.get("profession_family_confidence", confidence)
+        source = "llm"
+    elif use_llm and confidence < 0.5:
         try:
             family = _llm_classify(title, provider)
             confidence = 0.7
@@ -689,7 +739,9 @@ class Command(BaseCommand):
                         use_llm=use_llm,
                         frequent_repost_ids=frequent_repost_ids,
                     )
-                    if inferred["profession_family_source"] == "llm":
+                    # Only count a real call: with --no-llm a source of "llm"
+                    # means a previous run's result was carried forward.
+                    if inferred["profession_family_source"] == "llm" and use_llm:
                         llm_calls += 1
                     elif inferred["profession_family_source"] == "error":
                         errors += 1
@@ -703,6 +755,7 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Done. {done} updated, {llm_calls} LLM calls, {errors} errors."
+                + ("" if use_llm else " (--no-llm: existing LLM classifications preserved)")
             )
         )
 

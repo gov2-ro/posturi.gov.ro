@@ -8,7 +8,7 @@ from __future__ import annotations
 import csv
 import re
 from collections import defaultdict
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 from django.conf import settings
@@ -17,6 +17,8 @@ from django.db import connection, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.jobs.judete import COUNTIES as CANONICAL_COUNTIES
+from apps.jobs.judete import normalize_judet
 from apps.jobs.models import CalendarEvent, Employer, JobPosting, Judet
 
 RO_MONTHS = {
@@ -25,6 +27,7 @@ RO_MONTHS = {
     "septembrie": 9, "octombrie": 10, "noiembrie": 11, "decembrie": 12,
 }
 
+DATE_ISO_RE = re.compile(r"\b(\d{4})-(\d{1,2})-(\d{1,2})\b")
 DATE_DOT_RE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
 DATE_SLASH_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
 DATE_RO_RE = re.compile(r"\b(\d{1,2})\s+([a-zăâîșţț]+)\s*,?\s*(\d{4})\b", re.IGNORECASE)
@@ -40,6 +43,14 @@ def parse_date(value: str) -> date | None:
         return None
     # Strip leading "Publicat în:" / "Expiră in" / similar
     s = re.sub(r"^\s*(publicat\s+[îi]n\s*:?|expir[aă]\s+[îi]n)\s*", "", s, flags=re.IGNORECASE).strip()
+    # YYYY-MM-DD (parse-anunturi.py emits ISO dates in the detail CSV)
+    m = DATE_ISO_RE.search(s)
+    if m:
+        y, mo, d = (int(x) for x in m.groups())
+        try:
+            return date(y, mo, d)
+        except ValueError:
+            return None
     # DD.MM.YYYY
     m = DATE_DOT_RE.search(s)
     if m:
@@ -67,6 +78,78 @@ def parse_date(value: str) -> date | None:
             except ValueError:
                 return None
     return None
+
+
+RECENT_WINDOW_DAYS = 30
+MISSING_EXPIRY_RATIO = 0.5
+
+
+def expiry_sanity_warnings(active: int, recent_total: int, recent_without_expiry: int) -> list[str]:
+    """Check that expiry parsing still works, and return a warning per problem.
+
+    Exists because the 2026-07 site redesign swapped absolute dates on index
+    cards for a relative countdown ("1 zi rămasă"). `expires_at` silently went
+    NULL for every posting scraped afterwards, which left the deployed
+    active-only export with 3 rows — and nothing failed, so it went unnoticed
+    for five weeks. Both checks are ratios rather than absolute floors, so they
+    stay meaningful as the dataset grows.
+    """
+    warnings = []
+    if recent_total and recent_without_expiry / recent_total > MISSING_EXPIRY_RATIO:
+        pct = 100 * recent_without_expiry / recent_total
+        warnings.append(
+            f"{recent_without_expiry}/{recent_total} ({pct:.0f}%) of postings published in the "
+            f"last {RECENT_WINDOW_DAYS} days have no expires_at — expiry parsing is probably "
+            f"broken (check the `expira_in` / `Data Expirare` formats against the live site)."
+        )
+    if recent_total and not active:
+        warnings.append(
+            f"0 active postings, but {recent_total} were published in the last "
+            f"{RECENT_WINDOW_DAYS} days — an active-only export would ship an empty site."
+        )
+    return warnings
+
+
+#: A county count above this means the Judet table is fragmenting again.
+MAX_EXPECTED_COUNTIES = len(CANONICAL_COUNTIES)
+
+
+def judet_sanity_warnings(county_count: int, unresolved_postings: int, total: int) -> list[str]:
+    """Check that county normalisation is still holding, one warning per problem.
+
+    Exists because the source badge changed shape at the 2026-07 redesign
+    ("Timiş" → "TIMIŞOARA, Timiș") and the importer stored both verbatim, giving
+    one county up to 11 separate Judet rows — 261 in total. Nothing failed; the
+    județ facet just quietly stopped matching most postings. Both checks are
+    cheap and run on every import.
+    """
+    warnings = []
+    if county_count > MAX_EXPECTED_COUNTIES:
+        warnings.append(
+            f"{county_count} Judet rows, but Romania has {MAX_EXPECTED_COUNTIES} counties — "
+            f"normalisation is not catching some spelling. Run "
+            f"`manage.py normalize_judete --dry-run` to see the split."
+        )
+    if unresolved_postings:
+        pct = 100 * unresolved_postings / total if total else 0
+        warnings.append(
+            f"{unresolved_postings} posting(s) ({pct:.1f}%) have a județ the normaliser could not "
+            f"match to a county — they answer to no county filter. Inspect them in admin "
+            f"(Județ — rezolvare → Nerecunoscut) and add an entry to apps.jobs.judete.ALIASES."
+        )
+    return warnings
+
+
+def plausible_expiry(d: date | None, max_year: int) -> date | None:
+    """Drop expiry dates outside a sane window.
+
+    The source site occasionally carries a typo'd year — e.g. an
+    `Expiră in 14/01/2046` on a posting published in December 2025 — which
+    would otherwise leave that posting permanently "active".
+    """
+    if d is None or not (2000 <= d.year <= max_year):
+        return None
+    return d
 
 
 def parse_datetime_with_time(value: str) -> datetime | None:
@@ -114,6 +197,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
+            "--strict",
+            action="store_true",
+            help="Exit non-zero if the post-import sanity checks fail (for cron/CI).",
+        )
+        parser.add_argument(
             "--data-dir",
             type=Path,
             default=settings.DATA_DIR,
@@ -134,12 +222,25 @@ class Command(BaseCommand):
             raise CommandError(f"Required file missing: {index_csv}")
 
         today = timezone.localdate()
+        max_year = today.year + 2
 
         # ---- Pass 0: collect distinct judet + employer names ----
         with index_csv.open(newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
 
-        judet_names = sorted({r["judet"].strip() for r in rows if r.get("judet", "").strip()})
+        # Normalise the source's județ badge before it reaches the database.
+        # It arrives in two shapes ("Timiş" and "TIMIŞOARA, Timiș"), and storing
+        # both verbatim used to give one county several Judet rows — and so
+        # several separate entries in the browse facet. See apps.jobs.judete.
+        judet_parse_by_raw = {
+            raw: normalize_judet(raw)
+            for raw in {r.get("judet", "").strip() for r in rows}
+            if raw
+        }
+        judet_names = sorted({p.judet for p in judet_parse_by_raw.values() if p.judet})
+        unresolved_raw = sorted(
+            {raw for raw, p in judet_parse_by_raw.items() if not p.resolved}
+        )
         employer_names = set()
         for r in rows:
             n = r.get("angajator", "").strip()
@@ -157,8 +258,44 @@ class Command(BaseCommand):
         else:
             anunt_rows = []
 
+        # ---- Build expires_at lookup from the detail CSV ----
+        # The redesigned site shows a relative countdown on index cards
+        # ("1 zi rămasă"), not a date, so `expira_in` is unparseable for every
+        # posting scraped after the 2026-07 redesign. The detail page carries an
+        # absolute date, which parse-anunturi.py writes as `Data Expirare`.
+        expires_by_url: dict[str, date] = {}
+        implausible = 0
+        for r in anunt_rows:
+            src = r.get("Source URL", "").strip()
+            raw = r.get("Data Expirare", "").strip()
+            if not src or not raw:
+                continue
+            parsed = parse_date(raw)
+            d = plausible_expiry(parsed, max_year)
+            if d is None:
+                implausible += int(parsed is not None)
+                continue
+            expires_by_url[src] = d
+        self.stdout.write(
+            f"Detail expiry dates: {len(expires_by_url)} usable"
+            + (f", {implausible} rejected as implausible" if implausible else "")
+        )
+
         # ---- Seed Judet ----
-        self.stdout.write(f"Seeding Judet ({len(judet_names)} distinct)…")
+        self.stdout.write(
+            f"Seeding Judet ({len(judet_names)} canonical counties "
+            f"from {len(judet_parse_by_raw)} distinct source values)…"
+        )
+        if unresolved_raw:
+            # Loud on purpose: an unmatched value means either a new spelling
+            # from the source or a scraper regression, and it silently removes
+            # the posting from every county filter.
+            self.stderr.write(self.style.WARNING(
+                f"  {len(unresolved_raw)} județ value(s) could not be matched to a county — "
+                f"postings keep them in `judet_raw` and have no county: "
+                + ", ".join(repr(v) for v in unresolved_raw[:10])
+                + (" …" if len(unresolved_raw) > 10 else "")
+            ))
         judet_by_name: dict[str, Judet] = {}
         with transaction.atomic():
             existing_slugs = set(Judet.objects.values_list("slug", flat=True))
@@ -184,20 +321,33 @@ class Command(BaseCommand):
         # ---- Pass 1: upsert JobPosting from index CSV ----
         self.stdout.write(f"Importing index rows ({len(rows)})…")
         created = updated = errors = 0
+        implausible_index = 0
         for r in rows:
             url = r["url"].strip()
             if not url:
                 errors += 1
                 continue
             employer = employer_by_name.get(r["angajator"].strip())
-            judet = judet_by_name.get(r["judet"].strip()) if r.get("judet") else None
+            judet_parse = judet_parse_by_raw.get(r.get("judet", "").strip())
+            judet = judet_by_name.get(judet_parse.judet) if judet_parse and judet_parse.judet else None
+            # Detail page first; the index `expira_in` is a countdown string on
+            # the new site and only parses for pre-redesign rows.
+            expires_at = expires_by_url.get(url)
+            if expires_at is None:
+                parsed = parse_date(r.get("expira_in", ""))
+                expires_at = plausible_expiry(parsed, max_year)
+                implausible_index += int(parsed is not None and expires_at is None)
             defaults = {
                 "title": r.get("pozitie", "").strip(),
                 "employer": employer,
                 "detalii_raw": r.get("detalii", "").strip(),
                 "published_at": parse_date(r.get("publicat_in", "")),
-                "expires_at": parse_date(r.get("expira_in", "")),
+                "expires_at": expires_at,
                 "judet": judet,
+                "locality": (judet_parse.locality or "") if judet_parse else "",
+                # Only populated when the county could not be resolved, so
+                # `judet_raw != ""` is the "needs attention" filter.
+                "judet_raw": (judet_parse.raw if judet_parse and not judet_parse.resolved else ""),
                 "url_judet": r.get("url_judet", "").strip(),
                 "tip": r.get("tip", "").strip(),
                 "updates_raw": r.get("updates", "").strip(),
@@ -212,6 +362,7 @@ class Command(BaseCommand):
                 errors += 1
         self.stdout.write(self.style.SUCCESS(
             f"  Index: created={created} updated={updated} errors={errors}"
+            + (f" (dropped {implausible_index} implausible expiry dates)" if implausible_index else "")
         ))
 
         # ---- Pass 2: detail rows from anunturi.csv (join on Source URL) ----
@@ -337,5 +488,34 @@ class Command(BaseCommand):
                 """
             )
         self.stdout.write(self.style.SUCCESS("  search_vector updated."))
+
+        # ---- Post-import sanity check ----
+        recent_cutoff = today - timedelta(days=RECENT_WINDOW_DAYS)
+        recent = JobPosting.objects.filter(published_at__gte=recent_cutoff)
+        recent_total = recent.count()
+        recent_without_expiry = recent.filter(expires_at__isnull=True).count()
+        active = JobPosting.objects.filter(expires_at__gte=today).count()
+
+        self.stdout.write(
+            f"Sanity: {active} active postings; "
+            f"{recent_without_expiry}/{recent_total} published in the last "
+            f"{RECENT_WINDOW_DAYS} days lack an expiry date."
+        )
+        county_count = Judet.objects.count()
+        unresolved_postings = JobPosting.objects.exclude(judet_raw="").count()
+        with_locality = JobPosting.objects.exclude(locality="").count()
+        self.stdout.write(
+            f"Sanity: {county_count} counties; {unresolved_postings} postings with an "
+            f"unresolved județ; {with_locality} with a locality."
+        )
+
+        warnings = expiry_sanity_warnings(active, recent_total, recent_without_expiry)
+        warnings += judet_sanity_warnings(
+            county_count, unresolved_postings, JobPosting.objects.count()
+        )
+        for w in warnings:
+            self.stderr.write(self.style.ERROR(f"  ✗ {w}"))
+        if warnings and opts.get("strict"):
+            raise CommandError("Post-import sanity checks failed.")
 
         self.stdout.write(self.style.SUCCESS("Done."))

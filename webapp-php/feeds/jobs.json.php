@@ -12,7 +12,7 @@ $join = '';
 if ($f['fts'] && ($q = trim($_GET['q'] ?? ''))) {
     $join = "JOIN job_postings_fts fts ON fts.rowid = j.id";
     $w[] = "job_postings_fts MATCH ?";
-    $b[] = fts_escape($q);
+    $b[] = fts_query($q);
 }
 
 $where = $w ? 'WHERE ' . implode(' AND ', $w) : '';

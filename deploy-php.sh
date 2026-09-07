@@ -18,12 +18,19 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+if [ ! -f "$SCRIPT_DIR/webapp-php/static/app.css" ]; then
+    echo "ERROR: webapp-php/static/app.css is missing — run 'npm run css' first." >&2
+    exit 1
+fi
+
 echo "==> Exporting PostgreSQL → SQLite (active only)..."
 python "$SCRIPT_DIR/export-to-sqlite.py" --active-only --out "$SCRIPT_DIR/webapp-php/posturi.sqlite"
 
 echo "==> Deploying webapp-php/ to ${DEPLOY_HOST}:${DEPLOY_PATH}/"
 rsync -avz --delete \
     --exclude='.DS_Store' \
+    --exclude='assets/' \
+    --exclude='router.php' \
     --no-perms --no-owner --no-group --omit-dir-times \
     "$SCRIPT_DIR/webapp-php/" \
     "${DEPLOY_HOST}:${DEPLOY_PATH}/"

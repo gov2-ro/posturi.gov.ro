@@ -82,6 +82,15 @@ class JobPosting(models.Model):
     published_at = models.DateField(null=True, blank=True, help_text="publicat_in")
     expires_at = models.DateField(null=True, blank=True, help_text="expira_in")
     judet = models.ForeignKey(Judet, on_delete=models.PROTECT, null=True, blank=True, related_name="postings")
+    locality = models.CharField(
+        max_length=160, blank=True, default="",
+        help_text="City/commune, split out of the source's 'LOCALITY, County' badge",
+    )
+    judet_raw = models.CharField(
+        max_length=200, blank=True, default="",
+        help_text="Source județ string kept verbatim when it could not be matched to a county "
+                  "(see apps.jobs.judete). Empty means the county resolved cleanly.",
+    )
     url_judet = models.URLField(blank=True, default="", max_length=500)
     tip = models.CharField(max_length=100, blank=True, default="", help_text="Listing type from index page")
     updates_raw = models.TextField(blank=True, default="", help_text="updates — change log from scraper, parsed later")
@@ -95,6 +104,11 @@ class JobPosting(models.Model):
     body_markdown = models.TextField(blank=True, default="")
     attachment_text = models.TextField(blank=True, default="", help_text="Plain text extracted from downloaded attachment (docx/doc/pdf)")
     other_links = models.JSONField(default=list, blank=True)
+    attachment_meta = models.JSONField(
+        default=list, blank=True,
+        help_text="Per-file descriptors written by extract_attachments: "
+                  "[{url, ext, bytes, kind}]. `kind` is null for an ordinary announcement.",
+    )
     nr_posturi = models.IntegerField(null=True, blank=True)
     contact_phone = models.CharField(max_length=40, blank=True, default="")
     contact_email = models.CharField(max_length=200, blank=True, default="")
@@ -123,6 +137,8 @@ class JobPosting(models.Model):
             models.Index(fields=["published_at"]),
             models.Index(fields=["employer"]),
             models.Index(fields=["judet"]),
+            models.Index(fields=["locality"]),
+            models.Index(fields=["judet_raw"]),
             models.Index(fields=["job_level"]),
             GinIndex(fields=["search_vector"]),
             GinIndex(fields=["inferred"]),

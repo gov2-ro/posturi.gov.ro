@@ -33,11 +33,11 @@ $stmt6->execute([$eid]); $top_cat_row = $stmt6->fetch();
 $top_category = $top_cat_row ? $top_cat_row['employer_category'] : null;
 
 // Active postings (50)
-$stmt7 = db()->prepare("SELECT id, title, judet_name, published_at, expires_at, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND expires_at >= ? ORDER BY expires_at ASC LIMIT 50");
+$stmt7 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND expires_at >= ? ORDER BY expires_at ASC LIMIT 50");
 $stmt7->execute([$eid, $today]); $active_postings = $stmt7->fetchAll();
 
 // Recent expired (25)
-$stmt8 = db()->prepare("SELECT id, title, judet_name, published_at, expires_at, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (expires_at < ? OR expires_at IS NULL) ORDER BY published_at DESC LIMIT 25");
+$stmt8 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (expires_at < ? OR expires_at IS NULL) ORDER BY published_at DESC LIMIT 25");
 $stmt8->execute([$eid, $today]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
@@ -106,9 +106,9 @@ require __DIR__ . '/../inc/header.php';
         <div class="py-3 border-b border-border-warm last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <a href="/job/<?= $p['id'] ?>/" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
+              <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
               <div class="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-muted">
-                <?php if ($p['judet_name']): ?><span><?= e($p['judet_name']) ?></span><?php endif; ?>
+                <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
                 <?php if ($p['job_level']): ?><span>· <?= e($p['job_level']) ?></span><?php endif; ?>
                 <?php if ($p['categorie']): ?><span>· <?= e($p['categorie']) ?></span><?php endif; ?>
               </div>
@@ -134,9 +134,9 @@ require __DIR__ . '/../inc/header.php';
         </h2>
         <?php foreach ($expired_postings as $p): ?>
         <div class="py-3 border-b border-border-warm last:border-0 opacity-70">
-          <a href="/job/<?= $p['id'] ?>/" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
+          <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
           <div class="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-muted">
-            <?php if ($p['judet_name']): ?><span><?= e($p['judet_name']) ?></span><?php endif; ?>
+            <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
             <?php if ($p['expires_at']): ?><span class="font-mono">· expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>
           </div>
         </div>

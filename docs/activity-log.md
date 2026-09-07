@@ -2,6 +2,279 @@
 
 ## 2026
 
+### 2026-09-08 — v3 filters and detail UI, built ahead of the data and verified against the 5 real extractions
+
+**Asked:** are we extracting more fields now — if so, sync the filters and the UI.
+
+**Measured first: no.** Zero active postings carry `education`, `skill_list` or `positions`. The five v3 rows live in `JobPostingSchemaVariant` as compare-only output and were never promoted to `schema_json`; production is still 380 v2 rows out of 1,793 active. Building the filters against that would have shipped eight empty facets on 100% of postings — the same trap that caught the inferred metadata, where the display was worth nothing until the backfill ran.
+
+So the pipeline was built end to end and **verified against the five real extractions** rather than against nothing.
+
+**Export.** `_v3_columns()` flattens a v3 `schema_json` into queryable SQLite columns: `v3_eqf_level` and `v3_study_level` as scalars, and `v3_isced_fields` / `v3_study_labels` / `v3_skills` / `v3_languages` / `v3_credentials` / `v3_policy_domains` / `v3_exam_stages` as JSON arrays probed with `LIKE '%"value"%'`, the shape `inf_anomaly_flags` already uses. A v2 payload or no schema returns empty defaults, so nothing half-populates. Languages pack level and code into one token (`en:B2`) so a single probe filters on both.
+
+**Filters.** Seven new facets — Domeniu de studii (ISCED-F), Competențe, Domeniu activitate, Nivel studii (EQF), Limbi străine, Documente necesare, Etape concurs — plus chips, labels and multi-value handling. `facet_group()` already omits an empty group, so **all seven are invisible today and appear on their own once a v3 extraction has run**. EQF filters as "requires at most this level", since someone with a licență also qualifies for a post asking postliceală.
+
+**Detail page** gains a "Cerințe structurate" block: field-of-study chips each linking into the ISCED facet, with "Oricare dintre aceste domenii este acceptat" spelled out; competence chips carrying proficiency, with advantages dashed rather than solid; languages with CEFR; credentials; policy domains and exam stages; and a **per-role breakdown for multi-role postings**, each with its own studies, experience and competences.
+
+**Verification.** Copied the export, promoted the five real v3 payloads into the copy (production untouched — `db.php` grew a `POSTURI_DB` override for exactly this), and ran the app against it. Every facet populated with real values, and all twelve filter results were checked against SQLite ground truth: isced 3/3, credential 1/1, domain 3/3, skill 2/2, stage 5/5, EQF inclusive-of-lower-levels 3, two v3 facets AND-ing to 1, a v3 facet combining with județ, HTMX filtering, chip labels in Romanian, chip removal restoring 1,710. Production run afterwards to confirm all routes still 200 with zero v3 facets rendered.
+
+**One bug caught by that verification.** Four of the seven facets returned nothing while `skill` and `eqf` worked. The difference was underscores: these vocabularies are full of them (`09_sanatate_asistenta_sociala`), `_` is a LIKE wildcard, and I escaped it without declaring `ESCAPE '\'` — so the pattern matched literally nothing. Fixed, and the ground-truth comparison is what surfaced it; the facet counts alone looked perfectly healthy.
+
+225 tests pass (16 new for `_v3_columns`, including that a v2 payload must not half-populate the v3 columns).
+
+**Still true:** none of this shows anything until `llm-schema.py --prompt-version v3` runs at scale, which needs provider credits.
+
+### 2026-09-08 — First v3 run: three bugs of mine, four prompt defects, and a structural gap
+
+User ran `--compare --prompt-version v3 --active-only --limit 5`. Gemini completed all five; OpenAI returned 429 (no credits). `schema_json` stayed at 1,278 rows, so `--compare` honoured its promise not to touch production data.
+
+**Three bugs of mine, all from yesterday's v3 wiring:**
+
+1. **DeepSeek died with `name '_validate_v2' is not defined`.** Renaming that helper to `_validate_extraction`, I used a regex matching only the call taking `raw` and left three behind — OpenAI, Anthropic, DeepSeek. Gemini happened to be the one I did fix, which is why my own verification passed. I should have grepped after renaming instead of trusting the substitution. Fixed, plus two tests that would have caught it: one asserting the old name appears nowhere, and an AST check that every name loaded inside a `make_generator` provider branch resolves to a local or a module global. Both were confirmed to fail against the broken code before being kept.
+2. **`llm-schema.py` only imported from the repo root** — `open("models_config.json")` by relative path. Now resolved against `__file__`.
+3. Cost figures in the design doc were stale after the prompt grew; corrected.
+
+**Four prompt defects the output showed, all fixed:**
+
+| Defect | Frequency | Fix |
+|---|---|---|
+| Multi-role postings returned all-nulls | 2 of 5 | new `positions[]` array + a third few-shot |
+| `fields_of_study` labels were adjectives or filler — `juridic`, `medical`, `specialitate`, `sanitară` | 3 of 5 | "normalise to the name of the field, not the adjective", explicit ban on filler words |
+| `bibliography_topics` over-extracted — 37 entries, some genitive fragments | 2 of 5 | cap at 12, nominative form |
+| `credential.kind` fell back to `altele` for things with a home | 1 of 5 | per-kind guidance with examples |
+
+**The structural finding.** Two of the five postings advertise *several distinct roles* — "1 post de expert IT senior; 2 posturi de expert administrație publică I" — each with its own requirements (3 years of tenure vs 7). A flat extraction cannot hold two contradictory requirement sets, and rather than choose, the model returned null for education, skills, occupation *and* seniority. That threw away a posting which plainly stated "Cerințe specifice: Cunoașterea procesului de utilizare a fondurilor europene". Measured across the corpus: **143 of 1,710 active postings (8.4%)** are multi-role. Added `PositionRequirement` and a `positions[]` array — one entry per role with its own education/experience/skills/credentials — while the flat fields keep describing the first role so a consumer that ignores `positions` still gets something real. Filed a separate item for the downstream consequence: the list row, the detail page and every filter still treat a posting as one job.
+
+**A correction to my own reading.** `skill_list` looked under-extracted (1, 1, 0, 0, 0) and I said so. It was not. My evidence was a substring count of "abilit" — 21 hits in one posting — but every one was inside *dizabilități*, *reabilitarea* or *unitățile sanitare abilitate*. That is the same substring trap I fixed in `_infer_skills` yesterday, and I walked straight into it while checking someone else's work. Counted on word boundaries, three of the five postings contain no competence list at all and the empty result is correct; the one real miss was the multi-role posting.
+
+**What worked, and these were the open questions:** `fields_of_study` genuinely splits — one posting yielded seven alternatives across three ISCED fields (psihologie → 03, asistență socială → 09, științe administrative → 04). `credentials` is the strongest field in the schema: "certificat de membru OAMGMAMR", "aviz anual pentru autorizarea exercitării profesiei", "permis categoria B", "asigurare malpraxis" — exactly the hard yes/no filters. `contract` came back richer than expected (`duration_months: 33`, `shift_work: true`). `experience` read "6 luni" as `0.5` with `in_specialty: true`.
+
+**Still unmeasured:** cross-provider agreement, especially on `isced_field` — "inginerie geodezică" is defensibly 07 or 05, and how much providers disagree decides whether ISCED is trustworthy enough to filter on. The revised prompt (17.3k chars, ~5k tokens; JSON Schema 19.2 KB) has not been run at all.
+
+209 tests pass.
+
+### 2026-09-08 — Prompt v3: granular extraction designed for CV-to-job matching
+
+**Ask:** extract more semantics — study fields, competencies — from lines like *"Studii … în domeniul geografie/silvicultură/geologie/biologie/știința mediului/inginerie geodezică. Cunoștințe avansate de operare sisteme GIS (…)"*; how does Schema.org JobPosting relate to Europass; can we build a v3 that makes the UI filter as expressive as possible, with Europass CV upload as the end goal.
+
+**Researched first.** [cariere.gov.md](https://cariere.gov.md/ro/search?active=1) filters on **Domenii** (33 subject-matter domains: achiziții publice, securitate energetică, protecția consumatorului …), plus function type, authority type, locality and employment type. The important idea there is that *subject matter* is a separate axis from *profession* — a lawyer in an environment agency is both, and our `profession_family` only captures the second. The [Europass XML v3.0 page](https://interoperable-europe.ec.europa.eu/collection/employment-and-working-conditions/solution/europass-xml-schema-v30/release/no-version) does not publish field names but does name the vocabularies it imports: ISCO, ISCED, EQF. [ESCO](https://esco.ec.europa.eu/en/classification/skill_main) supplies the modern skills pillar — knowledge / language / skills / transversal, 13,939 concepts — and [Europass CVs](https://esco.ec.europa.eu/en/about-esco/escopedia/escopedia/cv-creation) carry EQF levels, ISCED-F fields of study, CEFR language levels and DigComp digital skills.
+
+**The answer on Schema.org vs Europass:** they are mirror images and neither replaces the other. Schema.org describes the *vacancy* and is deliberately loose (`educationRequirements` is free text) because its consumer is a search engine. Europass describes the *person* and is deliberately strict, because its whole point is that a diploma from one member state is legible in another. A matching system needs both — Schema.org so the posting stays Google-Jobs-eligible, Europass vocabularies so posting and CV become comparable. v3 emits Schema.org property names at the top level and hangs EU-vocabulary values underneath.
+
+**What v3 adds.** Keeps all twelve v2 fields verbatim (`JobPostingExtractionV3` *inherits* `JobPostingExtraction`, so every page, feed and renderer works unchanged on a v3 row) and adds a structured layer beside them:
+
+- `education` — `minimum_level` + **EQF 1–8** + `fields_of_study[]` with **ISCED-F 2013** codes. The alternatives in the example become six separate matchable entries instead of one unmatchable string, spanning three ISCED fields.
+- `skill_list[]` — short tags, not sentences, with the **ESCO pillar** and a proficiency: `{label: "GIS", type: "knowledge", proficiency: "avansat", evidence: "Cunoștințe avansate de operare sisteme GIS"}`. The parenthesised list expands into four more entries.
+- `language_list[]` — **CEFR** A1–C2. `credentials[]` — licences and authorisations, deliberately separate from skills because they are the hardest filter there is: you hold the document or you do not. `contract` — duration, schedule, hours, remote mode, probation, shifts. `policy_domains[]` — 24 subject-matter domains adapted from cariere.gov.md. Plus `occupation_title`, `seniority_hint`, `exam_stages[]`, `bibliography_topics[]`.
+
+Throughout: anything a filter depends on is a controlled value, with the original Romanian kept in `verbatim` / `evidence` for display. Free text cannot be matched; enums can.
+
+**Plumbing.** `llm-schema.py` no longer hard-codes `JobPostingExtraction` — it looks the model up in `schema_models.EXTRACTION_MODELS`, so all four provider paths (Gemini `response_schema`, OpenAI strict `json_schema`, Anthropic tool `input_schema`, DeepSeek) pick up v3 automatically and v4 is a one-line change. Verified that every provider's schema payload builds for both versions.
+
+**Not run.** All four providers remain unusable, so v3 is designed, wired and tested but has extracted nothing. The honest state: 26 tests cover the vocabularies, the v2-superset guarantee and the OpenAI strict-mode schema; the GIS example validates end to end; nothing has been through an actual model. First thing to do when a provider works is `--compare --prompt-version v3 --active-only --limit 5`, which writes only to `JobPostingSchemaVariant` and never touches `schema_json`.
+
+**Cost:** v3's system prompt is 12,377 chars (~3.6k tokens) against v2's 6,355 (~1.9k), and the structured-output JSON Schema grows 6.2 KB → 17.4 KB. Against a 6,000–9,000-token posting body that is under ~15% per posting.
+
+**Written up** in `docs/metadata-schema-v3.md` — the rationale, the Schema.org↔Europass comparison, the full field map with the filter each unlocks, and four open questions (ESCO URI resolution, whether `policy_domains` should be a standard, ISCED-F assignment being the model's judgement, and the lack of a migration path for the 380 v2 rows).
+
+### 2026-09-07 — Attachment descriptors: dropped the filename, tried document titles, kept what survived
+
+**Ask:** the filenames are useless — use the document's own title instead, in a standardized way.
+
+**What the data allowed.** Measured over 899 downloaded files with four successive classifier designs:
+
+1. Keyword match anywhere in the first 2,500 chars → 91% labelled, but "Cerere de înscriere" took 24% because announcements *quote* the enrolment requirement before they say "anunț".
+2. Earliest-marker-wins → collapsed to 88.6% "Anunț de concurs", which was the honest answer and showed the problem.
+3. Heading-like lines only → the same false positives, since section headings are also short lines.
+4. First meaningful line, letterheads skipped, abandoning once the document calls itself an announcement → **only "Erată" survived with real precision.**
+
+The shape of the data is the finding: **~89% of these files simply are the competition announcement**, one per posting, and their headings are all some spelling of "ANUNȚ" (often letter-spaced, `A N U N Ț`). Bibliografie, fișa postului, cererea de înscriere and the calendar are almost never separate documents — they are *sections inside* that one file, so every classifier that reached for them mislabelled the announcement itself and scored worse than saying nothing. A free-form "title" is no better: the first lines are letterheads, registry numbers and OCR noise.
+
+**So the standardized label is deliberately small.** New `webapp/apps/jobs/attachments.py` recognises exactly two kinds — **Erată / modificare** and **Rezultate** — both of which declare themselves on the opening line and both of which materially change what a reader should expect (an erratum can move a deadline). Everything else keeps the role it already has reliably from the field it came from: *Anunț oficial* vs *Document anexat*.
+
+**What replaced the filename.** `extract_attachments` now writes `JobPosting.attachment_meta` — `[{url, ext, bytes, kind, role}]` — computed per file while it already has each one open. The detail page renders a format badge, the standardized label and the file size (median 163 KB, largest 9.2 MB), with an erratum picked out in amber. Size is the genuinely new information: it was nowhere on the site, and it is what a reader on mobile data wants before tapping a 9 MB scan. Active postings: 990 DOCX, 637 PDF, 167 DOC; one erratum found in the current batch.
+
+**Also this session:**
+
+- Ported the **LLM-parsed filter** from the Django "Dev" panel (commit `c9be4ce`, never in the deployed app) to `webapp-php/` as a public facet — *Descriere → Structurată (LLM) 380 / Doar text brut 1,413*. Dropped the sibling `inferred` filter (100% populated, always a no-op) and `variants` (not exported).
+- Made the **Schema.org structure visible**: the JSON-LD now emits all seven text properties the prompt fills (was two), plus `occupationalCategory` and `directApply`; each rendered heading shows its property name linked to schema.org/JobPosting; and the 79% with no structured extraction now say so rather than silently presenting a wall of scraped text.
+- **Prompt location, for the record:** `models_config.json` → `prompts.v2` (6,355 chars), loaded by `get_prompt()` at `llm-schema.py:52`, sent as the *system* instruction — `system_instruction` for Gemini, `role: system` for OpenAI/DeepSeek, a cached `system` block for Anthropic. The posting content (body + attachment text, boilerplate-stripped, 100k cap) is the *user* message.
+
+**Backlog:** filed employer search + institution-type detection. Checked two assumptions while writing it — `employer_category` turns out to hold the *contract* type ("Funcție contractuală" on 1,710 of 1,793), not the institution type, so it does not already cover this; and a prototype keyword pass over the 1,103 active employers classified **89%** (primărie 32%, educație 24%, spital 19%, …), so the `judete.py` treatment is the right model.
+
+**Tests:** 22 new in `webapp/tests/test_attachments.py`, including the exact failure mode that killed the richer taxonomies (an announcement containing BIBLIOGRAFIE / CERERE DE ÎNSCRIERE headings must stay unlabelled). Full suite: 171 passed.
+
+### 2026-09-07 — Ported the LLM-parsed filter to the public app; Schema.org made visible; attachment filenames
+
+**The filter existed, in the other app.** Commit `c9be4ce` (2026-05-28) added a dashed amber "Dev" panel to the *Django* browse sidebar with three radio filters — Schema JSON / Inferred meta / LLM variants. It was never ported to `webapp-php/`, which is what is deployed. And no, they are not all LLM-parsed: **380 of 1,793 active postings (21%)**.
+
+Ported it as a real facet rather than a debug panel, since the distinction is useful to readers too: **Descriere → Structurată (LLM) 380 / Doar text brut 1,413**, under "Mai multe filtre", with live counts, a removable chip and full HTMX behaviour. Dropped the `inferred` yes/no filter (100% populated since this morning's backfill, so it would always be a no-op) and the variants filter (variant rows are not in the SQLite export).
+
+While testing it: the groups inside "Mai multe filtre" were themselves collapsed, so reaching one checkbox took two disclosures. Anomalii and Descriere now default open inside the panel, like Salariu and Angajator already did.
+
+**Schema.org, made visible.** The extraction already produces Schema.org JobPosting property names and the renderer maps them to Romanian labels — but nothing said so, and the JSON-LD was throwing most of it away.
+
+- The JSON-LD now emits every text property the prompt fills: `responsibilities`, `educationRequirements`, `experienceRequirements`, `qualifications`, `skills`, `jobBenefits`, `workHours` — previously only two of the seven. Added `occupationalCategory` from the inferred profession family (only above the confidence floor) and `directApply: false`, since applications go through the source site.
+- Each rendered section heading now carries its property name in small mono type, linked to schema.org/JobPosting — *Studii · educationRequirements*. The three RO-specific keys (`application_docs`, `application_fee`, `application_contact`) are deliberately unlabelled, because they are ours and not part of the vocabulary.
+- The 79% with no structured version now say so instead of silently presenting a wall of scraped text: a short note above the body explaining that no section-level extraction exists yet, linking to the methodology.
+
+**Attachments.** Was "Anunț oficial ↗" / "Document 1 ↗" — no indication of what the file is. Now shows the filename with a file-type badge and the role beneath, full name on hover (`title`) and in `aria-label`. Worth recording that the filenames are useless as names: all 1,794 attachment URLs in the export are opaque (`j_11414_c_9189_anunt_688423.docx`, or an 8-char hex hash) — not one contains a real word. So the display leans on the type badge (DOCX/PDF/DOC), which is the only signal actually present, and middle-truncates the name (`j_11414_c_9189_anun…88423.docx`) so the extension survives the ellipsis.
+
+**Verified:** facet counts match SQLite exactly (380/1,413), chip add/remove keeps the sidebar in sync, both page variants render correctly, all routes and feeds 200, no JS errors, 149 tests pass.
+
+### 2026-09-07 — Traced the detail-page body; found .doc extraction broken since May
+
+**Question asked:** where does the posting body come from, is it the LLM version with standard sections, and does the LLM get both the web body and the attachments?
+
+**Answers, in order.**
+
+`pages/detail.php` prefers the LLM's structured sections (`schema_json` → `render_schema_sections()` → `SCHEMA_SECTION_LABELS`) and falls back to `render_markdown($p['body_markdown'])` — the raw scraped page. **Only 21% of active postings (380/1,793) have `schema_json`**, so 79% render unstructured text. That is the stalled prompt-v2 backfill, blocked on all four LLM providers being unusable.
+
+The v2 prompt does define clear standard sections and the renderer displays every field it asks for. Fill rates on the 380 that have it: jobLocation 96%, educationRequirements 95%, application_contact 95%, application_docs 83%, workHours 71%, experienceRequirements 70%, qualifications 64%, skills 42% — and **responsibilities only 18%**, which is the section a job seeker most wants. (`work_conditions` is in the renderer's label map but the prompt never emits it — dead entry.)
+
+Yes, `llm-schema.py::iter_postings` concatenates `body_markdown` + `attachment_text` with a `---` separator, strips the HG 1.336 boilerplate and truncates at 100k. And it demonstrably matters — comparing the 380 postings with schema, split by whether attachment text existed at extraction time:
+
+| section | with attachment | without |
+|---|---|---|
+| responsibilities | 22% | 8% |
+| skills | 47% | 25% |
+| application_docs | 96% | 40% |
+
+**Which is what turned up the real bug.** `extract_attachments.py::_extract_doc` still used `docx2txt`, which only understands the ZIP-based .docx container and raises `KeyError`/`BadZipFile` on every genuine legacy .doc. `extract_text()` swallowed all exceptions into `""`, so an extractor failing on 100% of its input was indistinguishable from a pile of empty documents. The switch to `textutil` was made in `quality_check.py` (a reporting script) in May 2026 and **never ported to the management command that actually writes `attachment_text`**. Measured on four failing files: docx2txt 0 chars every time, textutil 9,031–15,862 chars.
+
+Fixed with a portable converter chain — `textutil` (macOS) → `antiword` → `catdoc` (both Debian-installable), which also closes the "textutil is macOS-only, add a fallback before deploying to Linux" note from May. Plus a ZIP-magic sniff, because some servers serve a real .docx under a .doc name. `extract_text()` now returns `(text, reason)` instead of swallowing failures, and the command prints a by-reason summary, so the next systematic breakage is visible on the first run rather than four months later.
+
+**Result:** re-running extraction recovered text for **2,082 postings**. Active coverage 77% → **86%**; postings with an attachment link but no text 23% → 14%. The 980 remaining are "no text layer" — scanned PDFs needing OCR, already a known backlog item. Re-ran `infer_postings --no-llm --force` over the richer text (studies 1,491 → 1,502, experience 952 → 956, work_type 846 → 856) and re-exported.
+
+**Not fixed:** the 79% without `schema_json` still need a working LLM provider. That gap is now the single biggest quality lever on the site — and every posting fixed above will produce a better extraction when it finally runs.
+
+### 2026-09-07 — Inference backfill + inferred metadata shown on every posting
+
+**Why:** the request was "we extracted structured data for filters — show it next to each job post". Measuring first: **1,768 of 1,793 active postings had `inferred = {}`** (99% empty), exactly as the backlog predicted. The display would have rendered blank on almost everything that ships, so the backfill came first.
+
+**Backfill.** `infer_postings --no-llm` runs the keyword-dictionary pass entirely offline — no provider needed, ~50 postings/sec. Coverage on active postings went 1% → 100% on the core fields: profession_family 1,545 (86% non-`altele`), studies 1,491 (83%), experience 952 (53%), work_type 846 (47%), seniority 461 (26%).
+
+**Three inference bugs found by looking at the rendered output**, each of which would have shipped wrong data to users:
+
+1. **Age read as work experience.** `_EXPERIENCE_RE` only matched "N ani … vechime", and `_normalize()` collapses newlines, so "Să aibă vârsta de minim 21 ani" running into the next line's "Vechime in munca: minim 1 ani" yielded *21 years of experience* for a driver's post. Romanian postings overwhelmingly put the label first, so the regex now prefers "Vechime în muncă: minim 3 ani" and keeps the number-first form as a fallback guarded against a nearby "vârsta". Effect: 2,619 postings newly detected, none lost, and the bogus 21 corrected to 1.
+
+2. **`_infer_skills` matched substrings, not words.** "SAR" fired on **8,183 of 9,425 postings (87%)** because it is inside *nece**sar**e*, *comi**sar***, ***sar**cini*; "atestat" fired on 36% via the boilerplate "starea de sănătate atestată". A "skill" present on 87% of postings is noise wearing a data costume. Switched to the file's existing word-boundary helper: SAR 8,183 → 1, atestat 3,437 → 620, and every genuine skill (Excel, Word, permis de conducere, Microsoft Office) unchanged. Also de-duplicated certifications on case/NBSP and canonicalised language spellings ("engleza"/"engleză" → one tag).
+
+3. **`--force --no-llm` silently destroyed paid LLM work.** 598 postings had an LLM-derived `profession_family`; re-running the dictionary pass to pick up fix #1 would have rewritten them all to `altele`. `--no-llm` now means "don't call the LLM on this run", not "discard what a previous run established" — an existing LLM classification is preserved when the dictionary is not confident. The run summary also stopped counting preserved classifications as "LLM calls", which is what would have hidden it.
+
+**The display.** New `inferred_meta()` / `inferred_tags()` in `webapp-php/helpers.php` are the single source for derived attributes, so list and detail cannot drift.
+
+- **Result rows** get one compact line — *Domeniu · Funcție · Grad · Studii · Experiență · Normă · Telemuncă · Calculator* — visually separated from the badges above it, which come straight from the source. A dotted-underline `auto` marker carries a tooltip explaining these are derived and may be wrong. All 25 rows on page 1 now render a populated line.
+- **Detail page**: the conditions grid is now explicitly headed "Condiții deduse automat" with a link to the methodology, and gained skills / languages / certifications chips — extracted since May and never displayed anywhere. The sidebar's inferred block uses proper labels and links Domeniu and Funcție into the corresponding filtered browse.
+- Labels: `conducere_superioara` was leaking raw into the UI; added `SENIORITY_LABELS` and `grade_label()`. A low-confidence family (< 0.5) or the `altele` catch-all is shown as nothing rather than as a wrong guess. Romanian year pluralisation via `years_label()` ("Min. 1 an", not "1 ani").
+
+**Tests:** 24 new in `webapp/tests/test_experience_inference.py` — label-first and number-first phrasings, the age-vs-tenure guard with the exact SOFER body, explicit "nu este cazul", SAR/atestat word-boundary cases, tag de-duplication, and three DB-backed tests that `--no-llm` preserves LLM families while a confident dictionary still wins. Full suite: 149 passed.
+
+**Left open:** the `altele` bucket is 14% of active postings and only an LLM pass can shrink it (all four providers are still dead). `skills` now covers 30% of postings rather than 99% of nothing — real, but thin; the keyword list is 14 entries and worth growing.
+
+### 2026-09-07 — Canonical județe: 261 → 42, locality split out, fragmentation guarded
+
+**What:** Fixed the county data rather than working around it in the UI. `judet_name` arrived in two shapes — bare `Timiş` before the 2026-07 redesign, `TIMIŞOARA, Timiș` after — and `import_csvs` stored both verbatim into a unique-by-name `Judet` table. Result: **261 rows for a country with 42 counties**, Brașov spread across 11 of them, and a browse facet where picking "Cluj" missed every posting filed under `CLUJ-NAPOCA, Cluj`. The home page tile read "197 JUDEȚE".
+
+**`webapp/apps/jobs/judete.py`** is now the single place that interprets a raw county string. It holds the canonical 42 (comma-below diacritics), folds the Turkish cedilla ş/ţ that Windows-era text uses onto the correct ș/ț, and `normalize_judet()` returns `(county, locality)` — so the city half that used to be welded into the county name is kept rather than discarded. Localities are title-cased Romanian-aware ("BAIA DE ARAMĂ" → "Baia de Aramă", particles stay lowercase; already-mixed-case input is left alone). All 261 raw values resolve; none needed an alias.
+
+**Where it runs:**
+- `import_csvs` normalises on the way in, so new data can no longer fragment. It reports canonical-vs-source counts and warns loudly on any value it cannot match.
+- `manage.py normalize_judete` repairs what was stored: 261 → 42 rows, 4,940 postings re-pointed, 219 stale rows deleted, 17 clean slugs reclaimed from rows that had been squatting on them. `--dry-run` shows the split first.
+
+**A bug I introduced and caught:** the first backfill run reported "1,838 localities backfilled" and the second reported "0 changed" — while silently erasing all 1,838. The locality is derived from the *pre-merge* `Judet.name`, which the command itself deletes, so on a second run every posting resolved to `locality=None` and got written back as empty. The counters only tracked *gains*, so nothing showed it. Fixed two ways: the command now only ever fills a locality in, never clears one (corrections belong to `import_csvs`, which reads the authoritative CSV), and the summary reports rows actually written, not just rows improved. Verified idempotent.
+
+**New fields.** `JobPosting.locality` (1,838 postings, 198 distinct localities) and `JobPosting.judet_raw`, which holds the source string *only* when the county could not be matched — so `judet_raw != ""` is the "needs attention" filter. Migration `0009`, both indexed.
+
+**Flagging, as asked.** Three layers, because a silent county failure is exactly the class of bug that went unnoticed for five weeks with `expires_at`:
+1. `import_csvs` prints a warning listing the unmatched values.
+2. `judet_sanity_warnings()` runs on every import next to the expiry check — fires if the Judet table exceeds 42 rows, or if any posting has an unresolved county — and honours `--strict` for cron.
+3. Admin gained a *Județ — rezolvare* filter (Nerecunoscut / Lipsă / Cu localitate / Fără localitate), plus `locality` in the list display and both fields in the edit form. The usual fix for an unmatched value is one line in `judete.ALIASES`.
+
+**Downstream.** `export-to-sqlite.py` exports `locality` (indexed), and the FTS location column is now `locality || ' ' || judet_name`, so "cluj napoca" finds 102 postings that county-only search missed. In `webapp-php/`, a new `place_label()` renders "Cluj-Napoca, Cluj" on result rows, the detail header and employer profiles, and the JSON-LD carries a real `addressLocality` — which is a genuine Google Jobs improvement, not just cosmetics. The județ facet lists all 42 counties by proper name (`București`, not `bucuresti`) and is no longer capped at 25, since the cap was what made a selected value outside the top window disappear.
+
+**Tests:** 31 in `webapp/tests/test_judete.py` (county list integrity, diacritic repair, folding collisions, title-casing, both badge shapes, county capitals keeping their locality, unknown values staying unresolved, idempotency) and 6 more for `judet_sanity_warnings`. Full suite: 125 passed.
+
+**Also filed:** a backlog item for rendering expired postings as a real "anunț expirat" page with a similar-jobs block instead of a 404 — blocked on the `--active-only` export decision, which this work makes more pressing now that the status control has a "Toate" option and the sitemap points crawlers at postings that will expire.
+
+### 2026-09-07 — UX pass on the PHP webapp: mobile, search, filter chips, SEO, accessibility
+
+**What:** Worked the `docs/backlog.md` "UX / UI" section against `webapp-php/` (the deployed app). Django templates under `webapp/templates/jobs/` were deliberately left alone this pass — they now diverge, and porting is a separate task.
+
+**Two pre-existing bugs found while implementing, both worse than anything on the backlog list:**
+
+1. **Multi-select facets only ever applied their last value.** Sidebar checkboxes were named `judet`, not `judet[]`. A browser serialises repeated checkboxes as `judet=cluj&judet=iasi`, which PHP collapses to `'iasi'` — so the moment any filter change went through HTMX, a three-county selection silently became one. Only the initial page load (where links were written with `judet[]=`) ever filtered correctly. Fixed with `param_field()` + a `MULTI_PARAMS` list in `helpers.php`; the chip-removal JS matches both the bare and bracketed name.
+
+2. **Search was phrase-only, so most multi-word queries returned nothing.** `fts_escape()` wrapped the whole query in double quotes, making it an FTS5 phrase match: `inspector primărie` returned 0 where the AND-ed terms return 22. Replaced with `fts_query()` — tokenises on non-alphanumerics, quotes each term, ANDs them, and adds a prefix wildcard to the trailing term so the 400 ms live search doesn't flash "no results" mid-word. Ranking moved from bare `rank` to `bm25(job_postings_fts, 10, 3, 1, 1)` so a title hit outranks a passing body mention. Returns `''` for term-less input, and `build_filters()` now refuses to claim FTS in that case (an empty MATCH expression is a SQLite error).
+
+   A third, smaller one: the județ facet lists the top 25 of ~197 slugs, so a selected value outside that window had no checkbox and was dropped on the next form submit. `facet_group()` now pins any active-but-unlisted value to the top of its group.
+
+**Mobile.** The search input moved out of the sidebar into a full-width bar that renders at every width. The facet column became one element that is a sticky sidebar at `lg` and a right-hand slide-over drawer below it — backdrop, Escape, focus return, scroll lock, an "Arată N rezultate" footer button, and a badge on the trigger showing the active-filter count. The count, the badge and the screen-reader live region update through `hx-swap-oob` rather than JS. Inner per-facet scrollers are now `lg:`-only: nested scrolling inside a drawer is hard to aim at. On phones the KPI tiles reorder below the search form (CSS `order`) so search is reachable without scrolling. Job detail's structured column no longer hides below 640px — it stacks above the body as a two-column card, with the deadline and contact first, and the duplicated `sm:hidden` fallback block is gone.
+
+**Filters.** Chips are generated from one `FILTER_CHIP_GROUPS` map covering all 18 params instead of 3, with per-key value labels (județ slug → county name, bucket keys → their labels). `qs_without($key, $value)` drops a single value where `qs_with($key, null)` dropped the whole key. Chips are HTMX now, not full page loads: a click handler unchecks the matching control and re-fires the form, so the sidebar and the URL stay in agreement; the `href` remains the no-JS fallback. Facet groups became `<details>` (native keyboard + AT behaviour), open for the top four, with Salariu / Angajator / Anomalii / exact dates behind a "Mai multe filtre" disclosure and open state persisted in `localStorage`. A segmented **Active / Expiră în 7 zile / Toate** control with live counts replaces the date pickers as the primary deadline control; `active` is the new default, which is a no-op on the active-only deploy but matters once the archive ships.
+
+**Empty state.** On zero results the page now runs one COUNT per active filter and offers the two or three whose removal recovers the most postings ("Încearcă fără — Caută: zzzz +6"). Only computed on the zero-results branch.
+
+**SEO.** `JobPosting` JSON-LD on every detail page, built from the columns plus the Schema.org-shaped `schema_json` the v2 prompt already produces — all six Google Jobs required properties present. Added `/robots.txt` and `/sitemap.xml` (2,900 URLs: statics, every posting newest-first, and only employers that actually have a posting in the export). Canonical, description, and OpenGraph tags in `inc/header.php`, with canonical stripping the query string so filter permutations fold into one indexable URL. Detail URLs are now `/job/1234-slug/`; `/job/1234/` and stale slugs 301 to the canonical form, and the id stays in front so lookup is still a primary-key hit. `javascript:history.back()` is gone — the back link points at the referring filtered list when there is one, else `/`.
+
+**Assets.** Replaced the `cdn.tailwindcss.com` play script with a real build: `package.json` + `tailwind.config.js` at the repo root, source in `webapp-php/assets/app.css`, output committed to `webapp-php/static/app.css` (27 KB minified) so the shared host needs no toolchain. Fonts and htmx are self-hosted; DM Sans italic was dropped (114 KB for the odd `<em>` — synthetic oblique covers it). `.htaccess` gained immutable cache headers, deflate, a woff2 mime type, and a deny for the sqlite journal sidecars. `deploy-php.sh` refuses to run if `static/app.css` is missing and excludes `assets/` and the dev-only `router.php`.
+
+**Accessibility.** `ink-muted` and `ink-faint` were 4.23:1 and **2.22:1** on parchment — both under AA. Darkened to #625C56 / #6F6963 (5.81 / 4.78) and added a separate `border-input` at 3.12:1 for form controls, since WCAG 1.4.11 applies to controls but not to decorative hairlines. Plus: skip link, labelled search input, `role="status"` live region announcing the result count on every swap, `aria-label` on the pagination nav and `aria-current` on the active page, `<ul>/<li>` for the result list, `<time datetime>` on dates, and tap targets raised to ≥24 px on everything that isn't an inline prose link. Romanian day pluralisation is correct now (`1 zi` / `7 zile` / `32 de zile`), and the h1 subtitle shows the corpus total instead of the filtered count, which used to read "0 anunțuri indexate" on a failed search.
+
+**Verified** with Playwright at 375 / 768 / 1280 / 1440 px: no horizontal overflow anywhere, drawer open/close/escape/backdrop/scroll-lock, multi-select surviving a round-trip, per-value chip removal, out-of-window value pinning, status control by mouse and keyboard, HTMX pagination, `localStorage` persistence across reloads, slug redirects, JSON-LD completeness, and zero JS errors. All routes and all three feeds return 200; no PHP warnings in the log.
+
+**Not done:** dark mode and RO/EN remain open, as does the landing page rework — the domain tiles it needs are blocked on the inference backfill. The Django templates now lag the PHP app.
+
+### 2026-09-06 — Re-exported the deploy SQLite; live site found five weeks stale; UX audit
+
+**What:** Regenerated `webapp-php/posturi.sqlite` after the expiry fix, checked what posturi.gov2.ro is actually serving, and audited the PHP webapp for UX gaps. No application code changed — findings went to `docs/backlog.md`.
+
+**Re-export:** the deploy artifact still held the pre-fix export (3 postings, 1.1 MB, written 2026-09-06 01:16 — the expiry fix landed after it and the export was never re-run). `export-to-sqlite.py --active-only` now writes 1,656 postings / 559 calendar events / 1,038 employers / 257 judete, 40 MB, FTS rebuilt. Verified every exported row has `expires_at` between 2026-09-07 and 2026-12-22 — no expired rows leaked through.
+
+**Live site:** `https://posturi.gov2.ro/` returns 200 but serves **14 postings, 3 active**, header "actualizat 02.08.2026". It is not even running the 3-row September export — it is on an August 2nd database. Nothing was deployed; the target host is not in the repo (no `DEPLOY_HOST` in `.env`, no match in `~/.ssh/config`). Left as a backlog item at the user's request.
+
+**Two problems the fresh export surfaced:**
+
+1. **Inferred facets are empty on live data.** 2,290 postings have `inferred = {}`, and since the deploy is active-only those are almost exactly the shipped rows. On the 1,656 active postings: profession_family 23, studii 22, work_type 4, seniority 3, experiență 3, telemuncă 1, anomalii 0. Seven of the sidebar's 13 facet groups are `inf_*`-driven, so the live sidebar would collapse to five working facets with "Domeniu" near-empty at the top. `facet_group()` skips empty groups, so it disappears silently rather than rendering broken. Not blocked by the dead LLM providers — `infer_postings --no-llm` runs the dictionary pass offline; the caveat is that it writes `altele`/0.0 for unmatched titles, taking them out of `inferred = {}` so a later LLM pass needs `--force`.
+
+2. **`judet_name` mixes two formats, splitting every county in the Județ facet.** Post-redesign rows store `"CITY, Județ"`, pre-redesign rows the bare county, and they become separate `judete` rows with separate slugs. Cluj is listed as 7 separate facet entries. 976 active rows are city-comma format, 680 bare — 257 `judete` rows for a country with 42 counties. This makes one of the five *still-working* facets wrong.
+
+**UX audit (`webapp-php/`, all findings also present in `webapp/templates/jobs/` since the PHP app was ported from them):** the headline is that below 1024px there is no search box and no filters at all — the sidebar is `hidden lg:flex` and the `q` input lives inside it, with a mobile fallback that reads "Deschide pe desktop pentru filtre complete." Job detail hides its whole structured column (deadline, contact, attachments) below 640px. Filter chips cover 3 of 15 params and their remove links drop every value of a key rather than the clicked one. Plus: Tailwind Play CDN in production, `javascript:history.back()` as the detail back link, no `aria-live` on the HTMX-swapped results, and no dark mode or RO/EN despite both being in the v1 spec. Written up as a new "UX / UI" section in the backlog with file:line references.
+
+**Not done (deferred by the user):** the deploy, and the `infer_postings --no-llm` run.
+
+---
+
+### 2026-09-06 — Post-import sanity check for expiry parsing
+
+**What:** Added a guard so a repeat of the expiry outage above surfaces on the next import instead of five weeks later.
+
+**Changes:**
+- `expiry_sanity_warnings(active, recent_total, recent_without_expiry)` in `import_csvs.py` — a pure function (hence testable without a DB) returning one warning per problem. Two checks, both **ratios rather than absolute floors** so they stay meaningful as the dataset grows: (1) >50% of postings published in the last 30 days missing `expires_at` → date parsing is probably broken; (2) zero active postings while recent postings exist → an active-only export would ship an empty site.
+- Called at the end of `handle()`; prints a `Sanity:` line every run, writes warnings to stderr, and with the new `--strict` flag raises `CommandError` so cron/CI fails loudly.
+- `webapp/tests/test_expiry_sanity.py` — 11 tests. Includes a regression test pinning the real outage numbers (`active=3, 2295/2295 missing`), the countdown strings that caused it, the ISO parse branch, and the `2046` typo rejection. Also asserts the checks stay silent on an empty DB and at 50% missing, so they don't cry wolf.
+
+**Verification:** 88 tests pass (77 + 11 new). Against live data the guard is silent (`active=1656, 21/1917 missing`); replaying the pre-fix numbers fires the expected warning. Not exercised via a full `import_csvs` run — the v2 backfill was mid-flight and the `search_vector` rebuild would contend with it; the function was validated directly against live counts instead.
+
+---
+
+### 2026-09-06 — Fix: `expires_at` NULL for every post-redesign posting (live site showed 3 jobs)
+
+**What:** `expires_at` had been NULL for 3,103 of 9,377 postings — including all 2,295 published on/after 2026-08-01 — leaving `export-to-sqlite.py --active-only` (`WHERE jp.expires_at >= CURRENT_DATE`) with 3 rows to deploy.
+
+**Root cause:** the redesigned site shows a *relative countdown* on index cards instead of a date. `expira_in` now holds `"1 zi rămasă"` (238), `"N zile rămase"` (766), `"Ultima zi"` (293) or `"Anunț anulat"` (79); only the 6,274 pre-redesign `/anunt/` rows still carry `Expiră in DD/MM/YYYY`. `import_csvs.py` fed that straight into `parse_date()`, which returned `None`. The Aug 1 scraper rewrite fixed the fetch/parse side but this mapping was never revisited — and the detail page's absolute date was already being captured as `Data Expirare` in `anunturi.csv` (9,243 usable values), just ignored by the importer.
+
+**Changes** (`webapp/apps/jobs/management/commands/import_csvs.py`):
+- `parse_date()` gained a `YYYY-MM-DD` branch — it handled `DD.MM.YYYY`, `DD/MM/YYYY` and `9 septembrie, 2024`, but not the ISO dates `parse-anunturi.py` writes, so `Data Expirare` was unparseable even where read.
+- New `expires_by_url` map built from `anunturi.csv` before Pass 1; `expires_at` now resolves detail-first, index-`expira_in` second. The join is on `Source URL`, so it covers the 3,000 `/joburi/` rows and leaves the old `/anunt/` rows on the index path.
+- New `plausible_expiry()` rejects years outside `2000..today.year + 2`, applied to **both** sources. Catches upstream typos like `Expiră in 14/01/2046` on a posting published 2025-12-23, which would otherwise read as permanently open. Rejections are reported in the command output rather than dropped silently.
+
+**Result:** NULL `expires_at` 3,103 → 80 (79 `Anunț anulat`, correctly excluded, + 1 typo'd row); active postings 3 → 1,656; `max(expires_at)` 2046-01-14 → 2026-12-22. `export-to-sqlite.py --active-only` now exports 1,656 postings / 559 calendar events. 77 tests pass; two consecutive imports produce identical counts.
+
+**Not done:** the same countdown string still makes `compare_and_update()` in `fetch-index.py` log a spurious `expira_in` change for every posting every day (12 entries on one sampled row in 18 days), inflating `updates_raw`, feeding noise into `JobPostingUpdate`, and defeating the skip-unchanged-page save optimisation. Left as an open backlog item.
+
+---
+
 ### 2026-08-02 — PHP webapp packaging: active-only SQLite export + streamlined deploy
 
 **What:** Refactored the `export-to-sqlite.py` → `deploy-php.sh` packaging so the PHP webapp folder is fully self-contained with an active-only database.

@@ -111,7 +111,7 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `fetch-detail` | `fetch-anunturi.py` | `data/anunturi/**/*.html` |
 | `parse` | `parse-anunturi.py` | `data/anunturi/anunturi.csv` + `data/calendar.csv` |
 | `download` | `download-attachments.py` | `data/downloads/` |
-| `import` | `manage.py import_csvs` | Postgres `jobs_jobposting` table |
+| `import` | `manage.py import_csvs` | Postgres `jobs_jobposting` table (normalises județe — see below) |
 | `extract` | `manage.py extract_attachments` | `JobPosting.attachment_text` |
 | `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
 | `schema` | `llm-schema.py` | `JobPosting.schema_json` JSONB |
@@ -120,6 +120,31 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 `--limit N` restricts `infer` to N postings (useful for testing).
 `--provider gemini|openai|anthropic|deepseek` sets the LLM used by the `infer` and `schema` steps (default: `gemini`).
 `--no-llm` skips the LLM portion of `infer` only — the `schema` step is always LLM-driven; use `--skip schema` to omit it.
+
+### Județe (counties)
+
+The source badge has two shapes — `Timiş` before the 2026-07 redesign,
+`TIMIŞOARA, Timiș` after — and storing both verbatim once gave the database 261
+`Judet` rows for a country with 42 counties, which quietly broke the județ
+filter. `webapp/apps/jobs/judete.py` is now the single place that interprets a
+raw county string:
+
+- `normalize_judet(raw)` → `(county, locality)`, folding the Turkish cedilla
+  `ş/ţ` onto Romanian `ș/ț` and splitting the city out into `JobPosting.locality`.
+- `import_csvs` applies it on the way in, so new data cannot fragment.
+- `manage.py normalize_judete [--dry-run]` repairs data imported before the fix.
+  Idempotent.
+
+**When a county cannot be matched**, the raw value is kept in
+`JobPosting.judet_raw` and the posting gets no county — so it answers to no
+county filter. Three things surface that:
+
+1. `import_csvs` prints a warning listing the unmatched values.
+2. `judet_sanity_warnings()` runs on every import (honours `--strict`) and fires
+   if the `Judet` table exceeds 42 rows or any posting is unresolved.
+3. Django admin → *Anunțuri* → filter *Județ — rezolvare* → **Nerecunoscut**.
+
+The fix is normally one line in `judete.ALIASES`.
 
 ### LLM Provider Comparison
 
@@ -271,26 +296,66 @@ A lightweight PHP frontend that runs on commodity shared hosting (cPanel). Reads
 # Generate active-only SQLite + push to shared host
 ./deploy-php.sh user@host ~/posturi.gov2.ro
 
+./deploy-php.sh pax@mioritics.ro  ~/posturi.gov2.ro --no-perms --no-owner  --no-group --omit-dir-times
+
 # Or set env vars
 DEPLOY_HOST=user@host DEPLOY_PATH=~/posturi.gov2.ro ./deploy-php.sh
 ```
 
 The deploy script:
-1. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`
-2. Rsyncs the entire `webapp-php/` folder to the remote host
+1. Aborts if `webapp-php/static/app.css` is missing (see *Stylesheet* below)
+2. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`
+3. Rsyncs the `webapp-php/` folder to the remote host, minus `assets/` (Tailwind source) and `router.php` (dev only)
 
 The full archive stays in PostgreSQL; the deployed SQLite only contains currently active postings.
+
+### Stylesheet
+
+The app has no build step *on the host* — the compiled CSS is committed. Rebuild it
+whenever you touch a template's classes:
+
+```bash
+npm install          # once
+npm run css          # webapp-php/assets/app.css -> webapp-php/static/app.css (minified)
+npm run css:watch    # while editing templates
+```
+
+Fonts (`static/fonts/*.woff2`) and htmx (`static/htmx.min.js`) are self-hosted; nothing
+is fetched from a CDN at runtime.
+
+### Previewing another export
+
+`db.php` honours a `POSTURI_DB` environment variable, so a test or a preview can
+point at a different SQLite file without touching the deployed one:
+
+```bash
+POSTURI_DB=/tmp/other.sqlite php -S localhost:8000 -t webapp-php webapp-php/router.php
+```
+
+Unset in production.
+
+### Local preview
+
+```bash
+php -S localhost:8000 -t webapp-php webapp-php/router.php
+```
+
+`router.php` exists only for PHP's built-in server — it serves static files and mirrors
+the `.htaccess` deny rules. Apache never loads it.
 
 ### Structure
 
 | Path | Purpose |
 |------|---------|
-| `index.php` | Front controller — routes `/`, `/job/123/`, `/angajatori/`, `/statistici/`, `/despre/` |
+| `index.php` | Front controller — routes `/`, `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/robots.txt`, `/sitemap.xml` |
 | `db.php` | PDO singleton for `posturi.sqlite` |
-| `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries |
+| `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |
 | `feeds/` | Atom, JSON API, iCal endpoints |
 | `partials/` | Result list partial (HTMX-compatible) |
-| `inc/` | Header/footer HTML |
-| `.htaccess` | URL rewriting, blocks direct access to `*.sqlite` |
+| `inc/` | Header/footer HTML, `<head>` metadata (canonical, OpenGraph, JSON-LD hook) |
+| `assets/` | Tailwind source — **not deployed** |
+| `static/` | Compiled `app.css`, self-hosted fonts, htmx |
+| `router.php` | Dev-server router — **not deployed** |
+| `.htaccess` | URL rewriting, asset caching, blocks direct access to `*.sqlite*` |
 

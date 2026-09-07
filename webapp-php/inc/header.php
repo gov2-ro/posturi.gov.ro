@@ -1,6 +1,16 @@
 <?php
-// $page_title is set by the calling page
+// Set by the calling page: $page_title, and optionally $meta_description,
+// $canonical_path, $head_extra (raw markup, e.g. JSON-LD).
 $_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.gov2.ro';
+
+$_description = $meta_description
+    ?? 'Explorator independent al anunțurilor de angajare din sectorul public românesc, '
+     . 'construit peste datele publice de pe posturi.gov.ro.';
+
+// Canonical drops the query string unless the page asks for a specific path, so
+// the thousands of filter permutations all fold into one indexable URL.
+$_canonical = site_origin() . ($canonical_path ?? parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
+$_canonical = preg_replace('/\?.*$/', '', $_canonical);
 
 // Last data update — used in header and footer
 if (!isset($_last_updated)) {
@@ -21,90 +31,60 @@ if ($_last_updated) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= e($_title) ?></title>
+  <meta name="description" content="<?= e($_description) ?>">
+  <link rel="canonical" href="<?= e($_canonical) ?>">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="posturi.gov2.ro">
+  <meta property="og:locale" content="ro_RO">
+  <meta property="og:title" content="<?= e($_title) ?>">
+  <meta property="og:description" content="<?= e($_description) ?>">
+  <meta property="og:url" content="<?= e($_canonical) ?>">
+  <meta name="twitter:card" content="summary">
+
   <link rel="alternate" type="application/atom+xml" title="posturi.gov2.ro — Atom" href="/posturi.atom">
   <link rel="alternate" type="application/json" title="posturi.gov2.ro — JSON" href="/posturi.json">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=DM+Sans:ital,opsz,wght@0,9..40,300..600;1,9..40,300..600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        fontFamily: {
-          display: ["'Fraunces'", "Georgia", "serif"],
-          sans: ["'DM Sans'", "system-ui", "sans-serif"],
-          mono: ["'DM Mono'", "monospace"],
-        },
-        extend: {
-          colors: {
-            parchment: "#F5F0E8",
-            "parchment-dark": "#EDE7D9",
-            ink: "#1C1917",
-            "ink-muted": "#78716C",
-            "ink-faint": "#A8A29E",
-            "gov": "#1B3A6B",
-            "gov-light": "#EEF2FF",
-            "border-warm": "#D6CFC4",
-          }
-        }
-      }
-    }
-  </script>
-
-  <style type="text/css">
-    body { background-color: #F5F0E8; color: #1C1917; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #EDE7D9; }
-    ::-webkit-scrollbar-thumb { background: #B8B0A4; border-radius: 3px; }
-    #results.htmx-request { opacity: 0.5; transition: opacity 200ms ease; }
-    .facet-check:checked + label { color: #1B3A6B; font-weight: 500; }
-    .prose-body h1, .prose-body h2, .prose-body h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 600; margin-top: 1.25em; margin-bottom: 0.4em; line-height: 1.2; }
-    .prose-body h1 { font-size: 1.35rem; }
-    .prose-body h2 { font-size: 1.15rem; }
-    .prose-body h3 { font-size: 1rem; }
-    .prose-body p { margin-bottom: 0.75em; line-height: 1.65; }
-    .prose-body ul, .prose-body ol { margin-bottom: 0.75em; padding-left: 1.4em; }
-    .prose-body li { margin-bottom: 0.25em; line-height: 1.6; }
-    .prose-body strong { font-weight: 600; }
-    .prose-body table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: 0.85rem; }
-    .prose-body th, .prose-body td { border: 1px solid #D6CFC4; padding: 0.4em 0.6em; text-align: left; }
-    .prose-body th { background: #EDE7D9; font-weight: 600; }
-  </style>
-
-  <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js" defer></script>
+  <link rel="preload" href="/static/fonts/dm-sans-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/app.css?v=<?= @filemtime(__DIR__ . '/../static/app.css') ?: '1' ?>">
+  <script src="/static/htmx.min.js" defer></script>
+  <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">
 
-<div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4 text-center">
-  <span class="font-mono text-xs uppercase tracking-wide font-semibold">WIP / MVP — versiune în lucru.</span>
-  <span class="flex-1 text-xs truncate">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului româniei. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a> (gForm)</span>
-  <button onclick="document.getElementById('wip-banner').remove()" class="text-yellow-700 hover:text-yellow-950 text-lg leading-none shrink-0" aria-label="Închide">&times;</button>
+<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gov focus:px-4 focus:py-2 focus:text-white">
+  Sari la conținut
+</a>
+
+<div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4">
+  <span class="font-mono text-xs uppercase tracking-wide font-semibold shrink-0">WIP / MVP</span>
+  <span class="flex-1 text-xs text-center">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului României. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a> (gForm)</span>
+  <button type="button" onclick="document.getElementById('wip-banner').remove()" class="shrink-0 -m-1 p-1 text-lg leading-none text-yellow-900 hover:text-yellow-950" aria-label="Închide anunțul">&times;</button>
 </div>
 
 <header class="bg-gov text-white border-b border-gov">
-  <div class="max-w-screen-xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
-    <a href="/" class="flex items-center gap-3 group">
-      <span class="font-display italic text-xl font-semibold text-white leading-none tracking-tight">
+  <div class="max-w-screen-xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 h-14">
+    <a href="/" class="flex shrink-0 items-center gap-3 py-2 group">
+      <span class="font-display italic text-lg sm:text-xl font-semibold text-white leading-none tracking-tight">
         posturi<span class="text-blue-300">.</span>gov<span class="text-blue-300">2</span><span class="text-blue-300">.</span>ro
       </span>
-      <span class="hidden sm:inline text-xs text-blue-200 font-mono uppercase tracking-widest mt-0.5 opacity-70">
+      <span class="hidden md:inline text-xs text-blue-200 font-mono uppercase tracking-widest mt-0.5">
         / alpha · WIP
       </span>
       <?php if ($_last_updated_fmt): ?>
-      <span class="hidden sm:inline text-xs text-blue-300 font-mono mt-0.5 opacity-60">
+      <span class="hidden lg:inline text-xs text-blue-200 font-mono mt-0.5">
         actualizat <?= $_last_updated_fmt ?>
       </span>
       <?php endif; ?>
     </a>
-    <nav class="flex items-center gap-4 text-sm text-blue-100">
-      <a href="/" class="hover:text-white transition-colors">Căutare</a>
-      <a href="/statistici/" class="hover:text-white transition-colors">Statistici</a>
-      <a href="/angajatori/" class="hover:text-white transition-colors">Angajatori</a>
-      <a href="/despre/" class="hover:text-white transition-colors">Despre</a>
+    <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-blue-100">
+      <a href="/" class="py-2 hover:text-white transition-colors">Căutare</a>
+      <a href="/statistici/" class="py-2 hover:text-white transition-colors">Statistici</a>
+      <a href="/angajatori/" class="hidden py-2 sm:inline hover:text-white transition-colors">Angajatori</a>
+      <a href="/despre/" class="py-2 hover:text-white transition-colors">Despre</a>
     </nav>
   </div>
 </header>
 
-<main class="flex-1">
+<main id="main" class="flex-1">

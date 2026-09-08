@@ -10,6 +10,8 @@ import glob
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
+from posting_urls import build_slug_index, url_from_slug
+
 _RO_MONTHS = {
     'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
     'mai': 5, 'iunie': 6, 'iulie': 7, 'august': 8,
@@ -51,6 +53,12 @@ def _load_index_dates():
 
 
 _INDEX_DATES = _load_index_dates()
+
+#: slug → source URL, built by running the fetch step's own naming function over
+#: every URL the index knows. Without this the parser guessed `/joburi/{slug}/`,
+#: which is wrong for the raw-permalink postings (`/?post_type=pg_job&p=26404`)
+#: and silently detached them from their index row — no dates, no join key.
+_SLUG_INDEX = build_slug_index(_INDEX_DATES)
 
 DATE_RE = re.compile(r'\b(\d{1,2}\.\d{2}\.\d{4})\b')
 TIME_RE = re.compile(r'ora\s+(\d{1,2}[:.]\d{2})', re.IGNORECASE)
@@ -254,16 +262,14 @@ def _find_calendar_date(calendar_rows, keywords):
 def source_url_from_path(file_path):
     """Reconstruct the posting URL from the cached HTML path.
 
-    Handles both old (/anunt/{slug}/) and new (/joburi/{slug}/) URL patterns.
-    The slug is the same in both cases, but we now default to /joburi/ for new fetches.
-    Old cached files still use /anunt/ in the join key.
-
-    The caller (_INDEX_DATES lookup) uses this reconstructed URL as the join key
-    to the index CSV (posturi_gov_ro.csv), which now contains /joburi/ URLs.
+    Resolved through `_SLUG_INDEX`, which is built by applying the fetch step's
+    own naming function to every URL in the index CSV — so the two directions
+    agree by construction rather than by two regexes kept in sync by hand.
+    Handles /anunt/, /joburi/ and raw `?post_type=pg_job&p=N` permalinks alike.
+    Unknown slugs fall back to the /joburi/{slug}/ shape.
     """
     slug = os.path.splitext(os.path.basename(file_path))[0]
-    # Try new URL first (matches current index CSV format)
-    return f'https://posturi.gov.ro/joburi/{slug}/'
+    return url_from_slug(slug, _SLUG_INDEX)
 
 
 def _try_index_lookup(src_url):

@@ -179,7 +179,12 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
                     [(r["id"], r["name"], r["slug"]) for r in rows])
     print(f"{len(rows)} rows")
 
-    active_filter = "WHERE jp.expires_at >= CURRENT_DATE" if active_only else ""
+    # "Active" means open *and* not withdrawn. A cancelled competition keeps the
+    # real dates on its detail page, so filtering on expires_at alone republishes
+    # it as an open job — see docs/activity-log.md, 2026-09-08.
+    active_filter = (
+        "WHERE jp.expires_at >= CURRENT_DATE AND NOT jp.cancelled" if active_only else ""
+    )
     label = "active " if active_only else ""
     print(f"Exporting {label}job_postings...", end=" ", flush=True)
     cur.execute(f"""
@@ -275,7 +280,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
     print("Exporting calendar_events...", end=" ", flush=True)
     ce_filter = (
-        "WHERE posting_id IN (SELECT id FROM jobs_jobposting WHERE expires_at >= CURRENT_DATE)"
+        "WHERE posting_id IN (SELECT id FROM jobs_jobposting "
+        "WHERE expires_at >= CURRENT_DATE AND NOT cancelled)"
         if active_only else ""
     )
     cur.execute(f"""

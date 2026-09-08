@@ -322,6 +322,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Importing index rows ({len(rows)})…")
         created = updated = errors = 0
         implausible_index = 0
+        cancelled_count = 0
         for r in rows:
             url = r["url"].strip()
             if not url:
@@ -330,6 +331,13 @@ class Command(BaseCommand):
             employer = employer_by_name.get(r["angajator"].strip())
             judet_parse = judet_parse_by_raw.get(r.get("judet", "").strip())
             judet = judet_by_name.get(judet_parse.judet) if judet_parse and judet_parse.judet else None
+            # The index writes "Anunț anulat" in the expiry slot for a withdrawn
+            # competition. The *detail* page still carries its original dates, so
+            # taking the date and dropping the word turns a cancelled announcement
+            # back into an apparently open job — 15 of them, when the cache-key fix
+            # let these pages be fetched for the first time.
+            cancelled = "anulat" in (r.get("expira_in", "") or "").lower()
+            cancelled_count += cancelled
             # Detail page first; the index `expira_in` is a countdown string on
             # the new site and only parses for pre-redesign rows.
             expires_at = expires_by_url.get(url)
@@ -343,6 +351,7 @@ class Command(BaseCommand):
                 "detalii_raw": r.get("detalii", "").strip(),
                 "published_at": parse_date(r.get("publicat_in", "")),
                 "expires_at": expires_at,
+                "cancelled": cancelled,
                 "judet": judet,
                 "locality": (judet_parse.locality or "") if judet_parse else "",
                 # Only populated when the county could not be resolved, so
@@ -363,6 +372,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"  Index: created={created} updated={updated} errors={errors}"
             + (f" (dropped {implausible_index} implausible expiry dates)" if implausible_index else "")
+            + (f", {cancelled_count} marked cancelled" if cancelled_count else "")
         ))
 
         # ---- Pass 2: detail rows from anunturi.csv (join on Source URL) ----

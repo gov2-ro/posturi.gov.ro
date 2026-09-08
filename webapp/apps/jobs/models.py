@@ -122,6 +122,14 @@ class JobPosting(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_seen_at = models.DateField(null=True, blank=True, help_text="Set by importer; can detect dropped postings")
+    cancelled = models.BooleanField(
+        default=False,
+        help_text=(
+            "Competition withdrawn: the index lists 'Anunț anulat' instead of an expiry date. "
+            "Distinct from expired — the detail page still carries real dates, so without this "
+            "flag a cancelled announcement reads as an open job."
+        ),
+    )
     inferred = models.JSONField(default=dict, blank=True, help_text="Reserved for v2/v3 derived fields")
     schema_json = models.JSONField(null=True, blank=True, help_text="LLM-extracted structured sections for display (responsibilities, qualifications, skills, etc.)")
 

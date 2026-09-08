@@ -4,6 +4,8 @@ base_url = "https://posturi.gov.ro"
 import csv, os, time, requests, random, re
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
+
+from posting_urls import slug_for_url
 from datetime import datetime
 from tqdm import tqdm
 from requests.exceptions import RequestException
@@ -100,9 +102,8 @@ def extract_main_content(html):
 
 
 def get_slug(url):
-    parsed_url = urlparse(url)
-    path = parsed_url.path.strip('/')
-    return path.split('/')[-1] if path else 'index'
+    """Cache filename for a posting URL — see posting_urls.slug_for_url."""
+    return slug_for_url(url)
 
 
 def create_directory(date_str):

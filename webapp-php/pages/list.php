@@ -90,8 +90,6 @@ $stmt = db()->prepare($list_sql);
 $stmt->execute($b);
 $postings = $stmt->fetchAll();
 
-$corpus_count = (int)db()->query("SELECT COUNT(*) FROM job_postings")->fetchColumn();
-
 // ---- Active filters ----
 $active_chips  = active_filter_chips();
 $is_unfiltered = $page === 1 && !$active_chips;
@@ -100,12 +98,46 @@ $is_unfiltered = $page === 1 && !$active_chips;
 $quick_stats = null;
 if ($is_unfiltered) {
     $today = date('Y-m-d');
+    // Județe and domenii counts were dropped 2026-09-08: as numbers they said
+    // nothing a visitor could act on, and both are reachable as facets. The two
+    // that stayed are corpus scale, and they now render as one line of text
+    // rather than as four cards above the fold.
     $quick_stats = [
         'active'    => (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE expires_at >= '$today'")->fetchColumn(),
-        'judete'    => (int)db()->query("SELECT COUNT(DISTINCT judet_id) FROM job_postings WHERE judet_id IS NOT NULL")->fetchColumn(),
         'employers' => (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn(),
-        'families'  => (int)db()->query("SELECT COUNT(DISTINCT inf_profession_family) FROM job_postings WHERE inf_profession_family IS NOT NULL AND inf_profession_family != ''")->fetchColumn(),
     ];
+}
+
+// ---- Landing shortcuts ----
+//
+// The unfiltered page needs a way in that is not "type something". These are
+// entry points, not a filter UI: plain links, shown only when nothing is
+// selected, each landing on a filter the sidebar can then refine. Counts are
+// computed here rather than read off $..._options so capping and ordering in
+// the facet lists cannot quietly change what the landing offers.
+$shortcuts = [];
+if ($is_unfiltered) {
+    $today = date('Y-m-d');
+    $live  = "(expires_at IS NULL OR expires_at >= '$today')";
+
+    foreach (db()->query(
+        "SELECT inf_profession_family AS v, COUNT(*) AS c FROM job_postings
+         WHERE inf_profession_family <> '' AND $live
+         GROUP BY 1 ORDER BY 2 DESC LIMIT 3") as $r) {
+        $shortcuts[] = ['param' => 'family', 'value' => $r['v'],
+                        'label' => mb_convert_case($r['v'], MB_CASE_TITLE, 'UTF-8'), 'count' => (int)$r['c']];
+    }
+
+    $probes = [
+        ['type',         'Temporar',             'Temporar',             "job_type = 'Temporar'"],
+        ['employer_cat', 'Funcție publică',      'Funcție publică',      "employer_category = 'Funcție publică'"],
+        ['employer_cat', 'Funcție contractuală', 'Funcție contractuală', "employer_category = 'Funcție contractuală'"],
+        ['remote',       '1',                    'Telemuncă',            "inf_remote_eligible = 1"],
+    ];
+    foreach ($probes as [$param, $value, $label, $clause]) {
+        $c = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE $clause AND $live")->fetchColumn();
+        if ($c > 0) $shortcuts[] = compact('param', 'value', 'label') + ['count' => $c];
+    }
 }
 
 // ---- Facet counts ----
@@ -189,15 +221,13 @@ $studies_options   = get_facet('inf_studies_required', 'studies_levels');
     $in7   = date('Y-m-d', strtotime('+7 days'));
     $st = db()->prepare("SELECT
             SUM(CASE WHEN j.expires_at IS NULL OR j.expires_at >= ? THEN 1 ELSE 0 END) AS active,
-            SUM(CASE WHEN j.expires_at >= ? AND j.expires_at <= ? THEN 1 ELSE 0 END)   AS soon,
-            COUNT(*) AS all_cnt
+            SUM(CASE WHEN j.expires_at >= ? AND j.expires_at <= ? THEN 1 ELSE 0 END)   AS soon
         FROM job_postings j {$s['join']} $where_st");
     $st->execute(array_merge([$today, $today, $in7], $s['binds']));
     $r = $st->fetch() ?: [];
     $status_counts = [
         'active' => (int)($r['active'] ?? 0),
         'soon'   => (int)($r['soon'] ?? 0),
-        'all'    => (int)($r['all_cnt'] ?? 0),
     ];
 }
 
@@ -346,36 +376,16 @@ if (!$is_htmx) {
 }
 
 if (!$is_htmx): ?>
-<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:block">
+<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
 
-  <div class="mb-5">
-    <h1 class="font-display text-2xl sm:text-3xl font-semibold italic text-ink leading-tight">Posturi în sectorul public</h1>
-    <p class="text-ink-muted text-sm mt-1"><?= $corpus_count ?> anunțuri indexate · sursă: <a href="https://posturi.gov.ro" rel="noopener" class="text-gov hover:underline">posturi.gov.ro</a></p>
-  </div>
-
-  <?php if ($is_unfiltered && $quick_stats): ?>
-  <div class="order-2 grid grid-cols-2 gap-3 sm:order-none sm:grid-cols-4 mb-8">
-    <div class="border border-line rounded-lg p-4">
-      <div class="text-2xl font-display font-semibold text-ok-ink"><?= $quick_stats['active'] ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri active</div>
-    </div>
-    <div class="border border-line rounded-lg p-4">
-      <div class="text-2xl font-display font-semibold text-ink"><?= $quick_stats['judete'] ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Județe</div>
-    </div>
-    <div class="border border-line rounded-lg p-4">
-      <div class="text-2xl font-display font-semibold text-ink"><?= $quick_stats['employers'] ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori</div>
-    </div>
-    <div class="border border-line rounded-lg p-4">
-      <div class="text-2xl font-display font-semibold text-ink"><?= $quick_stats['families'] ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Domenii</div>
-    </div>
-  </div>
-  <?php endif; ?>
+  <?php /* The visible title and the "N anunțuri indexate · sursă" line were removed
+     2026-09-08: both restated the masthead, and they pushed the filters — the
+     actual tool — below the fold. The heading stays in the document for SEO and
+     for screen readers, which is the part that was doing real work. The corpus
+     count and source attribution live in the footer. */ ?>
+  <h1 class="sr-only">Posturi în sectorul public</h1>
 
   <form id="filter-form"
-        class="order-1 sm:order-none"
         hx-get="/"
         hx-target="#results"
         hx-push-url="true"
@@ -383,7 +393,22 @@ if (!$is_htmx): ?>
         hx-indicator="#results"
         onsubmit="return false;">
 
-    <!-- SEARCH BAR — outside the sidebar, so it exists at every width -->
+    <!-- Backdrop for the mobile drawer. Outside the columns: it is fixed, and
+         keeping it out of the sticky wrapper avoids any stacking-context doubt. -->
+    <div id="facet-backdrop" hidden
+         class="fixed inset-0 z-30 bg-ink/40 lg:hidden"></div>
+
+    <div class="lg:flex lg:gap-6 lg:items-start">
+
+      <!-- LEFT COLUMN — search above the facets.
+           The filter is the main exploration tool, so on desktop it owns a
+           column and the search sits at the top of it rather than spanning the
+           page. On mobile there is no column: the search stays inline at the
+           top and the facets become the slide-over drawer, which is why the
+           search input lives here rather than inside <aside> — one input, one
+           name, reachable at every width. -->
+      <div class="lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)] lg:w-64 lg:shrink-0 lg:flex-col">
+
     <div class="flex gap-2 mb-3">
       <div class="relative flex-1 min-w-0">
         <label for="q" class="sr-only">Caută posturi după titlu, angajator sau conținut</label>
@@ -411,42 +436,11 @@ if (!$is_htmx): ?>
       </button>
     </div>
 
-    <!-- STATUS + SORT -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-      <div role="group" aria-label="Stare anunț"
-           class="inline-flex rounded-md border border-line-strong bg-surface overflow-hidden">
-        <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
-        <label class="relative border-r border-line-strong last:border-r-0">
-          <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status === $sval) ?>>
-          <span class="block cursor-pointer px-3 py-1.5 text-xs sm:text-sm text-ink-muted transition-colors hover:text-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-focus">
-            <?= e($slabel) ?>
-            <span class="ml-1 font-mono text-xs opacity-70"><?= $status_counts[$sval] ?></span>
-          </span>
-        </label>
-        <?php endforeach; ?>
-      </div>
-
-      <div class="flex items-center gap-2">
-        <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
-        <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
-          <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
-          <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
-          <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="flex gap-6 items-start">
-
-      <!-- Backdrop for the mobile drawer -->
-      <div id="facet-backdrop" hidden
-           class="fixed inset-0 z-30 bg-ink/40 lg:hidden"></div>
-
       <!-- FACETS — sticky column on lg, slide-over drawer below it -->
       <aside id="facet-panel"
              aria-label="Filtre"
              class="fixed inset-y-0 right-0 z-40 flex w-[86vw] max-w-sm translate-x-full flex-col overflow-y-auto overscroll-contain border-l border-line bg-page px-4 pb-4 transition-transform duration-200 ease-out
-                    lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:overscroll-auto lg:border-l-0 lg:bg-transparent lg:px-0 lg:transition-none lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)]">
+                    lg:static lg:z-auto lg:w-auto lg:max-w-none lg:min-h-0 lg:flex-1 lg:translate-x-0 lg:overscroll-auto lg:border-l-0 lg:bg-transparent lg:px-0 lg:transition-none">
 
         <!-- Drawer header (mobile only) -->
         <div class="sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between border-b border-line bg-page px-4 py-3 lg:hidden">
@@ -575,9 +569,9 @@ if (!$is_htmx): ?>
         <!-- Feed links -->
         <div class="mt-6 space-y-1 border-t border-line pt-4 text-xs text-ink-muted">
           <div class="mb-1 font-semibold uppercase tracking-widest">Export</div>
-          <a href="<?= e(feed_url('posturi.atom')) ?>" class="block py-1 text-gov hover:underline">Atom (RSS)</a>
-          <a href="<?= e(feed_url('posturi.json')) ?>" class="block py-1 text-gov hover:underline">JSON API</a>
-          <a href="<?= e(feed_url('posturi.ics')) ?>" class="block py-1 text-gov hover:underline">iCal</a>
+          <a data-feed="posturi.atom" href="<?= e(feed_url('posturi.atom')) ?>" class="block py-1 text-gov hover:underline">Atom (RSS)</a>
+          <a data-feed="posturi.json" href="<?= e(feed_url('posturi.json')) ?>" class="block py-1 text-gov hover:underline">JSON API</a>
+          <a data-feed="posturi.ics"  href="<?= e(feed_url('posturi.ics'))  ?>" class="block py-1 text-gov hover:underline">iCal</a>
         </div>
 
         <!-- Drawer footer (mobile only) -->
@@ -589,8 +583,58 @@ if (!$is_htmx): ?>
         </div>
       </aside>
 
-      <!-- RESULTS -->
-      <div class="min-w-0 flex-1">
+      </div><!-- /left column -->
+
+      <!-- RIGHT COLUMN — shortcuts, controls, results -->
+      <div class="min-w-0 lg:flex-1">
+
+    <?php if ($shortcuts): ?>
+    <div class="mb-5 border-b border-line pb-4">
+      <?php if ($quick_stats): ?>
+      <p class="mb-2 font-mono text-xs text-ink-muted">
+        <strong class="font-semibold text-ink"><?= number_format($quick_stats['active'], 0, ',', '.') ?></strong> anunțuri active ·
+        <strong class="font-semibold text-ink"><?= number_format($quick_stats['employers'], 0, ',', '.') ?></strong> angajatori
+      </p>
+      <?php endif; ?>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs uppercase tracking-widest text-ink-muted">Începe cu</span>
+        <?php foreach ($shortcuts as $sc): ?>
+        <a href="/?<?= e($sc['param']) ?>=<?= rawurlencode($sc['value']) ?>"
+           class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs text-ink transition-colors hover:border-gov hover:text-gov">
+          <?= e($sc['label']) ?>
+          <span class="font-mono text-ink-muted"><?= number_format($sc['count'], 0, ',', '.') ?></span>
+        </a>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- STATUS + SORT -->
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+      <div role="group" aria-label="Stare anunț"
+           class="inline-flex rounded-md border border-line-strong bg-surface overflow-hidden">
+        <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
+        <label class="relative border-r border-line-strong last:border-r-0">
+          <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status === $sval) ?>>
+          <span class="block cursor-pointer px-3 py-1.5 text-xs sm:text-sm text-ink-muted transition-colors hover:text-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-focus">
+            <?= e($slabel) ?>
+            <span class="ml-1 font-mono text-xs opacity-70"><?= $status_counts[$sval] ?></span>
+          </span>
+        </label>
+        <?php endforeach; ?>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
+        <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
+          <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
+          <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
+          <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
+        </select>
+      </div>
+    </div>
+
+
         <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> rezultate</p>
         <div id="results">
 <?php endif; // !$is_htmx ?>
@@ -686,6 +730,31 @@ if (!$is_htmx): ?>
     }
     htmx.trigger(form, 'change');
   });
+
+  // ---- Export links follow the active filters ----
+  //
+  // The sidebar is rendered once, server-side; HTMX only ever swaps #results.
+  // So without this the Atom/JSON/iCal hrefs keep the query string from the last
+  // full page load, and subscribing after narrowing the filters hands you a feed
+  // of whatever you were looking at before — silently, since the link still
+  // works. `page` and `sort` are dropped for the same reason feed_url() drops
+  // them server-side.
+  var feedLinks = document.querySelectorAll('[data-feed]');
+
+  function syncFeedLinks() {
+    var params = new URLSearchParams(location.search);
+    params.delete('page');
+    params.delete('sort');
+    var qs = params.toString();
+    feedLinks.forEach(function (a) {
+      a.setAttribute('href', '/' + a.dataset.feed + (qs ? '?' + qs : ''));
+    });
+  }
+
+  // hx-push-url writes the address bar after the swap settles; both events fire
+  // for a filter change, and back/forward only fires the popstate one.
+  document.body.addEventListener('htmx:pushedIntoHistory', syncFeedLinks);
+  window.addEventListener('popstate', syncFeedLinks);
 
   // Scroll back to the top of the list after paging.
   document.body.addEventListener('htmx:afterSwap', function (ev) {

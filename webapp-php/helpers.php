@@ -256,10 +256,13 @@ function bucket_label(array $buckets, string $key): string {
 
 const DEFAULT_STATUS = 'active';
 
+// "Toate" was dropped 2026-09-08: the deployed SQLite is exported --active-only,
+// so it counted exactly the same rows as "Active" (1,799 of 1,799) and cost a
+// third of the control's width to say nothing. An unknown status in the URL
+// falls back to DEFAULT_STATUS, so old ?status=all links still resolve.
 const STATUS_LABELS = [
     'active' => 'Active',
     'soon'   => 'Expiră în 7 zile',
-    'all'    => 'Toate',
 ];
 
 /** slug => name, for turning `judet=cluj` back into "Cluj" on a chip. */
@@ -564,7 +567,12 @@ function current_qs(): string {
 }
 
 function feed_url(string $filename): string {
-    $qs = http_build_query($_GET);
+    // `page` and `sort` describe how the HTML list is being read, not which
+    // postings it holds, and a feed reader has no use for either — a feed URL
+    // carrying ?page=3 would silently hand back the third slice.
+    $params = $_GET;
+    unset($params['page'], $params['sort']);
+    $qs = http_build_query($params);
     return '/' . $filename . ($qs ? '?' . $qs : '');
 }
 

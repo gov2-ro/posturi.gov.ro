@@ -88,7 +88,6 @@ if ($_last_updated) {
       <?php endif; ?>
     </a>
     <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
-      <a href="/" class="py-2 hover:text-on-bar transition-colors">Căutare</a>
       <a href="/statistici/" class="py-2 hover:text-on-bar transition-colors">Statistici</a>
       <a href="/angajatori/" class="hidden py-2 sm:inline hover:text-on-bar transition-colors">Angajatori</a>
       <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>

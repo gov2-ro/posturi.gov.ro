@@ -89,6 +89,65 @@ function fmt_datetime(?string $iso, string $fmt = 'd.m.Y H:i'): string {
     }
 }
 
+// ---- Provenance ----
+
+/**
+ * The one `build_meta` row: when export-to-sqlite.py built this database, from which
+ * commit, and what it holds. Two timestamps describe this site and they are not the
+ * same thing — `MAX(last_seen_at)` is when the source was last scraped, `built_at` is
+ * when this file was generated. They usually coincide, and when they do not, that
+ * gap is the interesting part.
+ *
+ * Returns null on an export predating the table, or any read failure: every caller
+ * must render sensibly without it.
+ */
+function build_meta(): ?array {
+    static $meta = false;          // false = not looked up, null = looked up, absent
+    if ($meta === false) {
+        try {
+            $meta = db()->query("SELECT * FROM build_meta WHERE id = 1")->fetch() ?: null;
+        } catch (Exception $e) {
+            $meta = null;
+        }
+    }
+    return $meta;
+}
+
+/**
+ * Build timestamp in Romanian local time — `built_at` is stored UTC, and 21:46 in
+ * Bucharest must not read as 18:46 to someone checking how fresh the site is.
+ */
+function build_time(string $fmt = 'd.m.Y, H:i'): string {
+    $meta = build_meta();
+    if (empty($meta['built_at'])) return '';
+    try {
+        return (new DateTime($meta['built_at']))
+            ->setTimezone(new DateTimeZone('Europe/Bucharest'))
+            ->format($fmt);
+    } catch (Exception $e) {
+        return '';
+    }
+}
+
+/**
+ * Tooltip text for the "actualizat" stamps in the header and footer. The visible
+ * stamp is the scrape date; this is where the build behind it becomes legible.
+ * `source_host` is deliberately not exposed — it names infrastructure.
+ */
+function build_tooltip(): string {
+    $when = build_time();
+    if (!$when) return '';
+    $meta = build_meta();
+    $parts = ["Bază de date generată la {$when}"];
+    if (!empty($meta['job_postings'])) {
+        $parts[] = number_format((int) $meta['job_postings'], 0, ',', '.') . ' anunțuri active';
+    }
+    if (!empty($meta['git_sha'])) {
+        $parts[] = 'cod ' . $meta['git_sha'];
+    }
+    return implode(' · ', $parts);
+}
+
 // ---- Salary / fee renderers ----
 
 function render_base_salary($salary): string {

@@ -2,6 +2,37 @@
 
 ## 2026
 
+### 2026-09-08 — `build_meta` surfaced: two timestamps, told apart
+
+The export now records its own provenance, so the site could stop implying that one date
+answers two questions. `MAX(last_seen_at)` is when the source was last scraped;
+`built_at` is when the file being served was generated. They coincide on a healthy run,
+and the gap between them is exactly what a partial failure looks like.
+
+**The visible stamp did not change meaning.** "actualizat 08.09.2026" in the header and
+"Date actualizate la…" in the footer still report the scrape date, because that is the
+question a visitor is asking. Both became `<time datetime>` elements carrying a title
+with the build behind them — generated at, active postings, commit. Swapping them to
+`built_at` would have been the wrong fix: an export can run when a scrape did not, and
+the stamp would then overstate freshness.
+
+**`/despre/` is where the detail belongs.** A "Versiunea acestor date" block lists the
+build time in Romanian local time (`built_at` is stored UTC — 21:46 in Bucharest must not
+read as 18:46 to someone checking how fresh the site is), the three row counts, and the
+commit linked to GitHub. Followed by a sentence explaining the two timestamps, since a
+reader who notices them differing deserves the reason rather than a support ticket.
+
+**`source_host` is recorded but never rendered.** It names infrastructure; it exists for
+the deploy to verify on the remote that the file that landed is the file it built.
+
+`build_meta()` in `helpers.php` returns null for an export predating the table — which is
+what is on the live site right now — and every consumer renders without it: no tooltip, no
+`cursor-help`, and a plain sentence in place of the block. Verified by serving a copy with
+the table dropped: all routes 200, no notices.
+
+Files: `webapp-php/helpers.php` (`build_meta()`, `build_time()`, `build_tooltip()`),
+`inc/header.php`, `inc/footer.php`, `pages/about.php`, rebuilt `static/app.css`.
+
 ### 2026-09-08 — Continuous deployment: twice-daily pipeline on a VPS, and the guards that make it safe to leave alone
 
 Answered the open "Daily fetch cron — design" backlog item, then built it.
@@ -79,8 +110,6 @@ Files: `ops/run-pipeline.sh`, `ops/env.sh`, `ops/systemd/posturi-pipeline.{servi
 export that carries provenance; nothing has been pushed to the shared host yet.
 
 Not done: the VPS itself. Provisioning, seeding and the first run are the runbook's job.
-`build_meta` is written but not yet read by anything — the header still stamps
-`MAX(last_seen_at)`, which is when the source was scraped rather than when the file was built.
 
 ### 2026-09-08 — Compact landing: filter-first two-column layout, shortcut chips, live export links
 

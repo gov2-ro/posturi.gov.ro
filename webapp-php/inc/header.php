@@ -14,7 +14,9 @@ $_description = $meta_description
 $_canonical = site_origin() . ($canonical_path ?? parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
 $_canonical = preg_replace('/\?.*$/', '', $_canonical);
 
-// Last data update — used in header and footer
+// Last data update — used in header and footer. This is when the source was last
+// scraped, not when the database file was built; build_meta() holds the latter and
+// $_build_tooltip carries it wherever the stamp appears.
 if (!isset($_last_updated)) {
     try {
         $_last_updated = db()->query("SELECT MAX(last_seen_at) FROM job_postings")->fetchColumn();
@@ -27,6 +29,8 @@ if ($_last_updated) {
 } else {
     $_last_updated_fmt = null;
 }
+$_last_updated_iso = $_last_updated ? substr($_last_updated, 0, 10) : '';
+$_build_tooltip = build_tooltip();
 ?><!doctype html>
 <html lang="ro">
 <head>
@@ -82,9 +86,11 @@ if ($_last_updated) {
         / alpha · WIP
       </span>
       <?php if ($_last_updated_fmt): ?>
-      <span class="hidden lg:inline text-xs text-on-bar-muted font-mono mt-0.5">
+      <time datetime="<?= e($_last_updated_iso) ?>"
+            class="hidden lg:inline text-xs text-on-bar-muted font-mono mt-0.5<?= $_build_tooltip ? ' cursor-help' : '' ?>"
+            <?= $_build_tooltip ? 'title="' . e($_build_tooltip) . '"' : '' ?>>
         actualizat <?= $_last_updated_fmt ?>
-      </span>
+      </time>
       <?php endif; ?>
     </a>
     <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">

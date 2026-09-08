@@ -23,6 +23,48 @@ require __DIR__ . '/../inc/header.php';
       <li>Clasificare automată a anunțurilor (domeniu profesional, nivel de experiență, studii)</li>
       <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a></li>
     </ul>
+    <h2>Versiunea acestor date</h2>
+    <p>
+      Site-ul nu interoghează portalul oficial în timp real: servește o bază de date
+      generată periodic din arhiva noastră. Pipeline-ul rulează de două ori pe zi, iar
+      fiecare rulare reconstruiește complet fișierul de mai jos, păstrând doar anunțurile
+      încă active.
+    </p>
+<?php $_bm = build_meta(); $_bt = build_time(); ?>
+<?php if ($_bm && $_bt): ?>
+    <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs font-mono
+               bg-sunken border border-line rounded p-4 my-4">
+      <dt class="text-ink-faint">Generată la</dt>
+      <dd class="text-ink"><?= e($_bt) ?> <span class="text-ink-faint">(ora României)</span></dd>
+
+      <dt class="text-ink-faint">Anunțuri active</dt>
+      <dd class="text-ink"><?= number_format((int) $_bm['job_postings'], 0, ',', '.') ?></dd>
+
+      <dt class="text-ink-faint">Angajatori</dt>
+      <dd class="text-ink"><?= number_format((int) $_bm['employers'], 0, ',', '.') ?></dd>
+
+      <dt class="text-ink-faint">Evenimente de concurs</dt>
+      <dd class="text-ink"><?= number_format((int) $_bm['calendar_events'], 0, ',', '.') ?></dd>
+
+<?php if (!empty($_bm['git_sha'])): ?>
+      <dt class="text-ink-faint">Cod sursă</dt>
+      <dd>
+        <a href="https://github.com/gov2-ro/posturi.gov.ro/commit/<?= e($_bm['git_sha']) ?>"
+           class="text-gov hover:underline" target="_blank" rel="noopener"><?= e($_bm['git_sha']) ?></a>
+      </dd>
+<?php endif; ?>
+    </dl>
+    <p class="text-xs text-ink-muted">
+      „Date actualizate la” din subsol este data ultimei verificări a anunțurilor la sursă;
+      ora de mai sus este momentul în care a fost construit fișierul servit acum. În mod
+      normal coincid — când nu coincid, sursa nu a putut fi citită la ultima rulare.
+    </p>
+<?php else: ?>
+    <p class="text-xs text-ink-muted">
+      Această versiune a bazei de date nu conține informații despre generarea ei.
+    </p>
+<?php endif; ?>
+
     <hr />
     <!-- <h2>Contact</h2> -->
     <p>

@@ -350,6 +350,14 @@ The export builds beside its target and only replaces it once it opens, passes
 against the file it would replace. `--force` overrides the row floors. This is the guard
 that was missing when the live site served three active postings for five weeks.
 
+Each export carries a `build_meta` row — when it was built, from which commit and host,
+and what it holds. The site reads it for the provenance block on `/despre/` and for the
+tooltip behind the "actualizat" stamps; `build_meta()` in `helpers.php` returns null on an
+older export, and every consumer renders without it. Note the two timestamps mean
+different things: the visible stamp is `MAX(last_seen_at)`, when the source was last
+scraped, while `built_at` is when the file was generated. `source_host` is recorded for
+the deploy to verify against, never rendered.
+
 ### Continuous deployment
 
 The pipeline runs unattended on a VPS twice a day (11:45 and 18:33 Europe/Bucharest) and

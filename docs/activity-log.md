@@ -2,6 +2,54 @@
 
 ## 2026
 
+### 2026-09-08 — Compact landing: filter-first two-column layout, shortcut chips, live export links
+
+Five backlog UI items, all on the PHP webapp's list page.
+
+**The landing was selling itself instead of being used.** An `<h1>` restating the masthead, a
+"N anunțuri indexate · sursă" line repeating the footer, and four stat cards pushed the filters
+— the actual tool — below the fold. The heading survives as `sr-only`, because SEO and screen
+readers were the only things it was genuinely doing; the rest is gone.
+
+**Two columns on `lg`.** Search now sits at the top of the sticky filter column rather than
+spanning the page, so the sidebar reads as the primary exploration tool. The search input stays
+a *single* DOM node — two inputs sharing a name would double-submit — which is why it lives in
+the column wrapper rather than inside `<aside>`: on mobile there is no column, the search renders
+inline at the top and the facets stay the slide-over drawer. Cleaning this up also removed a
+latent conflict where the aside carried both `lg:static` and `lg:sticky` and the winner depended
+on Tailwind's emission order.
+
+**Stats became shortcuts.** Județe and domenii counts were dropped — as numbers they said nothing
+a visitor could act on, and both are reachable as facets. Active + angajatori stayed, as one line
+of mono text rather than four cards. In their place, a row of clickable entry points with counts:
+top three domenii, Temporar, Funcție publică, Funcție contractuală, Telemuncă. They are plain
+links, not filter controls, since they only appear when nothing is selected and a normal
+navigation re-renders the form with the right boxes ticked. Counts are computed independently of
+`$..._options` so facet capping and ordering cannot quietly change what the landing offers; each
+was verified to equal its own filtered result count (464, 452, 365, 298, 13, 1718, 3).
+
+**"Toate" removed from the status tabs.** On the deployed SQLite — exported `--active-only` —
+it counted the same 1,799 rows as "Active", so it spent a third of the control's width saying
+nothing. Old `?status=all` URLs fall back to `active` through the existing validation.
+
+**The export links were quietly wrong.** The feeds always honoured `$_GET`; the bug was that the
+sidebar renders once, server-side, and HTMX only swaps `#results`. Narrow the filters, then
+subscribe, and you got a feed of whatever you were looking at *before* — with a link that still
+worked, so nothing gave it away. Now re-synced from `location.search` on `htmx:pushedIntoHistory`
+and `popstate`. Both `feed_url()` and the JS drop `page` and `sort`, which describe how the HTML
+list is being read rather than which postings it holds.
+
+Also removed `$corpus_count`: dead once the sub-header went, and it had been running a
+`COUNT(*)` on every request, HTMX swaps included.
+
+Two things logged rather than fixed. The "Funcție contractuală" chip matches 1,718 of 1,799
+active postings, so it narrows almost nothing — it was asked for, and it is built, but it does
+the opposite job of the other six. And building it surfaced that `categorie` and
+`employer_category` look crossed for post-redesign rows: the column named for the employer holds
+position categories for 96% of rows, while the one the sidebar labels "Categorie" is empty for
+99%. The sidebar's "Angajator" facet is really a position-type facet. Worth tracing before either
+is trusted.
+
 ### 2026-09-08 — Asked whether `webapp/` could be deleted; found it is the ETL, not a web app
 
 Prompted by the skin work above: the Django app still carries its own hardcoded palette and a

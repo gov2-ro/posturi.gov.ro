@@ -1,3 +1,7 @@
+---
+description: Review the data quality report for the posturi.gov.ro pipeline and produce a qualitative narrative assessment beyond the automated scores. Run after quality_check.py.
+---
+
 # /quality-review
 
 Review the data quality report for the posturi.gov.ro pipeline and produce a

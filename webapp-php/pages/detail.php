@@ -186,7 +186,7 @@ require __DIR__ . '/../inc/header.php';
   </nav>
 
   <!-- Title block -->
-  <div class="border-b border-border-warm pb-5 mb-6">
+  <div class="border-b border-line pb-5 mb-6">
     <h1 class="font-display text-2xl sm:text-3xl font-semibold italic text-ink leading-tight mb-2">
       <?= e($p['title']) ?>
     </h1>
@@ -208,27 +208,27 @@ require __DIR__ . '/../inc/header.php';
     <!-- Badges -->
     <div class="mt-3 flex flex-wrap gap-2">
       <?php if ($p['job_level']): ?>
-        <span class="px-2 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-slate-100 text-slate-700 border border-slate-200' ?>">
+        <span class="px-2 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'bg-info text-info-ink border border-info-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>">
           <?= e($p['job_level']) ?>
         </span>
       <?php endif; ?>
       <?php if ($p['job_type']): ?>
-        <span class="px-2 py-0.5 text-xs bg-slate-100 text-slate-700 border border-slate-200"><?= e($p['job_type']) ?></span>
+        <span class="px-2 py-0.5 text-xs bg-neutral text-neutral-ink border border-neutral-line"><?= e($p['job_type']) ?></span>
       <?php endif; ?>
       <?php if ($p['categorie']): ?>
-        <span class="px-2 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200' ?>">
+        <span class="px-2 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'bg-ok text-ok-ink border border-ok-line' : 'bg-note text-note-ink border border-note-line' ?>">
           <?= e($p['categorie']) ?>
         </span>
       <?php endif; ?>
       <?php if ($days !== null): ?>
         <?php if ($days < 0): ?>
-          <span class="px-2 py-0.5 text-xs bg-slate-100 text-ink-muted border border-slate-200 font-mono">Expirat <?= fmt_date($p['expires_at']) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Expirat <?= fmt_date($p['expires_at']) ?></span>
         <?php elseif ($days <= 3): ?>
-          <span class="px-2 py-0.5 text-xs bg-red-50 text-red-800 border border-red-200 font-mono font-semibold">Expiră în <?= e(days_label($days)) ?>!</span>
+          <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold">Expiră în <?= e(days_label($days)) ?>!</span>
         <?php elseif ($days <= 7): ?>
-          <span class="px-2 py-0.5 text-xs bg-amber-50 text-amber-900 border border-amber-200 font-mono">Expiră în <?= e(days_label($days)) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono">Expiră în <?= e(days_label($days)) ?></span>
         <?php else: ?>
-          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-blue-200 font-mono">Expiră <?= fmt_date($p['expires_at']) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Expiră <?= fmt_date($p['expires_at']) ?></span>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -239,7 +239,7 @@ require __DIR__ . '/../inc/header.php';
   <div class="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
 
     <aside aria-label="Detalii concurs"
-           class="w-full sm:w-64 sm:shrink-0 rounded-lg border border-border-warm bg-white/50 p-4 sm:border-0 sm:bg-transparent sm:p-0">
+           class="w-full sm:w-64 sm:shrink-0 rounded-lg border border-line bg-surface/50 p-4 sm:border-0 sm:bg-transparent sm:p-0">
       <div class="grid grid-cols-2 gap-x-4 gap-y-4 text-sm sm:block sm:space-y-4">
 
         <?php if ($p['data_limita_depunere']): ?>
@@ -253,7 +253,7 @@ require __DIR__ . '/../inc/header.php';
         <?php endif; ?>
 
         <?php if ($p['contact_person'] || $p['contact_phone'] || $p['contact_email']): ?>
-        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-border-warm">
+        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-line">
           <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-2">Contact</div>
           <?php if ($p['contact_person']): ?>
             <div class="text-ink mb-0.5"><?= e($p['contact_person']) ?></div>
@@ -314,7 +314,7 @@ require __DIR__ . '/../inc/header.php';
         $grd = $inferred['grade'] ?? null;
         if ($show_fam || $sen || $grd || $anomaly_flags_list):
         ?>
-        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-border-warm">
+        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-line">
           <div class="mb-2">
             <abbr title="Dedus automat din titlul și textul anunțului — poate fi incomplet sau greșit."
                   class="cursor-help text-xs font-semibold uppercase tracking-widest text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">Inferat automat</abbr>
@@ -337,7 +337,7 @@ require __DIR__ . '/../inc/header.php';
           <?php if ($anomaly_flags_list): ?>
             <div class="mt-1 flex flex-wrap gap-1">
               <?php foreach ($anomaly_flags_list as $flag): ?>
-                <span class="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-900 border border-amber-200"><?= e(ANOMALY_LABELS[$flag] ?? $flag) ?></span>
+                <span class="px-1.5 py-0.5 text-xs bg-note text-note-ink border border-note-line"><?= e(ANOMALY_LABELS[$flag] ?? $flag) ?></span>
               <?php endforeach; ?>
             </div>
           <?php endif; ?>
@@ -346,15 +346,15 @@ require __DIR__ . '/../inc/header.php';
 
         <?php $attachments = attachment_list($p); ?>
         <?php if ($attachments): ?>
-        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-border-warm">
+        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-line">
           <div class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">Atașamente</div>
           <ul class="space-y-1.5">
             <?php foreach ($attachments as $att): ?>
             <li>
               <a href="<?= e($att['url']) ?>" target="_blank" rel="noopener"
                  aria-label="<?= e($att['label']) ?><?= $att['size'] ? ', ' . e($att['size']) : '' ?> (<?= e($att['ext']) ?>, se deschide într-o filă nouă)"
-                 class="flex items-baseline gap-1.5 text-sm hover:underline <?= $att['important'] ? 'font-medium text-amber-800' : 'text-gov' ?>">
-                <span class="shrink-0 rounded border px-1 py-0.5 font-mono text-[10px] font-medium <?= $att['important'] ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-border-warm bg-white text-ink-muted' ?>"><?= e($att['ext']) ?></span>
+                 class="flex items-baseline gap-1.5 text-sm hover:underline <?= $att['important'] ? 'font-medium text-note-ink' : 'text-gov' ?>">
+                <span class="shrink-0 rounded border px-1 py-0.5 font-mono text-[10px] font-medium <?= $att['important'] ? 'border-note-line bg-note text-note-ink' : 'border-line bg-surface text-ink-muted' ?>"><?= e($att['ext']) ?></span>
                 <span class="min-w-0"><?= e($att['label']) ?></span>
                 <?php if ($att['size']): ?><span class="shrink-0 font-mono text-xs text-ink-muted"><?= e($att['size']) ?></span><?php endif; ?>
                 <span aria-hidden="true" class="shrink-0">↗</span>
@@ -382,7 +382,7 @@ require __DIR__ . '/../inc/header.php';
       $smx = $inferred['salary_max'] ?? null;
       if ($wt || $re || $rc !== null || $exp || $st || $smn):
       ?>
-      <div class="mb-6 rounded-lg border border-amber-200/60 bg-amber-50/40 p-4">
+      <div class="mb-6 rounded-lg border border-note-line/60 bg-note/40 p-4">
       <div class="mb-3 flex items-baseline gap-1.5">
         <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții deduse automat</span>
         <a href="/despre/" class="text-xs text-gov hover:underline" title="Cum sunt deduse aceste date">metodologie</a>
@@ -434,12 +434,12 @@ require __DIR__ . '/../inc/header.php';
 
       <?php $tag_groups = inferred_tags($p); ?>
       <?php if ($tag_groups): ?>
-      <div class="mt-4 space-y-2 border-t border-amber-200/60 pt-3">
+      <div class="mt-4 space-y-2 border-t border-note-line/60 pt-3">
         <?php foreach ($tag_groups as $group): ?>
         <div class="flex flex-wrap items-baseline gap-1.5">
           <span class="mr-1 text-xs font-semibold uppercase tracking-widest text-ink-muted"><?= e($group['label']) ?></span>
           <?php foreach ($group['values'] as $value): ?>
-            <span class="rounded-full border border-amber-200 bg-white/70 px-2 py-0.5 text-xs text-ink"><?= e(ucfirst((string)$value)) ?></span>
+            <span class="rounded-full border border-note-line bg-surface/70 px-2 py-0.5 text-xs text-ink"><?= e(ucfirst((string)$value)) ?></span>
           <?php endforeach; ?>
         </div>
         <?php endforeach; ?>
@@ -465,14 +465,14 @@ require __DIR__ . '/../inc/header.php';
           <div class="mb-1 text-xs font-semibold uppercase tracking-widest text-ink-muted">Studii</div>
           <div class="flex flex-wrap items-center gap-1.5 text-sm">
             <?php if ($lvl = $edu['eqf_level'] ?? null): ?>
-              <a href="/?eqf=<?= (int)$lvl ?>" class="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs text-gov hover:underline">
+              <a href="/?eqf=<?= (int)$lvl ?>" class="rounded-full border border-info-line bg-surface px-2.5 py-0.5 text-xs text-gov hover:underline">
                 <?= e(EQF_LABELS[(int)$lvl] ?? ('EQF ' . $lvl)) ?> <span class="font-mono opacity-60">EQF <?= (int)$lvl ?></span>
               </a>
             <?php endif; ?>
             <?php foreach ($edu['fields_of_study'] ?? [] as $f): ?>
               <a href="/?isced%5B%5D=<?= urlencode((string)($f['isced_field'] ?? '')) ?>"
                  title="<?= e(isced_label((string)($f['isced_field'] ?? ''))) ?>"
-                 class="rounded-full border border-border-warm bg-white px-2.5 py-0.5 text-xs text-ink hover:border-gov hover:text-gov">
+                 class="rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs text-ink hover:border-gov hover:text-gov">
                 <?= e(ucfirst((string)($f['label_ro'] ?? ''))) ?>
               </a>
             <?php endforeach; ?>
@@ -490,7 +490,7 @@ require __DIR__ . '/../inc/header.php';
             <?php foreach ($v3['skill_list'] as $k): ?>
               <a href="/?skill%5B%5D=<?= urlencode((string)($k['label'] ?? '')) ?>"
                  title="<?= e((string)($k['evidence'] ?? '')) ?>"
-                 class="rounded-full border px-2.5 py-0.5 text-xs hover:border-gov hover:text-gov <?= ($k['required'] ?? true) ? 'border-border-warm bg-white text-ink' : 'border-dashed border-border-warm bg-transparent text-ink-muted' ?>">
+                 class="rounded-full border px-2.5 py-0.5 text-xs hover:border-gov hover:text-gov <?= ($k['required'] ?? true) ? 'border-line bg-surface text-ink' : 'border-dashed border-line bg-transparent text-ink-muted' ?>">
                 <?= e((string)($k['label'] ?? '')) ?><?php if ($pr = $k['proficiency'] ?? null): ?> <span class="font-mono opacity-70"><?= e($pr) ?></span><?php endif; ?>
               </a>
             <?php endforeach; ?>
@@ -504,7 +504,7 @@ require __DIR__ . '/../inc/header.php';
           <div class="mb-1 text-xs font-semibold uppercase tracking-widest text-ink-muted">Limbi străine</div>
           <div class="flex flex-wrap gap-1.5">
             <?php foreach ($v3['language_list'] as $l): ?>
-              <span class="rounded-full border border-border-warm bg-white px-2.5 py-0.5 text-xs text-ink">
+              <span class="rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs text-ink">
                 <?= e(ucfirst((string)($l['language'] ?? ''))) ?><?php if ($c = $l['cefr'] ?? null): ?> <span class="font-mono text-gov"><?= e($c) ?></span><?php endif; ?>
               </span>
             <?php endforeach; ?>
@@ -536,7 +536,7 @@ require __DIR__ . '/../inc/header.php';
           <p class="mb-2 text-xs text-ink-muted">Anunțul cuprinde mai multe roluri, fiecare cu cerințele lui.</p>
           <div class="space-y-2">
             <?php foreach ($v3['positions'] as $pos): ?>
-            <div class="rounded border border-border-warm bg-white/60 px-3 py-2">
+            <div class="rounded border border-line bg-surface/60 px-3 py-2">
               <div class="text-sm font-medium text-ink">
                 <?php if ($n = $pos['count'] ?? null): ?><span class="font-mono text-gov"><?= (int)$n ?>×</span> <?php endif; ?>
                 <?= e((string)($pos['title'] ?? '')) ?>
@@ -560,7 +560,7 @@ require __DIR__ . '/../inc/header.php';
 
         <?php $pd = $v3['policy_domains'] ?? []; $st = $v3['exam_stages'] ?? []; ?>
         <?php if ($pd || $st): ?>
-        <div class="flex flex-wrap gap-x-4 gap-y-1 border-t border-blue-200/50 pt-2 text-xs">
+        <div class="flex flex-wrap gap-x-4 gap-y-1 border-t border-info-line/50 pt-2 text-xs">
           <?php if ($pd): ?>
           <div><span class="text-ink-muted">Domeniu:</span>
             <?php foreach ($pd as $d): ?><a href="/?domain%5B%5D=<?= urlencode((string)$d) ?>" class="ml-1 text-gov hover:underline"><?= e(policy_domain_label((string)$d)) ?></a><?php endforeach; ?>
@@ -584,7 +584,7 @@ require __DIR__ . '/../inc/header.php';
         ?>
         <?php foreach ($schema_sections as $section): ?>
         <section class="mb-6">
-          <h2 class="mb-3 flex items-baseline gap-2 border-b border-border-warm pb-2 font-display text-lg font-semibold italic text-ink">
+          <h2 class="mb-3 flex items-baseline gap-2 border-b border-line pb-2 font-display text-lg font-semibold italic text-ink">
             <?= e($section['label']) ?>
             <?php if (!in_array($section['key'], $ro_specific, true)): ?>
               <a href="https://schema.org/JobPosting" target="_blank" rel="noopener"
@@ -599,10 +599,10 @@ require __DIR__ . '/../inc/header.php';
         <?php endforeach; ?>
       <?php elseif ($body_html): ?>
       <section class="mb-6">
-        <h2 class="mb-3 border-b border-border-warm pb-2 font-display text-lg font-semibold italic text-ink">
+        <h2 class="mb-3 border-b border-line pb-2 font-display text-lg font-semibold italic text-ink">
           Detalii post
         </h2>
-        <p class="mb-3 rounded border border-border-warm bg-white/50 px-3 py-2 text-xs text-ink-muted">
+        <p class="mb-3 rounded border border-line bg-surface/50 px-3 py-2 text-xs text-ink-muted">
           Textul de mai jos este preluat ca atare de pe posturi.gov.ro. Pentru acest anunț nu există încă
           o versiune structurată pe secțiuni (studii, experiență, atribuții, dosar) —
           <a href="/despre/" class="text-gov hover:underline">vezi metodologia</a>.
@@ -616,20 +616,20 @@ require __DIR__ . '/../inc/header.php';
       <!-- Calendar timeline -->
       <?php if ($events): ?>
       <section class="mb-8">
-        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">
+        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Calendar concurs
         </h2>
         <div class="overflow-x-auto">
           <table class="w-full text-sm border-collapse">
             <thead>
-              <tr class="border-b border-border-warm">
+              <tr class="border-b border-line">
                 <th scope="col" class="text-left py-1.5 pr-4 text-xs font-medium uppercase tracking-widest text-ink-muted w-32 font-sans">Data</th>
                 <th scope="col" class="text-left py-1.5 text-xs font-medium uppercase tracking-widest text-ink-muted font-sans">Etapă</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-border-warm">
+            <tbody class="divide-y divide-line">
               <?php foreach ($events as $ev): ?>
-              <tr class="hover:bg-parchment-dark transition-colors">
+              <tr class="hover:bg-sunken transition-colors">
                 <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
                   <?= fmt_date($ev['data']) ?>
                   <?php if ($ev['ora']): ?><span> <?= e($ev['ora']) ?></span><?php endif; ?>
@@ -643,7 +643,7 @@ require __DIR__ . '/../inc/header.php';
       </section>
       <?php endif; ?>
 
-      <p class="mt-8 border-t border-border-warm pt-4 text-xs text-ink-muted">
+      <p class="mt-8 border-t border-line pt-4 text-xs text-ink-muted">
         Datele sunt preluate automat de pe posturi.gov.ro.
         <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener" class="text-gov hover:underline">Verifică anunțul original ↗</a>
         înainte de a depune dosarul. <a href="/despre/" class="text-gov hover:underline">Metodologie</a>

@@ -49,7 +49,7 @@ require __DIR__ . '/../inc/header.php';
     <a href="/angajatori/" class="text-gov hover:underline">← Angajatori</a>
   </div>
 
-  <div class="border-b border-border-warm pb-5 mb-6">
+  <div class="border-b border-line pb-5 mb-6">
     <h1 class="font-display text-2xl sm:text-3xl font-semibold italic text-ink leading-tight mb-2">
       <?= e($employer['name']) ?>
     </h1>
@@ -60,15 +60,15 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- Stats row -->
   <div class="grid grid-cols-3 gap-4 mb-8">
-    <div class="bg-white border border-border-warm rounded-lg p-4 text-center">
+    <div class="bg-surface border border-line rounded-lg p-4 text-center">
       <div class="text-2xl font-display font-semibold text-gov"><?= $total ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Total anunțuri</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-4 text-center">
-      <div class="text-2xl font-display font-semibold text-green-700"><?= $active_count ?></div>
+    <div class="bg-surface border border-line rounded-lg p-4 text-center">
+      <div class="text-2xl font-display font-semibold text-ok-ink"><?= $active_count ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Active</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-4 text-center">
+    <div class="bg-surface border border-line rounded-lg p-4 text-center">
       <div class="text-2xl font-display font-semibold text-ink-muted"><?= count($by_judet) ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Județe</div>
     </div>
@@ -86,7 +86,7 @@ require __DIR__ . '/../inc/header.php';
             <a href="/?judet=<?= urlencode($jd['judet_slug']) ?>&employer_id=<?= $eid ?>" class="text-gov hover:underline"><?= e($jd['judet_name']) ?></a>
             <span class="text-ink-faint font-mono"><?= $jd['cnt'] ?></span>
           </div>
-          <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
             <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $jd['cnt'] / $max_judet) ?>%"></div>
           </div>
         </div>
@@ -99,11 +99,11 @@ require __DIR__ . '/../inc/header.php';
     <div class="flex-1 min-w-0">
       <?php if ($active_postings): ?>
       <section class="mb-8">
-        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm">
+        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Anunțuri active (<?= count($active_postings) ?>)
         </h2>
         <?php foreach ($active_postings as $p): $days = days_until($p['expires_at']); ?>
-        <div class="py-3 border-b border-border-warm last:border-0">
+        <div class="py-3 border-b border-line last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div>
               <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
@@ -115,7 +115,7 @@ require __DIR__ . '/../inc/header.php';
             </div>
             <?php if ($days !== null): ?>
             <div class="shrink-0 text-right">
-              <span class="text-xs font-mono <?= $days <= 3 ? 'text-red-600 font-semibold' : ($days <= 7 ? 'text-amber-700' : 'text-ink-muted') ?>">
+              <span class="text-xs font-mono <?= $days <= 3 ? 'text-alert-ink font-semibold' : ($days <= 7 ? 'text-note-ink' : 'text-ink-muted') ?>">
                 <?= $days ?>z
               </span>
               <div class="text-xs text-ink-faint font-mono"><?= fmt_date($p['expires_at']) ?></div>
@@ -129,11 +129,11 @@ require __DIR__ . '/../inc/header.php';
 
       <?php if ($expired_postings): ?>
       <section>
-        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-border-warm text-ink-muted">
+        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line text-ink-muted">
           Anunțuri recente expirate
         </h2>
         <?php foreach ($expired_postings as $p): ?>
-        <div class="py-3 border-b border-border-warm last:border-0 opacity-70">
+        <div class="py-3 border-b border-line last:border-0 opacity-70">
           <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
           <div class="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-muted">
             <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>

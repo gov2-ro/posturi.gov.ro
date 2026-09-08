@@ -1,0 +1,116 @@
+/* @skin Numele stilului — o descriere scurtă
+
+   ══════════════════════════════════════════════════════════════════════════════
+   SKIN TEMPLATE — copy this file to <name>.css and it appears in the picker.
+
+   Files beginning with an underscore are skipped by the scanner, so this one is
+   never offered as a choice. The id is the filename without .css, and it must
+   match the attribute selector you scope with: copy this to `sepia.css` and
+   every rule must sit under [data-skin="sepia"].
+
+   Ids must be lowercase a–z, 0–9, hyphen or underscore, starting with a letter
+   or digit — anything else is ignored rather than silently half-working.
+
+   THE ONE RULE: scope everything. Every skin file is loaded on every page, so an
+   unscoped rule leaks into all the other skins, "hartie" included. @font-face is
+   the sole exception — it declares a family rather than applying it, and is how
+   a skin ships its own typeface (see posturi.css).
+
+   Most of a skin is just re-declaring tokens. Tailwind's theme resolves every
+   colour, radius and font utility to one of these variables, so overriding them
+   restyles the whole site without touching a single utility class. Deleting
+   everything below except the colours is a complete, working skin.
+
+   Colours are SPACE-SEPARATED RGB CHANNELS, not hex — `245 240 232`, never
+   `#F5F0E8`. That is the only form Tailwind's alpha modifiers can compose with,
+   and it is what keeps `bg-surface/70` and `border-note-line/60` working. A hex
+   value here does not throw; it silently breaks every alpha variant on the page.
+
+   Defaults to diff against: webapp-php/assets/app.css, the `:root` block.
+══════════════════════════════════════════════════════════════════════════════ */
+
+[data-skin="TEMPLATE"] {
+  /* Surfaces, back to front. */
+  --c-page:        245 240 232;   /* page ground                             */
+  --c-sunken:      237 231 217;   /* rails, table headers, sunken areas      */
+  --c-surface:     255 255 255;   /* cards, inputs, raised areas             */
+  --c-line:        214 207 196;   /* hairline dividers — decorative          */
+  --c-line-strong: 143 135 125;   /* form controls — needs 3:1 (WCAG 1.4.11) */
+
+  /* Text, most to least prominent. Check these against --c-page and
+     --c-surface: 4.5:1 for body, 3:1 for large. The defaults look darker than
+     you would pick by eye because the original pair measured 4.23 and 2.22. */
+  --c-ink:       28 25 23;
+  --c-ink-muted: 98 92 86;
+  --c-ink-faint: 111 105 99;
+
+  /* Brand, in two parts.
+
+     `gov` is the ACTION colour — links, buttons, the active-filter badge — and
+     `on-gov` is text drawn on a gov fill. Easy to forget, and forgetting it is
+     how the apply button loses its label in a light-brand skin. */
+  --c-gov:       27 58 107;
+  --c-gov-light: 238 242 255;     /* the brand tint field                    */
+  --c-on-gov:    255 255 255;
+
+  /* `gov-bar` is the MASTHEAD, with its own text ramp. Separate from `gov`
+     because a skin usually wants a bar that is not its link colour — GOV.UK is
+     black-on-blue-links, posturi.gov.ro navy-on-lighter-blue. Set these and the
+     header needs no rule of its own. */
+  --c-gov-bar:       27 58 107;
+  --c-on-bar:        255 255 255;
+  --c-on-bar-muted:  191 219 254; /* header nav, "actualizat" stamp          */
+  --c-on-bar-accent: 147 197 253; /* the dots in posturi.gov2.ro             */
+
+  /* The focus ring. Its own token because it is the one colour that may want to
+     break out of the palette entirely — see govuk.css. */
+  --c-focus: 27 58 107;
+
+  /* Five semantic families, each fill / border / label:
+       info     — the gov-tinted chip (job level "conducere", EQF links)
+       neutral  — the plain chip (job type, expired stamp)
+       ok       — positive (public-sector category, active counts)
+       note     — caution (anomaly flags, "expires soon", the WIP banner)
+       alert    — urgent (expires today, destructive hover)
+     -ink is label text on the matching -bg, so it carries the contrast burden. */
+  --c-info-bg:    239 246 255; --c-info-line:    191 219 254; --c-info-ink:    30 64 175;
+  --c-neutral-bg: 241 245 249; --c-neutral-line: 226 232 240; --c-neutral-ink:  51 65 85;
+  --c-ok-bg:      236 253 245; --c-ok-line:      167 243 208; --c-ok-ink:       6 95 70;
+  --c-note-bg:    255 251 235; --c-note-line:    253 230 138; --c-note-ink:   120  53  15;
+  --c-alert-bg:   254 242 242; --c-alert-line:   254 202 202; --c-alert-ink:  153  27  27;
+
+  /* --c-ok-solid is a fill with no text on it: the progress-bar meter. */
+  --c-ok-solid: 22 163 74;
+
+  /* Type. These three are tokens like any other — govuk points all three at one
+     Arial stack, which flattens the whole site in three declarations. Whatever
+     you name must already be loaded by the page or be a system font; to bring
+     your own, declare an @font-face in THIS file (unscoped, at the top level)
+     and the browser only fetches it while your skin is the active one. */
+  --font-display: Fraunces, Georgia, serif;
+  --font-sans:    "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono:    "DM Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Metrics. --radius-pill has the most reach: every chip, tag and meter cap
+     reads it, so setting it to 0 squares the whole site at once. */
+  --radius:      0.25rem;   /* rounded      — small controls, badges */
+  --radius-md:   0.375rem;  /* rounded-md   — buttons, inputs        */
+  --radius-lg:   0.5rem;    /* rounded-lg   — cards, panels          */
+  --radius-pill: 9999px;    /* rounded-full — chips, progress bars   */
+
+}
+
+/* Anything beyond tokens goes here, still scoped. A few useful hooks:
+
+     header            the brand bar — fill comes from --c-gov-bar, so this is
+                       only for chrome (an underline, a rule)
+     #wip-banner       the alpha warning strip
+     #results          the result list (gets .htmx-request while loading)
+     .prose-body       the rendered posting text
+     .skin-select      this picker, in the footer
+     .rounded-lg.border  a card — where posturi.css hangs its drop shadow
+     footer            the footer strip
+
+   If a colour needs to differ per state, define it as a token above rather than
+   hardcoding it here — a skin that hardcodes is a skin that has to be edited
+   again the next time the markup moves. */

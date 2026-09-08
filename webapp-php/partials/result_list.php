@@ -12,12 +12,12 @@ $chips = $active_chips ?? [];
   <!-- Out-of-band updates for the chrome that lives outside #results -->
   <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only" hx-swap-oob="true"><?= $total_count ?> rezultate</p>
   <span id="filter-count" hx-swap-oob="true"
-        class="<?= $chips ? '' : 'hidden ' ?>inline-flex min-w-[1.25rem] justify-center rounded-full bg-gov px-1.5 py-0.5 text-xs font-mono text-white"><?= count($chips) ?></span>
+        class="<?= $chips ? '' : 'hidden ' ?>inline-flex min-w-[1.25rem] justify-center rounded-full bg-gov px-1.5 py-0.5 text-xs font-mono text-on-gov"><?= count($chips) ?></span>
   <span id="drawer-count" hx-swap-oob="true"><?= $total_count ?></span>
 <?php endif; ?>
 
 <!-- Top bar: count + pagination info -->
-<div class="mb-3 flex items-center justify-between border-b border-border-warm pb-2">
+<div class="mb-3 flex items-center justify-between border-b border-line pb-2">
   <div class="text-sm text-ink-muted">
     <?php if ($total_count): ?>
       <span class="font-mono font-medium text-ink"><?= $total_count ?></span>
@@ -41,7 +41,7 @@ $chips = $active_chips ?? [];
     <a href="<?= e($chip['href']) ?>"
        data-chip-param="<?= e($chip['param']) ?>"
        data-chip-value="<?= e($chip['value']) ?>"
-       class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-gov-light px-2.5 py-1 text-xs text-gov transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700">
+       class="inline-flex items-center gap-1 rounded-full border border-info-line bg-gov-light px-2.5 py-1 text-xs text-gov transition-colors hover:border-alert-line hover:bg-alert hover:text-alert-ink">
       <?php if ($chip['group'] !== ''): ?><span class="opacity-70"><?= e($chip['group']) ?>:</span><?php endif; ?>
       <span class="font-medium"><?= e($chip['label']) ?></span>
       <span aria-hidden="true" class="text-sm leading-none">×</span>
@@ -56,16 +56,16 @@ $chips = $active_chips ?? [];
 
 <!-- Results list -->
 <?php if ($postings): ?>
-  <ul class="divide-y divide-border-warm border-t border-border-warm">
+  <ul class="divide-y divide-line border-t border-line">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
         $days = days_until($p['expires_at']);
     ?>
-    <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-parchment-dark">
+    <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <h2 class="font-display text-base font-semibold italic leading-snug text-ink">
-            <a href="<?= e(job_url($p)) ?>" class="inline-block py-0.5 transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-gov">
+            <a href="<?= e(job_url($p)) ?>" class="inline-block py-0.5 transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">
               <?= e($p['title']) ?>
             </a>
           </h2>
@@ -87,20 +87,20 @@ $chips = $active_chips ?? [];
           <!-- Badges -->
           <div class="mt-2 flex flex-wrap gap-1.5">
             <?php if ($p['job_level']): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'border border-blue-200 bg-blue-50 text-blue-800' : 'border border-slate-200 bg-slate-100 text-slate-700' ?>">
+              <span class="px-1.5 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'border border-info-line bg-info text-info-ink' : 'border border-neutral-line bg-neutral text-neutral-ink' ?>">
                 <?= e($p['job_level']) ?>
               </span>
             <?php endif; ?>
             <?php if ($p['job_type']): ?>
-              <span class="border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700"><?= e($p['job_type']) ?></span>
+              <span class="border border-neutral-line bg-neutral px-1.5 py-0.5 text-xs text-neutral-ink"><?= e($p['job_type']) ?></span>
             <?php endif; ?>
             <?php if ($p['categorie']): ?>
-              <span class="px-1.5 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-amber-200 bg-amber-50 text-amber-800' ?>">
+              <span class="px-1.5 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'border border-ok-line bg-ok text-ok-ink' : 'border border-note-line bg-note text-note-ink' ?>">
                 <?= e($p['categorie']) ?>
               </span>
             <?php endif; ?>
             <?php if (($p['nr_posturi'] ?? 0) > 1): ?>
-              <span class="border border-blue-200 bg-gov-light px-1.5 py-0.5 font-mono text-xs text-gov">
+              <span class="border border-info-line bg-gov-light px-1.5 py-0.5 font-mono text-xs text-gov">
                 <?= $p['nr_posturi'] ?> posturi
               </span>
             <?php endif; ?>
@@ -114,7 +114,7 @@ $chips = $active_chips ?? [];
             <abbr title="Atribute deduse automat din textul anunțului — pot fi incomplete sau greșite. Vezi metodologia."
                   class="cursor-help font-mono text-[10px] uppercase tracking-wider text-ink-muted no-underline decoration-dotted underline-offset-2 [text-decoration:underline]">auto</abbr>
             <?php foreach ($meta as $k => $item): ?>
-              <?php if ($k): ?><span aria-hidden="true" class="text-border-warm">·</span><?php endif; ?>
+              <?php if ($k): ?><span aria-hidden="true" class="text-line">·</span><?php endif; ?>
               <span><?= e($item) ?></span>
             <?php endforeach; ?>
           </div>
@@ -127,11 +127,11 @@ $chips = $active_chips ?? [];
             <?php if ($days < 0): ?>
               <span class="font-mono text-xs text-ink-muted">Expirat</span>
             <?php elseif ($days === 0): ?>
-              <span class="font-mono text-xs font-semibold text-red-700">Azi!</span>
+              <span class="font-mono text-xs font-semibold text-alert-ink">Azi!</span>
             <?php elseif ($days <= 3): ?>
-              <span class="font-mono text-xs font-semibold text-red-700"><?= e(days_label($days)) ?></span>
+              <span class="font-mono text-xs font-semibold text-alert-ink"><?= e(days_label($days)) ?></span>
             <?php elseif ($days <= 7): ?>
-              <span class="font-mono text-xs font-medium text-amber-800"><?= e(days_label($days)) ?></span>
+              <span class="font-mono text-xs font-medium text-note-ink"><?= e(days_label($days)) ?></span>
             <?php else: ?>
               <span class="font-mono text-xs text-ink-muted"><?= e(days_label($days)) ?></span>
             <?php endif; ?>
@@ -152,19 +152,19 @@ $chips = $active_chips ?? [];
         <a href="<?= e(qs_page($page - 1)) ?>" rel="prev" aria-label="Pagina anterioară"
            hx-get="<?= e(qs_page($page - 1)) ?>"
            hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
-           class="border border-border-warm px-3 py-1 text-ink-muted transition-colors hover:border-gov hover:text-gov">
+           class="border border-line px-3 py-1 text-ink-muted transition-colors hover:border-gov hover:text-gov">
           ← Prev
         </a>
       <?php endif; ?>
 
       <?php for ($i = max(1, $page - 3); $i <= min($num_pages, $page + 3); $i++): ?>
         <?php if ($i === $page): ?>
-          <span aria-current="page" class="bg-gov px-3 py-1 font-mono text-sm text-white"><?= $i ?></span>
+          <span aria-current="page" class="bg-gov px-3 py-1 font-mono text-sm text-on-gov"><?= $i ?></span>
         <?php else: ?>
           <a href="<?= e(qs_page($i)) ?>" aria-label="Pagina <?= $i ?>"
              hx-get="<?= e(qs_page($i)) ?>"
              hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
-             class="border border-border-warm px-3 py-1 font-mono text-xs text-ink-muted transition-colors hover:border-gov hover:text-gov">
+             class="border border-line px-3 py-1 font-mono text-xs text-ink-muted transition-colors hover:border-gov hover:text-gov">
             <?= $i ?>
           </a>
         <?php endif; ?>
@@ -174,7 +174,7 @@ $chips = $active_chips ?? [];
         <a href="<?= e(qs_page($page + 1)) ?>" rel="next" aria-label="Pagina următoare"
            hx-get="<?= e(qs_page($page + 1)) ?>"
            hx-target="#results" hx-push-url="true" hx-swap="innerHTML"
-           class="border border-border-warm px-3 py-1 text-ink-muted transition-colors hover:border-gov hover:text-gov">
+           class="border border-line px-3 py-1 text-ink-muted transition-colors hover:border-gov hover:text-gov">
           Următor →
         </a>
       <?php endif; ?>
@@ -194,7 +194,7 @@ $chips = $active_chips ?? [];
           <a href="<?= e($r['href']) ?>"
              data-chip-param="<?= e($r['param']) ?>"
              data-chip-value="<?= e($r['value']) ?>"
-             class="inline-flex items-center gap-1.5 rounded-full border border-border-warm bg-white px-3 py-1.5 text-xs text-ink transition-colors hover:border-gov hover:text-gov">
+             class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs text-ink transition-colors hover:border-gov hover:text-gov">
             <?php if ($r['group'] !== ''): ?><span class="opacity-70"><?= e($r['group']) ?>:</span><?php endif; ?>
             <span class="font-medium"><?= e($r['label']) ?></span>
             <span class="font-mono text-ink-muted">+<?= $r['gain'] ?></span>

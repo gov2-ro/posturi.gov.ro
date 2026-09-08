@@ -1,8 +1,19 @@
 /*
  * Source stylesheet. Build with `npm run css`; the compiled
  * webapp-php/static/app.css is committed so the shared host needs no
- * toolchain. Replaces the cdn.tailwindcss.com play script, which compiled
- * every page in the browser.
+ * toolchain.
+ *
+ * ── Tokens and skins ────────────────────────────────────────────────────────
+ * The `:root` block below is the whole palette. Tailwind's theme resolves every
+ * colour, radius and font to one of these variables (see tailwind.config.js), so
+ * re-declaring them under `[data-skin="x"]` restyles the entire site without
+ * touching a utility class. That is all a skin is — see static/skins/_template.css.
+ *
+ * `:root` doubles as the built-in "hartie" skin: it is what you get with no skin
+ * file layered on top, so keep it a complete, self-sufficient palette.
+ *
+ * Colours are space-separated RGB channels so Tailwind's alpha modifiers
+ * (`bg-surface/70`) compose with them. Non-colour tokens are ordinary values.
  */
 @import "./fonts.css";
 
@@ -11,9 +22,61 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Surfaces, back to front. */
+    --c-page:        245 240 232;
+    --c-sunken:      237 231 217;
+    --c-surface:     255 255 255;
+    --c-line:        214 207 196;   /* hairline dividers — decorative        */
+    --c-line-strong: 143 135 125;   /* form controls — needs 3:1 (WCAG 1.4.11) */
+
+    /* Text, most to least prominent. The muted/faint pair is darker than it
+       looks like it should be: the original #78716C / #A8A29E measured 4.23
+       and 2.22 on this page colour, both under AA. */
+    --c-ink:       28 25 23;
+    --c-ink-muted: 98 92 86;
+    --c-ink-faint: 111 105 99;
+
+    /* Brand, in two parts. `gov` is the action colour — links, buttons, badges —
+       with `on-gov` for text drawn on a gov fill. `gov-bar` is the masthead,
+       with its own `on-bar` ramp, because a skin generally wants a masthead that
+       is not its link colour. */
+    --c-gov:       27 58 107;
+    --c-gov-light: 238 242 255;
+    --c-on-gov:    255 255 255;
+
+    --c-gov-bar:       27 58 107;
+    --c-on-bar:        255 255 255;
+    --c-on-bar-muted:  191 219 254;   /* header nav, "actualizat" stamp */
+    --c-on-bar-accent: 147 197 253;   /* the dots in posturi.gov2.ro    */
+
+    --c-focus: 27 58 107;
+
+    /* Semantic families: fill / border / label. */
+    --c-info-bg:    239 246 255; --c-info-line:    191 219 254; --c-info-ink:    30 64 175;
+    --c-neutral-bg: 241 245 249; --c-neutral-line: 226 232 240; --c-neutral-ink:  51 65 85;
+    --c-ok-bg:      236 253 245; --c-ok-line:      167 243 208; --c-ok-ink:       6 95 70;
+    --c-ok-solid:    22 163  74;
+    --c-note-bg:    255 251 235; --c-note-line:    253 230 138; --c-note-ink:   120  53  15;
+    --c-alert-bg:   254 242 242; --c-alert-line:   254 202 202; --c-alert-ink:  153  27  27;
+
+    /* Type. A skin may only name fonts the page already loads or system fonts;
+       to bring its own it declares an @font-face in its own file. */
+    --font-display: Fraunces, Georgia, serif;
+    --font-sans:    "DM Sans", system-ui, -apple-system, sans-serif;
+    --font-mono:    "DM Mono", ui-monospace, SFMono-Regular, monospace;
+
+    /* Metrics. --radius-pill is what makes chips round; a square skin sets it
+       to 0 and flattens every tag in one declaration. */
+    --radius:      0.25rem;
+    --radius-md:   0.375rem;
+    --radius-lg:   0.5rem;
+    --radius-pill: 9999px;
+  }
+
   body {
-    background-color: theme("colors.parchment");
-    color: theme("colors.ink");
+    background-color: rgb(var(--c-page));
+    color: rgb(var(--c-ink));
   }
 
   /* Facet disclosures: no native triangle, caret flips when open. */
@@ -25,8 +88,8 @@
   input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 
   ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: theme("colors.parchment-dark"); }
-  ::-webkit-scrollbar-thumb { background: #9C948A; border-radius: 3px; }
+  ::-webkit-scrollbar-track { background: rgb(var(--c-sunken)); }
+  ::-webkit-scrollbar-thumb { background: rgb(var(--c-line-strong)); border-radius: var(--radius); }
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
@@ -41,13 +104,30 @@
   /* htmx loading indicator */
   #results.htmx-request { opacity: 0.5; transition: opacity 200ms ease; }
 
-  .facet-check:checked + span { color: theme("colors.gov"); font-weight: 500; }
+  .facet-check:checked + span { color: rgb(var(--c-gov)); font-weight: 500; }
+
+  /* The skin picker in the footer. Styled here rather than in each skin so a
+     skin that forgets it still gets a usable control. */
+  .skin-select {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: rgb(var(--c-ink-muted));
+    background: rgb(var(--c-surface));
+    border: 1px solid rgb(var(--c-line));
+    border-radius: var(--radius);
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+  }
+  .skin-select:focus-visible {
+    outline: 2px solid rgb(var(--c-focus));
+    outline-offset: 1px;
+  }
 
   /* Rendered posting body (Markdown → HTML) */
   .prose-body h1,
   .prose-body h2,
   .prose-body h3 {
-    font-family: Fraunces, Georgia, serif;
+    font-family: var(--font-display);
     font-weight: 600;
     margin-top: 1.25em;
     margin-bottom: 0.4em;
@@ -62,7 +142,7 @@
   .prose-body ol { list-style: decimal; }
   .prose-body li { margin-bottom: 0.25em; line-height: 1.6; }
   .prose-body strong { font-weight: 600; }
-  .prose-body a { color: theme("colors.gov"); text-decoration: underline; }
+  .prose-body a { color: rgb(var(--c-gov)); text-decoration: underline; }
 
   /* Wide tables scroll inside their own box rather than the page. */
   .prose-body table {
@@ -75,9 +155,9 @@
   }
   .prose-body th,
   .prose-body td {
-    border: 1px solid theme("colors.border-warm");
+    border: 1px solid rgb(var(--c-line));
     padding: 0.4em 0.6em;
     text-align: left;
   }
-  .prose-body th { background: theme("colors.parchment-dark"); font-weight: 600; }
+  .prose-body th { background: rgb(var(--c-sunken)); font-weight: 600; }
 }

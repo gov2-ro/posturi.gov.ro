@@ -64,17 +64,17 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- KPI row 1 -->
   <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-3xl font-display font-semibold text-gov"><?= $total ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri totale</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
-      <div class="text-3xl font-display font-semibold text-green-700"><?= $active ?></div>
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-ok-ink"><?= $active ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri active</div>
       <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $active / $ttl) ?>% din total</div>
       <?php if ($avg_deadline): ?><div class="text-xs text-ink-faint mt-1">avg <?= $avg_deadline ?> zile</div><?php endif; ?>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5 col-span-2 sm:col-span-1">
+    <div class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">
       <div class="text-3xl font-display font-semibold text-ink"><?= $inferred_cnt ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Clasificate automat</div>
       <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $inferred_cnt / $ttl) ?>% din total</div>
@@ -83,20 +83,20 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- KPI row 2 -->
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $unique_employers ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori unici</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $unique_judete ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Județe acoperite</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $new_7days ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Noi (7 zile)</div>
       <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $new_7days / $ttl) ?>% din total</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $with_salary ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Cu salariu</div>
       <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $with_salary / $ttl) ?>% din total</div>
@@ -120,7 +120,7 @@ require __DIR__ . '/../inc/header.php';
           }
           echo '<span class="text-ink-muted font-mono text-xs">' . $cnt . '</span>';
           echo '</div>';
-          echo '<div class="h-2 bg-parchment-dark rounded-full overflow-hidden">';
+          echo '<div class="h-2 bg-sunken rounded-full overflow-hidden">';
           echo '<div class="h-full bg-gov rounded-full" style="width:' . $pct . '%"></div>';
           echo '</div></div>';
       }
@@ -128,14 +128,14 @@ require __DIR__ . '/../inc/header.php';
   ?>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top domenii profesionale</h2>
       <div class="space-y-2">
         <?php bar_chart($by_family, 'family', 'cnt', $max_family, 'family'); ?>
       </div>
     </section>
 
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top județe</h2>
       <div class="space-y-2">
         <?php foreach ($by_judet as $item): ?>
@@ -144,7 +144,7 @@ require __DIR__ . '/../inc/header.php';
             <a href="/?judet=<?= urlencode($item['judet_slug']) ?>" class="text-gov hover:underline"><?= e($item['judet_name']) ?></a>
             <span class="text-ink-muted font-mono text-xs"><?= $item['cnt'] ?></span>
           </div>
-          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-2 bg-sunken rounded-full overflow-hidden">
             <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $item['cnt'] / $max_judet) ?>%"></div>
           </div>
         </div>
@@ -152,14 +152,14 @@ require __DIR__ . '/../inc/header.php';
       </div>
     </section>
 
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Grad/funcție</h2>
       <div class="space-y-2">
         <?php bar_chart($by_seniority, 'seniority', 'cnt', $max_seniority, 'seniority'); ?>
       </div>
     </section>
 
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Studii minime</h2>
       <div class="space-y-2">
         <?php
@@ -169,7 +169,7 @@ require __DIR__ . '/../inc/header.php';
       </div>
     </section>
 
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Tip angajator</h2>
       <div class="space-y-2">
         <?php bar_chart($by_emp_cat, 'category', 'cnt', $max_emp_cat, 'employer_cat'); ?>
@@ -177,7 +177,7 @@ require __DIR__ . '/../inc/header.php';
     </section>
 
     <!-- Monthly trend -->
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Tendință lunară (12 luni)</h2>
       <div class="space-y-1.5">
         <?php foreach ($by_month as $item): ?>
@@ -186,7 +186,7 @@ require __DIR__ . '/../inc/header.php';
             <span class="font-mono text-ink-muted"><?= e($item['month']) ?></span>
             <span class="text-ink-muted font-mono"><?= $item['cnt'] ?></span>
           </div>
-          <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
             <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $item['cnt'] / $max_monthly) ?>%"></div>
           </div>
         </div>
@@ -196,14 +196,14 @@ require __DIR__ . '/../inc/header.php';
   </div>
 
   <!-- Anomalies -->
-  <section class="bg-white border border-border-warm rounded-lg p-6 mb-8">
+  <section class="bg-surface border border-line rounded-lg p-6 mb-8">
     <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Anomalii detectate</h2>
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
       <?php foreach (ANOMALY_LABELS as $flag => $alabel): ?>
       <?php $cnt = $anomaly_counts[$flag] ?? 0; $pct = round(100 * $cnt / $ttl); ?>
-      <div class="border border-amber-200 bg-amber-50/40 rounded p-3">
-        <div class="text-xl font-display font-semibold text-amber-800"><?= $cnt ?></div>
-        <div class="text-xs text-amber-700 mt-0.5"><?= e($alabel) ?></div>
+      <div class="border border-note-line bg-note/40 rounded p-3">
+        <div class="text-xl font-display font-semibold text-note-ink"><?= $cnt ?></div>
+        <div class="text-xs text-note-ink mt-0.5"><?= e($alabel) ?></div>
         <div class="text-xs text-ink-faint mt-0.5"><?= $pct ?>% din total</div>
         <?php if ($cnt): ?>
           <a href="/?anomaly=<?= urlencode($flag) ?>" class="text-xs text-gov hover:underline mt-1 block">Explorează →</a>

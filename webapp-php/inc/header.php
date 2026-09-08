@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . "/skins.php";
+
 // Set by the calling page: $page_title, and optionally $meta_description,
 // $canonical_path, $head_extra (raw markup, e.g. JSON-LD).
 $_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.gov2.ro';
@@ -45,44 +47,51 @@ if ($_last_updated) {
   <link rel="alternate" type="application/atom+xml" title="posturi.gov2.ro — Atom" href="/posturi.atom">
   <link rel="alternate" type="application/json" title="posturi.gov2.ro — JSON" href="/posturi.json">
 
+  <?php /* Preloads follow the default skin, which is what a first visit gets. A
+     returning visitor on govuk or posturi preloads two faces it will not use —
+     the alternative is a cookie round-trip, which would break shared-host page
+     caching for the sake of ~90KB on one request. */ ?>
   <link rel="preload" href="/static/fonts/dm-sans-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css?v=<?= @filemtime(__DIR__ . '/../static/app.css') ?: '1' ?>">
+  <?= pg_skin_links() ?>
+  <?= pg_skin_boot() ?>
   <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/prefs.js?v=<?= @filemtime(__DIR__ . '/../static/prefs.js') ?: '1' ?>" defer></script>
   <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">
 
-<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gov focus:px-4 focus:py-2 focus:text-white">
+<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gov focus:px-4 focus:py-2 focus:text-on-gov">
   Sari la conținut
 </a>
 
-<div id="wip-banner" class="bg-yellow-100 border-b border-yellow-300 text-yellow-900 text-sm px-4 py-2 flex items-center justify-between gap-4">
+<div id="wip-banner" class="bg-note border-b border-note-line text-note-ink text-sm px-4 py-2 flex items-center justify-between gap-4">
   <span class="font-mono text-xs uppercase tracking-wide font-semibold shrink-0">WIP / MVP</span>
-  <span class="flex-1 text-xs text-center">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului României. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:text-yellow-950" target="_blank" rel="noopener">Acceptăm sugestii</a> (gForm)</span>
-  <button type="button" onclick="document.getElementById('wip-banner').remove()" class="shrink-0 -m-1 p-1 text-lg leading-none text-yellow-900 hover:text-yellow-950" aria-label="Închide anunțul">&times;</button>
+  <span class="flex-1 text-xs text-center">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului României. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:no-underline" target="_blank" rel="noopener">Acceptăm sugestii</a> (gForm)</span>
+  <button type="button" onclick="document.getElementById('wip-banner').remove()" class="shrink-0 -m-1 p-1 text-lg leading-none text-note-ink hover:opacity-70" aria-label="Închide anunțul">&times;</button>
 </div>
 
-<header class="bg-gov text-white border-b border-gov">
+<header class="bg-gov-bar text-on-bar border-b border-gov-bar">
   <div class="max-w-screen-xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 h-14">
     <a href="/" class="flex shrink-0 items-center gap-3 py-2 group">
-      <span class="font-display italic text-lg sm:text-xl font-semibold text-white leading-none tracking-tight">
-        posturi<span class="text-blue-300">.</span>gov<span class="text-blue-300">2</span><span class="text-blue-300">.</span>ro
+      <span class="font-display italic text-lg sm:text-xl font-semibold text-on-bar leading-none tracking-tight">
+        posturi<span class="text-on-bar-accent">.</span>gov<span class="text-on-bar-accent">2</span><span class="text-on-bar-accent">.</span>ro
       </span>
-      <span class="hidden md:inline text-xs text-blue-200 font-mono uppercase tracking-widest mt-0.5">
+      <span class="hidden md:inline text-xs text-on-bar-muted font-mono uppercase tracking-widest mt-0.5">
         / alpha · WIP
       </span>
       <?php if ($_last_updated_fmt): ?>
-      <span class="hidden lg:inline text-xs text-blue-200 font-mono mt-0.5">
+      <span class="hidden lg:inline text-xs text-on-bar-muted font-mono mt-0.5">
         actualizat <?= $_last_updated_fmt ?>
       </span>
       <?php endif; ?>
     </a>
-    <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-blue-100">
-      <a href="/" class="py-2 hover:text-white transition-colors">Căutare</a>
-      <a href="/statistici/" class="py-2 hover:text-white transition-colors">Statistici</a>
-      <a href="/angajatori/" class="hidden py-2 sm:inline hover:text-white transition-colors">Angajatori</a>
-      <a href="/despre/" class="py-2 hover:text-white transition-colors">Despre</a>
+    <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
+      <a href="/" class="py-2 hover:text-on-bar transition-colors">Căutare</a>
+      <a href="/statistici/" class="py-2 hover:text-on-bar transition-colors">Statistici</a>
+      <a href="/angajatori/" class="hidden py-2 sm:inline hover:text-on-bar transition-colors">Angajatori</a>
+      <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>
     </nav>
   </div>
 </header>

@@ -355,19 +355,19 @@ if (!$is_htmx): ?>
 
   <?php if ($is_unfiltered && $quick_stats): ?>
   <div class="order-2 grid grid-cols-2 gap-3 sm:order-none sm:grid-cols-4 mb-8">
-    <div class="border border-border-warm rounded-lg p-4">
-      <div class="text-2xl font-display font-semibold text-green-700"><?= $quick_stats['active'] ?></div>
+    <div class="border border-line rounded-lg p-4">
+      <div class="text-2xl font-display font-semibold text-ok-ink"><?= $quick_stats['active'] ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri active</div>
     </div>
-    <div class="border border-border-warm rounded-lg p-4">
+    <div class="border border-line rounded-lg p-4">
       <div class="text-2xl font-display font-semibold text-ink"><?= $quick_stats['judete'] ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Județe</div>
     </div>
-    <div class="border border-border-warm rounded-lg p-4">
+    <div class="border border-line rounded-lg p-4">
       <div class="text-2xl font-display font-semibold text-ink"><?= $quick_stats['employers'] ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori</div>
     </div>
-    <div class="border border-border-warm rounded-lg p-4">
+    <div class="border border-line rounded-lg p-4">
       <div class="text-2xl font-display font-semibold text-ink"><?= $quick_stats['families'] ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Domenii</div>
     </div>
@@ -390,7 +390,7 @@ if (!$is_htmx): ?>
         <input type="search" id="q" name="q" value="<?= e($q) ?>"
                autocomplete="off" enterkeyhint="search"
                placeholder="Caută posturi…"
-               class="w-full bg-white border border-border-input rounded-md px-3 py-2.5 pr-9 text-base sm:text-sm text-ink placeholder-ink-muted focus:outline-none focus:border-gov focus:ring-1 focus:ring-gov transition-colors">
+               class="w-full bg-surface border border-line-strong rounded-md px-3 py-2.5 pr-9 text-base sm:text-sm text-ink placeholder-ink-muted focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus transition-colors">
         <?php if ($q): ?>
           <button type="button"
                   onclick="var i=document.getElementById('q'); i.value=''; i.focus(); htmx.trigger('#filter-form','change')"
@@ -404,21 +404,21 @@ if (!$is_htmx): ?>
       <!-- Drawer trigger (small screens only) -->
       <button type="button" id="filter-toggle"
               aria-controls="facet-panel" aria-expanded="false"
-              class="lg:hidden shrink-0 inline-flex items-center gap-1.5 rounded-md border border-border-input bg-white px-3 py-2.5 text-sm font-medium text-gov focus:outline-none focus:ring-2 focus:ring-gov">
+              class="lg:hidden shrink-0 inline-flex items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 py-2.5 text-sm font-medium text-gov focus:outline-none focus:ring-2 focus:ring-focus">
         <span aria-hidden="true">☰</span> Filtre
         <span id="filter-count"
-              class="<?= $active_chips ? '' : 'hidden ' ?>inline-flex min-w-[1.25rem] justify-center rounded-full bg-gov px-1.5 py-0.5 text-xs font-mono text-white"><?= count($active_chips) ?></span>
+              class="<?= $active_chips ? '' : 'hidden ' ?>inline-flex min-w-[1.25rem] justify-center rounded-full bg-gov px-1.5 py-0.5 text-xs font-mono text-on-gov"><?= count($active_chips) ?></span>
       </button>
     </div>
 
     <!-- STATUS + SORT -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
       <div role="group" aria-label="Stare anunț"
-           class="inline-flex rounded-md border border-border-input bg-white overflow-hidden">
+           class="inline-flex rounded-md border border-line-strong bg-surface overflow-hidden">
         <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
-        <label class="relative border-r border-border-input last:border-r-0">
+        <label class="relative border-r border-line-strong last:border-r-0">
           <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status === $sval) ?>>
-          <span class="block cursor-pointer px-3 py-1.5 text-xs sm:text-sm text-ink-muted transition-colors hover:text-gov peer-checked:bg-gov peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-gov">
+          <span class="block cursor-pointer px-3 py-1.5 text-xs sm:text-sm text-ink-muted transition-colors hover:text-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-focus">
             <?= e($slabel) ?>
             <span class="ml-1 font-mono text-xs opacity-70"><?= $status_counts[$sval] ?></span>
           </span>
@@ -428,7 +428,7 @@ if (!$is_htmx): ?>
 
       <div class="flex items-center gap-2">
         <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
-        <select id="sort" name="sort" class="rounded-md bg-white border border-border-input px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-gov">
+        <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
           <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
           <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
           <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
@@ -445,14 +445,14 @@ if (!$is_htmx): ?>
       <!-- FACETS — sticky column on lg, slide-over drawer below it -->
       <aside id="facet-panel"
              aria-label="Filtre"
-             class="fixed inset-y-0 right-0 z-40 flex w-[86vw] max-w-sm translate-x-full flex-col overflow-y-auto overscroll-contain border-l border-border-warm bg-parchment px-4 pb-4 transition-transform duration-200 ease-out
+             class="fixed inset-y-0 right-0 z-40 flex w-[86vw] max-w-sm translate-x-full flex-col overflow-y-auto overscroll-contain border-l border-line bg-page px-4 pb-4 transition-transform duration-200 ease-out
                     lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shrink-0 lg:translate-x-0 lg:overscroll-auto lg:border-l-0 lg:bg-transparent lg:px-0 lg:transition-none lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)]">
 
         <!-- Drawer header (mobile only) -->
-        <div class="sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between border-b border-border-warm bg-parchment px-4 py-3 lg:hidden">
+        <div class="sticky top-0 z-10 -mx-4 mb-3 flex items-center justify-between border-b border-line bg-page px-4 py-3 lg:hidden">
           <span class="font-display text-lg font-semibold italic text-ink">Filtre</span>
           <button type="button" id="filter-close" aria-label="Închide filtrele"
-                  class="rounded p-1 text-2xl leading-none text-ink-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-gov">&times;</button>
+                  class="rounded p-1 text-2xl leading-none text-ink-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-focus">&times;</button>
         </div>
 
         <?php
@@ -482,8 +482,8 @@ if (!$is_htmx): ?>
             $selected = array_intersect($active, $values);
             $is_open  = $open || $selected;   // never hide a filter that is switched on
             ?>
-            <details class="facet-group mb-1 border-b border-border-warm/60 pb-1" data-facet="<?= e($name) ?>"<?= $is_open ? ' open' : '' ?>>
-              <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-ink-muted marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov">
+            <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="<?= e($name) ?>"<?= $is_open ? ' open' : '' ?>>
+              <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-ink-muted marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                 <span><?= e($label) ?><?php if ($selected): ?> <span class="font-mono text-gov normal-case tracking-normal">(<?= count($selected) ?>)</span><?php endif; ?></span>
                 <span aria-hidden="true" class="facet-caret text-ink-muted transition-transform">▾</span>
               </summary>
@@ -530,8 +530,8 @@ if (!$is_htmx): ?>
         ?>
 
         <!-- Advanced -->
-        <details class="facet-group mt-2 border-t border-border-warm pt-2" data-facet="advanced"<?= ($sal_bucket || $emp_cats || $anomaly_flags || $exp_before || $exp_after || $schema_filter) ? ' open' : '' ?>>
-          <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-gov marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gov">
+        <details class="facet-group mt-2 border-t border-line pt-2" data-facet="advanced"<?= ($sal_bucket || $emp_cats || $anomaly_flags || $exp_before || $exp_after || $schema_filter) ? ' open' : '' ?>>
+          <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-gov marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
             <span>Mai multe filtre</span>
             <span aria-hidden="true" class="facet-caret transition-transform">▾</span>
           </summary>
@@ -556,12 +556,12 @@ if (!$is_htmx): ?>
                 <div>
                   <label for="expires_after" class="text-xs text-ink-muted">De la</label>
                   <input type="date" id="expires_after" name="expires_after" value="<?= e($exp_after) ?>"
-                         class="mt-0.5 w-full rounded border border-border-input bg-white px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-gov">
+                         class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
                 </div>
                 <div>
                   <label for="expires_before" class="text-xs text-ink-muted">Până la</label>
                   <input type="date" id="expires_before" name="expires_before" value="<?= e($exp_before) ?>"
-                         class="mt-0.5 w-full rounded border border-border-input bg-white px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-gov">
+                         class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
                 </div>
               </div>
             </fieldset>
@@ -573,7 +573,7 @@ if (!$is_htmx): ?>
         <?php endif; ?>
 
         <!-- Feed links -->
-        <div class="mt-6 space-y-1 border-t border-border-warm pt-4 text-xs text-ink-muted">
+        <div class="mt-6 space-y-1 border-t border-line pt-4 text-xs text-ink-muted">
           <div class="mb-1 font-semibold uppercase tracking-widest">Export</div>
           <a href="<?= e(feed_url('posturi.atom')) ?>" class="block py-1 text-gov hover:underline">Atom (RSS)</a>
           <a href="<?= e(feed_url('posturi.json')) ?>" class="block py-1 text-gov hover:underline">JSON API</a>
@@ -581,9 +581,9 @@ if (!$is_htmx): ?>
         </div>
 
         <!-- Drawer footer (mobile only) -->
-        <div class="sticky bottom-0 -mx-4 mt-4 border-t border-border-warm bg-parchment px-4 py-3 lg:hidden">
+        <div class="sticky bottom-0 -mx-4 mt-4 border-t border-line bg-page px-4 py-3 lg:hidden">
           <button type="button" id="drawer-apply"
-                  class="w-full rounded-md bg-gov px-4 py-2.5 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-gov focus:ring-offset-2">
+                  class="w-full rounded-md bg-gov px-4 py-2.5 text-sm font-medium text-on-gov focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2">
             Arată <span id="drawer-count"><?= $total_count ?></span> rezultate
           </button>
         </div>

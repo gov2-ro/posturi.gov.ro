@@ -1,0 +1,139 @@
+/* @skin GOV.UK
+
+   Palette, type and metrics from the GOV.UK Design System. Three things to know
+   about the fidelity of this skin:
+
+   1. TYPEFACE. GOV.UK runs on GDS Transport, which is licensed for use on
+      gov.uk domains only. The Design System's own documented substitute for
+      everyone else is Arial, so that is what this uses — including for the
+      `font-mono` utilities, which carry dates and counts. GDS Transport has no
+      monospace companion either; GOV.UK sets figures in the body face. The cost
+      is that columns of numbers no longer align on the digit.
+
+   2. NO CARDS. --c-page and --c-surface are both white, which is not an
+      oversight: GOV.UK has no card pattern. Grouping is done with a visible
+      grey rule (--c-line is #b1b4b6, a real border rather than a hairline) and
+      with the grey panel (--c-sunken). Anything that was a lifted white card on
+      parchment becomes a bordered region.
+
+   3. SQUARE. Every radius token is 0, including --radius-pill, so the chips and
+      the progress-bar caps flatten into GOV.UK tags.
+
+   Reference: https://design-system.service.gov.uk/styles/colour/
+═══════════════════════════════════════════════════════════════════════════════ */
+
+[data-skin="govuk"] {
+  /* Surfaces. White page, white "cards", grey panels, grey rules. */
+  --c-page:        255 255 255;
+  --c-sunken:      243 242 241;   /* govuk-colour("light-grey")              */
+  --c-surface:     255 255 255;
+  --c-line:        177 180 182;   /* govuk-colour("mid-grey") — a real rule  */
+  --c-line-strong:  11  12  12;   /* inputs get a 2px black border on GOV.UK */
+
+  /* Text. GOV.UK has exactly two tones, so faint and muted are the same value
+     rather than invented thirds — #505a5f is 7.0:1 on white and is the lightest
+     text the Design System ships. */
+  --c-ink:        11  12  12;     /* govuk-colour("black")                   */
+  --c-ink-muted:  80  90  95;     /* govuk-colour("dark-grey")               */
+  --c-ink-faint:  80  90  95;
+
+  /* Brand. The action blue and the masthead black are separate tokens, which is
+     the whole reason the split exists — GOV.UK has a black header and blue links. */
+  --c-gov:       29 112 184;      /* govuk-colour("blue")                     */
+  --c-gov-light: 210 226 241;     /* the blue tag fill, used as the tint       */
+  --c-on-gov:    255 255 255;
+
+  --c-gov-bar:       11  12  12;  /* govuk-colour("black") — the masthead      */
+  --c-on-bar:       255 255 255;
+  --c-on-bar-muted: 177 180 182;  /* mid-grey, 9.4:1 on the black bar          */
+  --c-on-bar-accent: 255 255 255; /* GOV.UK would not colour the dots          */
+
+  /* The signature: focus is yellow, not brand. */
+  --c-focus: 255 221 0;           /* govuk-colour("yellow")                  */
+
+  /* Semantic families mapped onto govuk-tag. Each tag's border takes the label
+     colour rather than a lighter tint — GOV.UK tags are fill + bold dark text,
+     so -line and -ink agreeing is correct here, not a copy-paste slip. */
+  --c-info-bg:    210 226 241; --c-info-line:     20  78 129; --c-info-ink:     20  78 129;
+  --c-neutral-bg: 238 239 239; --c-neutral-line:  56  63  67; --c-neutral-ink:  56  63  67;
+  --c-ok-bg:      204 226 216; --c-ok-line:        0  90  48; --c-ok-ink:        0  90  48;
+  --c-note-bg:    255 247 191; --c-note-line:     89  77   0; --c-note-ink:     89  77   0;
+  --c-alert-bg:   246 215 210; --c-alert-line:   148  37  20; --c-alert-ink:   148  37  20;
+
+  --c-ok-solid: 0 112 60;         /* govuk-colour("green"), the button green  */
+
+  /* One Arial stack for all three — see note 1 above. */
+  --font-display: Arial, Helvetica, sans-serif;
+  --font-sans:    Arial, Helvetica, sans-serif;
+  --font-mono:    Arial, Helvetica, sans-serif;
+
+  /* Square, and flat — no card lift at all, so there is nothing here to set. */
+  --radius:      0;
+  --radius-md:   0;
+  --radius-lg:   0;
+  --radius-pill: 0;
+}
+
+/* ── Beyond tokens ──────────────────────────────────────────────────────────── */
+
+/* The masthead fill comes from --c-gov-bar; this is only the 10px blue underline
+   that GOV.UK draws beneath it, which is chrome rather than a colour role. */
+[data-skin="govuk"] header {
+  border-bottom: 10px solid #1d70b8;
+}
+
+/* GOV.UK sets the wordmark upright and bold, never italic. */
+[data-skin="govuk"] header .font-display {
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+/* Headings are heavier and tighter than the parchment skin's Fraunces. */
+[data-skin="govuk"] .font-display,
+[data-skin="govuk"] .prose-body h1,
+[data-skin="govuk"] .prose-body h2,
+[data-skin="govuk"] .prose-body h3 {
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* The focus state, which on GOV.UK is a yellow block with a black underline
+   rather than a ring. `ring-focus` already resolves to the yellow via the token;
+   this adds the black baseline that makes it read as GOV.UK. */
+[data-skin="govuk"] a:focus-visible,
+[data-skin="govuk"] button:focus-visible,
+[data-skin="govuk"] summary:focus-visible,
+[data-skin="govuk"] select:focus-visible,
+[data-skin="govuk"] [type="checkbox"]:focus-visible + span {
+  outline: 3px solid transparent;
+  background-color: #ffdd00;
+  box-shadow: 0 -2px #ffdd00, 0 4px #0b0c0c;
+  color: #0b0c0c;
+  text-decoration: none;
+}
+
+[data-skin="govuk"] input:focus-visible,
+[data-skin="govuk"] textarea:focus-visible {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+  box-shadow: inset 0 0 0 2px #0b0c0c;
+}
+
+/* Tags are uppercase and bold on GOV.UK. These are the chip utilities as the
+   templates emit them — a fill plus a 1px border plus `text-xs`. */
+[data-skin="govuk"] .bg-info,
+[data-skin="govuk"] .bg-neutral,
+[data-skin="govuk"] .bg-ok,
+[data-skin="govuk"] .bg-note,
+[data-skin="govuk"] .bg-alert {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* The WIP strip becomes a GOV.UK warning: black text, no fill, a thick rule. */
+[data-skin="govuk"] #wip-banner {
+  background-color: #fff7bf;
+  border-bottom: 4px solid #594d00;
+  font-weight: 700;
+}

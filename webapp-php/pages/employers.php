@@ -71,19 +71,19 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- KPI tiles -->
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-gov"><?= $total_employers ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori totali</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
-      <div class="text-2xl font-display font-semibold text-green-700"><?= $active_employers ?></div>
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ok-ink"><?= $active_employers ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Cu anunțuri active</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $avg_postings ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Medie anunțuri/ang.</div>
     </div>
-    <div class="bg-white border border-border-warm rounded-lg p-5">
+    <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $concentration_pct ?>%</div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Top 10 concentrare</div>
       <div class="text-xs text-ink-faint mt-0.5"><?= $top_ten_count ?> din <?= $total_postings ?> anunțuri</div>
@@ -93,12 +93,12 @@ require __DIR__ . '/../inc/header.php';
   <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
 
     <!-- Top overall with judet filter -->
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <div class="flex items-center justify-between mb-4 gap-2">
         <h2 class="font-display text-lg italic font-semibold text-ink">Top angajatori</h2>
         <form method="get" action="/angajatori/">
           <select name="judet" onchange="this.form.submit()"
-                  class="text-xs border border-border-warm bg-parchment px-2 py-1 focus:outline-none focus:border-gov">
+                  class="text-xs border border-line bg-page px-2 py-1 focus:outline-none focus:border-gov">
             <option value="">Toate județele</option>
             <?php foreach ($judet_list as $jd): ?>
               <option value="<?= e($jd['slug']) ?>"<?= $judet_filter === $jd['slug'] ? ' selected' : '' ?>><?= e($jd['name']) ?></option>
@@ -116,7 +116,7 @@ require __DIR__ . '/../inc/header.php';
             <a href="/angajator/<?= e($emp['employer_slug']) ?>/" class="text-gov hover:underline truncate max-w-xs"><?= e($emp['employer_name']) ?></a>
             <span class="text-ink-muted font-mono text-xs shrink-0 ml-2"><?= $emp['cnt'] ?></span>
           </div>
-          <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
             <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $emp['cnt'] / $max_filtered) ?>%"></div>
           </div>
         </div>
@@ -125,7 +125,7 @@ require __DIR__ . '/../inc/header.php';
     </section>
 
     <!-- Top active -->
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top angajatori activi</h2>
       <div class="space-y-2">
         <?php foreach ($top_active as $emp): ?>
@@ -134,8 +134,8 @@ require __DIR__ . '/../inc/header.php';
             <a href="/angajator/<?= e($emp['employer_slug']) ?>/" class="text-gov hover:underline truncate max-w-xs"><?= e($emp['employer_name']) ?></a>
             <span class="text-ink-muted font-mono text-xs shrink-0 ml-2"><?= $emp['cnt'] ?></span>
           </div>
-          <div class="h-1.5 bg-parchment-dark rounded-full overflow-hidden">
-            <div class="h-full bg-green-600 rounded-full" style="width:<?= round(100 * $emp['cnt'] / $max_active) ?>%"></div>
+          <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
+            <div class="h-full bg-ok-solid rounded-full" style="width:<?= round(100 * $emp['cnt'] / $max_active) ?>%"></div>
           </div>
         </div>
         <?php endforeach; ?>
@@ -143,7 +143,7 @@ require __DIR__ . '/../inc/header.php';
     </section>
 
     <!-- Distribution -->
-    <section class="bg-white border border-border-warm rounded-lg p-6">
+    <section class="bg-surface border border-line rounded-lg p-6">
       <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Distribuție angajatori</h2>
       <div class="space-y-3">
         <?php foreach ($distribution as $d): ?>
@@ -152,7 +152,7 @@ require __DIR__ . '/../inc/header.php';
             <span class="text-ink"><?= e($d['label']) ?></span>
             <span class="text-ink-muted font-mono text-xs"><?= $d['count'] ?> (<?= $d['pct'] ?>%)</span>
           </div>
-          <div class="h-2 bg-parchment-dark rounded-full overflow-hidden">
+          <div class="h-2 bg-sunken rounded-full overflow-hidden">
             <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $d['count'] / $max_dist) ?>%"></div>
           </div>
         </div>

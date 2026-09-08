@@ -1,0 +1,120 @@
+/* @skin posturi.gov.ro
+
+   Mimics the official posturi.gov.ro (WordPress + Astra + Elementor, rebuilt
+   2026-07). Values were read off the live site's inline styles rather than
+   guessed: the navy #0f2742 that carries the masthead, the #0f4c81 link blue,
+   the #d4af6a gold, the Tailwind-ish slate text ramp it ships, and the soft
+   navy-tinted card shadow `0 6px 18px rgba(15,39,66,.09)`.
+
+   Two notes:
+
+   1. FONT. The official site runs Manrope. It is self-hosted here (below) rather
+      than pulled from Google Fonts, matching how the rest of this app handles
+      type — the shared host has no build step and no third-party font requests.
+      The @font-face blocks are intentionally NOT scoped: @font-face declares a
+      family rather than applying one, so it cannot leak into another skin, and
+      the browser only fetches the files while a rule actually using Manrope is
+      live. latin + latin-ext are both needed — ș and ț live in latin-ext.
+
+   2. ROUND AND LIFTED. This is the opposite end from govuk.css: 10–12px cards,
+      999px pills, and a real --shadow-card. Cards sit on an off-white #f5f5f3
+      ground, so --c-page and --c-surface genuinely differ here.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/static/fonts/manrope-normal-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/static/fonts/manrope-normal-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+[data-skin="posturi"] {
+  /* Surfaces. Off-white ground, white cards — the Elementor card grid.         */
+  --c-page:        245 245 243;   /* #f5f5f3                                   */
+  --c-sunken:      240 245 250;   /* #f0f5fa — the pale blue panel tint        */
+  --c-surface:     255 255 255;
+  --c-line:        226 226 226;   /* #e2e2e2                                   */
+  --c-line-strong: 142 148 159;   /* #8e949f — #9ca3af was 2.54:1 on white,   */
+                                  /* under the 3:1 that WCAG 1.4.11 wants     */
+
+  /* Text: the slate ramp the live site uses. #64748b is 4.8:1 on #f5f5f3 and
+     5.1:1 on white, so the muted tone clears AA on both grounds. */
+  --c-ink:        30  41  59;     /* #1e293b                                   */
+  --c-ink-muted:  71  85 105;     /* #475569                                   */
+  --c-ink-faint:  97 113 135;     /* #617187 — #64748b measured 4.36:1 on     */
+                                  /* the #f5f5f3 ground, just under AA        */
+
+  /* Brand. The official site.s masthead navy and link blue are different
+     colours, which the gov / gov-bar split carries directly. */
+  --c-gov:        15  76 129;     /* #0f4c81 — links, buttons                  */
+  --c-gov-light: 238 245 251;     /* #eef5fb                                   */
+  --c-on-gov:    255 255 255;
+
+  --c-gov-bar:       15  39  66;  /* #0f2742 — the masthead navy               */
+  --c-on-bar:       255 255 255;
+  --c-on-bar-muted: 219 227 236;  /* #dbe3ec — secondary text on the bar       */
+  --c-on-bar-accent: 212 175 106; /* #d4af6a — the gold accent                 */
+
+  --c-focus: 4 107 210;           /* #046bd2 — the brighter action blue        */
+
+  /* Semantic families, tuned to sit on white cards rather than parchment.      */
+  --c-info-bg:    238 245 251; --c-info-line:    190 214 234; --c-info-ink:    11  71 125;
+  --c-neutral-bg: 240 243 246; --c-neutral-line: 212 212 212; --c-neutral-ink:  71  85 105;
+  --c-ok-bg:      233 246 238; --c-ok-line:      183 222 198; --c-ok-ink:       21  94  61;
+  --c-note-bg:    253 246 230; --c-note-line:    232 213 170; --c-note-ink:    124  84  13;
+  --c-alert-bg:   253 238 237; --c-alert-line:   244 203 200; --c-alert-ink:   158  38  29;
+
+  --c-ok-solid: 21 128 61;
+
+  /* One geometric sans for everything, as on the official site — it has no
+     serif display face and no monospace. */
+  --font-display: Manrope, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans:    Manrope, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:    Manrope, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Round and lifted. */
+  --radius:      6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-pill: 999px;
+}
+
+/* ── Beyond tokens ──────────────────────────────────────────────────────────── */
+
+/* The navy comes from --c-gov-bar. This is only the gold rule beneath it — the
+   one piece of Elementor chrome that makes the bar read as posturi.gov.ro rather
+   than as generic government blue. */
+[data-skin="posturi"] header {
+  box-shadow: inset 0 -3px 0 0 #d4af6a;
+}
+
+/* Astra/Elementor set the wordmark upright and heavy; Fraunces' italic is the
+   parchment skin's signature, not this one's. */
+[data-skin="posturi"] .font-display {
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Cards get the lift. The templates draw them as `border border-line bg-surface
+   rounded-lg`, so this is where --shadow-card actually lands. */
+[data-skin="posturi"] .rounded-lg.border {
+  box-shadow: 0 6px 18px rgba(15, 39, 66, 0.09);
+}
+
+/* The WIP strip in the site's own register: gold, not amber. */
+[data-skin="posturi"] #wip-banner {
+  background-color: #fdf6e6;
+  border-bottom-color: #d4af6a;
+  color: #7c540d;
+}

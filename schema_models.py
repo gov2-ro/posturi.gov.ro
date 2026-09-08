@@ -12,9 +12,10 @@ tool-use input_schema).
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 SalaryUnit = Literal["HOUR", "DAY", "WEEK", "MONTH", "YEAR"]
@@ -263,6 +264,20 @@ class EducationRequirement(BaseModel):
     )
     verbatim: Optional[str] = Field(default=None, description="The original sentence, for display.")
 
+    @model_validator(mode="after")
+    def _derive_eqf_level(self):
+        """EQF level is a pure function of `minimum_level` — derive it, never trust it.
+
+        The prompt used to ask the model for both and hope they agreed. They are
+        the same fact in two notations, so asking twice can only introduce
+        disagreement; `STUDY_LEVEL_TO_EQF` is the authority. A model-supplied
+        value is overwritten whenever `minimum_level` is set, and kept only when
+        it is not (some postings state a level with no Romanian equivalent named).
+        """
+        if self.minimum_level is not None:
+            object.__setattr__(self, "eqf_level", STUDY_LEVEL_TO_EQF[self.minimum_level])
+        return self
+
 
 class SkillRequirement(BaseModel):
     """One competence, normalised to a short tag so it can be matched.
@@ -289,6 +304,29 @@ class SkillRequirement(BaseModel):
     evidence: Optional[str] = Field(default=None, description="Phrase the tag was taken from.")
 
 
+#: Romanian language names → ISO 639-1. Keys are diacritic-free and lowercased;
+#: `_LANGUAGE_ISO` is consulted after the same normalisation is applied to the
+#: model's output, so "Engleză", "engleza" and "ENGLEZA" all resolve.
+_LANGUAGE_ISO: dict[str, str] = {
+    "romana": "ro", "engleza": "en", "franceza": "fr", "germana": "de",
+    "italiana": "it", "spaniola": "es", "portugheza": "pt", "rusa": "ru",
+    "maghiara": "hu", "ucraineana": "uk", "bulgara": "bg", "sarba": "sr",
+    "croata": "hr", "turca": "tr", "greaca": "el", "polona": "pl",
+    "poloneza": "pl", "ceha": "cs", "slovaca": "sk", "olandeza": "nl",
+    "suedeza": "sv", "norvegiana": "no", "daneza": "da", "finlandeza": "fi",
+    "chineza": "zh", "japoneza": "ja", "araba": "ar", "ebraica": "he",
+    "rromani": "rom", "romani": "rom", "tiganeasca": "rom",
+    "limba semnelor": "sgn", "latina": "la",
+}
+
+
+def _normalise_language(name: str) -> str:
+    """Lowercase, strip diacritics and a leading "limba ", for dictionary lookup."""
+    folded = unicodedata.normalize("NFKD", name.strip().lower())
+    folded = "".join(c for c in folded if not unicodedata.combining(c))
+    return folded.removeprefix("limba ").strip()
+
+
 class LanguageRequirement(BaseModel):
     """Europass-compatible language requirement."""
 
@@ -298,6 +336,18 @@ class LanguageRequirement(BaseModel):
         default=None, description="CEFR level if stated or clearly implied."
     )
     required: bool = Field(default=True)
+
+    @model_validator(mode="after")
+    def _derive_iso_code(self):
+        """Look the ISO 639-1 code up from the language name rather than asking.
+
+        A 30-entry table covers every language these postings mention. Only
+        falls back to the model's own value for a name not in the table.
+        """
+        code = _LANGUAGE_ISO.get(_normalise_language(self.language))
+        if code:
+            object.__setattr__(self, "iso_code", code)
+        return self
 
 
 class ExperienceRequirement(BaseModel):

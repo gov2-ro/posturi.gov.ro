@@ -18,6 +18,9 @@ Usage:
   python pipeline.py --force --no-llm
   python pipeline.py --steps infer --provider anthropic --limit 100
   python pipeline.py --steps export-sqlite    # rebuild SQLite only
+
+  # Backfill the LLM extraction for everything currently live (~1,440 postings):
+  python pipeline.py --steps schema --active-only --resume --workers 8 --prompt-version v3
 """
 from __future__ import annotations
 
@@ -27,6 +30,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+from llm_config import resolve_provider
+
+#: Providers every pipeline step can drive (see --provider below).
+_PIPELINE_PROVIDERS = ("gemini", "openai", "anthropic", "deepseek")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -85,6 +93,10 @@ def _build_cmd(
     provider: str,
     limit: int | None,
     since: int | None,
+    workers: int | None = None,
+    resume: bool = False,
+    active_only: bool = False,
+    prompt_version: str | None = None,
 ) -> list[str | Path]:
     """Return the subprocess command for a given step."""
     if step in _SCRAPER_STEPS:
@@ -94,6 +106,20 @@ def _build_cmd(
                 cmd.append("--force")
             if provider:
                 cmd.extend(["--provider", provider])
+            # The schema step is the long pole: ~9,600 LLM calls. Without these
+            # it ran one call at a time over every posting ever scraped, which
+            # is why it never finished — 1,440 of 1,799 *active* postings still
+            # have no schema_json.
+            if workers is not None:
+                cmd.extend(["--workers", str(workers)])
+            if resume:
+                cmd.append("--resume")
+            if active_only:
+                cmd.append("--active-only")
+            if prompt_version:
+                cmd.extend(["--prompt-version", prompt_version])
+            if limit is not None:
+                cmd.extend(["--limit", str(limit)])
         if step == "download" and since is not None:
             cmd.extend(["--since", str(since)])
         if step == "export-sqlite":
@@ -178,16 +204,47 @@ def main() -> None:
     )
     parser.add_argument(
         "--provider",
-        choices=["gemini", "openai", "anthropic"],
-        default=os.environ.get("LLM_PROVIDER", "gemini"),
-        help="LLM provider for infer and schema steps (default: gemini).",
+        # The `infer` management command only implements gemini/openai/anthropic,
+        # so the pipeline can only drive those end to end even though
+        # llm-schema.py alone also supports deepseek.
+        choices=_PIPELINE_PROVIDERS,
+        default=None,
+        help="LLM provider for infer and schema steps. Defaults to $LLM_PROVIDER, "
+             "then models_config.json \"defaults.provider\".",
     )
     parser.add_argument(
         "--limit",
         type=int,
         default=None,
         metavar="N",
-        help="Pass --limit N to infer step (useful for testing).",
+        help="Pass --limit N to the infer and schema steps (useful for testing).",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Concurrent LLM calls in the schema step (llm-schema.py default: 4).",
+    )
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Schema step: skip postings that already have a variant row for this "
+             "provider/model/prompt-version. Makes an interrupted run restartable.",
+    )
+    parser.add_argument(
+        "--prompt-version",
+        default=None,
+        metavar="VERSION",
+        help="Schema step: prompt version (v1/v2/v3). Defaults to $LLM_PROMPT_VERSION, "
+             "then models_config.json \"defaults.prompt_version\".",
+    )
+    parser.add_argument(
+        "--active-only",
+        action="store_true",
+        help="Schema step: only extract postings whose deadline has not passed. "
+             "The export-sqlite step is always active-only, so this matches what "
+             "actually reaches the deployed site.",
     )
     parser.add_argument(
         "--since",
@@ -236,6 +293,14 @@ def main() -> None:
         )
         sys.exit(1)
 
+    args.provider = resolve_provider(args.provider)
+    if args.provider not in _PIPELINE_PROVIDERS:
+        parser.error(
+            f"provider {args.provider!r} (from $LLM_PROVIDER or models_config.json) "
+            f"is not supported by the infer step; pass --provider "
+            f"{'/'.join(_PIPELINE_PROVIDERS)} explicitly."
+        )
+
     print(f"Running {len(selected)} step(s): {', '.join(selected)}")
     t_total = time.monotonic()
     failures: list[str] = []
@@ -248,6 +313,10 @@ def main() -> None:
             provider=args.provider,
             limit=args.limit,
             since=args.since,
+            workers=args.workers,
+            resume=args.resume,
+            active_only=args.active_only,
+            prompt_version=args.prompt_version,
         )
         ok = _run_step(step, cmd, continue_on_error=args.continue_on_error)
         if not ok:

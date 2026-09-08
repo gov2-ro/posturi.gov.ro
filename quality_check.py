@@ -27,6 +27,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from boilerplate import strip_hg_1336
+from llm_config import PROVIDERS, resolve_model, resolve_provider
 
 load_dotenv()
 
@@ -37,12 +38,8 @@ DOWNLOADS_DIR = DATA_DIR / "downloads"
 SCHEMA_DIR = DATA_DIR / "schema"
 REPORT_PATH = DATA_DIR / "quality_report.json"
 
-DEFAULTS = {
-    "gemini": "gemini-2.5-flash",
-    "openai": "gpt-4o",
-    "anthropic": "claude-3-5-haiku-20241022",
-    "deepseek": "deepseek-v4-flash",
-}
+# Provider/model selection is shared with llm-schema.py — see llm_config:
+# CLI flag > $LLM_PROVIDER/$LLM_MODEL > models_config.json "defaults".
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────
@@ -615,7 +612,7 @@ def _infer_anomaly_flags(row: dict, body: str, *, attachment_text: str = "") -> 
     return flags
 
 
-def _llm_classify(title: str, provider: str) -> str:
+def _llm_classify(title: str, provider: str, model: str | None = None) -> str:
     prompt = (
         "Clasifică postul din administrația publică română.\n"
         f'Titlu: "{title}"\n'
@@ -628,13 +625,13 @@ def _llm_classify(title: str, provider: str) -> str:
         from google import genai
         client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
         raw = client.models.generate_content(
-            model=DEFAULTS["gemini"], contents=prompt
+            model=model or resolve_model("gemini"), contents=prompt
         ).text.strip()
     elif provider == "openai":
         import openai
         client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         raw = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model or resolve_model("openai"),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=20,
         ).choices[0].message.content.strip()
@@ -642,7 +639,7 @@ def _llm_classify(title: str, provider: str) -> str:
         import anthropic
         client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
         raw = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=model or resolve_model("anthropic"),
             max_tokens=20,
             messages=[{"role": "user", "content": prompt}],
         ).content[0].text.strip()
@@ -976,14 +973,16 @@ def compute_aggregate(results: list) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Data quality check for posturi.gov.ro pipeline")
     parser.add_argument("--n", type=int, default=8, help="Number of postings to sample (default: 8)")
-    parser.add_argument("--provider", choices=["gemini", "openai", "anthropic", "deepseek"], default="anthropic")
+    parser.add_argument("--provider", choices=list(PROVIDERS), default=None,
+                        help="LLM provider. Defaults to $LLM_PROVIDER, then models_config.json.")
     parser.add_argument("--model", default=None, help="Override default model for the provider")
     parser.add_argument("--no-llm", action="store_true", help="Skip LLM steps (infer fallback + schema generation)")
     parser.add_argument("--slugs", default=None, help="Comma-separated slugs to force-select (e.g. 2a66f376.doc)")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for sampling (omit for different sample each run)")
     args = parser.parse_args()
 
-    model = args.model or DEFAULTS[args.provider]
+    args.provider = resolve_provider(args.provider)
+    model = resolve_model(args.provider, args.model)
     use_llm = not args.no_llm
 
     print(f"Loading {CSV_PATH}...")

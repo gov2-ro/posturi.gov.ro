@@ -1,10 +1,10 @@
 # posturi.gov.ro scraper
 
+&rarr; [posturi.gov2.ro](https://posturi.gov2.ro/) [WIP]
+
 Alternative browser / explorer for [posturi.gov.ro](https://posturi.gov.ro). Scrapes the Romanian government job listings portal — and tracks changes over time. Pipeline: index → cache announcement pages → extract structured data → LLM-extracted structured display sections stored in Postgres.
 
-**Site redesigned 2026-07**: The site now runs on WordPress + Astra + Elementor with a custom PG plugin. The pipeline handles both old (`/anunt/{slug}/`) and new (`/joburi/{slug}/`) URL schemes. See `docs/activity-log.md` (2026-08-01) for details.
-
-See [initial specs](https://docs.google.com/document/d/11NXWd4yJII3obPwNsVSJPu7Ue98SqNFQ/) gdocs
+Derivative work: [mariuscomper.uk/posturi-publice](https://mariuscomper.uk/posturi-publice/)
 
 ## Pipeline
 
@@ -190,7 +190,31 @@ Pydantic models in `schema_models.py` are the single source of truth and feed ea
 - **Anthropic**: tool-use with `input_schema`
 - **DeepSeek**: `response_format={"type":"json_object"}` (loose) + Pydantic post-validation
 
-A cacheable system prefix (instructions + 2 few-shot examples) is sent on every call so providers can hit their prompt cache — measured ~94–99% input-cache hit rate by the 2nd call on OpenAI/DeepSeek.
+A cacheable system prefix (instructions + 2 few-shot examples) is sent on every call so providers can hit their prompt cache — measured ~94–99% input-cache hit rate by the 2nd call on OpenAI/DeepSeek. **Gemini is the exception**: its implicit cache is best-effort and hit only 1 of 6 sequential v3 calls (2026-09-08), so do not budget for it there. See `docs/llm-extraction-round.md`.
+
+### Choosing the model, and long runs
+
+Provider, model and prompt version resolve the same way in `llm-schema.py`, `pipeline.py` and `quality_check.py` — **CLI flag > environment variable > `models_config.json` "defaults"**, implemented once in `llm_config.py`:
+
+```bash
+# .env
+LLM_PROVIDER=gemini            # gemini | openai | anthropic | deepseek
+LLM_MODEL=gemini-2.5-flash     # ignored if it is not a model of the selected provider
+LLM_PROMPT_VERSION=v3          # v1 | v2 | v3
+```
+
+A backfill is ~9,600 calls per model, so the runner is built for that:
+
+```bash
+# concurrent, restartable, retrying
+python llm-schema.py --prompt-version v3 --workers 8 --resume
+```
+
+- `--workers N` (default 4) — concurrent LLM calls; database writes stay single-threaded. Measured 5.13 s/post at 4 workers against 15–20 s sequential.
+- `--resume` — skip postings that already have a variant row for this exact provider/model/prompt-version.
+- `--max-attempts N` (default 4) — transient errors (429/5xx/timeout) back off exponentially; invalid output gets one repair attempt that shows the model its own validation error.
+
+Every run also checks that quoted `evidence`/`verbatim` values actually appear in the posting (`grounding.py`) and reports unsupported quotes — a hallucination check with no extra LLM call.
 
 ### Boilerplate stripping
 

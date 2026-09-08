@@ -177,12 +177,33 @@ Findings from a 2026-09-06 read of `webapp-php/` (deployed) — every one also e
 - [ ] **Resolve `skill_list` labels to ESCO URIs** — ESCO has 13,939 skill concepts with Romanian labels. Resolving extracted tags locally against a downloaded ESCO dump beats asking an LLM for a URI it will hallucinate, and turns our tags into genuinely interoperable identifiers. Do it once there is a corpus of extracted labels to resolve against.
 
 
+- [ ] **The Django webapp has no skins and has drifted** — `webapp/templates/base.html` still loads `cdn.tailwindcss.com` and carries its own hardcoded hex palette plus an inline `<style>` block (the pre-2026-09-07 arrangement). The PHP app's colours are now CSS custom properties under a `[data-skin]` scope, so the two apps no longer look alike and the skins cannot be previewed in the Django one. Don't port the token layer into it — see *Retire the duplicated Django frontend* under Cross-cutting, which removes the divergence instead of maintaining it twice.
+- [ ] **Font preloads follow the default skin, not the active one** — `inc/header.php` preloads DM Sans + Fraunces unconditionally, so a returning visitor on `govuk` (Arial) or `posturi` (Manrope) fetches ~90KB of faces it never uses, and Manrope is not preloaded when it is the active face. The skin lives in `localStorage`, so the server cannot know it without a cookie, and a cookie would break shared-host page caching. Options if it ever matters: move the preloads into a `<link>` injected by the pre-paint boot script, or drop them entirely.
+- [ ] **No dark theme axis** — all three skins are light. The otios implementation this borrows from treats theme (light/dark) and skin as independent axes, with each skin optionally declaring a `[data-skin="x"][data-theme="dark"]` block. The token layer here supports that with no changes; it needs a `data-theme` attribute on `<html>`, a second `localStorage` key in `static/prefs.js`, and dark blocks per skin. `assets/check-skins.php` would need its contrast pairs run against both.
+- [ ] **`posturi.css` hangs its card shadow on `.rounded-lg.border`** — a structural selector, so a card that stops using both classes silently loses its lift. The honest fix is a `shadow-card` utility applied at the ~31 card sites, with `--shadow-card: none` in the skins that want flat; that was left out as churn disproportionate to the benefit. Revisit if a second skin wants card lift.
+
 ## Cross-cutting / future
 
 - [ ] **Bilingual UI (RO/EN)** — gettext catalogs; default RO, EN toggle.
 - [x] **RSS + JSON feeds per filter combination** — Done 2026-05-27. `/posturi.json` (JsonResponse, up to 200 results, full field set) and `/posturi.atom` (Atom1Feed via `django.contrib.syndication`, 50 items) both accept the same query params as the browse view (`q`, `judet`, `level`, `type`, `categorie`, `employer_cat`, `expires_before`, `expires_after`, `family`, `seniority`). `_filter_kwargs_from_request()` helper extracts params from the request; both feeds share `_apply_filters()`.
 - [x] **iCal feed per filter combination** — `/posturi.ics` — one `VEVENT` per posting (deadline as `DTSTART`/`DTEND`), employer as `SUMMARY`, contact info + URL in `DESCRIPTION`. Same filter params as browse view, up to 200 events. Done 2026-05-27.
 - [x] **Methodology + About pages** — `/despre/` page with sections: what the site is, data sources, inference methodology (dict + LLM fallback, confidence scoring), anomaly heuristics (all 6 flags explained), limitations (scanned PDFs, partial attachment coverage, imperfect classification), export/API reference. Navigation link in base.html header. Done 2026-05-27.
+- [ ] **Retire the duplicated Django frontend; `webapp/` is the ETL, not a web app** — investigated 2026-09-08 after asking whether `webapp/` could simply be deleted. It cannot: it is the database layer the PHP app depends on. But roughly half of it is dead weight, and that half is what caused the skin divergence above.
+
+  **Load-bearing — must stay:**
+  - The 12 migrations own the Postgres schema. `export-to-sqlite.py` reads `jobs_jobposting`, `jobs_employer`, `jobs_judet`, `jobs_calendarevent` by name, so no migrations means no database means no deploy SQLite.
+  - `pipeline.py:133` shells out to `webapp/manage.py` for three stages (`import_csvs`, `extract_attachments`, `infer_postings`); four more commands exist unwired (`normalize_judete`, `canonicalize_employers`, `parse_updates`, `infer_conditions_llm`).
+  - `apps/jobs/judete.py` — CLAUDE.md names it the single interpreter of the județ badge.
+  - `tests/` — the project's only suite, 282 passing, 8 of 13 files needing Django. Note that `test_llm_runner.py` and `test_posting_urls.py` import from the repo root (`grounding`, `schema_models`, `posting_urls`) and touch Django not at all; they live here only because this is where the suite is. That is why the folder *looks* actively developed as a web app when it isn't.
+  - `admin.py` — a genuinely useful data-inspection surface that depends on nothing else.
+  - `templates/jobs/llm_variants.html` + `variant_comparison.html` (233 lines) — the prompt-version comparison dashboard, the one web surface with no PHP equivalent.
+
+  **Duplicated by `webapp-php/` — candidates for deletion (~2,634 lines, slightly more than the load-bearing model/command code):** `views.py`, `templates/base.html`, and the six templates that mirror PHP pages (`list`, `detail`, `about`, `stats`, `employer_profile`, `employers_dashboard`), plus the JSON/Atom/iCal feed views that `webapp-php/feeds/` also serves.
+
+  **Before deleting:** `views.py` holds helpers the tests exercise and that `webapp-php/helpers.php` reimplemented — `_render_schema_sections`, `_apply_filters`, `_render_base_salary`, `_render_application_fee`, `_render_application_contact`, `_sanitize`. Move the ones the tests cover somewhere that survives (e.g. `apps/jobs/rendering.py`) rather than dropping them with the file, and keep `urls.py` entries for admin + the variants dashboard.
+
+  **Then rename.** A folder holding models, migrations, commands, `judete.py`, tests and one dev dashboard is honestly `etl/` or `db/`, not `webapp/`. The rename is what stops this drifting back — `pipeline.py:44` (`WEBAPP_DIR`), `deploy-php.sh`, `conftest.py`, README and CLAUDE.md all reference the path.
+
 - [ ] **Auth (v3)** — `django-sesame` magic-link; optional Google OAuth.
 - [x] **Stats dashboard** — `/statistici/` page with KPI tiles (total/active/classified), top-10 profession family and județ bar charts with filter links, and anomaly flag table. Done 2026-05-27. Remaining v3 additions: time series, geographic heat map, re-posting tracker.
 - [ ] **Stats dashboard v3 additions** — time series (postings over time), geographic choropleth, re-posting tracker.
@@ -225,7 +246,148 @@ Findings from a 2026-09-06 read of `webapp-php/` (deployed) — every one also e
 - [x] go beyond schema org, extract easy to read attributes. `Rezumatul functiei` card on [cariere.gov.md](https://cariere.gov.md/ro/job/specialist-in-domeniul-perceperii-fiscale/32948). Those will also used as filters.
 - [ ] stats, show all judete. norm to population
 - [x] angajator profile? — Done 2026-06-09 (`8ff209b`: employer profile page in Django, `pages/employer.php` in PHP).
+- [ ] remove "Stare anunț" -> Toate tab
+- [ ] RSS feed/calendar shold reflect the current active feed filters
+- [ ] remove `căutare` nav item
+- [ ] remove landing sub-header: Posturi în sectorul public / xxx anunțuri indexate · sursă: posturi.gov.ro
+- [ ] compact ui, search can be in sidebar on desktop - the main exploration tool is the filter. remove count judete stats, and domains. keep count anunturi active, angajatori - but move it out of premium area. put instead some clickable facets, ex: like top domenii, temporar, telemunca. funcție publică, funcție contractuală (w counters)
+- [ ] for expired postings keep page, metadata, use in stats, list in company profile archive, but instead of description show similar jobs, based on filters and employer.
 
+
+
+### Enhance extraction
+- [ ] 13343-expert-comunicare-proiect-cod-smis-330790 - should have a 'comunicare' keyword
+- [ ] reformat rendered text, markdown, catch lists, headings. Mark relevant parts?
+- [ ] normalize titles
+
+### Update pipeline
+
+State as of 2026-09-08 (9,603 postings, 1,799 active, 647 published in the last 7 days).
+
+- [ ] **80% of the live site has no LLM extraction.** 1,440 of 1,799 active postings
+      have `schema_json IS NULL`; the deployed `webapp-php/posturi.sqlite` carries 359
+      of 1,799. Every one of those detail pages renders without responsibilities,
+      requirements or skills. Now runnable in ~2 h:
+      `python pipeline.py --steps schema --active-only --resume --workers 8
+      --prompt-version v3` (~$2 at Gemini 2.5 Flash rates). Run it as **v3**:
+      `JobPostingExtractionV3` inherits every v2 field, `_render_schema_sections()`
+      reads by key so the detail page is unaffected, and `_v3_columns()` in
+      `export-to-sqlite.py` already flattens the v3 keys into the `v3_*` SQLite
+      columns the new filters query. `PRODUCTION_PROMPT_VERSION = "v2"` in `views.py`
+      only sets the default filter on the LLM-variants comparison page and does not
+      gate the backfill.
+- [x] **80 postings were never actually fetched — cache-key collision.** — Root cause
+      found 2026-09-08, fix in `fetch-anunturi.py::get_slug()`. The index links some
+      cards by raw WordPress permalink (`/?post_type=pg_job&p=26404`) instead of
+      `/joburi/{slug}/`. Those URLs have an *empty* path, and `get_slug` returned the
+      constant `'index'` for them, so all 80 shared one cache filename per date
+      directory — 28 `index.html` files, each holding whichever posting was fetched
+      first that day, with `file_exists()` skipping every later one as already done.
+      The correlation is exact: 80 query-string URLs in the database, 80 rows with
+      `expires_at IS NULL`, and all 80 have **no** body, attachment, card deadline or
+      schema_json. `get_slug` now falls back to the query string.
+- [x] **Re-fetch those 80 and re-import.** — Done 2026-09-08. 78 recovered (body,
+      expiry, 233 calendar events); the other 2 are 404 upstream. Also fixed the decoder
+      half — `parse-anunturi.py` rebuilt every URL as `/joburi/{slug}/` — by giving both
+      scripts one shared `posting_urls.py` whose decoder resolves through a map built
+      from the encoder, so they cannot drift again.
+- [x] **Cancelled announcements are now a real state.** — Done 2026-09-08. All 80 turned
+      out to be `expira_in = "Anunț anulat"`, and their detail pages still carry live
+      dates, so recovering them turned 15 withdrawn competitions into apparently open
+      jobs. `JobPosting.cancelled` (migration 0011) + `--active-only` meaning open AND
+      not withdrawn. Active export 1,777 → 1,762.
+- [ ] **Surface cancellation in the UI.** The flag exists and is excluded from the live
+      export, but a cancelled posting reached by direct link (Django app, or a stale
+      bookmark) still renders as an ordinary job. Needs a badge and probably a
+      `noindex`.
+- [ ] **36 recent postings still lack an expiry date** (down from 81 before the fetch
+      fix, and none are cancelled). The export's `expires_at >= CURRENT_DATE` filter
+      hides them silently. Decide: show as "termen nespecificat", or keep hiding — but
+      deliberately. This filter is what kept a fetch bug invisible for two months.
+- [ ] **The 78 recovered postings have no LLM extraction** and the deployed SQLite has
+      not been rebuilt. Both wait on the v3 backfill.
+- [x] **`pipeline.py` could not drive the schema step usefully.** — Done 2026-09-08.
+      It passed neither `--active-only`, `--resume`, `--workers` nor `--limit`, so the
+      step ran one call at a time over every posting ever scraped and never finished.
+      All four now pass through, opt-in so existing invocations are unchanged.
+- [ ] **Stale `posturi.sqlite` (73 MB, 9 June) in the repo root**, left over from before
+      `export-to-sqlite.py` grew `--out`; the live artifact is `webapp-php/posturi.sqlite`.
+      Two `-shm`/`-wal` files sit beside it. Delete, and check nothing reads the root path.
+- [ ] **88 active postings have empty `inferred`** and 252 have no `attachment_text`
+      (the latter may be legitimate — not every posting has an attachment). Worth a
+      one-off check that these are absences in the source rather than fetch failures.
+- [ ] **Nothing schedules any of this.** `deploy-php.sh` is documented as a daily
+      rebuild but there is no cron/CI entry in the repo. The 3-month-stale root SQLite
+      and the recurring "live site is N weeks stale" entries in the activity log are
+      the symptom.
+- [ ] deployment pipeline
+
+### LLM round
+
+Measured 2026-09-08 on `gemini-2.5-flash` + prompt v3: a typical call is
+`in≈8,600 out≈1,400`, ~$0.0015 cold and ~$0.0008 warm, ~15 s. The v3 system prompt
+is ~6,960 tokens — **~81% of the input**. Gemini's implicit cache *can* hit it
+(`cached=7092` observed, billed at 10% of the input rate) but did so on only **1 of 6**
+sequential calls, so it cannot be budgeted for. Full 9,603-posting v3 run: ~$15 and
+~40 h wall-clock at one call at a time. Cost is not the constraint; wall-clock is.
+
+- [ ] **Controlled vocabulary for `skill_list.label`.** Free-text tags do not
+      aggregate: the 2,664 skill bullets in the current v2 extractions are 66%
+      distinct, and it takes 1,214 distinct strings to cover 80% of occurrences.
+      A 30-tag hand-written seed already word-boundary-matches 31% of them
+      (`comunicare` 240, `Word` 125, `Excel` 122, `relaționare` 112, `operare PC` 68).
+      Bootstrap the real list from data — run v3 free-form on a stratified sample,
+      count labels, keep everything above a frequency floor, curate — rather than
+      inventing it. Ship as a *soft* in-prompt list ("use one of these exact labels
+      when it fits, otherwise emit your own tag"), not a Pydantic `Literal`, so the
+      tail survives. Keep `evidence` so labels can be re-normalised later without
+      re-running extraction.
+- [x] **Stop asking the model for derivable fields.** — Done 2026-09-08. `eqf_level`
+      and `iso_code` are now derived in `model_validator`s on `EducationRequirement`
+      and `LanguageRequirement`; a model-supplied value that disagrees is overwritten.
+- [x] **No retry anywhere in `llm-schema.py`.** — Done 2026-09-08.
+      `generate_with_retry()` backs off exponentially with jitter on transient errors
+      (classified by HTTP status, falling back to exception class name since no two
+      SDKs share a base class) and makes exactly one repair attempt on invalid output,
+      appending the validation error to the user message so the cached system prefix
+      stays byte-identical. `--max-attempts` tunes it.
+- [ ] **Explicit prompt caching, since implicit is unreliable (1/6 hits measured).**
+      Gemini `client.caches.create` with the v3 system prompt + a TTL guarantees the
+      10% rate on ~81% of every request's input. Anthropic's `cache_control` is already
+      wired; its 5-minute TTL refreshes on each hit, so a continuous run stays warm.
+      Worth ~$12 of the ~$15 backfill, and more once the prompt carries vocabularies.
+- [x] **Sequential loop = ~40 h for a full v3 run.** — Done 2026-09-08. `--workers`
+      (default 4) runs LLM calls in a bounded thread pool; all database writes stay on
+      the calling thread. Measured 5.13 s/post at 4 workers against ~15-20 s/post
+      sequential, i.e. ~14 h for the full corpus instead of ~40 h. Still worth warming
+      the cache with one call before fanning out.
+- [x] **`--compare` re-runs everything.** — Done 2026-09-08. `--resume` excludes
+      already-done postings with a `NOT EXISTS` clause in `_selection_where()`, so the
+      progress total and the iteration cannot drift apart. Verified across two runs:
+      27 variants over 27 distinct postings, nothing reprocessed.
+- [ ] **Batch APIs are ~50% off** on all four providers and would beat caching as a
+      cost lever for a one-off backfill. Trade-off: latency (hours) and weaker cache
+      interaction. Worth it for the 9,603-posting v3 backfill, not for incremental runs.
+- [x] **Hallucination check is free and unbuilt.** — Done 2026-09-08. `grounding.py`
+      runs on every posting: a quote passes if 60% of its content words appear in the
+      source, or if any four consecutive content words appear consecutively (coverage
+      alone punishes length, so a long real span with a short invented lead-in would
+      otherwise look like a fabrication). All 30 quotes in the real v3 extractions
+      pass; injected fabrications score 12-14%. Findings are printed and counted, not
+      stored — a `grounding` column on the variant table is the obvious next step.
+- [ ] **Cheap-then-expensive routing.** Flag contradictory or suspiciously empty
+      extractions deterministically (e.g. `educationRequirements` non-null but
+      `education` null, `eqf_level` disagreeing with `minimum_level`) and re-run only
+      those on a stronger model.
+- [ ] **Anthropic cache *writes* cost 1.25x and are not modelled.** `compute_cost()`
+      reads `cache_read_input_tokens` but ignores `cache_creation_input_tokens`, so
+      Anthropic runs under-report cost slightly on every cold call.
+- [ ] **Content truncation is a hard cut at 100,000 chars** (`iter_postings`), which
+      lands mid-document on the longest postings (max 120,180 chars). Section-aware
+      or middle-out truncation would keep the bibliography and calendar.
+- [ ] add a note, something like: "conținutul anunțurilor a fost rescris de un LLM, vă recomandăm să verificați și [sursa] înainte de a aplica"
+- [ ] deployment: could we run it via github actions, or need VPS?
+- [ ] check expiry w LLM, sometimes mismatch, see https://posturi.gov.ro/joburi/expert-comunicare-proiect-cod-smis-330790/ 
 
 ### Later
 - [ ] scrape anunturi job-uri din site-uri individuale, vezi stiri.gov2.ro Ex: https://www.umpcultura.ro/ctg_3_oportunitati-de-angajare_pg_0.htm 

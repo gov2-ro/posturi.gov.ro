@@ -26,6 +26,8 @@ See README.md for project overview, pipeline, commands, and data structure.
 
 **Județe are normalised at import** — the source badge is `"Timiş"` (pre-redesign) or `"TIMIŞOARA, Timiș"` (post-redesign). `webapp/apps/jobs/judete.py` is the only place that interprets it: `normalize_judet()` returns `(county, locality)` against the canonical 42 counties. Never write a raw badge value into `Judet.name` — that is what produced 261 rows and broke the județ facet. Unmatched values land in `JobPosting.judet_raw` and are reported by `judet_sanity_warnings()` on every import; fix by adding to `judete.ALIASES`. See README § Județe.
 
+**The PHP webapp's palette is tokens, not literals** — every colour, radius and font in `tailwind.config.js` resolves to a CSS custom property; the defaults are one `:root` block in `webapp-php/assets/app.css`. Never add a raw Tailwind palette class (`bg-amber-50`, `text-slate-700`) or a hex literal to a template — use the role tokens (`page`, `sunken`, `surface`, `line`, `ink`, `gov`, `gov-bar`) and the five semantic families (`info`, `neutral`, `ok`, `note`, `alert`), each a `bg-x` / `border-x-line` / `text-x-ink` triple. A skin is a file in `webapp-php/static/skins/` that re-declares those variables under `[data-skin="<id>"]`; run `php webapp-php/assets/check-skins.php` after touching one. See README § Skins.
+
 **Rate limiting** — `random.uniform(0.5, 1.1)` sleep between pages, built into all fetch scripts.
 
 ## Project tracking

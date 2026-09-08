@@ -2,6 +2,315 @@
 
 ## 2026
 
+### 2026-09-08 — Asked whether `webapp/` could be deleted; found it is the ETL, not a web app
+
+Prompted by the skin work above: the Django app still carries its own hardcoded palette and a
+`cdn.tailwindcss.com` script, so the two frontends had visibly diverged, and the folder looked
+stale apart from two recently-touched tests.
+
+It cannot be deleted. `webapp/` is the database layer the PHP app stands on: the 12 migrations
+own the `jobs_*` tables that `export-to-sqlite.py` reads by name, `pipeline.py:133` shells out
+to `manage.py` for three of its stages, `apps/jobs/judete.py` is the canonical județ
+interpreter, and `tests/` is the project's only suite (282 passing).
+
+But about half of it is dead weight. `views.py`, `base.html` and six templates duplicate PHP
+pages one-for-one — ~2,634 lines, slightly more than the load-bearing model and command code —
+and the JSON/Atom/iCal feed views are duplicated too. That duplication is exactly what produced
+the styling divergence: two frontends, only one of which got the token layer.
+
+The two recently-updated tests turned out to be the misleading signal. `test_llm_runner.py` and
+`test_posting_urls.py` import `grounding`, `schema_models` and `posting_urls` from the repo root
+and touch Django not at all; they live in `webapp/tests/` only because that is where the suite
+happens to be. The folder reads as an actively developed web app because it is an actively
+developed *test directory*.
+
+Logged rather than acted on — see the backlog entry under Cross-cutting. The shape of the fix:
+delete the duplicated frontend, first moving the six helpers the tests exercise (and that
+`helpers.php` reimplemented) out of `views.py`; keep models, migrations, commands, `judete.py`,
+`admin.py`, the tests and the LLM-variants dashboard; then rename the folder to `etl/` or `db/`,
+which is what actually stops it drifting back. `pipeline.py:44`, `deploy-php.sh`, `conftest.py`,
+README and CLAUDE.md all reference the path.
+
+### 2026-09-08 — Skins: the palette became tokens, and GOV.UK / posturi.gov.ro skins on top
+
+The PHP webapp's colours were literals in `tailwind.config.js` and ~90 raw Tailwind palette
+classes (`bg-amber-50`, `text-slate-700`, …) scattered through the templates. Restyling meant
+editing templates, so there was no way to try a different look.
+
+**The token layer.** Every colour, radius and font in the Tailwind theme now resolves to a CSS
+custom property — `page: "rgb(var(--c-page) / <alpha-value>)"` — with the defaults in one
+`:root` block in `assets/app.css`. Re-declaring those variables under `[data-skin="<id>"]`
+restyles the whole site without touching a utility class. Values are space-separated RGB
+channels rather than hex because that is the only form `<alpha-value>` composes with; hex
+would silently break every `bg-surface/70`.
+
+**Renames.** Token names now describe a role, not a colour: `parchment`→`page`,
+`parchment-dark`→`sunken`, `border-warm`→`line`, `border-input`→`line-strong`,
+`bg-white`→`bg-surface`. A name like `bg-parchment` becomes a lie the moment a skin is not
+beige. The ~90 raw palette classes collapsed into five semantic families — `info`, `neutral`,
+`ok`, `note`, `alert` — each a fill / border / label triple.
+
+**The brand split, found by the validator.** `--c-gov` was serving as both the masthead fill
+and the link colour. Both new skins need a masthead that is *not* their link colour (GOV.UK:
+black bar, blue links; posturi.gov.ro: navy bar, lighter blue links), and both had started out
+overriding `header` by hand to get it. Splitting into `--c-gov` (actions, with `--c-on-gov`)
+and `--c-gov-bar` (masthead, with the `--c-on-bar` ramp) means no skin hardcodes the header,
+and it makes the on-fill contrast pairs measurable.
+
+**Discovery, not a registry.** `inc/skins.php` globs `static/skins/*.css`; drop a file in and
+it appears in the footer picker on the next request. The display name comes from an `@skin`
+comment in the file, ids are validated against `^[a-z0-9][a-z0-9_-]*$` before reaching a
+`data-` attribute, and `_`-prefixed files are skipped. The choice lives in `localStorage` and
+is applied by a pre-paint inline script, so there is no flash of the default palette. The
+valid ids are baked into that script so a deleted skin falls back to the default instead of
+pointing at a stylesheet that no longer exists.
+
+Skins sit in `static/` rather than `assets/` for two reasons: Tailwind would strip them (nothing
+in the PHP references their selectors), and `deploy-php.sh` excludes `assets/`.
+
+**The two skins.** `govuk.css` is the GOV.UK Design System — white ground, zero radius
+everywhere including `--radius-pill`, Arial (GDS Transport is licensed to gov.uk domains; Arial
+is the Design System's own documented substitute), yellow `#ffdd00` focus with the black
+underline, the semantic families mapped onto `govuk-tag`. It has no cards: `--c-page` and
+`--c-surface` are both white and grouping is carried by a visible grey rule, which is how
+GOV.UK actually works. `posturi.css` mirrors the official site, with values read off its live
+inline styles rather than guessed — `#0f2742` masthead navy, `#0f4c81` links, `#d4af6a` gold,
+the slate text ramp, `0 6px 18px rgba(15,39,66,.09)` card shadow, 10–12px radii. Manrope is
+self-hosted (latin + latin-ext; ș and ț live in latin-ext) via an `@font-face` inside the skin
+file itself, so the browser only fetches it while that skin is active.
+
+**The validator.** `assets/check-skins.php` reads the token contract out of `app.css` and flags
+the four failures that are silent in a browser: an unscoped rule, a token name that does not
+exist, a colour written as hex, and any text/background pair under WCAG AA. It earned its keep
+immediately — besides the brand split above it caught two sub-AA values in the posturi skin
+(`#64748b` at 4.36:1 on the `#f5f5f3` ground, `#9ca3af` at 2.54:1 where 1.4.11 wants 3:1),
+both replaced with computed rather than eyeballed values. Both skins now override 32/32 colour
+tokens and all palettes pass.
+
+Known cost: the two `<link rel=preload>` font hints follow the default skin, so a returning
+visitor on `govuk` or `posturi` preloads two faces it will not use. Fixing it needs a cookie
+round-trip, which would break shared-host page caching for ~90KB on one request.
+
+### 2026-09-08 — Recovered the 80 lost postings, and found they were all cancelled competitions
+
+**What:** Repaired the 80 postings the `get_slug` collision had left empty, which
+promptly exposed a second, worse problem.
+
+**The repair:** backed up and deleted the 28 colliding `data/anunturi/**/index.html`
+files, re-fetched, re-parsed, re-imported. 78 of 80 recovered — the other two return
+**404 on posturi.gov.ro**, deleted upstream. Result: 78 postings gained a body
+(avg 5,746 chars), an expiry date and 233 calendar events between them; the importer
+went from silently dropping them to `Detail: matched=9604 unmatched=0`.
+
+**The second half of the bug.** Fixing `get_slug` (the encoder) was not enough:
+`parse-anunturi.py::source_url_from_path()` (the decoder) rebuilt every URL as
+`/joburi/{slug}/`, so the recovered files still failed to join back to their index
+row. Rather than write a second regex to invert the first — two regexes kept in sync
+by hand is what caused this — both scripts now share `posting_urls.py`, and the
+decoder resolves through a slug→URL map built by running the *encoder* over every URL
+in the index CSV. The two directions agree by construction. `/anunt/` URLs round-trip
+properly now too, where before they relied on a fallback in `_try_index_lookup`.
+
+**What the recovered data revealed:** all 80 carry `expira_in = "Anunț anulat"` in the
+index. The correlation is exact and three-way — 80 raw-permalink URLs, 80 cancelled
+announcements, 80 rows that had NULL expiry, no overlap in any direction. When
+posturi.gov.ro withdraws a competition it drops the pretty permalink *and* replaces
+the expiry with that phrase.
+
+**Which made the repair actively dangerous.** A cancelled announcement's detail page
+still carries its original dates, so successfully fetching these turned **15 withdrawn
+competitions into apparently open jobs** — worse than the invisibility they replaced.
+The site had been protected only by the accident that they never fetched.
+
+Fixed properly rather than papered over: `JobPosting.cancelled` (migration 0011), set
+by the importer from the index marker, and `--active-only` in `export-to-sqlite.py` now
+means open **and** not withdrawn, for calendar events as well as postings. The active
+export drops from 1,777 to 1,762. `import_csvs` reports "80 marked cancelled".
+
+**Not done:** the deployed SQLite has not been rebuilt or redeployed, and the 78
+recovered postings have no LLM extraction. Both wait on the interrupted v3 backfill.
+
+---
+
+### 2026-09-08 — Pipeline audit: the schema step could not be driven, and 80% of the live site has no extraction
+
+**What:** Audited the update pipeline against the live database rather than the code.
+
+**The finding:** **1,440 of 1,799 active postings have `schema_json IS NULL`.** The
+deployed `webapp-php/posturi.sqlite` carries structured sections for 359 of its 1,799
+rows — four out of five detail pages on the live site render with no responsibilities,
+no requirements, no skills. 9,603 postings total, 647 published in the last 7 days, so
+this is not a stale-data problem; the extraction step simply never got through.
+
+**Why it never got through:** `pipeline.py::_build_cmd()` passed the schema step only
+`--force` and `--provider`. Not `--active-only`, not `--limit`, and (until today) there
+was no `--resume` or `--workers` to pass. So the step ran one call at a time over every
+posting ever scraped — ~40 h with no resume, restarting from zero after any
+interruption. Fixed: all five now pass through, opt-in, so existing invocations are
+unchanged. The documented backfill is now
+
+    python pipeline.py --steps schema --active-only --resume --workers 8 --prompt-version v3
+
+which is ~1,440 calls, roughly 2 h and ~$2.
+
+**Run it as v3, not v2** — checked rather than assumed. `JobPostingExtractionV3`
+inherits every v2 field; `_render_schema_sections()` in `views.py` reads `schema_json`
+by key, so the detail page is unaffected; and `_v3_columns()` in `export-to-sqlite.py`
+already flattens the v3 keys into the `v3_*` SQLite columns the new filters query.
+`PRODUCTION_PROMPT_VERSION = "v2"` only sets the default filter on the LLM-variants
+comparison page — I initially wrote that it gated the backfill, which was wrong.
+
+**Second finding — 80 postings were never fetched at all.** 81 postings have
+`expires_at IS NULL`, 80 of them published within 60 days (one today), and
+`export-to-sqlite.py` filters `WHERE jp.expires_at >= CURRENT_DATE`, which drops NULLs,
+so they are invisible on the live site.
+
+I first concluded this was not a parsing bug, on the grounds that none of the 80 mention
+a deadline anywhere in `body_markdown`. That reasoning was worthless: **they have no
+`body_markdown` at all.** Absence of evidence, read as evidence of absence. Looking at
+the rows rather than grepping them showed every one carries a raw WordPress permalink —
+`https://posturi.gov.ro/?post_type=pg_job&p=26404` — instead of `/joburi/{slug}/`. The
+correlation is exact: 80 query-string URLs in the database, 80 rows with NULL expiry,
+zero overlap either way, and all 80 have no body, no attachment, no card deadline and
+no schema_json.
+
+**Root cause:** `fetch-anunturi.py::get_slug()` was
+`path.split('/')[-1] if path else 'index'`. A query-string URL has an *empty* path, so
+every one of them returned the constant `'index'` and shared a single cache filename per
+date directory. 28 `index.html` files exist on disk, each holding whichever posting was
+fetched first that day; `file_exists()` then skipped all the others as already
+processed. `get_slug` now falls back to a sanitised query string
+(`post_type-pg_job-p-26404`), with regression tests covering collision, filename safety,
+stability across runs, and the unchanged path-URL behaviour.
+
+The fix stops it recurring but does not repair the rows — those 28 cache files need
+deleting and the 80 URLs re-fetching, re-parsing and re-importing. Backlogged.
+
+**What let it hide for two months:** the export filter silently drops NULL `expires_at`.
+A posting that fails to fetch loses its deadline, and losing its deadline removes it
+from the live site — so the failure mode erases its own evidence.
+
+**Also noted, not fixed:** a stale 73 MB `posturi.sqlite` (9 June) in the repo root left
+over from before `export-to-sqlite.py` grew `--out`; 88 active postings with empty
+`inferred`; and nothing in the repo that actually schedules `deploy-php.sh`, which is
+what the recurring "live site is N weeks stale" entries in this log keep describing.
+All in `docs/backlog.md` § "Update pipeline".
+
+---
+
+### 2026-09-08 — The extraction round made survivable: retry, concurrency, resume, grounding
+
+**What:** Five of the levers identified in `docs/llm-extraction-round.md` (new, and the
+place to read for the measurements behind all of this).
+
+**Retry — the real gap.** There was none. `llm-schema.py` caught every exception,
+printed `✗` and moved to the next posting, so a single 429 lost that posting
+permanently. At ~9,600 calls per model, rate limits and 5xx are certainties.
+`generate_with_retry()` now splits failures in two, because they need opposite
+responses: a *transient* error (429/5xx/timeout) is retried with the same input and
+exponential backoff with jitter, while *invalid output* gets exactly one repair
+attempt that appends the validation error to the user message. Only one repair — if
+showing the model its own error does not fix it, a third full prompt will not either.
+
+Classifying the transient ones is the fiddly part: no two provider SDKs share a base
+class, and google-genai exposes `.code` where openai and anthropic expose
+`.status_code`. `_is_transient()` reads whichever numeric status it can find and
+falls back to matching the exception class name.
+
+**Concurrency.** `--workers` (default 4). Only the LLM call runs in the pool; every
+database write stays on the calling thread, since one psycopg connection is not safe
+to share and `write_variant` commits per row. `imap_unordered()` keeps a bounded
+number in flight rather than using `executor.map`, so the 9,600-row cursor is not
+materialised to start work and an abort does not strand thousands of queued calls.
+Measured on 8 real postings: **5.13 s/post at 4 workers** against 15-20 s each
+sequentially — about 14 h for the full corpus instead of 40.
+
+**Resume.** `--resume` excludes postings that already have a variant row for the exact
+provider/model/prompt-version. Done as a `NOT EXISTS` clause inside
+`_selection_where()` rather than by filtering the generator, because that function's
+whole contract is that `count_postings` and `iter_postings` agree — filtering in
+Python would have made the progress bar lie. Verified over two consecutive runs: 27
+variants across 27 distinct postings, nothing reprocessed.
+
+**Grounding check (`grounding.py`).** Every v3 requirement already carries the phrase
+it came from, so hallucination detection needs no second LLM call — just compare the
+quotes to the source. Calibrated against the real extractions rather than guessed:
+a quote passes if 60% of its content words appear in the source **or** any four
+consecutive content words appear consecutively. The second rule was added after a
+negative control showed the first one alone is unfair to long quotes — coverage
+punishes length asymmetrically, so a genuine 20-word span with a 3-word invented
+lead-in scored 50%, the same range as a pure fabrication. All 30 quotes in the real
+v3 extractions pass; injected fabrications score 12-14%. Findings are printed and
+counted per run; storing them needs a column on the variant table.
+
+**Derived fields.** `eqf_level` is a pure function of `minimum_level` — and
+`STUDY_LEVEL_TO_EQF` had been sitting in `schema_models.py` unused since v3 was
+written, while the prompt asked the model to do the lookup. Both it and `iso_code`
+are now derived in `model_validator`s, overwriting whatever the model returned.
+Asking for the same fact in two notations can only introduce disagreement.
+
+**Tests:** `webapp/tests/test_llm_runner.py`, 32 cases over error triage, backoff,
+the repair path, pool completeness under failure, lazy iteration, grounding and the
+derived fields — all with fake `generate` callables, so none of them call a provider.
+
+---
+
+### 2026-09-08 — One place to choose the LLM: `llm_config.py`, env vars, and honest cache pricing
+
+**What:** Provider/model/prompt selection was scattered across four files with three
+different answers. `llm-schema.py` and `quality_check.py` each carried their own
+`DEFAULTS` dict — and they disagreed (`openai` meant `gpt-4o-mini` in one,
+`gpt-4o` in the other). `pipeline.py` and the two `infer_*` management commands
+read `$LLM_PROVIDER`; the two scraper scripts did not, so setting it in `.env`
+changed half the pipeline.
+
+New `llm_config.py` is the single source of truth, with one precedence rule
+everywhere: **CLI flag > env var > `models_config.json` "defaults"**.
+
+- `models_config.json` grew a `defaults` block (`provider`, `prompt_version`,
+  `model` per provider) next to the existing catalogue.
+- `.env` / `.env.example`: `LLM_PROVIDER`, `LLM_MODEL`, `LLM_PROMPT_VERSION`.
+- `llm-schema.py`, `quality_check.py`, `pipeline.py` all resolve through it.
+  `--provider` now defaults to `None` so "not passed" is distinguishable from
+  "passed the same value as the default".
+
+**Non-obvious decisions:**
+- *An env var set to the empty string counts as unset.* `.env.example` ships
+  `LLM_PROVIDER=`, and `load_dotenv()` turns that into `""` — which would
+  otherwise beat the config default and blow up on the provider lookup.
+- *`$LLM_MODEL` is ignored when it names a model of a different provider.* Otherwise
+  `LLM_MODEL=gpt-4o-mini` in `.env` plus `--provider anthropic` on the command line
+  sends an OpenAI model id to Anthropic. This way the env var is a preference, not a trap.
+- *`pipeline.py` keeps a narrower provider list.* `llm-schema.py` supports deepseek;
+  the `infer` management command has no deepseek branch. Rather than silently
+  dropping the flag, pipeline errors out with a message naming the three it can drive.
+- *`quality_check._llm_classify` hard-coded a model per provider* (including a
+  `claude-haiku-4-5` that `DEFAULTS` never mentioned). Now resolved through the same path.
+
+**Cache pricing fixed:** `compute_cost()` bills cached tokens at
+`cache_input_cost_per_million`, falling back to the full input rate when the key is
+missing — and it was missing on both Anthropic models and `gpt-4o`. The Anthropic
+branch has been setting `cache_control` on the system block all along, so the reads
+were real and the recorded `cost_usd` simply never showed the discount. Added
+0.1x for the Claude models, 0.5x for `gpt-4o`.
+
+**Measured, not assumed — Gemini implicit caching fires, but rarely.** The v3 system
+prompt is ~6,960 tokens, i.e. **~81% of a typical request's input**, and when it is
+cached it bills at 10% of the input rate: `in=8909 cached=7092 out=1467 $0.000839`
+versus ~$0.0015 cold. But across a 6-posting sequential run only **one call hit it**
+— implicit caching is best-effort and a ~15 s gap between calls is evidently enough
+to lose it. Do not budget for it. If the prefix discount matters for the full v3
+backfill, use Gemini *explicit* caching (`client.caches.create`, TTL'd), which
+guarantees the hit; Anthropic's `cache_control` breakpoint (already wired in the
+Anthropic branch) is the equivalent there.
+
+Either way the absolute numbers are small: at ~$0.0015 per posting the whole
+9,603-posting v3 run is ~$15, and 1,500 extra tokens of static prompt costs ~$1.4
+across the corpus even with **zero** cache hits. Prompt size is not the constraint —
+the ~40 h of sequential wall-clock is. See `docs/backlog.md` § "LLM round".
+
+---
+
 ### 2026-09-08 — v3 filters and detail UI, built ahead of the data and verified against the 5 real extractions
 
 **Asked:** are we extracting more fields now — if so, sync the filters and the UI.

@@ -347,6 +347,50 @@ npm run css:watch    # while editing templates
 Fonts (`static/fonts/*.woff2`) and htmx (`static/htmx.min.js`) are self-hosted; nothing
 is fetched from a CDN at runtime.
 
+### Skins
+
+The whole palette is one `:root` block of CSS custom properties in
+`webapp-php/assets/app.css`. Tailwind's theme resolves every colour, radius and font
+utility to one of those variables, so re-declaring them under `[data-skin="<id>"]`
+restyles the entire site without touching a single utility class. That is all a skin is.
+
+Three ship today, chosen with the picker in the footer (stored in `localStorage`, applied
+before first paint so there is no flash):
+
+| id        | what it is                                                              |
+| --------- | ----------------------------------------------------------------------- |
+| `hartie`  | the built-in default — parchment, Fraunces, DM Sans. No file; it *is* `:root`. |
+| `govuk`   | GOV.UK Design System — white, square, Arial, yellow focus, black masthead. |
+| `posturi` | the official posturi.gov.ro — navy + gold, Manrope, rounded, lifted cards. |
+
+**Adding one:** copy `webapp-php/static/skins/_template.css` to `<name>.css` and it
+appears in the picker on the next request — no registry, no build step. The id is the
+filename; `inc/skins.php` discovers it and reads the display name from the `@skin` comment.
+Files starting with `_` are skipped.
+
+Two rules the template explains at length:
+
+1. **Scope every rule** under `[data-skin="<id>"]`. All skin files load on every page, so
+   an unscoped rule leaks into the others. `@font-face` is the exception — it declares a
+   family rather than applying one, and is how a skin ships its own typeface.
+2. **Colours are space-separated RGB channels** (`245 240 232`), not hex. That is the only
+   form Tailwind's alpha modifiers compose with; a hex value silently breaks every
+   `bg-surface/70` on the page.
+
+Skins live in `static/` rather than `assets/` because they need no build — Tailwind would
+strip them, since nothing in the PHP references their selectors — and because `deploy-php.sh`
+excludes `assets/`.
+
+Validate before committing:
+
+```bash
+php webapp-php/assets/check-skins.php
+```
+
+It reads the token contract out of `app.css` and flags the four failures that are silent in
+a browser: an unscoped rule, a token name that does not exist, a colour written as hex, and
+any text/background pair under WCAG AA.
+
 ### Previewing another export
 
 `db.php` honours a `POSTURI_DB` environment variable, so a test or a preview can

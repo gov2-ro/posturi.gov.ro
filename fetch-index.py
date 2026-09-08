@@ -62,6 +62,46 @@ def write_header():
             writer.writeheader()
 
 
+#: Remembered page count, so a windowed pagination cannot silently truncate a run.
+page_count_path = "data/.last_page_count"
+
+
+def _read_last_page_count():
+    try:
+        with open(page_count_path, encoding="utf-8") as fh:
+            return int(fh.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _check_page_count(max_page):
+    """Abort when the listing appears to have lost half its pages overnight.
+
+    `get_total_pages()` takes the largest numeric link out of the pagination nav.
+    WordPress renders a *window* of page links, and it only happens to include the
+    last page today; if that ever changes the scrape would quietly stop a few pages
+    in and every posting past the cut would look deleted. A listing genuinely
+    shrinking by half between two runs a few hours apart is not a thing, so treat it
+    as a scraper failure rather than as data. Set FETCH_INDEX_ALLOW_SHRINK=1 to
+    override after checking the site by hand.
+    """
+    previous = _read_last_page_count()
+    if (
+        previous
+        and max_page < previous * 0.5
+        and os.environ.get("FETCH_INDEX_ALLOW_SHRINK") != "1"
+    ):
+        raise SystemExit(
+            f"ERROR: pagination reports {max_page} pages, down from {previous} on the "
+            f"last run. Refusing to scrape a truncated listing — check "
+            f"{listing_url} by hand, then re-run with FETCH_INDEX_ALLOW_SHRINK=1 if "
+            f"the drop is real."
+        )
+    os.makedirs(os.path.dirname(page_count_path), exist_ok=True)
+    with open(page_count_path, "w", encoding="utf-8") as fh:
+        fh.write(str(max_page))
+
+
 def get_total_pages():
     """Discover the total number of listing pages from pagination nav."""
     url = f"{listing_url}?pg_page=1"
@@ -90,13 +130,42 @@ def get_total_pages():
         pass
 
     print(f"Discovered {max_page} pages")
+    _check_page_count(max_page)
     return max_page
+
+
+#: The redesigned index renders a relative countdown ("6 zile rămase") where the old
+#: one printed a date, so the raw string changes every day for every live posting.
+#: Diffing it verbatim logged a spurious `expira_in` change on all ~9,600 rows on every
+#: run, rewrote the whole CSV on every page, and defeated the unchanged-page early stop
+#: below — which is what makes a twice-daily cron affordable. Two countdowns compare
+#: equal; "Anunț anulat" is outside the family, so a cancellation is still a real change.
+COUNTDOWN_RE = re.compile(
+    r'^\s*(\d+\s+zi(?:le)?\s+r[ăa]mas[ăae]|ultima\s+zi)\s*$',
+    re.IGNORECASE,
+)
+
+
+def is_countdown(value):
+    """True for the relative expiry strings the post-redesign index renders."""
+    return bool(COUNTDOWN_RE.match(value or ''))
+
+
+def values_differ(key, old_value, new_value):
+    """Field-aware comparison for compare_and_update()."""
+    if old_value == new_value:
+        return False
+    if key == 'expira_in' and is_countdown(old_value) and is_countdown(new_value):
+        return False  # the clock ticked, the posting did not change
+    return True
 
 
 def compare_and_update(existing_job, new_job):
     updates = []
     for key in new_job:
-        if key != 'updates' and key in existing_job and existing_job[key] != new_job[key]:
+        if key != 'updates' and key in existing_job and values_differ(
+            key, existing_job[key], new_job[key]
+        ):
             updates.append(key)
 
     if updates:

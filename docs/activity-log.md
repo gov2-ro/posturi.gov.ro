@@ -2,6 +2,86 @@
 
 ## 2026
 
+### 2026-09-08 — Continuous deployment: twice-daily pipeline on a VPS, and the guards that make it safe to leave alone
+
+Answered the open "Daily fetch cron — design" backlog item, then built it.
+
+**GitHub Actions was the first question, and the answer is no — for the pipeline.** It
+carries ~2.4 GB of persistent state (`data/anunturi` 169 MB of cached HTML, `data/downloads`
+2.1 GB of attachments) plus a PostgreSQL database that has to survive between runs. On
+ephemeral runners every run would restore and re-save all of it against a 10 GB cache quota
+with 7-day eviction. Secrets, cost and the 6h job limit were never the obstacle; the state is.
+The VPS already holds it. Actions was declined for CI too, by choice.
+
+**Topology.** The VPS owns Postgres, the scrape cache and the API keys and runs the pipeline
+at 11:45 and 18:33 Europe/Bucharest; the shared host owns the PHP tree and one read-only
+SQLite file. Code deploys stay manual from the Mac. That last decision is what forced
+`deploy-php.sh` to split: a cron pushing the whole directory would silently revert templates
+pushed from the Mac, using the VPS's older checkout. `--code-only` excludes `*.sqlite*`,
+`--data-only` sends nothing else.
+
+**`--active-only` is the cost guard, not `--resume`.** The plan had this wrong. `iter_postings`
+already skips rows with a non-null `schema_json`, so a re-run does not re-extract what is done
+— `--resume` is the finer per-variant filter. The actual trap is scope: 6,904 postings have no
+`schema_json` and only **15** of them are active. A run without `--active-only` would pay for
+LLM extraction on ~6,900 expired postings that can never reach the export. `llm-schema.py`'s
+flag defaults were left alone once that was clear.
+
+**`--prompt-version v3` is pinned in the cron.** `models_config.json` still defaults to v2, and
+a v2 extraction lands with every `v3_*` facet column empty — the site's filters read those.
+
+**The export stopped being able to publish an empty site.** `create_schema()` DROPs every table
+before writing, so a crash used to leave the deploy source gutted and ready to ship. It now
+builds `<out>.tmp` and promotes with `os.replace()` only after `integrity_check`, a `--min-rows`
+floor (default 100), and a refusal to lose half the rows against the file it would replace —
+compared only against a baseline built the same way, since an `--active-only` file is
+legitimately a fifth of a full one. A rejected build is deleted rather than left as 50 MB of
+nothing. This is the check that was missing when the live site served three active postings for
+five weeks.
+
+**WAL was actively dangerous on a read-only replica.** The export set `journal_mode=WAL` and
+`db.php` set it again. Two failures follow: PHP opening a WAL database has to create `-shm`/`-wal`
+beside it, and a shared host's document root may not be writable; and a `-wal` surviving an rsync
+swap describes a database that is no longer there, which SQLite reports as *database disk image is
+malformed*. Now `journal_mode=DELETE` in the export, `PRAGMA query_only=1` in `db.php` so the
+read-only intent is enforced rather than assumed, and the deploy removes the remote sidecars once.
+Every route was re-checked under `query_only` — list, detail, employers, stats, sitemap and all
+three feeds return 200 and nothing creates a sidecar.
+
+**`expira_in` was making every run look like a change.** The redesigned cards render a relative
+countdown, so a verbatim diff logged an `expira_in` change on all ~9,600 rows twice a day: the
+`updates` column growing without bound, a full 4.1 MB CSV rewrite on every page, and the
+three-unchanged-pages early stop permanently defeated. `values_differ()` now treats two members
+of the countdown family as equal while still recording a move to `Anunț anulat`. `Data Expirare`
+comes from the detail page's `.pg-meta-deadline`, so nothing downstream loses information.
+
+**Smaller things the unattended path needed.** A pagination floor in `fetch-index.py`, because
+`get_total_pages()` reads the largest numeric link out of a *windowed* pagination and would
+silently truncate the scrape if WordPress ever stopped rendering the last page; `flock` inside
+`run-pipeline.sh` rather than in the unit, so a hand-run cannot overlap the timer either; a
+`DEPLOY_PATH` guard, because `rsync --delete` plus an unquoted `~` that expanded against the
+*local* home is one keystroke from emptying a directory; and a dead-man's-switch
+`HEALTHCHECK_URL`, since a failure alert cannot tell you about a run that never happened —
+which is exactly how the site went five weeks stale.
+
+**`--continue-on-error` with a deploy anyway.** A failed `download` or `infer` step still lets
+the export and deploy run — a current site matters more than a clean run, and the export floors
+decide whether the data is fit to ship. The run still exits non-zero and pings `/fail`.
+
+Files: `ops/run-pipeline.sh`, `ops/env.sh`, `ops/systemd/posturi-pipeline.{service,timer}`,
+`docs/deploy-vps.md` (provisioning runbook + failure table), and changes to `fetch-index.py`,
+`export-to-sqlite.py`, `deploy-php.sh`, `webapp-php/db.php`, `.env.example`, README.
+28 new tests in `webapp/tests/test_index_diff.py` and `test_export_guards.py`; 310 pass.
+
+`webapp-php/posturi.sqlite` was re-exported through the new path as the end-to-end check —
+1,762 active postings, `journal_mode=delete`, `integrity_check` ok, `build_meta` stamped
+`e156190`, and all ten routes served 200 against it under `query_only`. It is the first
+export that carries provenance; nothing has been pushed to the shared host yet.
+
+Not done: the VPS itself. Provisioning, seeding and the first run are the runbook's job.
+`build_meta` is written but not yet read by anything — the header still stamps
+`MAX(last_seen_at)`, which is when the source was scraped rather than when the file was built.
+
 ### 2026-09-08 — Compact landing: filter-first two-column layout, shortcut chips, live export links
 
 Five backlog UI items, all on the PHP webapp's list page.

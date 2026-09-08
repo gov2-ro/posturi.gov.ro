@@ -317,21 +317,62 @@ A lightweight PHP frontend that runs on commodity shared hosting (cPanel). Reads
 ### Export & deploy
 
 ```bash
-# Generate active-only SQLite + push to shared host
-./deploy-php.sh user@host ~/posturi.gov2.ro
+# Everything: rebuild the SQLite from Postgres, push code and data
+./deploy-php.sh user@host '~/posturi.gov2.ro'
 
-./deploy-php.sh pax@mioritics.ro  ~/posturi.gov2.ro --no-perms --no-owner  --no-group --omit-dir-times
+# Just the PHP tree — after a template or stylesheet change
+./deploy-php.sh --code-only
 
-# Or set env vars
-DEPLOY_HOST=user@host DEPLOY_PATH=~/posturi.gov2.ro ./deploy-php.sh
+# Just the database, already built by pipeline.py — what the cron runs
+./deploy-php.sh --data-only --no-export
+
+# See what would move, change nothing
+./deploy-php.sh --dry-run
 ```
 
+Set `DEPLOY_HOST`, `DEPLOY_PATH` and `SITE_URL` in `.env` and the arguments become
+optional. Quote a leading `~`: unquoted it expands against the *local* home, and the
+script refuses the result rather than rsyncing to a path the remote host has never
+heard of.
+
 The deploy script:
-1. Aborts if `webapp-php/static/app.css` is missing (see *Stylesheet* below)
-2. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`
-3. Rsyncs the `webapp-php/` folder to the remote host, minus `assets/` (Tailwind source) and `router.php` (dev only)
+1. Aborts if `webapp-php/static/app.css` is missing (see *Stylesheet* below), or if `DEPLOY_PATH` looks like a home directory — it runs `rsync --delete`
+2. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`, unless `--no-export`
+3. Refuses to ship a database that fails `integrity_check` or has no postings
+4. **Code**: rsyncs `webapp-php/` with `--delete`, minus `assets/` (Tailwind source), `router.php` (dev only) and `*.sqlite*` — excluding the database also protects it from the deletion pass
+5. **Data**: rsyncs `posturi.sqlite` alone, no `--delete` and no `--inplace`, so rsync's write-temp-then-rename swaps it atomically and a request mid-transfer still sees the whole previous database
+6. Checks `SITE_URL` returns HTTP 200
 
 The full archive stays in PostgreSQL; the deployed SQLite only contains currently active postings.
+
+The export builds beside its target and only replaces it once it opens, passes
+`integrity_check`, clears `--min-rows` (default 100) and has not lost half its rows
+against the file it would replace. `--force` overrides the row floors. This is the guard
+that was missing when the live site served three active postings for five weeks.
+
+### Continuous deployment
+
+The pipeline runs unattended on a VPS twice a day (11:45 and 18:33 Europe/Bucharest) and
+pushes a fresh database to the shared host. Code deploys stay manual from the development
+machine, which is why the two rsyncs above are separate — a cron that pushed the whole
+directory would revert templates from the VPS's older checkout.
+
+```
+Mac (dev) ──git push──> GitHub ──git pull (manual)──> VPS
+  │                                                    │
+  │  ./deploy-php.sh --code-only     ops/run-pipeline.sh (systemd timer)
+  └──────────────> shared host (PHP + posturi.sqlite) <┘
+```
+
+| Path | What it is |
+|------|------------|
+| `ops/run-pipeline.sh` | the unattended entry point: flock, pipeline, data deploy, healthcheck ping |
+| `ops/systemd/posturi-pipeline.{service,timer}` | the two daily slots |
+| `ops/env.sh` | `.env` reader shared by the shell scripts (it is never sourced — it holds API keys) |
+| `docs/deploy-vps.md` | provisioning runbook, operating commands, failure table |
+
+Full setup — packages, seeding Postgres and the scrape cache from the Mac, SSH keys,
+installing the timer — is in **[docs/deploy-vps.md](docs/deploy-vps.md)**.
 
 ### Stylesheet
 

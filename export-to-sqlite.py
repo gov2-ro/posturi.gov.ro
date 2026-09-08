@@ -6,6 +6,12 @@ Usage:
     python export-to-sqlite.py --active-only      # active postings only (for deployment)
     DATABASE_URL=postgres://... python export-to-sqlite.py --active-only
     python export-to-sqlite.py --out /path/to/posturi.sqlite
+    python export-to-sqlite.py --active-only --min-rows 500   # tighter floor for cron
+
+The file is built as <out>.tmp and only replaces <out> once it opens, passes
+integrity_check, clears --min-rows, and has not lost half its rows against the file it
+would replace. --force skips the row floors. Nothing half-written or newly empty ever
+reaches the deploy step — see docs/deploy-vps.md.
 
 Output: posturi.sqlite with tables:
   job_postings   — main posting rows + extracted inferred fields
@@ -13,14 +19,17 @@ Output: posturi.sqlite with tables:
   judete         — county names
   calendar_events — competition timeline
   job_postings_fts — FTS5 virtual table (rowid = job_posting id)
+  build_meta      — one row: when this file was built, from which commit and host
 """
 
 import argparse
 import json
 import os
+import socket
 import sqlite3
+import subprocess
 import sys
-from datetime import date
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import psycopg
@@ -42,9 +51,15 @@ def pg_connect():
 
 def create_schema(con: sqlite3.Connection):
     con.executescript("""
-PRAGMA journal_mode=WAL;
+-- DELETE, not WAL. The deployed copy is read-only and lives on shared hosting,
+-- where two things bite: PHP opening a WAL database has to create -shm/-wal beside
+-- it and the document root may not be writable; and after rsync swaps the file in,
+-- a -wal left over from the previous copy describes a database that is no longer
+-- there, which SQLite reports as "database disk image is malformed".
+PRAGMA journal_mode=DELETE;
 PRAGMA foreign_keys=ON;
 
+DROP TABLE IF EXISTS build_meta;
 DROP TABLE IF EXISTS calendar_events;
 DROP TABLE IF EXISTS job_postings_fts;
 DROP TABLE IF EXISTS job_postings;
@@ -143,6 +158,20 @@ CREATE TABLE calendar_events (
 );
 CREATE INDEX idx_ce_posting ON calendar_events(posting_id);
 CREATE INDEX idx_ce_data    ON calendar_events(data);
+
+-- One row, written last. Lets the deploy verify on the remote that the file that
+-- landed is the file this run built, and gives the site a real "generated at"
+-- distinct from MAX(last_seen_at), which is when the source was last scraped.
+CREATE TABLE build_meta (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    built_at        TEXT NOT NULL,
+    git_sha         TEXT NOT NULL DEFAULT '',
+    source_host     TEXT NOT NULL DEFAULT '',
+    active_only     INTEGER NOT NULL DEFAULT 0,
+    job_postings    INTEGER NOT NULL DEFAULT 0,
+    employers       INTEGER NOT NULL DEFAULT 0,
+    calendar_events INTEGER NOT NULL DEFAULT 0
+);
 
 CREATE VIRTUAL TABLE job_postings_fts USING fts5(
     title,
@@ -307,6 +336,41 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     """)
     print("done")
 
+    write_build_meta(con, active_only=active_only)
+
+
+def git_sha() -> str:
+    """Short HEAD sha of the checkout that produced this file, or "" outside git."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
+def write_build_meta(con: sqlite3.Connection, *, active_only: bool):
+    counts = {
+        t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        for t in ("job_postings", "employers", "calendar_events")
+    }
+    con.execute(
+        "INSERT INTO build_meta(id, built_at, git_sha, source_host, active_only, "
+        "job_postings, employers, calendar_events) VALUES (1,?,?,?,?,?,?,?)",
+        (
+            datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            git_sha(),
+            socket.gethostname(),
+            int(active_only),
+            counts["job_postings"],
+            counts["employers"],
+            counts["calendar_events"],
+        ),
+    )
+
 
 def _v3_columns(schema_json_text) -> dict:
     """Flatten prompt-v3 `schema_json` into queryable SQLite columns.
@@ -380,41 +444,155 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
     """, batch)
 
 
+def previous_build(path: str) -> dict | None:
+    """Read job_postings count + active_only out of an existing export.
+
+    Returns None when the file is absent, unreadable, or predates build_meta —
+    every one of those means "no baseline", not "a failure".
+    """
+    if not os.path.exists(path):
+        return None
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.Error:
+        return None
+    try:
+        rows = con.execute("SELECT COUNT(*) FROM job_postings").fetchone()[0]
+        try:
+            active_only = con.execute(
+                "SELECT active_only FROM build_meta WHERE id = 1"
+            ).fetchone()[0]
+        except sqlite3.Error:
+            active_only = None          # pre-build_meta export
+        return {"job_postings": rows, "active_only": active_only}
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
+
+
+def verify(path: str, *, min_rows: int, previous: dict | None, active_only: bool) -> int:
+    """Fail loudly rather than promote a broken or suspiciously empty export.
+
+    The live site once served three active postings for five weeks because a bad
+    export was deployed and nobody read the output — see docs/backlog.md. These are
+    the checks that would have stopped it at the door.
+
+    Returns the job_postings count.
+    """
+    try:
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    except sqlite3.Error as exc:
+        raise SystemExit(f"ERROR: cannot open the export at {path}: {exc}") from exc
+    try:
+        try:
+            integrity = con.execute("PRAGMA integrity_check").fetchone()[0]
+            rows = con.execute("SELECT COUNT(*) FROM job_postings").fetchone()[0]
+            fts = con.execute("SELECT COUNT(*) FROM job_postings_fts").fetchone()[0]
+        except sqlite3.Error as exc:
+            # A truncated or scribbled-on file. Report it as a refusal to promote,
+            # not as a traceback, so the caller's cleanup runs and cron logs a reason.
+            raise SystemExit(f"ERROR: the export at {path} is unreadable: {exc}") from exc
+
+        if integrity != "ok":
+            raise SystemExit(f"ERROR: integrity_check on {path} returned {integrity!r}")
+
+        if rows < min_rows:
+            raise SystemExit(
+                f"ERROR: export has {rows} job_postings, below the --min-rows floor "
+                f"of {min_rows}. Not promoting. Re-run with --force to override."
+            )
+        if fts != rows:
+            print(
+                f"  WARNING: FTS index has {fts} rows against {rows} postings — "
+                f"search will be incomplete.",
+                file=sys.stderr,
+            )
+
+        # Only compare against a baseline built the same way; an --active-only run
+        # is legitimately a fifth the size of a full one.
+        if previous and previous["active_only"] in (None, int(active_only)):
+            before = previous["job_postings"]
+            if before and rows < before * 0.5:
+                raise SystemExit(
+                    f"ERROR: export has {rows} job_postings, down from {before} in the "
+                    f"file it would replace. That is a collapse, not a day's churn — "
+                    f"check the scrape and the import, then --force if it is real."
+                )
+        return rows
+    finally:
+        con.close()
+
+
 def main():
     ap = argparse.ArgumentParser(description="Export PostgreSQL → posturi.sqlite")
     ap.add_argument("--out", default="webapp-php/posturi.sqlite", help="Output SQLite file path")
     ap.add_argument("--active-only", action="store_true",
                     help="Only export postings with expires_at >= today")
+    ap.add_argument("--min-rows", type=int, default=100, metavar="N",
+                    help="Refuse to promote an export with fewer than N job_postings "
+                         "(default: 100). A run that also has a previous export to "
+                         "compare against additionally refuses a >50%% drop.")
+    ap.add_argument("--force", action="store_true",
+                    help="Promote even if the row-count floors would refuse. "
+                         "Integrity check still applies.")
     args = ap.parse_args()
 
     out_path = args.out
-    print(f"Connecting to PostgreSQL...")
+    # Build beside the target, never onto it: create_schema() DROPs every table, so
+    # a crash used to leave the deploy source gutted, ready to ship an empty site.
+    tmp_path = out_path + ".tmp"
+    previous = previous_build(out_path)
+
+    print("Connecting to PostgreSQL...")
     try:
         pg = pg_connect()
     except Exception as e:
         print(f"ERROR: Cannot connect to PostgreSQL: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Writing to {out_path}...")
-    con = sqlite3.connect(out_path)
+    for stale in (tmp_path, tmp_path + "-wal", tmp_path + "-shm"):
+        if os.path.exists(stale):
+            os.remove(stale)
+
+    print(f"Building {tmp_path}...")
+    con = sqlite3.connect(tmp_path)
     try:
         create_schema(con)
         with con:
             export(pg, con, active_only=args.active_only)
         con.execute("PRAGMA optimize;")
         con.commit()
-        print(f"\nDone. SQLite file: {out_path}")
-
-        # Verify
-        total = con.execute("SELECT COUNT(*) FROM job_postings").fetchone()[0]
-        fts_total = con.execute("SELECT COUNT(*) FROM job_postings_fts").fetchone()[0]
-        print(f"  job_postings: {total}")
-        print(f"  job_postings_fts: {fts_total}")
+        con.execute("VACUUM;")          # compacts the FTS index; smaller rsync delta
+        con.commit()
         ver = con.execute("SELECT sqlite_version()").fetchone()[0]
-        print(f"  SQLite version: {ver}")
     finally:
         con.close()
         pg.close()
+
+    try:
+        rows = verify(
+            tmp_path,
+            min_rows=0 if args.force else args.min_rows,
+            previous=None if args.force else previous,
+            active_only=args.active_only,
+        )
+    except SystemExit:
+        os.remove(tmp_path)     # a rejected build is 50 MB of nothing
+        raise
+
+    os.replace(tmp_path, out_path)
+    # A -wal/-shm pair from a WAL-era build describes the file we just replaced.
+    for stale in (out_path + "-wal", out_path + "-shm"):
+        if os.path.exists(stale):
+            os.remove(stale)
+
+    size_mb = os.path.getsize(out_path) / (1024 * 1024)
+    print(f"\nDone. SQLite file: {out_path}  ({size_mb:.1f} MB)")
+    print(f"  job_postings: {rows}")
+    if previous:
+        print(f"  previous:     {previous['job_postings']}")
+    print(f"  SQLite version: {ver}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,19 @@
+# /etc/systemd/system/posturi-pipeline.timer — see the .service beside it.
+[Unit]
+Description=Run the posturi.gov.ro pipeline twice a day
+
+[Timer]
+# Local time, so the VPS must be on Europe/Bucharest — the --active-only export
+# filters on expires_at >= CURRENT_DATE, and that boundary has to be the Romanian
+# one. `timedatectl set-timezone Europe/Bucharest`.
+OnCalendar=*-*-* 11:45:00
+OnCalendar=*-*-* 18:33:00
+
+# Catch up a slot missed while the box was down, rather than waiting for the next
+# one -- the export is what drops expired postings off the site.
+Persistent=true
+AccuracySec=1min
+Unit=posturi-pipeline.service
+
+[Install]
+WantedBy=timers.target

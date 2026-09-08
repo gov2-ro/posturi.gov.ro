@@ -1,0 +1,44 @@
+# /etc/systemd/system/posturi-pipeline.service
+#
+#   sudo cp ops/systemd/posturi-pipeline.* /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now posturi-pipeline.timer
+#
+# Run it once by hand before enabling the timer:
+#   sudo systemctl start posturi-pipeline.service && journalctl -fu posturi-pipeline
+[Unit]
+Description=posturi.gov.ro pipeline — scrape, enrich, export, deploy
+Documentation=file:/srv/posturi/docs/deploy-vps.md
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=posturi
+Group=posturi
+WorkingDirectory=/srv/posturi
+ExecStart=/srv/posturi/ops/run-pipeline.sh
+
+# API keys are NOT loaded here. systemd's EnvironmentFile keeps everything after the
+# "=" including a trailing "# comment", which would silently corrupt a key. The
+# Python entry points read .env through python-dotenv, and deploy-php.sh through
+# ops/env.sh; both parse it properly.
+Environment=TZ=Europe/Bucharest
+Environment=PYTHONUNBUFFERED=1
+
+# The scrape sleeps between pages and the LLM step waits on the network, so the run
+# is long and mostly idle. Let anything else on the box go first.
+Nice=10
+IOSchedulingClass=idle
+
+# A run can legitimately take hours on a first backfill; 6h is the ceiling, past
+# which something is wedged. flock inside the script stops slots from overlapping.
+TimeoutStartSec=6h
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+# No ProtectHome: the deploy step's ssh reads ~/.ssh and may need to write known_hosts.
+
+[Install]
+WantedBy=multi-user.target

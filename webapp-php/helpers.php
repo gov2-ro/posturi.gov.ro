@@ -687,6 +687,40 @@ function param_field(string $name): string {
     return in_array($name, MULTI_PARAMS, true) ? $name . '[]' : $name;
 }
 
+/**
+ * How several checked values inside one facet group combine, and which groups
+ * let the visitor change it.
+ *
+ * The default everywhere is 'any' (OR): a facet reads as "which of these do you
+ * accept?", not as a stack of requirements. That is the e-commerce convention,
+ * and for most of these columns it is the only thing that can work — a posting
+ * carries exactly one `inf_profession_family`, so "social AND administrație"
+ * is empty by construction, not merely rare. The same held for four of the
+ * JSON-array columns, which used to AND their values while averaging barely
+ * more than one value per posting (v3_languages: 1.07, v3_isced_fields: 1.32).
+ *
+ * `skill` is the real exception: postings carry 9.6 skills on average, so
+ * "știe Excel ȘI contabilitate" is a question worth asking. It keeps the AND
+ * default and, in exchange, shows a visible any/all switch and residual counts
+ * — see v3_facet() in list.php.
+ *
+ * Keys are filter params; values are the default mode for that group.
+ */
+const FACET_MODE_PARAMS = ['skill' => 'all'];
+
+/** Combine mode in force for a facet group: 'any' (OR) or 'all' (AND). */
+function facet_mode(string $param, ?array $p = null): string {
+    $p ??= $_GET;
+    if (!isset(FACET_MODE_PARAMS[$param])) return 'any';
+    $mode = (string)($p[$param . '_mode'] ?? FACET_MODE_PARAMS[$param]);
+    return $mode === 'all' ? 'all' : 'any';
+}
+
+/** Form field name carrying a group's combine mode. */
+function facet_mode_field(string $param): string {
+    return $param . '_mode';
+}
+
 function filter_value_label(string $key, string $value): string {
     return match ($key) {
         'judet'                            => judet_names()[$value] ?? $value,
@@ -829,7 +863,6 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     $work_types = (array)($p['work_type']   ?? []);
     $exp_levels = (array)($p['exp_level']   ?? []);
     $studies    = (array)($p['studies_level'] ?? []);
-    $anomalies  = (array)($p['anomaly']     ?? []);
     $remote     = $p['remote']       ?? '';
     $computer   = $p['computer']     ?? '';
     $sal_bucket = $p['salary_bucket'] ?? '';
@@ -918,13 +951,6 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
             $where[] = "(j.inf_requires_computer IS NULL OR j.inf_requires_computer != 1)";
         }
     }
-    if ($anomalies && $excl !== 'anomaly_flags') {
-        foreach ($anomalies as $flag) {
-            $flag = preg_replace('/[^a-z_]/', '', $flag); // sanitize
-            $where[] = "j.inf_anomaly_flags LIKE ?";
-            $binds[] = '%"' . $flag . '"%';
-        }
-    }
     if ($exp_levels && $excl !== 'exp_levels') {
         $exp_clauses = [];
         foreach ($exp_levels as $bk) {
@@ -950,9 +976,19 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         $where[] = "j.inf_studies_required IN ($ph)";
         array_push($binds, ...$studies);
     }
-    // ---- prompt-v3 structured filters ----
-    // Each JSON-array column is probed with LIKE '%"value"%', the same shape
-    // inf_anomaly_flags uses. All no-ops until a v3 extraction has run.
+    // ---- JSON-array filters ----
+    // Each column is probed with LIKE '%"value"%'. The v3_* ones are no-ops
+    // until a v3 extraction has run; `anomaly` is populated by the inference
+    // pass and joined here since it is the same shape — which also gets it the
+    // ESCAPE it always needed (every ANOMALY_LABELS key contains an underscore,
+    // and `_` is a LIKE wildcard) and drops a hand-rolled sanitiser in favour
+    // of the bound parameter that was already doing the real work.
+    //
+    // The probes for one group are joined by that group's combine mode, so a
+    // group lands as a single parenthesised clause and still ANDs against every
+    // other filter. Before 2026-09-09 each value emitted its own top-level
+    // clause, i.e. every one of these groups was AND-within — see
+    // FACET_MODE_PARAMS for why that was wrong for five of the six.
     foreach ([
         'isced'      => 'v3_isced_fields',
         'skill'      => 'v3_skills',
@@ -960,16 +996,20 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         'credential' => 'v3_credentials',
         'domain'     => 'v3_policy_domains',
         'stage'      => 'v3_exam_stages',
+        'anomaly'    => 'inf_anomaly_flags',
     ] as $param => $column) {
-        $values = (array)($p[$param] ?? []);
+        $values = array_filter((array)($p[$param] ?? []), fn ($v) => (string)$v !== '');
         if (!$values || $excl === $param) continue;
+        $probes = [];
         foreach ($values as $value) {
             // ESCAPE is required: these vocabularies are full of underscores
             // ("09_sanatate_asistenta_sociala"), and `_` is a LIKE wildcard.
             // Escaping without declaring the escape character matched nothing.
-            $where[] = "j.$column LIKE ? ESCAPE '\\'";
-            $binds[] = '%"' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value) . '"%';
+            $probes[] = "j.$column LIKE ? ESCAPE '\\'";
+            $binds[]  = '%"' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value) . '"%';
         }
+        $glue = facet_mode($param, $p) === 'all' ? ' AND ' : ' OR ';
+        $where[] = '(' . implode($glue, $probes) . ')';
     }
     // Exact level, like every other facet in the sidebar. This used to be
     // `v3_eqf_level <= ?` ("a candidate above the minimum still qualifies"),

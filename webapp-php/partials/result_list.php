@@ -34,10 +34,21 @@ $chips = $active_chips ?? [];
   <?php endif; ?>
 </div>
 
-<!-- Active filter chips — one per value, each removing only itself -->
+<!-- Active filter chips — one per value, each removing only itself.
+     The connectives between them are the only place the filter's logic is
+     stated: values inside one group are alternatives ("sau"), groups narrow
+     each other ("și"). active_filter_chips() walks FILTER_CHIP_GROUPS in order,
+     so chips sharing a param are already adjacent and a look-back is enough. -->
 <?php if ($chips): ?>
 <div class="mb-3 flex flex-wrap items-center gap-1.5">
-  <?php foreach ($chips as $chip): ?>
+  <?php $prev_param = null; foreach ($chips as $chip): ?>
+    <?php if ($prev_param !== null):
+        $same = $prev_param === $chip['param'];
+        // Within a group the word tracks that group's actual mode, so the
+        // Competențe any/all switch is legible from the chips too.
+        $word = ($same && facet_mode($chip['param']) !== 'all') ? 'sau' : 'și'; ?>
+      <span class="px-0.5 text-[11px] uppercase tracking-wide text-ink-muted <?= $same ? '' : 'font-semibold' ?>"><?= $word ?></span>
+    <?php endif; $prev_param = $chip['param']; ?>
     <a href="<?= e($chip['href']) ?>"
        data-chip-param="<?= e($chip['param']) ?>"
        data-chip-value="<?= e($chip['value']) ?>"

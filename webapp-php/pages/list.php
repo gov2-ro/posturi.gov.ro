@@ -238,9 +238,18 @@ $studies_options   = get_facet('inf_studies_required', 'studies_levels');
  * Counts each distinct value with a LIKE probe. Returns [] when no posting
  * carries v3 data yet, and facet_group() then omits the whole group — so these
  * filters stay invisible until `llm-schema.py --prompt-version v3` has run.
+ *
+ * The count scope depends on how the group combines its values. An OR group
+ * drops its own selection, so each number reads "check this too and you get N
+ * more" — the promise a facet count makes everywhere else in this sidebar. An
+ * AND group cannot borrow that: there checking another box *narrows*, so the
+ * honest number is the residual — rows still standing that also carry this
+ * value — which means counting with the group's own selection applied. Values
+ * whose residual is zero simply stop appearing, and facet_group() pins any
+ * that are checked back to the top.
  */
 function v3_facet(string $column, string $excl_key, callable $label, int $limit = 30): array {
-    $s = facet_scope($excl_key);
+    $s = facet_scope(facet_mode($excl_key) === 'all' ? '' : $excl_key);
     $where = $s['where'] ? 'WHERE ' . implode(' AND ', $s['where']) . " AND j.$column != '[]'"
                         : "WHERE j.$column != '[]'";
     $st = db()->prepare("SELECT j.$column AS vals FROM job_postings j {$s['join']} $where");
@@ -260,6 +269,13 @@ function v3_facet(string $column, string $excl_key, callable $label, int $limit 
     }
     return $out;
 }
+
+// Anomalii is the same JSON-array shape, and until 2026-09-09 it was the one
+// group rendered with no counts at all — every flag looked clickable, including
+// the ones that would empty the list. Counted like the rest, the values that
+// would zero out simply stop being offered.
+$anomaly_options = v3_facet('inf_anomaly_flags', 'anomaly',
+                            fn ($v) => ANOMALY_LABELS[$v] ?? $v);
 
 $isced_options  = v3_facet('v3_isced_fields',   'isced',      'isced_label');
 $skill_options  = v3_facet('v3_skills',         'skill',      fn($v) => $v, 40);

@@ -2,6 +2,81 @@
 
 ## 2026
 
+### 2026-09-09 — Facet combine semantics: OR within a group, AND across groups
+
+**The question.** Should picking *Domeniu: social* and *administrație* show the
+union or the intersection? For that facet there is no choice:
+`inf_profession_family` holds exactly one value per posting (sănătate 511,
+tehnic 499, administrație 382, social 84…), so an intersection is empty by
+construction, not merely rare. The convention the scalar facets already followed
+— OR inside a group, AND between groups, i.e. "which of these do you accept?"
+crossed with "and also this" — is the only one that can work there, and it is
+what shop sidebars do.
+
+**What was actually inconsistent.** Six JSON-array facets did the opposite.
+`build_filters()` emitted one top-level `LIKE` clause *per checked value*, so
+every one of them was AND-within, with the same checkbox affordance as the OR
+groups and no cue that they behaved differently. Measured average values per
+posting: `v3_skills` 9.6, `v3_exam_stages` 3.1, `v3_credentials` 2.0,
+`v3_policy_domains` 2.1, `v3_isced_fields` 1.32, `v3_languages` 1.07,
+`inf_anomaly_flags` 1.02. For the bottom four, AND-within was a control that
+could only return zero — verified against the live export: two languages ANDed
+gave 0 rows (OR: 42), two anomaly flags gave 0 (OR: 83).
+
+**The count machinery only ever supported OR.** `facet_scope($own_key)`
+deliberately drops a group's own selection so each number reads *"check this too
+and you get N more"*. Under AND that number promises a widening and delivers a
+narrowing. Corroborating evidence that someone had already hit this: Anomalii
+was the one group rendered with `'cnt' => ''` — the counts didn't work under AND,
+so they had been blanked, leaving six flags that all looked clickable including
+the ones that emptied the list.
+
+**Changes** (`helpers.php`, `pages/list.php`, `partials/facets.php`,
+`partials/result_list.php`):
+
+- Added `FACET_MODE_PARAMS` + `facet_mode()`. Default is `any` (OR) everywhere;
+  `skill` is the sole entry, keeping `all` (AND) — at 9.6 skills per posting
+  "Excel ȘI contabilitate" is a real question and OR there narrows almost
+  nothing. The JSON-array loop now joins a group's probes with that mode and
+  emits one parenthesised clause, so a group still ANDs against every other
+  filter. A `?lang_mode=all` in the URL is ignored: only groups listed in
+  `FACET_MODE_PARAMS` can be switched.
+- `skill` gets **residual counts** — `v3_facet()` includes the group's own
+  selection in the scope when the mode is AND, so each number is "rows still
+  standing that also carry this value" and clicking one lands exactly there.
+  Verified: with *comunicare* picked (182 results) no option claims more than
+  182, and *lucru în echipă* reads 116, which is what the click returns.
+- The group carries a visible `oricare / toate` switch, shown from the first
+  pick onward (with 0 or 1 value checked the two modes agree, so before that it
+  would be a control with no effect).
+- **Anomalii folded into the same loop.** It gets real counts, so — like every
+  other counted facet — values that would zero out simply stop being offered.
+  It also picks up the `ESCAPE` clause it always needed: every `ANOMALY_LABELS`
+  key contains an underscore and `_` is a LIKE wildcard, so `short_deadline` was
+  matching `shortXdeadline` too. Its hand-rolled `preg_replace` sanitiser went
+  with it — the bound parameter was doing the real work.
+- The chip row now states the logic instead of leaving it to be inferred:
+  *Social* `sau` *Administrație* `și` *Cluj*, with the connective inside a group
+  tracking that group's actual mode (skill chips read `și` in AND mode, `sau`
+  after flipping the switch).
+- Zero-count options render disabled and dimmed, and orphan-pinned selections
+  now carry a blank count rather than `0` — an orphan's real count is unknown
+  (it fell outside the display cap), and a rendered "0" read as "this matches
+  nothing".
+
+**On the zero-count guard.** Worth recording that it is defensive, not a fix for
+something visible: the facet queries are `GROUP BY`s over the current scope and
+`if ($cnt)` filters, so a counted option is never 0 — under strict
+OR-within/AND-across with per-facet exclusion, dead ends *cannot* occur, and a
+sweep of the rendered page found no disabled boxes. The real dead end was
+Anomalii having no counts at all, which is what the fold-in fixed. The guard
+stays so a future facet that can produce a zero is handled.
+
+**Verified** against the 1,848-row active export: all six groups match a direct
+SQLite OR/AND cross-check; cross-facet still intersects (social 84 ∩ cluj 140 =
+8); ten filter combinations render with no PHP notice. `npm run css` rerun (the
+stylesheet is a committed build artifact) and `check-skins.php` passes.
+
 ### 2026-09-09 — Live facet counts: the sidebar now updates with the results
 
 **What was actually wrong.** The counts were already dynamic server-side —

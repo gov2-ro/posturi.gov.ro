@@ -50,7 +50,7 @@ require __DIR__ . '/../inc/header.php';
   </div>
 
   <div class="border-b border-line pb-5 mb-6">
-    <h1 class="font-display text-2xl sm:text-3xl font-semibold italic text-ink leading-tight mb-2">
+    <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink leading-tight mb-2">
       <?= e($employer['name']) ?>
     </h1>
     <?php if ($top_category): ?>

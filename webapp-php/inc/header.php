@@ -52,11 +52,13 @@ $_build_tooltip = build_tooltip();
   <link rel="alternate" type="application/json" title="posturi.gov2.ro — JSON" href="/posturi.json">
 
   <?php /* Preloads follow the default skin, which is what a first visit gets. A
-     returning visitor on govuk or posturi preloads two faces it will not use —
-     the alternative is a cookie round-trip, which would break shared-host page
-     caching for the sake of ~90KB on one request. */ ?>
-  <link rel="preload" href="/static/fonts/dm-sans-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/static/fonts/fraunces-italic-latin.woff2" as="font" type="font/woff2" crossorigin>
+     returning visitor on hartie or govuk preloads a face it will not use — the
+     alternative is a cookie round-trip, which would break shared-host page
+     caching for the sake of ~45KB on one request.
+
+     Manrope is one variable face doing display, sans and mono in the posturi
+     skin, so this is a single preload where the parchment default needed two. */ ?>
+  <link rel="preload" href="/static/fonts/manrope-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/app.css?v=<?= @filemtime(__DIR__ . '/../static/app.css') ?: '1' ?>">
   <?= pg_skin_links() ?>
   <?= pg_skin_boot() ?>
@@ -70,12 +72,15 @@ $_build_tooltip = build_tooltip();
   Sari la conținut
 </a>
 
-<div id="wip-banner" class="bg-note border-b border-note-line text-note-ink text-sm px-4 py-2 flex items-center justify-between gap-4">
-  <span class="font-mono text-xs uppercase tracking-wide font-semibold shrink-0">WIP / MVP</span>
-  <span class="flex-1 text-xs text-center">Acesta <b>NU ESTE UN PROIECT OFICIAL</b> al Guvernului României. <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline font-medium hover:no-underline" target="_blank" rel="noopener">Acceptăm sugestii</a> (gForm)</span>
-  <button type="button" onclick="document.getElementById('wip-banner').remove()" class="shrink-0 -m-1 p-1 text-lg leading-none text-note-ink hover:opacity-70" aria-label="Închide anunțul">&times;</button>
-</div>
+<?php /* The disclaimer used to be a dismissible amber strip above the masthead.
+   It is the first thing the site has to say and the easiest thing to lose — a
+   band above the header reads as an ad and was one click from being gone for
+   good — so it now lives inside <header>, on the same navy, as a second row.
+   No close button: a permanent legal disclaimer that can be dismissed is a
+   disclaimer you cannot rely on having been seen.
 
+   The skin's gold rule is `inset 0 -3px 0` on <header>, so it lands under this
+   row rather than under the wordmark, and the two rows read as one block. */ ?>
 <header class="bg-gov-bar text-on-bar border-b border-gov-bar">
   <div class="max-w-screen-xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 h-14">
     <a href="/" class="flex shrink-0 items-center gap-3 py-2 group">
@@ -93,11 +98,22 @@ $_build_tooltip = build_tooltip();
       </time>
       <?php endif; ?>
     </a>
+    <?php /* Statistici and Angajatori moved to /despre/ — they are things you
+       read once, not places you navigate between, and the masthead is worth
+       more as one unambiguous way back to the listing. */ ?>
     <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
-      <a href="/statistici/" class="py-2 hover:text-on-bar transition-colors">Statistici</a>
-      <a href="/angajatori/" class="hidden py-2 sm:inline hover:text-on-bar transition-colors">Angajatori</a>
       <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>
     </nav>
+  </div>
+
+  <div class="border-t border-on-bar/15">
+    <p class="max-w-screen-xl mx-auto px-4 sm:px-6 py-1.5 text-center text-xs leading-snug text-on-bar-muted">
+      <span class="font-mono uppercase tracking-wide text-on-bar-accent">WIP</span>
+      <span class="mx-1.5 text-on-bar/30" aria-hidden="true">·</span>
+      Acesta <b class="font-semibold text-on-bar">nu este un proiect oficial</b> al Guvernului României.
+      <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline decoration-on-bar/40 underline-offset-2 hover:text-on-bar hover:decoration-current" target="_blank" rel="noopener">Acceptăm sugestii</a>
+      (gForm)
+    </p>
   </div>
 </header>
 

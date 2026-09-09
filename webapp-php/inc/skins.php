@@ -35,7 +35,16 @@ declare(strict_types=1);
 
 define('SKINS_DIR',    __DIR__ . '/../static/skins');
 define('SKINS_URL',    '/static/skins');
-define('DEFAULT_SKIN', 'hartie');
+
+/**
+ * What a first visit gets. Not the same thing as BASE_SKIN: "hartie" is still
+ * the null skin that app.css's own :root defines and that every other skin
+ * layers over — it just is not the one shown by default any more.
+ *
+ * Whoever changes this should also change the font preloads in header.php,
+ * which follow the default rather than the base.
+ */
+define('DEFAULT_SKIN', 'posturi');
 define('BASE_SKIN',    'hartie');
 
 /**

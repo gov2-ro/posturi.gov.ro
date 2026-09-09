@@ -3,7 +3,7 @@ $page_title = 'Despre';
 require __DIR__ . '/../inc/header.php';
 ?>
 <div class="max-w-screen-md mx-auto px-4 sm:px-6 py-10">
-  <h1 class="font-display text-3xl italic font-semibold text-ink mb-6">Despre</h1>
+  <h1 class="font-display text-[2rem] italic font-semibold text-ink mb-6">Despre</h1>
 
   <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
 <mark>⚠️ WIP / MVP - versiune in lucru</mark>
@@ -23,6 +23,34 @@ require __DIR__ . '/../inc/header.php';
       <li>Clasificare automată a anunțurilor (domeniu profesional, nivel de experiență, studii)</li>
       <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a></li>
     </ul>
+
+  </div>
+
+  <?php /* Statistici and Angajatori used to be masthead links. They are pages
+     you read once rather than places you navigate between, so they live here
+     now — as cards, since a bare list item is easy to miss on the one page that
+     has to carry them.
+
+     Outside the .prose-body wrapper on purpose: `.prose-body a` is (0,1,1) and
+     underlines every link it contains, which a utility class cannot override.
+     Hence also the hand-set heading size, matching `.prose-body h2`. */ ?>
+  <section class="my-6">
+    <h2 class="mb-3 font-display text-[1.15rem] font-semibold italic text-ink">Vezi și</h2>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <?php foreach ([
+        ['/statistici/', 'Statistici', 'Distribuția anunțurilor pe județe, domenii, grade și termene.'],
+        ['/angajatori/', 'Angajatori', 'Instituțiile care recrutează, cu numărul de posturi al fiecăreia.'],
+      ] as [$href, $label, $blurb]): ?>
+        <a href="<?= e($href) ?>"
+           class="block rounded border border-line bg-surface p-4 no-underline transition-colors hover:border-gov hover:bg-gov-light">
+          <span class="block font-display text-lg font-semibold italic text-ink"><?= e($label) ?></span>
+          <span class="mt-1 block text-xs text-ink-muted"><?= e($blurb) ?></span>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  </section>
+
+  <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
     <h2>Versiunea acestor date</h2>
     <p>
       Site-ul nu interoghează portalul oficial în timp real: servește o bază de date

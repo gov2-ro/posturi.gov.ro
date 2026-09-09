@@ -65,7 +65,7 @@ require __DIR__ . '/../inc/header.php';
 ?>
 <div class="max-w-screen-lg mx-auto px-4 sm:px-6 py-10">
 
-  <h1 class="font-display text-3xl italic font-semibold text-ink mb-1">Angajatori</h1>
+  <h1 class="font-display text-[2rem] italic font-semibold text-ink mb-1">Angajatori</h1>
   <p class="text-ink-muted text-sm mb-2 font-mono">Distribuție și concentrare după angajator</p>
   <p class="text-sm mb-8"><a href="/statistici/" class="text-gov hover:underline">← Înapoi la statistici generale</a></p>
 

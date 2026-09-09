@@ -16,9 +16,13 @@
       the browser only fetches the files while a rule actually using Manrope is
       live. latin + latin-ext are both needed — ș and ț live in latin-ext.
 
-   2. ROUND AND LIFTED. This is the opposite end from govuk.css: 10–12px cards,
-      999px pills, and a real --shadow-card. Cards sit on an off-white #f5f5f3
-      ground, so --c-page and --c-surface genuinely differ here.
+   2. FLAT, BARELY ROUNDED. This is the site's default skin (see DEFAULT_SKIN
+      in inc/skins.php), and it deliberately does not copy the official site's
+      geometry: corners are 3–5px rather than 10–12, and there is no card
+      shadow. Cards still sit on an off-white #f5f5f3 ground, so --c-page and
+      --c-surface genuinely differ here — that 1px line is what separates them
+      now. Pills keep their 999px, being a different affordance rather than a
+      rounder corner.
 ═══════════════════════════════════════════════════════════════════════════════ */
 
 @font-face {
@@ -82,10 +86,16 @@
   --font-sans:    Manrope, 'Helvetica Neue', Arial, sans-serif;
   --font-mono:    Manrope, 'Helvetica Neue', Arial, sans-serif;
 
-  /* Round and lifted. */
-  --radius:      6px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
+  /* Barely rounded, and flat. This started as the official site's 10–12px
+     cards with a navy-tinted lift; as the default skin it reads calmer with
+     the corners nearly square and no shadow at all, so the only thing
+     separating a card from the ground is its 1px line. Pills stay pills —
+     `--radius-pill` is a separate affordance (chips, tags, progress caps), not
+     a bigger version of the same corner, and flattening it would turn the
+     filter chips into buttons. govuk.css is the skin that squares those. */
+  --radius:      3px;
+  --radius-md:   4px;
+  --radius-lg:   5px;
   --radius-pill: 999px;
 }
 
@@ -106,15 +116,11 @@
   letter-spacing: -0.01em;
 }
 
-/* Cards get the lift. The templates draw them as `border border-line bg-surface
-   rounded-lg`, so this is where --shadow-card actually lands. */
-[data-skin="posturi"] .rounded-lg.border {
-  box-shadow: 0 6px 18px rgba(15, 39, 66, 0.09);
-}
-
-/* The WIP strip in the site's own register: gold, not amber. */
-[data-skin="posturi"] #wip-banner {
-  background-color: #fdf6e6;
-  border-bottom-color: #d4af6a;
-  color: #7c540d;
-}
+/* No card lift. There used to be a `.rounded-lg.border { box-shadow }` rule
+   here mirroring the official site's `0 6px 18px rgba(15,39,66,.09)`. It had a
+   side effect worth remembering: it keyed off the *classes*, so it also drew a
+   soft box around anything that merely carried them — the detail page's
+   `aside` reads `rounded-lg border … sm:border-0`, i.e. a card on phones and
+   bare columns on desktop, and the shadow gave it a phantom outline at every
+   width. Styling by utility class rather than by token is why; if a lift ever
+   comes back, give it its own class in the template. */

@@ -75,7 +75,7 @@ $chips = $active_chips ?? [];
     <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
-          <h2 class="font-display text-base font-semibold italic leading-snug text-ink">
+          <h2 class="font-display text-lg font-semibold italic leading-snug text-ink">
             <a href="<?= e(job_url($p)) ?>" class="inline-block py-0.5 transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">
               <?= e($p['title']) ?>
             </a>

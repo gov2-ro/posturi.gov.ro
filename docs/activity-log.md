@@ -2,6 +2,64 @@
 
 ## 2026
 
+### 2026-09-09 — posturi.gov.ro becomes the default skin, flattened
+
+**Default skin.** `DEFAULT_SKIN` is now `posturi` rather than `hartie`. The two
+are different things and both still exist: `BASE_SKIN` stays `hartie`, the null
+skin that app.css's own `:root` defines and that every other skin layers over —
+it just is not what a first visit sees any more. The font preloads in
+header.php follow the *default*, so they changed with it: one Manrope face
+(which does display, sans and mono in this skin) where the parchment default
+needed DM Sans plus Fraunces.
+
+**Flattened.** As a default it reads calmer than the official site it mimics:
+`--radius` 6→3, `--radius-md` 8→4, `--radius-lg` 12→5, and the card shadow is
+gone entirely. `--radius-pill` stays 999px — a pill is a different affordance
+(chips, tags, progress caps), not a rounder corner, and flattening it would
+turn the filter chips into buttons. govuk.css remains the skin that squares
+them.
+
+**The shadow was also drawing a phantom box.** The rule was
+`.rounded-lg.border { box-shadow: 0 6px 18px rgba(15,39,66,.09) }` — keyed off
+utility *classes*, so it hit anything carrying them regardless of what those
+classes currently computed to. The detail page's `aside` reads
+`rounded-lg border … sm:border-0`: a card on phones, a bare column on desktop.
+Its border-width was already `0px` at 1280 and the visible outline was purely
+this shadow. Worth remembering as the general hazard: a skin that styles by
+utility class rather than by token reaches elements it was never aimed at.
+`_template.css` now says so, and lost its `.rounded-lg.border` hook.
+
+**The detail sidebar lost its frame** for real, at every width — the
+`rounded-lg border border-line bg-surface/50 p-4 sm:border-0 sm:bg-transparent
+sm:p-0` is gone. Its three inner dividers were `sm:border-t`, i.e. desktop-only,
+with the card doing the separating on phones; they are now unconditional, so
+the sections stay legible without an outer rectangle.
+
+**The disclaimer moved into the masthead.** It was a dismissible amber strip
+*above* `<header>`; it is now a second row *inside* it, on the same fill. Two
+reasons: a band above the header reads as an ad, and a permanent legal
+disclaimer with a close button is one you cannot rely on having been seen — so
+the close button is gone with it. The skin's gold rule is `inset 0 -3px 0` on
+`header`, so it now lands under the disclaimer and the two rows read as one
+block. `#wip-banner` no longer exists; the `[data-skin] #wip-banner` overrides
+in posturi.css and govuk.css went with it.
+
+**Nav trimmed to Despre.** Statistici and Angajatori are pages you read once,
+not places you navigate between, so they are cards on `/despre/` now. They sit
+*outside* that page's `.prose-body` wrapper deliberately: `.prose-body a` is
+specificity (0,1,1) and underlines every link inside it, which `no-underline`
+(0,1,0) cannot override — the heading size is hand-set to match
+`.prose-body h2` for the same reason.
+
+**Titles up one notch.** Posting/page h1 `text-2xl sm:text-3xl` →
+`text-[1.7rem] sm:text-[2rem]`, section h1 `text-3xl` → `text-[2rem]`, detail
+section h2 `text-lg` → `text-xl`, list card h2 `text-base` → `text-lg`.
+
+**Verified:** 6 pages × 3 skins × 2 widths — all HTTP 200, no PHP notice, no JS
+error, no horizontal scroll, nav is exactly "Despre", disclaimer inside
+`<header>`; zero non-inset box-shadows left on the detail page; the facet suite
+from earlier today still passes. `npm run css` rerun, `check-skins.php` passes.
+
 ### 2026-09-09 — Browser-testing the sidebar: a collapsed facet would not stay collapsed
 
 Playwright run over the facet sidebar (33 assertions, Chromium at 1280 and at

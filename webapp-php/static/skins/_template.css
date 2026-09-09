@@ -102,14 +102,18 @@
 
 /* Anything beyond tokens goes here, still scoped. A few useful hooks:
 
-     header            the brand bar — fill comes from --c-gov-bar, so this is
-                       only for chrome (an underline, a rule)
-     #wip-banner       the alpha warning strip
+     header            the brand bar and, as a second row, the WIP disclaimer —
+                       fill comes from --c-gov-bar, so this is only for chrome
+                       (an underline, a rule)
      #results          the result list (gets .htmx-request while loading)
      .prose-body       the rendered posting text
      .skin-select      this picker, in the footer
-     .rounded-lg.border  a card — where posturi.css hangs its drop shadow
      footer            the footer strip
+
+   Style by token, not by utility class. posturi.css used to hang a card shadow
+   off `.rounded-lg.border` and it leaked onto every element that merely carried
+   those classes, including one that sets `sm:border-0`. If a skin needs to
+   reach a specific component, give that component its own class first.
 
    If a colour needs to differ per state, define it as a token above rather than
    hardcoding it here — a skin that hardcodes is a skin that has to be edited

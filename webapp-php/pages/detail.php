@@ -187,7 +187,7 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- Title block -->
   <div class="border-b border-line pb-5 mb-6">
-    <h1 class="font-display text-2xl sm:text-3xl font-semibold italic text-ink leading-tight mb-2">
+    <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink leading-tight mb-2">
       <?= e($p['title']) ?>
     </h1>
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
@@ -238,8 +238,13 @@ require __DIR__ . '/../inc/header.php';
        hidden outright, which removed the deadline and the contact details. -->
   <div class="flex flex-col sm:flex-row gap-6 sm:gap-8 items-start">
 
+    <?php /* No box. This used to be `rounded-lg border border-line bg-surface/50
+       p-4 sm:border-0 sm:bg-transparent sm:p-0` — a card on phones, a bare
+       column on desktop. The inner `sm:border-t` dividers already separate the
+       sections at every width, so the outer frame was drawing a second, larger
+       rectangle around them for no gain. */ ?>
     <aside aria-label="Detalii concurs"
-           class="w-full sm:w-64 sm:shrink-0 rounded-lg border border-line bg-surface/50 p-4 sm:border-0 sm:bg-transparent sm:p-0">
+           class="w-full sm:w-64 sm:shrink-0">
       <div class="grid grid-cols-2 gap-x-4 gap-y-4 text-sm sm:block sm:space-y-4">
 
         <?php if ($p['data_limita_depunere']): ?>
@@ -253,7 +258,7 @@ require __DIR__ . '/../inc/header.php';
         <?php endif; ?>
 
         <?php if ($p['contact_person'] || $p['contact_phone'] || $p['contact_email']): ?>
-        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-line">
+        <div class="col-span-2 pt-3 border-t border-line">
           <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-2">Contact</div>
           <?php if ($p['contact_person']): ?>
             <div class="text-ink mb-0.5"><?= e($p['contact_person']) ?></div>
@@ -314,7 +319,7 @@ require __DIR__ . '/../inc/header.php';
         $grd = $inferred['grade'] ?? null;
         if ($show_fam || $sen || $grd || $anomaly_flags_list):
         ?>
-        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-line">
+        <div class="col-span-2 pt-3 border-t border-line">
           <div class="mb-2">
             <abbr title="Dedus automat din titlul și textul anunțului — poate fi incomplet sau greșit."
                   class="cursor-help text-xs font-semibold uppercase tracking-widest text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">Inferat automat</abbr>
@@ -346,7 +351,7 @@ require __DIR__ . '/../inc/header.php';
 
         <?php $attachments = attachment_list($p); ?>
         <?php if ($attachments): ?>
-        <div class="col-span-2 sm:pt-3 sm:border-t sm:border-line">
+        <div class="col-span-2 pt-3 border-t border-line">
           <div class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">Atașamente</div>
           <ul class="space-y-1.5">
             <?php foreach ($attachments as $att): ?>
@@ -453,7 +458,7 @@ require __DIR__ . '/../inc/header.php';
       <?php $v3 = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : []; ?>
       <?php if (isset($v3['education']) || !empty($v3['skill_list']) || !empty($v3['credentials']) || !empty($v3['positions'])): ?>
       <section class="mb-6 rounded-lg border border-gov/20 bg-gov-light/40 p-4">
-        <h2 class="mb-3 flex items-baseline gap-2 font-display text-lg font-semibold italic text-ink">
+        <h2 class="mb-3 flex items-baseline gap-2 font-display text-xl font-semibold italic text-ink">
           Cerințe structurate
           <abbr title="Extrase automat și normalizate pe vocabularele europene EQF, ISCED-F, CEFR și ESCO — vezi metodologia."
                 class="cursor-help font-mono text-[10px] font-normal uppercase not-italic tracking-wider text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">v3</abbr>
@@ -584,7 +589,7 @@ require __DIR__ . '/../inc/header.php';
         ?>
         <?php foreach ($schema_sections as $section): ?>
         <section class="mb-6">
-          <h2 class="mb-3 flex items-baseline gap-2 border-b border-line pb-2 font-display text-lg font-semibold italic text-ink">
+          <h2 class="mb-3 flex items-baseline gap-2 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
             <?= e($section['label']) ?>
             <?php if (!in_array($section['key'], $ro_specific, true)): ?>
               <a href="https://schema.org/JobPosting" target="_blank" rel="noopener"
@@ -599,7 +604,7 @@ require __DIR__ . '/../inc/header.php';
         <?php endforeach; ?>
       <?php elseif ($body_html): ?>
       <section class="mb-6">
-        <h2 class="mb-3 border-b border-line pb-2 font-display text-lg font-semibold italic text-ink">
+        <h2 class="mb-3 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
           Detalii post
         </h2>
         <p class="mb-3 rounded border border-line bg-surface/50 px-3 py-2 text-xs text-ink-muted">
@@ -616,7 +621,7 @@ require __DIR__ . '/../inc/header.php';
       <!-- Calendar timeline -->
       <?php if ($events): ?>
       <section class="mb-8">
-        <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
+        <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Calendar concurs
         </h2>
         <div class="overflow-x-auto">

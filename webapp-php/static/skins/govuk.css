@@ -131,9 +131,7 @@
   letter-spacing: 0.02em;
 }
 
-/* The WIP strip becomes a GOV.UK warning: black text, no fill, a thick rule. */
-[data-skin="govuk"] #wip-banner {
-  background-color: #fff7bf;
-  border-bottom: 4px solid #594d00;
-  font-weight: 700;
-}
+/* The WIP disclaimer used to be a standalone `#wip-banner` strip above the
+   masthead, which this skin restyled as a GOV.UK warning. It is now a second
+   row inside <header>, drawn on --c-gov-bar like the first, so it needs no
+   rule of its own here. */

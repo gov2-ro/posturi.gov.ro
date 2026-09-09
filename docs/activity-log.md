@@ -2,6 +2,68 @@
 
 ## 2026
 
+### 2026-09-09 — Live facet counts: the sidebar now updates with the results
+
+**What was actually wrong.** The counts were already dynamic server-side —
+every facet calls `facet_scope($own_key)` (`pages/list.php:150`), which rebuilds
+the WHERE clause with all *other* active filters applied. The problem was
+delivery: `hx-target="#results"` swaps only `partials/result_list.php` plus three
+OOB spans, and the sidebar sat inside `if (!$is_htmx)`, so after ticking a
+checkbox the numbers on screen were whatever the last full page load produced.
+
+And the facet blocks (lines 184–330) run *before* the `$is_htmx` check, so every
+HTMX request already computed all of them and threw them away — the partial cost
+108 ms of the full page's 138 ms. Shipping the counts costs **no extra queries**.
+
+**Change:** extracted the sidebar to `partials/facets.php`, wrapped in
+`<div id="facet-list">`, and re-included it on HTMX responses with
+`hx-swap-oob="true"`. Verified the OOB fragment is byte-identical to what a full
+page load renders, for four different filter combinations, and that it sits at
+nesting depth 0 in the response so htmx lifts it out before the main swap.
+
+**Whole groups, not individual count spans.** The per-span idea does not work:
+narrowing one filter drops values out of a sibling group's list and widening
+brings them back, so there is no fixed set of spans to address — stale values
+would keep their old numbers and new ones would have no target to swap into.
+
+**Client state a swap destroys, and where it is put back** (`list.php` script):
+- focus on the control just clicked — restored by `name`+`value` at
+  `htmx:afterSettle`, `preventScroll` so a sticky column does not jump. Only
+  when focus was inside `#facet-list`, so typing in the search box is untouched.
+- `<details>` open/closed — `applyFacetState()` re-applies localStorage. The
+  per-element `toggle` listener became one capture-phase listener on `document`
+  (`toggle` does not bubble, and a per-element listener dies with the swap).
+- scroll offset of the panel and of each `max-h-56` group.
+
+**Paging is excluded.** The filter form carries no `page` field, so `page` in the
+query string means a pagination link — same filters, same counts. Skipping it
+avoids re-shipping the sidebar to redraw identical numbers.
+
+**Cost.** No new queries; server time unchanged (102 ms vs 108 ms unfiltered,
+5 ms with a filter on). Payload grew 79 KB → 200 KB raw, but `.htaccess` has
+`mod_deflate` on `text/html`: **10.3 KB gzipped unfiltered, 6.0 KB filtered.**
+
+Profiled the count queries at both scales — 16 facet queries, warm:
+
+| | 1,848 active rows (51 MB) | 9,756 rows, full archive (174 MB) |
+|---|---|---|
+| all facet queries | 72 ms | 183 ms |
+
+Sub-linear at 5.3× the data. The one line item that scales badly is
+`v3_facet()` (`list.php:242`) — six queries that read every matching row's JSON
+column and tally in PHP, 110 of those 183 ms. If the corpus grows 10×, replace
+it with a normalised `(posting_id, kind, value)` table and a real `GROUP BY`.
+
+**Not changed:** a group still excludes its own selection from its counts. Drop
+that and picking IT shows every other domeniu as `0`, so a second value can never
+be added to an OR group. Those numbers read as "how many this would *add*".
+
+**Verification gap:** the Chrome connection was unavailable this session, so the
+focus/scroll/`<details>` restoration is reviewed and reasoned about but not
+click-tested in a browser.
+
+---
+
 ### 2026-09-09 — Two facet bugs: `IT` absorbed every failed LLM classification, EQF counted one thing and filtered another
 
 Both found from the UI: selecting **Domeniu = IT** listed îngrijitoare and

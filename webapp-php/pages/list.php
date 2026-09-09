@@ -450,122 +450,7 @@ if (!$is_htmx): ?>
                   class="rounded p-1 text-2xl leading-none text-ink-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-focus">&times;</button>
         </div>
 
-        <?php
-        /**
-         * A facet as a <details> disclosure: native keyboard + screen-reader
-         * behaviour for free, and the open/closed state survives HTMX swaps
-         * because only #results is replaced.
-         */
-        function facet_group(string $label, array $items, string $name, array $active, bool $open = false): void {
-            if (!$items) return;
-            $active = array_map('strval', $active);
-            $values = array_map(fn($i) => (string)($i['val'] ?? $i['value'] ?? ''), $items);
-
-            // Facets are capped (județ shows the top 25 of ~197 slugs). A selected
-            // value outside that window has no checkbox, so the next HTMX submit
-            // serialises the form without it and the filter silently disappears.
-            // Pin any such value to the top of its group.
-            foreach (array_reverse(array_diff($active, $values)) as $orphan) {
-                array_unshift($items, [
-                    'val'   => $orphan,
-                    'label' => filter_value_label($name, $orphan),
-                    'cnt'   => 0,
-                ]);
-                $values[] = $orphan;
-            }
-
-            $selected = array_intersect($active, $values);
-            $is_open  = $open || $selected;   // never hide a filter that is switched on
-            ?>
-            <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="<?= e($name) ?>"<?= $is_open ? ' open' : '' ?>>
-              <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-ink-muted marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-                <span><?= e($label) ?><?php if ($selected): ?> <span class="font-mono text-gov normal-case tracking-normal">(<?= count($selected) ?>)</span><?php endif; ?></span>
-                <span aria-hidden="true" class="facet-caret text-ink-muted transition-transform">▾</span>
-              </summary>
-              <div class="space-y-0.5 pb-2 pr-1 lg:max-h-56 lg:overflow-y-auto">
-                <?php foreach ($items as $item):
-                    $val = (string)($item['val'] ?? $item['value'] ?? '');
-                    $lbl = $item['label'] ?? $val;
-                    $cnt = $item['cnt'] ?? $item['count'] ?? 0; ?>
-                  <label class="group flex cursor-pointer items-center gap-2 py-1">
-                    <input type="checkbox" name="<?= e(param_field($name)) ?>" value="<?= e($val) ?>"
-                           class="facet-check accent-gov shrink-0"<?= checked_if(in_array($val, array_map('strval', $active), true)) ?>>
-                    <span class="flex-1 truncate text-sm text-ink transition-colors group-hover:text-gov"><?= e($lbl) ?></span>
-                    <span class="shrink-0 font-mono text-xs text-ink-muted"><?= $cnt === 0 ? "" : $cnt ?></span>
-                  </label>
-                <?php endforeach; ?>
-              </div>
-            </details>
-            <?php
-        }
-
-        // Open by default: the four facets people reach for first.
-        facet_group('Domeniu',           $family_options,    'family',        $families,     true);
-        facet_group('Județ',             $judet_options,     'judet',         $judet_slugs,  true);
-        facet_group('Nivel',             $level_options,     'level',         $levels,       true);
-        facet_group('Tip',               $type_options,      'type',          $types,        true);
-        facet_group('Categorie',         $cat_options,       'categorie',     $categories);
-        facet_group('Grad/funcție',      $seniority_options, 'seniority',     $seniorities);
-        facet_group('Tip normă',         $work_type_options, 'work_type',     $work_types);
-        facet_group('Experiență minimă', $exp_options,       'exp_level',     $exp_levels);
-        facet_group('Studii minime',     $studies_options,   'studies_level', $studies_lvls);
-
-        // Prompt-v3 facets. Each is omitted while its column is empty, so they
-        // appear on their own once a v3 extraction has run.
-        facet_group('Domeniu de studii', $isced_options,  'isced', $isced_sel, true);
-        facet_group('Competențe',        $skill_options,  'skill', $skill_sel, true);
-        facet_group('Domeniu activitate',$domain_options, 'domain', $domain_sel);
-        facet_group('Nivel studii (EQF)',$eqf_options,    'eqf',   $eqf_sel);
-        facet_group('Limbi străine',     $lang_options,   'lang',  $lang_sel);
-
-        if ($remote_count) {
-            facet_group('Telemuncă', [['val' => '1', 'label' => 'Disponibil remote', 'cnt' => $remote_count]],
-                        'remote', $remote ? ['1'] : []);
-        }
-        ?>
-
-        <!-- Advanced -->
-        <details class="facet-group mt-2 border-t border-line pt-2" data-facet="advanced"<?= ($sal_bucket || $emp_cats || $anomaly_flags || $exp_before || $exp_after || $schema_filter) ? ' open' : '' ?>>
-          <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-gov marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-            <span>Mai multe filtre</span>
-            <span aria-hidden="true" class="facet-caret transition-transform">▾</span>
-          </summary>
-          <div class="pt-1">
-            <?php
-            facet_group('Salariu',   $salary_options,  'salary_bucket', $sal_bucket ? [$sal_bucket] : [], true);
-            facet_group('Angajator', $emp_cat_options, 'employer_cat',  $emp_cats,                        true);
-
-            $anomaly_items = [];
-            foreach (ANOMALY_LABELS as $flag => $alabel) {
-                $anomaly_items[] = ['val' => $flag, 'label' => $alabel, 'cnt' => ''];
-            }
-            facet_group('Anomalii',  $anomaly_items,  'anomaly', $anomaly_flags, true);
-            facet_group('Descriere',  $schema_options, 'schema',     $schema_filter ? [$schema_filter] : [], true);
-            facet_group('Documente necesare', $cred_options, 'credential', $cred_sel, true);
-            facet_group('Etape concurs',      $stage_options, 'stage',     $stage_sel, true);
-            ?>
-
-            <fieldset class="mb-4 pt-2">
-              <legend class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Termen limită exact</legend>
-              <div class="space-y-1.5">
-                <div>
-                  <label for="expires_after" class="text-xs text-ink-muted">De la</label>
-                  <input type="date" id="expires_after" name="expires_after" value="<?= e($exp_after) ?>"
-                         class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-                </div>
-                <div>
-                  <label for="expires_before" class="text-xs text-ink-muted">Până la</label>
-                  <input type="date" id="expires_before" name="expires_before" value="<?= e($exp_before) ?>"
-                         class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-                </div>
-              </div>
-            </fieldset>
-          </div>
-        </details>
-
-        <?php if ($active_chips): ?>
-          <a href="/" class="mt-2 block py-1 text-center text-xs text-gov hover:underline">✕ Șterge filtrele</a>
-        <?php endif; ?>
+        <?php require __DIR__ . '/../partials/facets.php'; ?>
 
         <!-- Feed links -->
         <div class="mt-6 space-y-1 border-t border-line pt-4 text-xs text-ink-muted">
@@ -642,6 +527,21 @@ if (!$is_htmx): ?>
 
 <?php require __DIR__ . '/../partials/result_list.php'; ?>
 
+<?php
+// Live facet counts: the sidebar goes back with every HTMX response as an
+// out-of-band swap. The counts were computed above either way — this is the
+// only thing that puts the fresh ones on screen. htmx lifts an `hx-swap-oob`
+// element out of the response before the main swap, so it never lands in
+// #results.
+//
+// Paging is the exception. The filter form carries no `page` field, so a
+// filter change always arrives without one and a `page` in the query string
+// means a pagination link — same filters, same counts, no reason to re-ship
+// ~120 KB of sidebar (10 KB over mod_deflate, but still the whole thing
+// re-rendered and re-swapped) to redraw identical numbers.
+if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.php';
+?>
+
 <?php if (!$is_htmx): ?>
         </div>
       </div>
@@ -692,16 +592,70 @@ if (!$is_htmx): ?>
   var state = {};
   try { state = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { state = {}; }
 
-  document.querySelectorAll('.facet-group').forEach(function (el) {
-    var key = el.dataset.facet;
-    // A facet holding an active selection is rendered open and stays open.
-    if (!el.open && state[key] === true) el.open = true;
-    else if (el.open && state[key] === false && !el.querySelector(':checked')) el.open = false;
-
-    el.addEventListener('toggle', function () {
-      state[key] = el.open;
-      try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
+  function applyFacetState() {
+    document.querySelectorAll('.facet-group').forEach(function (el) {
+      var key = el.dataset.facet;
+      // A facet holding an active selection is rendered open and stays open.
+      if (!el.open && state[key] === true) el.open = true;
+      else if (el.open && state[key] === false && !el.querySelector(':checked')) el.open = false;
     });
+  }
+  applyFacetState();
+
+  // `toggle` does not bubble, so this listens in the capture phase — which also
+  // keeps it working across sidebar swaps, unlike a listener per <details>.
+  document.addEventListener('toggle', function (ev) {
+    var el = ev.target;
+    if (!el.dataset || !el.classList.contains('facet-group')) return;
+    state[el.dataset.facet] = el.open;
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
+  }, true);
+
+  // ---- Live facet counts ----
+  // Every HTMX response carries a fresh #facet-list as an out-of-band swap, so
+  // the counts next to each checkbox narrow with the results instead of going
+  // stale until the next full page load. Replacing the markup costs three
+  // pieces of client state, put back here: which control had focus (the one
+  // just clicked — losing it breaks keyboard multi-select), how far a long
+  // group like Județ was scrolled, and the panel's own scroll offset.
+  // <details> open/closed is restored by applyFacetState() above.
+  var pending = null;
+
+  document.body.addEventListener('htmx:beforeRequest', function () {
+    var list = document.getElementById('facet-list');
+    if (!list) return;
+    var a = document.activeElement;
+    pending = {
+      focus:  (a && list.contains(a) && a.name) ? { name: a.name, value: a.value } : null,
+      panel:  panel.scrollTop,
+      groups: {}
+    };
+    list.querySelectorAll('.facet-group > div').forEach(function (d) {
+      if (d.scrollTop) pending.groups[d.parentElement.dataset.facet] = d.scrollTop;
+    });
+  });
+
+  document.body.addEventListener('htmx:afterSettle', function () {
+    applyFacetState();
+    var list = document.getElementById('facet-list');
+    if (!list || !pending) return;
+
+    panel.scrollTop = pending.panel;
+    Object.keys(pending.groups).forEach(function (key) {
+      var d = list.querySelector('.facet-group[data-facet="' + key + '"] > div');
+      if (d) d.scrollTop = pending.groups[key];
+    });
+
+    if (pending.focus) {
+      var sel = '[name="' + pending.focus.name.replace(/"/g, '\\"') + '"]';
+      var match = null;
+      list.querySelectorAll(sel).forEach(function (el) {
+        if (el.value === pending.focus.value) match = el;
+      });
+      // preventScroll: refocusing must not yank a sticky column back to the top.
+      if (match && document.activeElement !== match) match.focus({ preventScroll: true });
+    }
+    pending = null;
   });
 
   // ---- Active-filter chips ----
@@ -734,12 +688,12 @@ if (!$is_htmx): ?>
 
   // ---- Export links follow the active filters ----
   //
-  // The sidebar is rendered once, server-side; HTMX only ever swaps #results.
-  // So without this the Atom/JSON/iCal hrefs keep the query string from the last
-  // full page load, and subscribing after narrowing the filters hands you a feed
-  // of whatever you were looking at before — silently, since the link still
-  // works. `page` and `sort` are dropped for the same reason feed_url() drops
-  // them server-side.
+  // The export block sits outside #facet-list, so unlike the facet counts it is
+  // not re-rendered on a filter change. Without this the Atom/JSON/iCal hrefs
+  // keep the query string from the last full page load, and subscribing after
+  // narrowing the filters hands you a feed of whatever you were looking at
+  // before — silently, since the link still works. `page` and `sort` are
+  // dropped for the same reason feed_url() drops them server-side.
   var feedLinks = document.querySelectorAll('[data-feed]');
 
   function syncFeedLinks() {

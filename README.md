@@ -469,7 +469,7 @@ the `.htaccess` deny rules. Apache never loads it.
 | `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |
 | `feeds/` | Atom, JSON API, iCal endpoints |
-| `partials/` | Result list partial (HTMX-compatible) |
+| `partials/` | Result list and facet sidebar (both HTMX out-of-band swappable) |
 | `inc/` | Header/footer HTML, `<head>` metadata (canonical, OpenGraph, JSON-LD hook) |
 | `assets/` | Tailwind source — **not deployed** |
 | `static/` | Compiled `app.css`, self-hosted fonts, htmx |

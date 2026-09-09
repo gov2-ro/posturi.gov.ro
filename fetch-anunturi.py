@@ -123,6 +123,18 @@ def file_exists(directory, filename):
     return os.path.exists(file_path)
 
 
+def is_cancelled(row):
+    """A withdrawn competition: the index writes "Anunț anulat" in the expiry slot.
+
+    posturi.gov.ro also drops the pretty `/joburi/{slug}/` permalink for these and
+    links the bare `/?post_type=pg_job&p=N` form, which 404s once the post is
+    removed upstream. There is nothing to fetch — `import_csvs.py` sets
+    `JobPosting.cancelled` straight from this same marker — so skip them rather
+    than retrying a dead URL on every run. See docs/activity-log.md, 2026-09-08.
+    """
+    return "anulat" in (row.get('expira_in') or '').lower()
+
+
 def process_csv(csv_path):
     with open(csv_path, 'r', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
@@ -131,6 +143,8 @@ def process_csv(csv_path):
         new_rows = []
         for row in rows:
             url = row['url']
+            if is_cancelled(row):
+                continue
             date_str = row['publicat_in']
             try:
                 formatted_date = parse_romanian_date(date_str)

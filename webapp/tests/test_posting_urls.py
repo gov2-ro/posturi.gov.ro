@@ -92,6 +92,11 @@ class TestCancelledIsExcludedFromActive:
         )
         assert '"anulat" in' in src
 
+    def test_fetch_anunturi_skips_the_romanian_marker(self):
+        """A withdrawn competition's detail page 404s; don't retry it every run."""
+        src = (REPO_ROOT / "fetch-anunturi.py").read_text(encoding="utf-8")
+        assert '"anulat" in' in src
+
     @pytest.mark.parametrize("raw,expected", [
         ("Anunț anulat", True), ("ANUNȚ ANULAT", True), ("anulat", True),
         ("Expiră in  13/09/2026", False), ("Ultima zi", False), ("", False),

@@ -2,6 +2,82 @@
 
 ## 2026
 
+### 2026-09-09 — Two facet bugs: `IT` absorbed every failed LLM classification, EQF counted one thing and filtered another
+
+Both found from the UI: selecting **Domeniu = IT** listed îngrijitoare and
+consilieri școlari, and **Nivel studii (EQF) = Doctorat**, labelled `12`,
+returned 1,437 rows headed by *Conducător auto*.
+
+**Bug 1 — `IT` was the dumping ground for unparseable LLM answers.**
+`_llm_classify`'s response validator fell back to a substring test:
+
+```python
+norm = _normalize(raw.split()[0] if raw else "")   # empty answer -> ""
+for fam in PROFESSION_FAMILIES:
+    if _normalize(fam) in norm or norm in _normalize(fam):   # "" in "it" -> True
+        return fam
+```
+
+`PROFESSION_FAMILIES` is `sorted(FAMILIES.keys())` and `"IT"` is uppercase, so
+it sorts first — every empty answer landed there. The same test also matched the
+letters `it` inside a word, so `sanitar` and `ingrijitoare` would have gone to IT
+too. Confirmed against the API: `deepseek-v4-flash` with reasoning on returns
+`''` for this prompt (it is the pre-`f403acf` state that wrote these rows), and
+`altele` with `thinking: disabled`. 57 of 120 Postgres `IT` rows (50 of 60 active)
+were llm-sourced junk.
+
+`quality_check.py::_llm_classify` had the same validator **plus** no `deepseek`
+branch at all and no `else: raise` — so under the configured default provider it
+left `raw = ""` and silently classified everything as IT.
+
+**Fix:** new `_match_family()` in both files — empty/unrecognised is `altele`,
+never a family; exact match first, then a whole-word scan of the answer (longest
+family name first, so `ordine publică` beats a stray `ordine` and `IT` cannot
+match inside `sanitar`), then a ≥4-char prefix match for an answer truncated at
+`max_tokens`. `quality_check.py` gained the deepseek branch (thinking disabled,
+matching `infer_postings.py`) and raises on an unknown provider.
+
+**Repair:** new `infer_postings --requeue-llm-family FAMILY` flag re-runs only the
+postings the LLM put in one family — repairing a bad batch without paying for a
+full `--force` pass over 9,756 postings. `--requeue-llm-family IT --provider
+deepseek`: 57 updated, 57 LLM calls, 0 errors. Active `IT` 60 → 11 (10 dictionary
+hits plus one *Economist specialist IA (cu atributii de administrator)*); the
+other 49 redistributed to sănătate, administrație, educație, social. Re-exported
+to `webapp-php/posturi.sqlite`.
+
+**Bug 2 — EQF facet counts and filter answered different questions.**
+`build_filters()` filtered `v3_eqf_level <= ?` on the "a candidate above the
+minimum still qualifies" reading, while the facet counts in `pages/list.php` are
+a plain `GROUP BY v3_eqf_level` — exact per level. Clicking *Licență 587* gave
+1,411 rows; *Doctorat 12* gave 1,437, i.e. every posting with any EQF level.
+
+**Fix:** exact match, `v3_eqf_level IN (…)`, like every other sidebar facet, and
+`eqf` added to `MULTI_PARAMS` so it multi-selects (`eqf[]`) instead of collapsing
+to a single scalar. `(array)` in `pages/list.php` keeps detail.php's legacy
+scalar `/?eqf=6` links working. Verified: Doctorat → 12 (all *Cercetător
+științific*), Master → 14, both → 26. The "everything I qualify for" semantics
+belongs to CV matching, not to a browse facet; if it comes back it needs
+cumulative counts and labels that say "cel mult".
+
+**Tests:** `tests/test_infer_llm.py::TestResponseValidation` — empty/whitespace/
+`i`/`???` → `altele`, `sanitar`/`ingrijitoare` → `altele`, and the recognised
+shapes (`**IT**`, `Sănătate.`, `Îngrijitoare → sănătate`, truncated `ordine`).
+331 webapp tests pass; `check-skins.php` clean.
+
+**Outcome:** `export-to-sqlite.py --active-only` rebuilt `posturi.sqlite` at 1,848
+active postings. Domeniu facet now reads sănătate 511, tehnic 499, administrație
+382, altele 240, social 84, financiar 59, educație 34, cultură 21, IT 11, ordine
+publică 6, juridic 1.
+
+**Follow-ups filed:** the FAMILIES dict is whole-word only, so `îngrijitoare`,
+`infirmiere` and `asistenti` never match their masculine-singular keywords and
+fall through to the paid LLM on every run — that is *why* these titles reached
+the broken matcher at all. And `quality_check.py` duplicates the entire inference
+layer from `infer_postings.py`; this is the fifth fix that had to be applied
+twice, and the `textutil` one was missed outright.
+
+---
+
 ### 2026-09-09 — DeepSeek schema step returned empty content: reasoning ate the token budget
 
 **Symptom:** `pipeline.py --active-only --since 7` finished the schema step with

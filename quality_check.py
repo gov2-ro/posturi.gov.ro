@@ -643,14 +643,60 @@ def _llm_classify(title: str, provider: str, model: str | None = None) -> str:
             max_tokens=20,
             messages=[{"role": "user", "content": prompt}],
         ).content[0].text.strip()
+    elif provider == "deepseek":
+        import openai
+        client = openai.OpenAI(
+            api_key=os.environ["DEEPSEEK_API_KEY"],
+            base_url="https://api.deepseek.com",
+        )
+        raw = client.chat.completions.create(
+            model=model or resolve_model("deepseek"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=20,
+            # deepseek-v4-* reason by default and would spend the whole
+            # 20-token budget thinking, returning empty content. This is a
+            # one-word classification — no reasoning needed.
+            extra_body={"thinking": {"type": "disabled"}},
+        ).choices[0].message.content.strip()
+    else:
+        # Falling through silently used to leave `raw = ""`, which the old
+        # substring matcher resolved to `IT` — so the configured default
+        # provider (deepseek, which had no branch here) classified every
+        # posting as IT without raising.
+        raise ValueError(f"Unknown provider: {provider}")
 
-    norm = _normalize(raw.split()[0] if raw else "")
+    return _match_family(raw)
+
+
+def _match_family(raw: str) -> str:
+    """Map a free-text LLM answer onto a known family, or `altele`.
+
+    Deliberately conservative: an unrecognised answer is `altele`, never a
+    family. The previous substring test (`_normalize(fam) in norm or norm in
+    _normalize(fam)`) made `IT` the silent dumping ground for every failed
+    call — `""` is a substring of every family name and `PROFESSION_FAMILIES`
+    is `sorted()`, where uppercase `IT` sorts first. The same test also matched
+    the letters "it" inside `sanitar` and `ingrijitoare`.
+    """
+    norm = _normalize(raw).strip()
+    if not norm:
+        return "altele"
     for fam in PROFESSION_FAMILIES:
         if _normalize(fam) == norm:
             return fam
-    for fam in PROFESSION_FAMILIES:
-        if _normalize(fam) in norm or norm in _normalize(fam):
+    # A family name appearing as a whole word somewhere in a chattier answer
+    # ("Îngrijitoare → sănătate"). Longest first so "ordine publică" wins over
+    # any single-word family it might contain; whole-word so "IT" cannot match
+    # a fragment of "sanitar".
+    for fam in sorted(PROFESSION_FAMILIES, key=len, reverse=True):
+        if _kw_match(_normalize(fam), norm):
             return fam
+    # A truncated answer that prefixes exactly one family ("ordine" for
+    # "ordine publică"). Length-guarded so a stray letter matches nothing.
+    if len(norm) >= 4:
+        for fam in PROFESSION_FAMILIES:
+            if _normalize(fam).startswith(norm):
+                return fam
     return "altele"
 
 

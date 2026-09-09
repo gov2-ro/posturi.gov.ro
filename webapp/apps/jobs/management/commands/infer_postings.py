@@ -9,6 +9,7 @@ Layers:
 Usage:
     python manage.py infer_postings [--provider gemini|openai|anthropic|deepseek]
                                     [--force] [--no-llm] [--limit N]
+                                    [--requeue-llm-family FAMILY]
 """
 from __future__ import annotations
 
@@ -560,15 +561,40 @@ def _llm_classify(title: str, provider: str) -> str:
     except Exception as exc:
         raise RuntimeError(f"LLM call failed: {exc}") from exc
 
-    # Validate response
-    norm = _normalize(raw.split()[0] if raw else "")
+    return _match_family(raw)
+
+
+def _match_family(raw: str) -> str:
+    """Map a free-text LLM answer onto a known family, or `altele`.
+
+    Deliberately conservative: an unrecognised answer is `altele`, never a
+    family. The previous substring test (`_normalize(fam) in norm or norm in
+    _normalize(fam)`) made `IT` the silent dumping ground for every failed
+    call — `""` is a substring of every family name and `PROFESSION_FAMILIES`
+    is `sorted()`, where uppercase `IT` sorts first. That is how 50 of 60 `IT`
+    postings came to be îngrijitoare, bibliotecari and infirmiere: DeepSeek
+    with reasoning left on returned empty content. The same test also matched
+    the letters "it" inside `sanitar` and `ingrijitoare`.
+    """
+    norm = _normalize(raw).strip()
+    if not norm:
+        return "altele"
     for fam in PROFESSION_FAMILIES:
         if _normalize(fam) == norm:
             return fam
-    # Partial match
-    for fam in PROFESSION_FAMILIES:
-        if _normalize(fam) in norm or norm in _normalize(fam):
+    # A family name appearing as a whole word somewhere in a chattier answer
+    # ("Îngrijitoare → sănătate"). Longest first so "ordine publică" wins over
+    # any single-word family it might contain; whole-word so "IT" cannot match
+    # a fragment of "sanitar".
+    for fam in sorted(PROFESSION_FAMILIES, key=len, reverse=True):
+        if _kw_match(_normalize(fam), norm):
             return fam
+    # A truncated answer that prefixes exactly one family ("ordine" for
+    # "ordine publică"). Length-guarded so a stray letter matches nothing.
+    if len(norm) >= 4:
+        for fam in PROFESSION_FAMILIES:
+            if _normalize(fam).startswith(norm):
+                return fam
     return "altele"
 
 
@@ -717,6 +743,13 @@ class Command(BaseCommand):
             help="Process at most N postings (useful for testing).",
         )
         parser.add_argument(
+            "--requeue-llm-family",
+            default=None,
+            metavar="FAMILY",
+            help="Re-run only the postings the LLM classified as FAMILY, to repair a bad "
+                 "batch without paying for a full --force pass over every posting.",
+        )
+        parser.add_argument(
             "--conditions-only",
             action="store_true",
             help="Re-run only the work-condition fields (work_type, remote, computer, salary) "
@@ -732,7 +765,12 @@ class Command(BaseCommand):
             return
 
         qs = JobPosting.objects.all().order_by("id")
-        if not opts["force"]:
+        if opts["requeue_llm_family"]:
+            qs = qs.filter(
+                inferred__profession_family=opts["requeue_llm_family"],
+                inferred__profession_family_source="llm",
+            )
+        elif not opts["force"]:
             qs = qs.filter(Q(inferred={}) | Q(inferred__isnull=True))
         if opts["limit"]:
             qs = qs[: opts["limit"]]

@@ -29,7 +29,8 @@ $lang_sel      = (array)($_GET['lang']       ?? []);
 $cred_sel      = (array)($_GET['credential'] ?? []);
 $domain_sel    = (array)($_GET['domain']     ?? []);
 $stage_sel     = (array)($_GET['stage']      ?? []);
-$eqf_sel       = $_GET['eqf'] ?? '';
+// `(array)` keeps a legacy scalar `?eqf=6` link (detail.php ships them) working.
+$eqf_sel       = (array)($_GET['eqf'] ?? []);
 $sort         = $_GET['sort']          ?? '';
 $page         = max(1, (int)($_GET['page'] ?? 1));
 
@@ -267,8 +268,8 @@ $cred_options   = v3_facet('v3_credentials',    'credential', 'credential_kind_l
 $domain_options = v3_facet('v3_policy_domains', 'domain',     'policy_domain_label');
 $stage_options  = v3_facet('v3_exam_stages',    'stage',      'exam_stage_label');
 
-// Minimum study level, as EQF. A candidate above the minimum still qualifies,
-// so the filter is "posting requires at most this level".
+// Minimum study level a posting requires, as EQF. Counts are per exact level
+// and so is the filter — see the `eqf` block in build_filters().
 $eqf_options = [];
 {
     $s = facet_scope('eqf');
@@ -514,7 +515,7 @@ if (!$is_htmx): ?>
         facet_group('Domeniu de studii', $isced_options,  'isced', $isced_sel, true);
         facet_group('Competențe',        $skill_options,  'skill', $skill_sel, true);
         facet_group('Domeniu activitate',$domain_options, 'domain', $domain_sel);
-        facet_group('Nivel studii (EQF)',$eqf_options,    'eqf',   $eqf_sel ? [$eqf_sel] : []);
+        facet_group('Nivel studii (EQF)',$eqf_options,    'eqf',   $eqf_sel);
         facet_group('Limbi străine',     $lang_options,   'lang',  $lang_sel);
 
         if ($remote_count) {

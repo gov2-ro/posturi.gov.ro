@@ -679,7 +679,7 @@ const FILTER_CHIP_GROUPS = [
 const MULTI_PARAMS = [
     'judet', 'level', 'type', 'categorie', 'employer_cat',
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
-    'isced', 'skill', 'lang', 'credential', 'domain', 'stage',
+    'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
 ];
 
 /** Form field name for a filter param. */
@@ -971,11 +971,19 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
             $binds[] = '%"' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value) . '"%';
         }
     }
-    $eqf = $p['eqf'] ?? '';
-    if ($eqf !== '' && $excl !== 'eqf') {
-        // A candidate qualified above the minimum still qualifies.
-        $where[] = "j.v3_eqf_level IS NOT NULL AND j.v3_eqf_level <= ?";
-        $binds[] = (int)$eqf;
+    // Exact level, like every other facet in the sidebar. This used to be
+    // `v3_eqf_level <= ?` ("a candidate above the minimum still qualifies"),
+    // but the facet counts next to each checkbox are a plain GROUP BY on the
+    // level — so "Doctorat 12" returned 1437 rows headed by îngrijitoare.
+    // Match-what-I-qualify-for belongs to CV matching, not to a browse facet.
+    $eqf = array_values(array_filter(
+        array_map('intval', (array)($p['eqf'] ?? [])),
+        fn ($v) => isset(EQF_LABELS[$v])
+    ));
+    if ($eqf && $excl !== 'eqf') {
+        $ph = implode(',', array_fill(0, count($eqf), '?'));
+        $where[] = "j.v3_eqf_level IN ($ph)";
+        array_push($binds, ...$eqf);
     }
 
     // Whether the posting has LLM-extracted Schema.org sections, or only the

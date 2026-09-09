@@ -204,9 +204,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--provider",
-        # The `infer` management command only implements gemini/openai/anthropic,
-        # so the pipeline can only drive those end to end even though
-        # llm-schema.py alone also supports deepseek.
+        # Both LLM-consuming steps (infer and schema) support this full set.
         choices=_PIPELINE_PROVIDERS,
         default=None,
         help="LLM provider for infer and schema steps. Defaults to $LLM_PROVIDER, "

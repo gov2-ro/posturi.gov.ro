@@ -7,7 +7,7 @@ Layers:
   4. Anomaly flags — rule engine over structured fields + body
 
 Usage:
-    python manage.py infer_postings [--provider gemini|openai|anthropic]
+    python manage.py infer_postings [--provider gemini|openai|anthropic|deepseek]
                                     [--force] [--no-llm] [--limit N]
 """
 from __future__ import annotations
@@ -540,6 +540,23 @@ def _llm_classify(title: str, provider: str) -> str:
                 max_tokens=20,
                 messages=[{"role": "user", "content": prompt}],
             ).content[0].text.strip()
+        elif provider == "deepseek":
+            import openai
+            client = openai.OpenAI(
+                api_key=os.environ["DEEPSEEK_API_KEY"],
+                base_url="https://api.deepseek.com",
+            )
+            raw = client.chat.completions.create(
+                model="deepseek-v4-flash",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=20,
+                # deepseek-v4-* reason by default and would spend the whole
+                # 20-token budget thinking, returning empty content. This is a
+                # one-word classification — no reasoning needed.
+                extra_body={"thinking": {"type": "disabled"}},
+            ).choices[0].message.content.strip()
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
     except Exception as exc:
         raise RuntimeError(f"LLM call failed: {exc}") from exc
 
@@ -679,7 +696,7 @@ class Command(BaseCommand):
         default_provider = os.environ.get("LLM_PROVIDER", "gemini")
         parser.add_argument(
             "--provider",
-            choices=["gemini", "openai", "anthropic"],
+            choices=["gemini", "openai", "anthropic", "deepseek"],
             default=default_provider,
             help=f"LLM provider for profession-family fallback (default: {default_provider})",
         )

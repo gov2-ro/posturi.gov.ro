@@ -421,6 +421,12 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 ],
                 "max_tokens": 2000,
                 "temperature": 0.2,
+                # deepseek-v4-* are reasoning models: left on, they spend
+                # 1,400–2,600 tokens thinking before emitting any JSON, blow the
+                # max_tokens budget and return empty content — which parses to
+                # `ValueError: Expected dict, got str: ''`. Field extraction needs
+                # no chain-of-thought, so disable it.
+                "extra_body": {"thinking": {"type": "disabled"}},
             }
             # DeepSeek supports loose JSON mode (no schema enforcement)
             if use_schema:

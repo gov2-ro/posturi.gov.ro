@@ -76,7 +76,11 @@
                   <?php endforeach; ?>
                 </div>
               <?php endif; ?>
-              <div class="space-y-0.5 pb-2 pr-1 lg:max-h-56 lg:overflow-y-auto">
+              <?php /* `facet-options` is what list.php's scroll save/restore
+                 addresses. It cannot use `.facet-group > div`: the any/all
+                 switch above is also a direct child, and being first it is what
+                 a `querySelector` would return. */ ?>
+              <div class="facet-options space-y-0.5 pb-2 pr-1 lg:max-h-56 lg:overflow-y-auto">
                 <?php foreach ($items as $item):
                     $val = (string)($item['val'] ?? $item['value'] ?? '');
                     $lbl = $item['label'] ?? $val;

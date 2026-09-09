@@ -618,10 +618,24 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   }
   applyFacetState();
 
+  // Only a toggle the *reader* caused may be recorded. Inserting a
+  // `<details open>` fires `toggle` exactly like a click does, and the sidebar
+  // swap inserts ten of them — every group the server renders open (Domeniu,
+  // Județ, Nivel, Tip, Competențe…). Those events land between htmx:afterSwap
+  // and htmx:afterSettle, so before this flag existed each filter change
+  // rewrote state[key] = true for all of them, wiping a collapsed preference a
+  // moment before applyFacetState() was supposed to honour it: a facet the
+  // reader had closed sprang back open on the next click and stayed open.
+  // Cleared in a task queued from the settle handler, so the toggles that
+  // applyFacetState()'s own writes queue are ignored too.
+  var swapping = false;
+  document.body.addEventListener('htmx:beforeSwap', function () { swapping = true; });
+
   // `toggle` does not bubble, so this listens in the capture phase — which also
   // keeps it working across sidebar swaps, unlike a listener per <details>.
   document.addEventListener('toggle', function (ev) {
     var el = ev.target;
+    if (swapping) return;
     if (!el.dataset || !el.classList.contains('facet-group')) return;
     state[el.dataset.facet] = el.open;
     try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
@@ -646,19 +660,25 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       panel:  panel.scrollTop,
       groups: {}
     };
-    list.querySelectorAll('.facet-group > div').forEach(function (d) {
+    list.querySelectorAll('.facet-group > .facet-options').forEach(function (d) {
       if (d.scrollTop) pending.groups[d.parentElement.dataset.facet] = d.scrollTop;
     });
   });
 
   document.body.addEventListener('htmx:afterSettle', function () {
     applyFacetState();
+    // Queued, not immediate: the `toggle` events applyFacetState()'s own writes
+    // produce are delivered as tasks, so they must still see swapping === true.
+    // Before the early return below, or a settle with nothing pending would
+    // leave the flag stuck on and stop recording the reader's clicks entirely.
+    setTimeout(function () { swapping = false; }, 0);
+
     var list = document.getElementById('facet-list');
     if (!list || !pending) return;
 
     panel.scrollTop = pending.panel;
     Object.keys(pending.groups).forEach(function (key) {
-      var d = list.querySelector('.facet-group[data-facet="' + key + '"] > div');
+      var d = list.querySelector('.facet-group[data-facet="' + key + '"] > .facet-options');
       if (d) d.scrollTop = pending.groups[key];
     });
 

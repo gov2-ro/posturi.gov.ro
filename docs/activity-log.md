@@ -2,6 +2,55 @@
 
 ## 2026
 
+### 2026-09-09 — Browser-testing the sidebar: a collapsed facet would not stay collapsed
+
+Playwright run over the facet sidebar (33 assertions, Chromium at 1280 and at
+320 with touch). Closes the "Click-test the live facet counts in a browser"
+backlog item left open by the OOB-swap work.
+
+**Two of the three checks passed as written.** Keyboard focus survives the swap
+— arrowing across the new `oricare/toate` radio group fires the request and
+`activeElement` comes back on the same control — and Județ's scroll offset is
+kept. (An earlier failing run had both wrong for test reasons: focus was driven
+by a *mouse click on a label*, which never focuses a clipped `sr-only` input in
+any browser and needs no ring, and the scroll assertion clicked a checkbox
+*inside* the very scroller it was measuring, so Playwright's own
+scroll-into-view moved it.)
+
+**The third was a real bug, and pre-existing.** A facet the reader collapsed
+sprang back open on the next filter change, and stayed open. Traced:
+
+```
+htmx:beforeSwap
+htmx:afterSwap ×5
+toggle family=true      <- ten of these, one per server-open group
+toggle judet=true
+…
+htmx:afterSettle ×5     <- applyFacetState() runs here, too late
+```
+
+Inserting a `<details open>` fires `toggle` exactly like a click does, and the
+sidebar swap inserts ten of them. The capture-phase listener could not tell the
+two apart, so every filter change rewrote `state[key] = true` for every
+server-open group — wiping the reader's `judet: false` moments before
+`applyFacetState()` was supposed to honour it.
+
+**Fix:** a `swapping` flag, set on `htmx:beforeSwap` and cleared in a task
+queued from the settle handler — queued rather than immediate so the `toggle`
+events that `applyFacetState()`'s *own* writes produce are ignored too, and
+placed before that handler's early return, or a settle with nothing pending
+would leave the flag stuck on and stop recording real clicks entirely.
+Verified: the stored preference now survives two consecutive filter changes,
+and a group the reader opens by hand is still remembered.
+
+**One regression from the same day's facet work, caught here.** The any/all
+switch is a direct child of `<details>`, and being *first* it is what
+`querySelector('.facet-group[data-facet=…] > div')` returns — so scroll restore
+for Competențe was writing the offset onto the switch instead of the option
+list. The scroller now carries a `facet-options` marker class and both the save
+and the restore address that. It is a JS hook like `facet-check`, so no CSS
+rebuild.
+
 ### 2026-09-09 — Facet combine semantics: OR within a group, AND across groups
 
 **The question.** Should picking *Domeniu: social* and *administrație* show the

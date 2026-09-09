@@ -19,6 +19,9 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 - [x] **FAMILIES dict: add `muncitor` → `tehnic`, `psiholog practicant` → `social`** — both now in `infer_postings.py` FAMILIES dict (synced 2026-05-27 alongside broader dict expansion). Done 2026-05-27.
 - [x] **`missing_contact` anomaly: distinguish card-empty from attachment-found** — fixed 2026-05-26. `_infer_anomaly_flags` now scans `combined_body` (card body + attachment text) for phone/email patterns when CSV contact fields are empty. Emits `contact_in_attachment` (CSV extraction gap, not a data problem) vs `missing_contact` (truly absent). Same fix applied to `quality_check.py` and `webapp/infer_postings.py`.
 
+- [ ] **`quality_check.py::_llm_classify` has no deepseek branch** — the CLI accepts it (`--provider choices=list(PROVIDERS)`, line 976) but the dispatch at lines 615-654 covers only gemini/openai/anthropic, so `check_infer` silently classifies every low-confidence title as `altele` on deepseek runs. Fix by adding a deepseek branch (openai SDK, `DEEPSEEK_API_KEY`, `base_url="https://api.deepseek.com"` — its own `make_schema_generator` at lines 765-779 already has a working deepseek branch to copy) or at minimum an else-raise. Not on the pipeline.py path.
+- [ ] **`infer_conditions_llm.py` lacks deepseek** — argparse `choices=["gemini", "openai", "anthropic"]` (line 100) and `_call_llm` has no deepseek branch (it does else-raise at line 90). Add deepseek to choices plus a branch if this command is ever put on the pipeline path; it currently is not.
+
 
 - [x] **Employer canonicalization** — done 2026-05-27. Added `EmployerAlias` model (migration 0004); wrote `canonicalize_employers` management command that groups the 2,955 employers by normalized key (NFKD, strip diacritics, lowercase, collapse punctuation/ws), picks the best canonical per group (scored by diacritic richness + title-case), creates EmployerAlias records, and reassigns all `JobPosting.employer` FKs. Result: 205 duplicate groups → 257 aliases created, 521 posting FKs reassigned. Admin updated with posting_count/alias_count columns and full EmployerAlias admin. Note: 257 aliased Employer records still exist with 0 postings — can be deleted later once confident the merge is correct.
 - [x] **Parse the `updates_raw` change log** — `JobPostingUpdate` model (`posting`, `changed_at`, `fields_changed`) added (migration 0005). `parse_updates` management command parses semicolon-delimited segments from `updates_raw` and bulk-creates records. Run produced 2,529 "New entry" records (no actual field-change events in current data — those will appear on the next incremental scrape). Admin registered. Done 2026-05-27.
@@ -412,3 +415,7 @@ sequential calls, so it cannot be budgeted for. Full 9,603-posting v3 run: ~$15 
 - [ ] propose a input form for posturi.gov.ro
 - [ ] **upload cv, get job recommendations**
 - [ ] enhanced stats, compare counties, regions, employment trends, norm per capita
+
+
+## Data quality issues
+- [ ] `job/14140-ingrijitoare` this labeled as IT

@@ -2,6 +2,92 @@
 
 ## 2026
 
+### 2026-09-09 — DeepSeek schema step returned empty content: reasoning ate the token budget
+
+**Symptom:** `pipeline.py --active-only --since 7` finished the schema step with
+`9 ok, 154 failed`, every failure `ValueError: Expected dict, got str: ''`. Recent
+postings on the live site kept `schema_json IS NULL`.
+
+**Cause:** `.env` selects `LLM_PROVIDER=deepseek` / `LLM_MODEL=deepseek-v4-flash`.
+The `deepseek-v4-*` models reason by default. Probed against the API: on a real
+posting they spend 1,400–2,600 completion tokens on hidden reasoning before
+emitting any JSON, so the `max_tokens=2000` cap in `llm-schema.py`'s deepseek
+branch is hit mid-think (`finish_reason: length`) and `message.content` comes back
+`''`. `_validate_extraction('')` then raises `Expected dict, got str: ''`
+(`llm-schema.py:279`). The 9 successes were short postings that fit under 2000.
+Raising `max_tokens` does not help — the model just reasons longer to fill it.
+
+**Fix:** pass `extra_body={"thinking": {"type": "disabled"}}` on the DeepSeek
+calls. Field extraction needs no chain-of-thought; disabled, the same posting
+returns valid JSON in ~300 completion tokens and validates against the v2 model.
+Applied in two places:
+- `llm-schema.py` deepseek branch (the schema step — the actual failure).
+- `infer_postings.py::_llm_classify` deepseek branch (uncommitted WIP; its
+  `max_tokens=20` could not fit a single reasoning token, so it would have failed
+  100% the same way).
+
+Re-run: `python pipeline.py --steps schema --active-only --resume --workers 8`.
+61 LLM tests pass.
+
+**Outcome:** the re-run completed clean. Active postings with `schema_json` in
+Postgres went 359 → 1,812 of 1,848. Note the schema step writes Postgres only —
+the PHP site kept showing "nu există încă o versiune structurată" until
+`export-to-sqlite.py --active-only` rebuilt `webapp-php/posturi.sqlite`; the
+`--steps schema` invocation does not include the export.
+
+---
+
+### 2026-09-09 — `fetch-anunturi.py` skips cancelled competitions
+
+**What:** `process_csv()` now drops any index row whose `expira_in` contains
+`anulat` before building the fetch list, via a new `is_cancelled()` helper.
+
+**Why:** when posturi.gov.ro withdraws a competition it swaps the pretty
+`/joburi/{slug}/` card link for the bare `/?post_type=pg_job&p=N` permalink and
+writes `Anunț anulat` in the expiry slot. All 80 such rows in the CSV are
+cancelled (the correlation is exact — see 2026-09-08 "Recovered the 80 lost
+postings"). 78 were cached back then; 2 (`p=8208`, `p=8915`) were already 404 and
+still are. With no cache file they were treated as new on every run and burned
+~35 s each on 3 retries with 5/10/20 s backoff. Nothing was lost by skipping:
+`import_csvs.py` sets `JobPosting.cancelled` from the same `"anulat"` marker and
+never needed the detail page, and `--active-only` already excludes cancelled rows
+from the export.
+
+**Scope:** one guard in the first loop of `process_csv()` is enough — the second
+loop only iterates the already-filtered `new_rows`. Added
+`test_fetch_anunturi_skips_the_romanian_marker` in `webapp/tests/test_posting_urls.py`
+alongside the existing `import_csvs` source assertion; 20 pass.
+
+---
+
+### 2026-09-09 — `infer_postings` supports deepseek, so pipeline.py runs end-to-end
+
+`python pipeline.py` died at the infer step with argparse `invalid choice:
+'deepseek'`. The `.env` sets `LLM_PROVIDER=deepseek`, and `pipeline.py` accepted
+and forwarded it (deepseek had been added to `_PIPELINE_PROVIDERS` in 23c0c94),
+but the management command's `--provider` only allowed gemini/openai/anthropic
+and its `_llm_classify()` had no deepseek branch — the one dispatch site missed
+in the May sweep that wired deepseek into `llm-schema.py`.
+
+**Fix:** added deepseek to the argparse choices and a deepseek branch to
+`_llm_classify()` mirroring the openai branch — OpenAI SDK,
+`DEEPSEEK_API_KEY`, `base_url="https://api.deepseek.com"`, model
+`deepseek-v4-flash` (hardcoded, matching the file's per-branch idiom and
+`models_config.json` defaults). Also added an else-raise so an unknown provider
+fails loudly instead of silently classifying `altele` — the bug class
+`quality_check.py::_llm_classify` already has. The stale "infer only implements
+gemini/openai/anthropic" comment in `pipeline.py` was removed.
+
+**Decisions:** deferred deepseek support in `quality_check.py::_llm_classify`
+(CLI accepts it but silently falls back to `altele`) and `infer_conditions_llm.py`
+(same hardcoded choices) to the backlog — neither is on the pipeline.py path.
+
+**Verified:** live smoke call classified "Informatician grad I" → `IT`;
+`pipeline.py --steps infer --provider deepseek --limit 5 --force` completes
+cleanly; 2 new tests in `webapp/tests/test_infer_llm.py`, full suite 313 pass.
+
+---
+
 ### 2026-09-08 — `build_meta` surfaced: two timestamps, told apart
 
 The export now records its own provenance, so the site could stop implying that one date

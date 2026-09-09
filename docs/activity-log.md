@@ -35,14 +35,36 @@ sm:p-0` is gone. Its three inner dividers were `sm:border-t`, i.e. desktop-only,
 with the card doing the separating on phones; they are now unconditional, so
 the sections stay legible without an outer rectangle.
 
-**The disclaimer moved into the masthead.** It was a dismissible amber strip
-*above* `<header>`; it is now a second row *inside* it, on the same fill. Two
-reasons: a band above the header reads as an ad, and a permanent legal
-disclaimer with a close button is one you cannot rely on having been seen — so
-the close button is gone with it. The skin's gold rule is `inset 0 -3px 0` on
-`header`, so it now lands under the disclaimer and the two rows read as one
-block. `#wip-banner` no longer exists; the `[data-skin] #wip-banner` overrides
-in posturi.css and govuk.css went with it.
+**The disclaimer moved into the masthead — on the same line.** It was a
+dismissible amber strip *above* `<header>`; it is now the middle item of the
+bar itself, between the wordmark and the nav. Two reasons for moving it: a band
+above the header reads as an ad, and a permanent legal disclaimer with a close
+button is one you cannot rely on having been seen — so the close button is gone
+with it. `#wip-banner` no longer exists; the `[data-skin] #wip-banner`
+overrides in posturi.css and govuk.css went with it.
+
+Fitting three things on one 56px line down to 320px means the middle one gives.
+The disclaimer is written at three lengths and the breakpoints pick one, so the
+claim survives every width even where the sentence cannot:
+
+| width | shown |
+|---|---|
+| < 640 | `Neoficial`, linking to /despre/ (~70px) |
+| 640–1023 | `Nu este un proiect oficial` |
+| ≥ 1024 | the full sentence + the gForm link |
+
+The brand block sheds its own extras on the way down so the middle keeps the
+slack — the alpha/WIP marker moved from `md:` to `lg:`, the update stamp from
+`lg:` to `xl:`. `min-w-0` on the middle is what lets it shrink at all: a flex
+item defaults to `min-width:auto` and would otherwise shove the nav off-screen
+rather than truncate. `truncate` is the backstop if a translation ever outgrows
+its slot.
+
+Measured at 320/360/375/390/414/640/768/820/1024/1280/1440/1536 × three skins:
+one row everywhere, row height 56px, nothing ellipsised, no horizontal scroll,
+and brand → disclaimer → nav never overlap. Note when reading those numbers
+that govuk's `<header>` measures 66px — 56 of row plus its 10px GOV.UK blue
+rule, which is chrome, not layout.
 
 **Nav trimmed to Despre.** Statistici and Angajatori are pages you read once,
 not places you navigate between, so they are cards on `/despre/` now. They sit

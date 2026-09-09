@@ -72,48 +72,63 @@ $_build_tooltip = build_tooltip();
   Sari la conținut
 </a>
 
-<?php /* The disclaimer used to be a dismissible amber strip above the masthead.
-   It is the first thing the site has to say and the easiest thing to lose — a
-   band above the header reads as an ad and was one click from being gone for
-   good — so it now lives inside <header>, on the same navy, as a second row.
-   No close button: a permanent legal disclaimer that can be dismissed is a
-   disclaimer you cannot rely on having been seen.
+<?php /* One row: brand, disclaimer, nav.
+   ────────────────────────────────────────────────────────────────────────────
+   The disclaimer used to be a dismissible amber strip above the masthead. It is
+   the first thing the site has to say and the easiest thing to lose — a band
+   above the header reads as an ad, and it was one click from being gone for
+   good — so it lives in the bar itself now, and has no close button.
 
-   The skin's gold rule is `inset 0 -3px 0` on <header>, so it lands under this
-   row rather than under the wordmark, and the two rows read as one block. */ ?>
+   Fitting three things on one 56px line down to 320px means the middle one has
+   to give. It is written at three lengths and the breakpoints pick one, so the
+   claim survives at every width even when the sentence cannot:
+
+     < 640    "Neoficial"                       ~70px
+     640–1023 "Nu este un proiect oficial"
+     ≥ 1024   the full sentence + the gForm link
+
+   The brand block sheds its own extras on the way down (the alpha/WIP marker at
+   <lg, the update stamp at <xl) so the disclaimer keeps the slack. `min-w-0` on
+   the middle is what lets it shrink at all — a flex item defaults to
+   `min-width:auto` and would otherwise push the nav off-screen rather than
+   truncate — and `truncate` is the backstop if a translation ever outgrows its
+   slot. Measured at 320/375/390/768/1024/1280/1536; see the activity log. */ ?>
 <header class="bg-gov-bar text-on-bar border-b border-gov-bar">
-  <div class="max-w-screen-xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-3 h-14">
-    <a href="/" class="flex shrink-0 items-center gap-3 py-2 group">
-      <span class="font-display italic text-lg sm:text-xl font-semibold text-on-bar leading-none tracking-tight">
+  <div class="max-w-screen-xl mx-auto px-3 sm:px-6 flex items-center gap-2 sm:gap-4 h-14">
+    <a href="/" class="flex shrink-0 items-center gap-2 sm:gap-3 py-2 group">
+      <span class="font-display italic text-base sm:text-lg md:text-xl font-semibold text-on-bar leading-none tracking-tight">
         posturi<span class="text-on-bar-accent">.</span>gov<span class="text-on-bar-accent">2</span><span class="text-on-bar-accent">.</span>ro
       </span>
-      <span class="hidden md:inline text-xs text-on-bar-muted font-mono uppercase tracking-widest mt-0.5">
+      <span class="hidden lg:inline text-xs text-on-bar-muted font-mono uppercase tracking-widest mt-0.5">
         / alpha · WIP
       </span>
       <?php if ($_last_updated_fmt): ?>
       <time datetime="<?= e($_last_updated_iso) ?>"
-            class="hidden lg:inline text-xs text-on-bar-muted font-mono mt-0.5<?= $_build_tooltip ? ' cursor-help' : '' ?>"
+            class="hidden xl:inline text-xs text-on-bar-muted font-mono mt-0.5<?= $_build_tooltip ? ' cursor-help' : '' ?>"
             <?= $_build_tooltip ? 'title="' . e($_build_tooltip) . '"' : '' ?>>
         actualizat <?= $_last_updated_fmt ?>
       </time>
       <?php endif; ?>
     </a>
+
+    <p class="min-w-0 flex-1 truncate text-center text-[11px] sm:text-xs leading-none text-on-bar-muted">
+      <?php /* Below sm the word alone carries it, and it points at the page that
+         explains — there is no room for a sentence, and a cryptic label with
+         nowhere to go would be worse than the short one. */ ?>
+      <a href="/despre/" class="sm:hidden font-semibold uppercase tracking-wide text-on-bar-accent hover:text-on-bar">Neoficial</a>
+      <span class="hidden sm:inline lg:hidden">Nu este un <b class="font-semibold text-on-bar">proiect oficial</b></span>
+      <span class="hidden lg:inline">Acesta <b class="font-semibold text-on-bar">nu este un proiect oficial</b> al Guvernului României.</span>
+      <a href="https://forms.gle/96WusM2qr4pbUXhW7"
+         class="hidden lg:inline underline decoration-on-bar/40 underline-offset-2 hover:text-on-bar hover:decoration-current"
+         target="_blank" rel="noopener">Acceptăm sugestii</a><span class="hidden lg:inline"> (gForm)</span>
+    </p>
+
     <?php /* Statistici and Angajatori moved to /despre/ — they are things you
        read once, not places you navigate between, and the masthead is worth
        more as one unambiguous way back to the listing. */ ?>
-    <nav aria-label="Navigare principală" class="flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
+    <nav aria-label="Navigare principală" class="shrink-0 flex items-center text-sm text-on-bar-muted">
       <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>
     </nav>
-  </div>
-
-  <div class="border-t border-on-bar/15">
-    <p class="max-w-screen-xl mx-auto px-4 sm:px-6 py-1.5 text-center text-xs leading-snug text-on-bar-muted">
-      <span class="font-mono uppercase tracking-wide text-on-bar-accent">WIP</span>
-      <span class="mx-1.5 text-on-bar/30" aria-hidden="true">·</span>
-      Acesta <b class="font-semibold text-on-bar">nu este un proiect oficial</b> al Guvernului României.
-      <a href="https://forms.gle/96WusM2qr4pbUXhW7" class="underline decoration-on-bar/40 underline-offset-2 hover:text-on-bar hover:decoration-current" target="_blank" rel="noopener">Acceptăm sugestii</a>
-      (gForm)
-    </p>
   </div>
 </header>
 

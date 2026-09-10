@@ -18,6 +18,7 @@ selenium/geckodriver.log
 */scraping.log
 Archive.zip
 */Archive.zip
+*.dump
 */*.zip 
 *zip
 posturi.sqlite

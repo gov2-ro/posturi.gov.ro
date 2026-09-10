@@ -24,6 +24,12 @@ between runs. On ephemeral runners all of it would be restored and re-saved ever
 against a 10 GB cache quota with 7-day eviction. Secrets and job limits were never the
 problem — the state is.
 
+> **The live box (`gov2-1`) diverges from §1–§5 below.** It runs as the ordinary
+> login user `pax` out of `~/g2-dev/posturi.gov.ro`, connects to Postgres over the
+> local socket, and is driven by a user crontab rather than a systemd timer. See
+> **§6** for the actual layout, the `~/.ssh/config` block, and the cron lines.
+> Sections 1–5 remain the reference for a clean dedicated-user install.
+
 ---
 
 ## 1. Provision the box
@@ -88,7 +94,11 @@ ones stay on the Mac. If you later want the full archive on the VPS, rsync
 `/srv/posturi/.env`, owned by `posturi`, mode 600:
 
 ```bash
-DATABASE_URL=postgres://posturi@localhost/posturi
+DATABASE_URL=postgres://posturi@/posturi   # socket + peer auth, no password.
+                                           # @localhost forces TCP and fails with
+                                           # "fe_sendauth: no password supplied"
+                                           # unless the role has a password and
+                                           # pg_hba permits md5/scram on 127.0.0.1
 GOOGLE_API_KEY=...
 DEPLOY_HOST=user@sharedhost
 DEPLOY_PATH=~/posturi.gov2.ro
@@ -171,3 +181,91 @@ lock, anything else a failure already reported to `HEALTHCHECK_URL`.
 
 The dead-man's-switch is the point of `HEALTHCHECK_URL`: a failure alert cannot tell you
 about a run that never happened, which is exactly how the site went five weeks stale.
+
+---
+
+## 6. `gov2-1` — the box this actually runs on
+
+§1–§5 describe a dedicated `posturi` service user under `/srv/posturi` with a systemd
+timer. The live VPS was set up as the plain login user instead. The deltas:
+
+| §1–§5 reference | `gov2-1` |
+|---|---|
+| user `posturi`, group `posturi` | `pax` (the login user) |
+| `/srv/posturi` | `/home/pax/g2-dev/posturi.gov.ro` |
+| DB role `posturi`, `createdb -O posturi` | `pax` is a Postgres `SUPERUSER` role (`sudo -u postgres psql -c "CREATE ROLE pax LOGIN SUPERUSER"`); DB `posturi` recreated and owned by `pax` |
+| `DATABASE_URL=postgres://posturi@localhost/posturi` | **`postgres://pax@/posturi`** — empty host = local socket = peer auth, no password. `@localhost` forces TCP and dies with `fe_sendauth: no password supplied`. |
+| `systemd` timer (`ops/systemd/`) | user crontab (below). The unit files still hard-code `/srv/posturi` and `User=posturi`; edit both if you ever switch to them. |
+| `.venv` via `sudo -u posturi` | `.venv` owned by `pax`, no `sudo` anywhere in the run path |
+
+Rebuild the DB from a Mac dump, as `pax`:
+
+```bash
+cd ~/g2-dev/posturi.gov.ro
+dropdb --if-exists posturi && createdb posturi
+pg_restore -d posturi --no-owner --no-privileges /tmp/posturi.dump
+.venv/bin/python webapp/manage.py migrate      # no-op; migrations travel in the dump
+```
+
+### SSH to the shared host
+
+`deploy-php.sh` runs a bare `ssh pax@mioritics.ro` / `rsync` (from `DEPLOY_HOST` in
+`.env`). Cron has no `ssh-agent`, so the deploy key must be passphrase-less and named
+in `~/.ssh/config`. No trailing `#` comments in this file — OpenSSH parses the words
+after the value as options and aborts (`Bad configuration option`). `IdentityFile` is
+the passphrase-less deploy key:
+
+```
+Host mioritics.ro
+    HostName mioritics.ro
+    User pax
+    IdentityFile ~/.ssh/id_ed25519_posturi
+    IdentitiesOnly yes
+```
+
+Seed `known_hosts` once so a run never blocks on the host-key prompt:
+
+```bash
+ssh-keyscan -H mioritics.ro >> ~/.ssh/known_hosts
+ssh mioritics.ro 'echo ok && command -v rsync'
+```
+
+### Cron
+
+`mkdir -p ~/g2-dev/posturi.gov.ro/logs` first, then `crontab -e` as `pax`:
+
+```cron
+CRON_TZ=Europe/Bucharest
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=pax@mioritics.ro
+
+45 11 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+33 18 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+```
+
+`run-pipeline.sh` `cd`s to the repo itself, re-execs under `flock` (the two slots and
+any hand-run cannot overlap), and reads `.env` through `ops/env.sh`. Exit codes: `0`
+fine, `75` a run was already going, anything else a failure. `MAILTO` mails any run
+that produced output; it cannot report a cron that stopped firing — set
+`HEALTHCHECK_URL` in `.env` for that.
+
+Checks:
+
+```bash
+timedatectl                       # must say Europe/Bucharest (set once: timedatectl set-timezone …)
+crontab -l
+./ops/run-pipeline.sh             # hand-run once; watch: tail -f logs/pipeline.log
+```
+
+Optional `/etc/logrotate.d/posturi`:
+
+```
+/home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+```

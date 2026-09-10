@@ -2,6 +2,47 @@
 
 ## 2026
 
+### 2026-09-10 — VPS bring-up resumed: fresh Postgres restore, and the runbook meets the real box
+
+Picked the VPS deploy back up. The box (`gov2-1`) had a `posturi` Postgres DB from
+an earlier manual import, but was never provisioned the way `docs/deploy-vps.md`
+§1–§5 assume: no dedicated `posturi` service user, no `/srv/posturi`. It runs as the
+login user `pax` out of `~/g2-dev/posturi.gov.ro`.
+
+- **Fresh dump from the Mac.** `pg_dump -Fc --no-owner --no-privileges posturi_dev`
+  → `posturi.dump` (117 MB, `*.dump` added to `.gitignore`). Carries every local
+  data-quality fix since the earlier seed (județe 261→42, inference backfill,
+  DeepSeek 57-row repair, 80 recovered cancelled competitions, the `expires_at`
+  NULL fix) that an incremental `--since 7` run would not reproduce. Mac baseline:
+  9,756 postings / ~1,780 active / 42 județe / 1,749 active with `schema_json`.
+- **Restore, as `pax`.** No `pax` Postgres role existed, so
+  `CREATE ROLE pax LOGIN SUPERUSER`; `dropdb`/`createdb posturi`;
+  `pg_restore --no-owner --no-privileges`. Migrations travel in the dump, so
+  `manage.py migrate` is a no-op check.
+- **`fe_sendauth: no password supplied`, twice.** The `.env` `DATABASE_URL` was
+  `…@localhost/posturi`, which forces a TCP connection Postgres wants a password
+  for. Fixed to `postgres://pax@/posturi` — empty host = local socket = peer auth.
+  The Django steps then connected fine, but the first hand-run of
+  `ops/run-pipeline.sh` still failed at `export-sqlite`: `export-to-sqlite.py::
+  pg_connect()` did `host=r.hostname or "localhost"`, turning the empty host back
+  into a TCP connection. Changed to `host=r.hostname or None` (+ `port` the same)
+  so libpq falls back to the socket, matching Django.
+- **First hand-run.** `scrape → parse → import → infer → schema` all completed
+  (schema: 80 ok / 46 failed / 15 retried on DeepSeek — the `Expected dict, got
+  str` family, non-blocking under `--continue-on-error`); only `export-sqlite`
+  failed, on the bug above. Total 1545 s. Re-run after the fix lands on the VPS.
+- **Docs.** `docs/deploy-vps.md` gained a divergence callout at the top and a new
+  **§6** for `gov2-1`: the layout delta table, the `~/.ssh/config` block for the
+  passphrase-less deploy key, and a user-crontab alternative to the systemd timer
+  (the units still hard-code `/srv/posturi` / `User=posturi`). `run-pipeline.sh`
+  needs no change — it `cd`s to its own repo and `flock`s itself.
+- **Backlog.** Added "Pipeline observability + an LLM data-quality / pipeline-health
+  check" under Tooling & ops — structured per-run logging plus threshold assertions
+  and a slower-cadence LLM fidelity pass on the pipeline tail.
+
+Still open: land the `export-to-sqlite.py` fix on the VPS (`git pull`), re-run
+`ops/run-pipeline.sh` to a clean exit + `deploy-php.sh --data-only`, then `crontab -e`.
+
 ### 2026-09-10 — Per-angajator JSON / Atom / iCal feeds
 
 The three site-wide feeds (`/posturi.json`, `/posturi.atom`, `/posturi.ics`)

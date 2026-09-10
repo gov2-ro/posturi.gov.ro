@@ -43,8 +43,11 @@ def pg_connect():
         dbname=r.path.lstrip("/"),
         user=r.username,
         password=r.password,
-        host=r.hostname or "localhost",
-        port=r.port or 5432,
+        # No host in the URL (postgres://user@/db) means "local socket, peer auth" --
+        # same as Django. Forcing "localhost" here turns that into a TCP connection
+        # that demands a password. Pass None so libpq falls back to PGHOST / socket.
+        host=r.hostname or None,
+        port=r.port or None,
         row_factory=dict_row,
     )
 

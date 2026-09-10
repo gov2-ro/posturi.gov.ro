@@ -334,11 +334,22 @@ line per run.
 bare on success. **It is currently empty in `.env`, so none of that happens.** Fix:
 
 ```bash
-# healthchecks.io → new check → "Period 12 hours, Grace 3 hours" (the slots are
-# 11:45 and 18:33, so a 12h period tolerates one late run and catches a missed day).
+# healthchecks.io → new check → Period 1 day, Grace 2 hours.
 echo 'HEALTHCHECK_URL=https://hc-ping.com/<uuid>' >> .env
 ./ops/run-pipeline.sh    # or wait for a slot; the check should go green
 ```
+
+**The period is set by the overnight gap, not by the slot interval.** The two
+slots are 6h48m apart (11:45 → 18:33) but **17h12m** apart the other way
+(18:33 → 11:45). healthchecks measures from the last *success* ping, which lands
+at the end of a run, so anything under ~18h raises a false alarm every morning.
+One day is the honest setting: it will not report a single missed slot, only a
+missed day — which is the right trade, because the two slots run the same thing
+and the next one catches up on its own. Genuine failures do not wait for the
+period: `/fail` alerts immediately.
+
+If the slots are ever moved closer together, recompute the largest gap before
+shortening the period.
 
 This is the only signal that reports a run which *never happened*. `MAILTO` in the
 crontab mails any run that produced output, but only if the box has an MTA — verify

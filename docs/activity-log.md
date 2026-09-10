@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-09-10 — Per-angajator JSON / Atom / iCal feeds
+
+The three site-wide feeds (`/posturi.json`, `/posturi.atom`, `/posturi.ics`)
+already run every request through `build_filters($_GET)`, so scoping them to one
+employer only needed a filter key. Added `employer` (slug) and a legacy
+`employer_id` (int) clause to `build_filters()` — slug wins when both are
+present, `employer_id = (SELECT id FROM employers WHERE slug = ?)` for the slug
+form. That alone makes `/posturi.atom?employer=<slug>` work.
+
+On top of that:
+
+- `feed_employer($_GET)` helper resolves `?employer=` to the `{id, name, slug}`
+  row (null otherwise). Each feed uses it to name itself: Atom `<title>` /
+  `<subtitle>` / alternate `<link>` / `<id>` point at the angajator profile, ICS
+  `X-WR-CALNAME` / `X-WR-CALDESC` carry the employer name, and the JSON payload
+  gains a top-level `employer: {name, slug}` object before `results`.
+- `pages/employer.php` renders a **Feed** row (Atom / JSON / iCal) under the
+  stats grid and sets `$head_extra` with `<link rel="alternate">` tags for the
+  Atom and JSON scoped feeds, so feed readers autodiscover them on the profile.
+- `/despre/` notes that the feeds follow the active filters and take
+  `?employer=<slug>`.
+
+An unknown slug resolves to `employer_id = NULL`, i.e. an empty (but valid)
+feed, which is the right failure. `employer_id` was never a real list filter
+before this — the `/?…&employer_id=` links in `employer.php` were inert — so the
+new clause quietly fixes those too.
+
 ### 2026-09-10 — Export links move from the sidebar to the end of the list
 
 Atom / JSON / iCal were the last block in the facet sidebar. Two problems with

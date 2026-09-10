@@ -26,17 +26,24 @@ $rows = $stmt->fetchAll();
 $base_url = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
           . '://' . ($_SERVER['HTTP_HOST'] ?? 'posturi.gov.ro');
 
+$scope    = feed_employer($_GET);
+$title    = $scope ? 'posturi.gov2.ro — ' . $scope['name'] : 'posturi.gov2.ro';
+$subtitle = $scope
+    ? 'Anunțuri de angajare — ' . $scope['name']
+    : 'Anunțuri de angajare în sectorul public din România';
+$alt_url  = $scope ? $base_url . '/angajator/' . rawurlencode($scope['slug']) . '/' : $base_url . '/';
+
 $updated = $rows ? substr($rows[0]['updated_at'] ?? $rows[0]['published_at'] ?? '', 0, 10) . 'T00:00:00Z' : date('Y-m-d') . 'T00:00:00Z';
 
 echo '<?xml version="1.0" encoding="utf-8"?>' . "\n";
 ?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <title>posturi.gov2.ro</title>
-  <link href="<?= e($base_url . '/') ?>" rel="alternate" type="text/html"/>
+  <title><?= e($title) ?></title>
+  <link href="<?= e($alt_url) ?>" rel="alternate" type="text/html"/>
   <link href="<?= e($base_url . '/posturi.atom' . current_qs()) ?>" rel="self" type="application/atom+xml"/>
-  <id><?= e($base_url . '/') ?></id>
+  <id><?= e($alt_url) ?></id>
   <updated><?= e($updated) ?></updated>
-  <subtitle>Anunțuri de angajare în sectorul public din România</subtitle>
+  <subtitle><?= e($subtitle) ?></subtitle>
 <?php foreach ($rows as $r):
     $employer = $r['employer_name_disp'] ?? $r['employer_name'] ?? '';
     $title = trim($r['title'] . ($employer ? ' — ' . $employer : ''));

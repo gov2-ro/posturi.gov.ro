@@ -468,7 +468,7 @@ the `.htaccess` deny rules. Apache never loads it.
 | `db.php` | PDO singleton for `posturi.sqlite` |
 | `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |
-| `feeds/` | Atom, JSON API, iCal endpoints |
+| `feeds/` | Atom, JSON API, iCal endpoints — follow the active filters; `?employer=<slug>` scopes a feed to one angajator (linked from each employer profile) |
 | `partials/` | Result list and facet sidebar (both HTMX out-of-band swappable) |
 | `inc/` | Header/footer HTML, `<head>` metadata (canonical, OpenGraph, JSON-LD hook) |
 | `assets/` | Tailwind source — **not deployed** |

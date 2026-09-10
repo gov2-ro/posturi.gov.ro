@@ -30,11 +30,14 @@ function ical_escape(string $s): string {
     return wordwrap($s, 75, "\r\n ", true);
 }
 
+$scope   = feed_employer($_GET);
+$calname = $scope ? 'posturi.gov2.ro — ' . $scope['name'] : 'posturi.gov2.ro';
+
 echo "BEGIN:VCALENDAR\r\n";
 echo "VERSION:2.0\r\n";
 echo "PRODID:-//posturi.gov2.ro//RO\r\n";
-echo "X-WR-CALNAME:posturi.gov2.ro\r\n";
-echo "X-WR-CALDESC:Termene de depunere — posturi.gov2.ro\r\n";
+echo "X-WR-CALNAME:" . ical_escape($calname) . "\r\n";
+echo "X-WR-CALDESC:" . ical_escape('Termene de depunere — ' . $calname) . "\r\n";
 echo "CALSCALE:GREGORIAN\r\n";
 
 foreach ($rows as $r) {

@@ -21,7 +21,7 @@ require __DIR__ . '/../inc/header.php';
       <li>Căutare full-text și filtrare după județ, nivel, tip, domeniu, grad, studii etc.</li>
       <li>Statistici agregate despre piața muncii în sectorul public</li>
       <li>Clasificare automată a anunțurilor (domeniu profesional, nivel de experiență, studii)</li>
-      <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a></li>
+      <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a> — respectă filtrele active, iar cu <code>?employer=&lt;slug&gt;</code> se restrâng la un singur angajator (link direct pe fiecare pagină de angajator)</li>
     </ul>
 
   </div>

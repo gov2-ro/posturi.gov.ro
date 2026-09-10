@@ -635,6 +635,19 @@ function feed_url(string $filename): string {
     return '/' . $filename . ($qs ? '?' . $qs : '');
 }
 
+/**
+ * When a feed request is scoped to one angajator (`?employer=<slug>`), return
+ * that employer's `{id, name, slug}` row so the feed can name itself after it;
+ * null otherwise. Used by the three feed handlers for their titles.
+ */
+function feed_employer(array $p): ?array {
+    $slug = trim((string)($p['employer'] ?? ''));
+    if ($slug === '') return null;
+    $stmt = db()->prepare("SELECT id, name, slug FROM employers WHERE slug = ?");
+    $stmt->execute([$slug]);
+    return $stmt->fetch() ?: null;
+}
+
 // ---- Active-filter chips ----
 
 /**
@@ -888,6 +901,17 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
             $binds[] = date('Y-m-d', strtotime('+7 days'));
         }
         // 'all' adds no clause
+    }
+    // Employer scope — `?employer=<slug>` (the angajator-profile feeds) or a
+    // legacy `?employer_id=<n>`. Slug wins when both are present.
+    $employer_slug = trim((string)($p['employer'] ?? ''));
+    $employer_id   = (int)($p['employer_id'] ?? 0);
+    if ($employer_slug !== '' && $excl !== 'employer') {
+        $where[] = "j.employer_id = (SELECT id FROM employers WHERE slug = ?)";
+        $binds[] = $employer_slug;
+    } elseif ($employer_id > 0 && $excl !== 'employer') {
+        $where[] = "j.employer_id = ?";
+        $binds[] = $employer_id;
     }
     if ($judets && $excl !== 'judet_slugs') {
         $ph = implode(',', array_fill(0, count($judets), '?'));

@@ -53,4 +53,10 @@ foreach ($rows as $r) {
     ];
 }
 
-echo json_encode(['count' => $total, 'results' => $results], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+$payload = ['count' => $total];
+if ($scope = feed_employer($_GET)) {
+    $payload['employer'] = ['name' => $scope['name'], 'slug' => $scope['slug']];
+}
+$payload['results'] = $results;
+
+echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

@@ -186,6 +186,11 @@ about a run that never happened, which is exactly how the site went five weeks s
 
 ## 6. `gov2-1` — the box this actually runs on
 
+**Status (2026-09-10):** provisioned, Postgres restored from a Mac dump, and
+`ops/run-pipeline.sh` verified end to end — full pipeline + `deploy-php.sh
+--data-only` to `mioritics.ro`, live site HTTP 200. Not yet done: the crontab
+entries, `HEALTHCHECK_URL`, and the quality check (`docs/pipeline-quality-checks.md`).
+
 §1–§5 describe a dedicated `posturi` service user under `/srv/posturi` with a systemd
 timer. The live VPS was set up as the plain login user instead. The deltas:
 

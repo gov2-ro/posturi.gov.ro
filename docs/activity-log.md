@@ -27,10 +27,14 @@ login user `pax` out of `~/g2-dev/posturi.gov.ro`.
   pg_connect()` did `host=r.hostname or "localhost"`, turning the empty host back
   into a TCP connection. Changed to `host=r.hostname or None` (+ `port` the same)
   so libpq falls back to the socket, matching Django.
-- **First hand-run.** `scrape → parse → import → infer → schema` all completed
-  (schema: 80 ok / 46 failed / 15 retried on DeepSeek — the `Expected dict, got
-  str` family, non-blocking under `--continue-on-error`); only `export-sqlite`
-  failed, on the bug above. Total 1545 s. Re-run after the fix lands on the VPS.
+- **First hand-run** failed only at `export-sqlite`, on the bug above; the other
+  five steps completed (schema: 80 ok / 46 failed / 15 retried on DeepSeek — the
+  `Expected dict, got str` family, non-blocking under `--continue-on-error`).
+- **Second hand-run, after `git pull`: clean.** 9 steps in 836 s. Export: 42
+  județe, 5,938 employers, 1,876 active postings, 485 calendar events, 51.8 MB
+  SQLite. `deploy-php.sh --data-only` rsynced it to
+  `pax@mioritics.ro:~/posturi.gov2.ro/` and `https://posturi.gov2.ro/` returned
+  HTTP 200. The VPS is a working source of truth end to end.
 - **Docs.** `docs/deploy-vps.md` gained a divergence callout at the top and a new
   **§6** for `gov2-1`: the layout delta table, the `~/.ssh/config` block for the
   passphrase-less deploy key, and a user-crontab alternative to the systemd timer
@@ -40,8 +44,10 @@ login user `pax` out of `~/g2-dev/posturi.gov.ro`.
   check" under Tooling & ops — structured per-run logging plus threshold assertions
   and a slower-cadence LLM fidelity pass on the pipeline tail.
 
-Still open: land the `export-to-sqlite.py` fix on the VPS (`git pull`), re-run
-`ops/run-pipeline.sh` to a clean exit + `deploy-php.sh --data-only`, then `crontab -e`.
+Still open: `crontab -e` on the VPS to enable the two daily slots; set
+`HEALTHCHECK_URL` in `.env` for the dead-man's-switch; build the data /
+pipeline-run quality check — watch-list drafted in
+`docs/pipeline-quality-checks.md`.
 
 ### 2026-09-10 — Per-angajator JSON / Atom / iCal feeds
 

@@ -584,6 +584,32 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
                block deliberately sits outside the swapped region. */ ?>
             <span class="basis-full text-ink-faint sm:basis-auto">urmează filtrele active</span>
           </div>
+
+          <?php /* Calendar subscription. `posturi.ics` is a live query, not a
+             download — the browser only saves it because of the .ics filename.
+             Google fetches the URL on its own and re-polls it, so a subscription
+             stays current. `?title=` names the calendar in clients that show
+             X-WR-CALNAME (Apple Calendar, Outlook) and won't let you rename a
+             subscription. All three hrefs are kept in step with the filters and
+             the title box by syncFeedLinks(). */
+             $ics_abs = site_origin() . feed_url('posturi.ics'); ?>
+          <div class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 text-xs text-ink-muted">
+            <span class="font-semibold uppercase tracking-widest">Calendar</span>
+            <a id="gcal-link" data-gcal
+               href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=<?= e(rawurlencode($ics_abs)) ?>"
+               target="_blank" rel="noopener"
+               class="py-1 text-gov hover:underline">Adaugă în Google Calendar</a>
+            <a id="webcal-link" data-webcal
+               href="<?= e(preg_replace('#^https?://#', 'webcal://', $ics_abs)) ?>"
+               class="py-1 text-gov hover:underline">Abonare (Apple / Outlook)</a>
+            <label class="inline-flex items-baseline gap-1.5">
+              <span>Titlu</span>
+              <input id="feed-title" type="text" autocomplete="off"
+                     value="<?= e($_GET['title'] ?? '') ?>" placeholder="posturi.gov2.ro"
+                     class="w-44 rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+            </label>
+            <span class="basis-full text-ink-faint sm:basis-auto">abonarea rămâne actualizată; titlul denumește calendarul în aplicație</span>
+          </div>
         </div>
       </div>
     </div>
@@ -761,22 +787,52 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   // stays valid for the life of the page. Moving the block inside #results
   // would break that, and would rebuild it on every page of pagination for
   // something that only changes when the filters do.
-  var feedLinks = document.querySelectorAll('[data-feed]');
+  var feedLinks   = document.querySelectorAll('[data-feed]');
+  var gcalLink    = document.querySelector('[data-gcal]');
+  var webcalLink  = document.querySelector('[data-webcal]');
+  var titleInput  = document.getElementById('feed-title');
 
   function syncFeedLinks() {
     var params = new URLSearchParams(location.search);
     params.delete('page');
     params.delete('sort');
+    // The title box is the source of truth for ?title=, not the address bar —
+    // a shared link may seed it, but from then on the input drives it.
+    params.delete('title');
     var qs = params.toString();
     feedLinks.forEach(function (a) {
       a.setAttribute('href', '/' + a.dataset.feed + (qs ? '?' + qs : ''));
     });
+
+    // The iCal link and the two subscription links also carry the custom title.
+    var ical = new URLSearchParams(qs);
+    var title = titleInput && titleInput.value.trim();
+    if (title) ical.set('title', title);
+    var icalQs = ical.toString();
+    var icsPath = '/posturi.ics' + (icalQs ? '?' + icalQs : '');
+    var icalEl = document.querySelector('[data-feed="posturi.ics"]');
+    if (icalEl) icalEl.setAttribute('href', icsPath);
+
+    var icsAbs = location.origin + icsPath;
+    if (gcalLink) {
+      gcalLink.setAttribute('href',
+        'https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=' + encodeURIComponent(icsAbs));
+    }
+    if (webcalLink) webcalLink.setAttribute('href', icsAbs.replace(/^https?:/, 'webcal:'));
   }
 
   // hx-push-url writes the address bar after the swap settles; both events fire
   // for a filter change, and back/forward only fires the popstate one.
   document.body.addEventListener('htmx:pushedIntoHistory', syncFeedLinks);
   window.addEventListener('popstate', syncFeedLinks);
+  if (titleInput) {
+    titleInput.addEventListener('input', syncFeedLinks);
+    // Enter in a lone text field would submit the filter form; nothing to submit.
+    titleInput.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') ev.preventDefault();
+    });
+  }
+  syncFeedLinks();  // server renders correct hrefs on load; this also builds the subscription links from location.origin
 
   // Scroll back to the top of the list after paging.
   document.body.addEventListener('htmx:afterSwap', function (ev) {

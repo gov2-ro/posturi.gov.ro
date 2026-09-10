@@ -22,6 +22,7 @@ require __DIR__ . '/../inc/header.php';
       <li>Statistici agregate despre piața muncii în sectorul public</li>
       <li>Clasificare automată a anunțurilor (domeniu profesional, nivel de experiență, studii)</li>
       <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a> — respectă filtrele active, iar cu <code>?employer=&lt;slug&gt;</code> se restrâng la un singur angajator (link direct pe fiecare pagină de angajator)</li>
+      <li>Calendarul iCal se poate <strong>abona</strong> (nu doar descărca): adaugă adresa <code>/posturi.ics?…</code> în Google Calendar (<em>Alte calendare → Prin URL</em>) sau într-un client care acceptă <code>webcal://</code>. Filtrează cu aceiași parametri ca lista (<code>?judet[]=cluj&amp;judet[]=timis</code>) și denumește calendarul cu <code>?title=</code> — util pentru mai multe feed-uri, câte unul pe județ</li>
     </ul>
 
   </div>

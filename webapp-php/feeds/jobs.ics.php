@@ -33,6 +33,15 @@ function ical_escape(string $s): string {
 $scope   = feed_employer($_GET);
 $calname = $scope ? 'posturi.gov2.ro — ' . $scope['name'] : 'posturi.gov2.ro';
 
+// `?title=` overrides the calendar name outright. Someone following several
+// filtered feeds — one per județ, say — needs each to carry its own label in a
+// client that shows X-WR-CALNAME and won't let you rename a subscription
+// (Apple Calendar, Outlook). Strip control chars, cap at 80 chars; ical_escape
+// still handles delimiters and line folding on the way out.
+if (($t = trim((string)($_GET['title'] ?? ''))) !== '') {
+    $calname = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', $t), 0, 80);
+}
+
 echo "BEGIN:VCALENDAR\r\n";
 echo "VERSION:2.0\r\n";
 echo "PRODID:-//posturi.gov2.ro//RO\r\n";

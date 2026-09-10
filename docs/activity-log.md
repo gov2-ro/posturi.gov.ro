@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-09-10 — iCal feed: subscribable, `?title=` custom calendar name
+
+The `/posturi.ics` feed was already a live query that honours every list filter
+(`?judet[]=cluj&judet[]=timis`, `?family=…`, `?q=…`, `?employer=<slug>`), but the
+UI only offered it as a link the browser saves as a file, and the calendar name
+(`X-WR-CALNAME`) was fixed at `posturi.gov2.ro` (or `— <employer>`).
+
+- `feeds/jobs.ics.php`: `?title=` now overrides the calendar name outright, so
+  someone following several filtered feeds — one per județ — gets a distinct
+  label in clients that show `X-WR-CALNAME` and won't let you rename a
+  subscription (Apple Calendar, Outlook). Control chars stripped, capped at 80
+  chars (`mb_substr`, diacritics preserved); `ical_escape()` still folds/escapes.
+- `pages/list.php`: new "Calendar" row in the Export block — an *Adaugă în Google
+  Calendar* link (`calendar.google.com/.../r/settings/addbyurl?url=<ics>`), a
+  `webcal://` subscribe link for Apple/Outlook, and a "Titlu" text box. All three
+  hrefs, plus the existing iCal link, are kept in step with the active filters
+  and the title box by `syncFeedLinks()`, which now also runs once on load to
+  build the two absolute-URL subscription links from `location.origin`.
+- The "Titlu" input carries no `name` (never serialised by the filter form's
+  htmx) and swallows Enter (a lone text field would otherwise submit the form).
+- `pages/about.php`: documents subscribing vs downloading, filter params, `?title=`.
+
+Non-obvious: `feed_url()` serialises arrays as `judet[0]=cluj` (indexed) while
+htmx pushes `judet[]=cluj`; PHP parses both to the same array, so the
+server-rendered and JS-rebuilt hrefs are equivalent. Google re-polls an external
+iCal URL on its own schedule (~8–24 h) and that cadence is not controllable.
+
 ### 2026-09-10 — The "actualizat" stamps now carry the run's time-of-day
 
 The header and footer "actualizat" / "Date actualizate la" stamps showed a date

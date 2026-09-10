@@ -2,6 +2,41 @@
 
 ## 2026
 
+### 2026-09-10 — Export links move from the sidebar to the end of the list
+
+Atom / JSON / iCal were the last block in the facet sidebar. Two problems with
+that: they are what you reach for once you are happy with a result set, not
+while you are narrowing one, and on phones the sidebar is a slide-over behind a
+button labelled **Filtre** — the last place anyone would look for a feed. They
+now sit under the pagination, at the end of the results column, as one
+horizontal row.
+
+**Kept outside `#results` on purpose.** That element is swapped on every filter
+change *and* every page of pagination, so a block inside it would be rebuilt
+constantly for something that only changes when the filters do. It also keeps
+the `[data-feed]` NodeList that `syncFeedLinks()` collects once, at script
+init, valid for the life of the page — moving the block inside the swap target
+would leave that list pointing at detached nodes and the hrefs would quietly
+stop tracking.
+
+**The caption is deliberately unconditional.** "urmează filtrele active" holds
+whether or not anything is filtered. A server-rendered "cu filtrele active" /
+"toate anunțurile" pair would have been stale the instant someone ticked a
+facet, precisely because this block sits outside the swapped region — the same
+property that makes the placement correct makes conditional copy wrong.
+
+**Verified** (Playwright): the links are gone from the sidebar and absent from
+`#results`; the block renders below the end of the list; a facet click rewrites
+all three hrefs and a second facet is carried too; `page` never leaks into a
+feed URL; back/forward resets them. End to end, `/posturi.json` with a județ
+filter returns `count` 225 — exactly what the page reports — against 1768
+unfiltered. Visible with no overflow at 320/375/768/1280, and the mobile drawer
+still opens with no feed links left in it. The facet, header and page-sweep
+suites all still pass.
+
+Note for anyone testing the feeds: the JSON shape is `{count, results}`, not a
+bare array and not `items`.
+
 ### 2026-09-09 — posturi.gov.ro becomes the default skin, flattened
 
 **Default skin.** `DEFAULT_SKIN` is now `posturi` rather than `hartie`. The two

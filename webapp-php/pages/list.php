@@ -468,13 +468,11 @@ if (!$is_htmx): ?>
 
         <?php require __DIR__ . '/../partials/facets.php'; ?>
 
-        <!-- Feed links -->
-        <div class="mt-6 space-y-1 border-t border-line pt-4 text-xs text-ink-muted">
-          <div class="mb-1 font-semibold uppercase tracking-widest">Export</div>
-          <a data-feed="posturi.atom" href="<?= e(feed_url('posturi.atom')) ?>" class="block py-1 text-gov hover:underline">Atom (RSS)</a>
-          <a data-feed="posturi.json" href="<?= e(feed_url('posturi.json')) ?>" class="block py-1 text-gov hover:underline">JSON API</a>
-          <a data-feed="posturi.ics"  href="<?= e(feed_url('posturi.ics'))  ?>" class="block py-1 text-gov hover:underline">iCal</a>
-        </div>
+        <?php /* The export links used to sit here, under the facets. They are
+           what you reach for once you are happy with a result set, not while
+           you are narrowing one — and in the mobile drawer they were behind a
+           button labelled "Filtre", which is the last place anyone would look
+           for a feed. They now follow the results; see below #results. */ ?>
 
         <!-- Drawer footer (mobile only) -->
         <div class="sticky bottom-0 -mx-4 mt-4 border-t border-line bg-page px-4 py-3 lg:hidden">
@@ -559,6 +557,33 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 ?>
 
 <?php if (!$is_htmx): ?>
+        </div>
+
+        <?php /* Export, at the end of the list rather than in the sidebar.
+           Deliberately OUTSIDE #results: htmx swaps that element on every
+           filter change and on every page of pagination, so a block inside it
+           would be rebuilt constantly for something that changes only when the
+           filters do. Staying put also keeps the `[data-feed]` NodeList that
+           syncFeedLinks() collects once, at script init, valid for the life of
+           the page.
+
+           `feed_url()` already carries the active filters (minus page/sort),
+           so the hrefs are right on a full load; syncFeedLinks() is what keeps
+           them right afterwards. Saying so in the line of text matters — an
+           export that silently means something different from what is on
+           screen is worse than no export. */ ?>
+        <div class="mt-8 border-t border-line pt-4">
+          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-xs text-ink-muted">
+            <span class="font-semibold uppercase tracking-widest">Export</span>
+            <a data-feed="posturi.atom" href="<?= e(feed_url('posturi.atom')) ?>" class="py-1 text-gov hover:underline">Atom (RSS)</a>
+            <a data-feed="posturi.json" href="<?= e(feed_url('posturi.json')) ?>" class="py-1 text-gov hover:underline">JSON API</a>
+            <a data-feed="posturi.ics"  href="<?= e(feed_url('posturi.ics'))  ?>" class="py-1 text-gov hover:underline">iCal</a>
+            <?php /* Phrased so it holds at every moment, filtered or not. A
+               server-rendered "cu filtrele active" / "toate anunțurile" pair
+               would be stale the instant someone ticks a facet, since this
+               block deliberately sits outside the swapped region. */ ?>
+            <span class="basis-full text-ink-faint sm:basis-auto">urmează filtrele active</span>
+          </div>
         </div>
       </div>
     </div>
@@ -724,12 +749,18 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 
   // ---- Export links follow the active filters ----
   //
-  // The export block sits outside #facet-list, so unlike the facet counts it is
-  // not re-rendered on a filter change. Without this the Atom/JSON/iCal hrefs
-  // keep the query string from the last full page load, and subscribing after
-  // narrowing the filters hands you a feed of whatever you were looking at
-  // before — silently, since the link still works. `page` and `sort` are
-  // dropped for the same reason feed_url() drops them server-side.
+  // The export block sits below #results and outside it, so — unlike the result
+  // list and the facet counts — it is never re-rendered on a filter change.
+  // Without this the Atom/JSON/iCal hrefs keep the query string from the last
+  // full page load, and subscribing after narrowing the filters hands you a
+  // feed of whatever you were looking at before — silently, since the link
+  // still works. `page` and `sort` are dropped for the same reason feed_url()
+  // drops them server-side.
+  //
+  // Collected once: the block is outside every swap target, so this NodeList
+  // stays valid for the life of the page. Moving the block inside #results
+  // would break that, and would rebuild it on every page of pagination for
+  // something that only changes when the filters do.
   var feedLinks = document.querySelectorAll('[data-feed]');
 
   function syncFeedLinks() {

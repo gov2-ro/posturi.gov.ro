@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-09-10 — The "actualizat" stamps now carry the run's time-of-day
+
+The header and footer "actualizat" / "Date actualizate la" stamps showed a date
+only. The date is `MAX(last_seen_at)`, a Django `DateField` with no time component,
+so the time could not come from there. `build_meta.built_at` — written as the last
+step of `export-to-sqlite.py`, i.e. the end of a successful pipeline run — already
+has second precision and is already converted to Europe/Bucharest by `build_time()`.
+
+`inc/header.php` now appends `build_time('H:i')` to `$_last_updated_fmt` and folds
+the same `H:i` into `$_last_updated_iso` (`YYYY-MM-DDTHH:MM`) for the `<time>`
+attribute. Footer and the header stamp read the shared vars, so both update; the
+`about.php` `<dl>` "Generată la" row already rendered `d.m.Y, H:i` and is unchanged.
+Stamp now reads e.g. `actualizat 09.09.2026, 21:22`.
+
+Non-obvious: the displayed date (scrape day) and the appended time (build-finished,
+Bucharest wall clock) are from two sources and can straddle midnight in rare cases
+— accepted as good enough for a freshness stamp rather than showing a second date.
+`about.php`'s explanatory paragraph and the `build_tooltip()` doc comment were
+reworded to match. No schema, Python, or CSS/skin changes.
+
 ### 2026-09-10 — Observability for the unattended run: a run log, a deploy gate, and `/pipeline-check`
 
 The pipeline now runs itself twice a day on `gov2-1` and nothing watched it. The

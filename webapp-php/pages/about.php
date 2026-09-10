@@ -83,9 +83,10 @@ require __DIR__ . '/../inc/header.php';
 <?php endif; ?>
     </dl>
     <p class="text-xs text-ink-muted">
-      „Date actualizate la” din subsol este data ultimei verificări a anunțurilor la sursă;
-      ora de mai sus este momentul în care a fost construit fișierul servit acum. În mod
-      normal coincid — când nu coincid, sursa nu a putut fi citită la ultima rulare.
+      „Date actualizate la” din subsol arată ziua ultimei verificări a anunțurilor la sursă,
+      urmată de ora la care s-a încheiat rularea care a construit fișierul servit acum —
+      aceeași oră cu „Generată la” de mai sus. În mod normal verificarea și construcția au
+      loc în aceeași zi; când nu, sursa nu a putut fi citită la ultima rulare.
     </p>
 <?php else: ?>
     <p class="text-xs text-ink-muted">

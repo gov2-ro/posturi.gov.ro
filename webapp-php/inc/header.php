@@ -14,9 +14,12 @@ $_description = $meta_description
 $_canonical = site_origin() . ($canonical_path ?? parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
 $_canonical = preg_replace('/\?.*$/', '', $_canonical);
 
-// Last data update — used in header and footer. This is when the source was last
-// scraped, not when the database file was built; build_meta() holds the latter and
-// $_build_tooltip carries it wherever the stamp appears.
+// Last data update — used in header and footer. The date is when the source was
+// last scraped (MAX(last_seen_at), a DateField with no time); the H:i appended to
+// it is build_meta.built_at, written as the final step of that same pipeline run,
+// so the stamp answers "how many hours ago?" without carrying a second date. The
+// two can straddle midnight in rare cases — good enough for a freshness stamp.
+// build_meta() holds the full build provenance and $_build_tooltip carries it.
 if (!isset($_last_updated)) {
     try {
         $_last_updated = db()->query("SELECT MAX(last_seen_at) FROM job_postings")->fetchColumn();
@@ -25,11 +28,19 @@ if (!isset($_last_updated)) {
     }
 }
 if ($_last_updated) {
-    $_last_updated_fmt = (new DateTime(substr($_last_updated, 0, 10)))->format('d.m.Y');
+    $_last_updated_date = substr($_last_updated, 0, 10);
+    $_last_updated_fmt = (new DateTime($_last_updated_date))->format('d.m.Y');
+    $_build_hm = build_time('H:i');   // build time-of-day, Europe/Bucharest
+    if ($_build_hm) {
+        $_last_updated_fmt .= ', ' . $_build_hm;
+        $_last_updated_iso = $_last_updated_date . 'T' . $_build_hm;
+    } else {
+        $_last_updated_iso = $_last_updated_date;
+    }
 } else {
     $_last_updated_fmt = null;
+    $_last_updated_iso = '';
 }
-$_last_updated_iso = $_last_updated ? substr($_last_updated, 0, 10) : '';
 $_build_tooltip = build_tooltip();
 ?><!doctype html>
 <html lang="ro">

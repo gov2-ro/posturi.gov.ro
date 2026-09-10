@@ -131,8 +131,8 @@ function build_time(string $fmt = 'd.m.Y, H:i'): string {
 
 /**
  * Tooltip text for the "actualizat" stamps in the header and footer. The visible
- * stamp is the scrape date; this is where the build behind it becomes legible.
- * `source_host` is deliberately not exposed — it names infrastructure.
+ * stamp is the scrape date plus the build's time-of-day; this adds the row count
+ * and commit behind it. `source_host` is deliberately not exposed — infrastructure.
  */
 function build_tooltip(): string {
     $when = build_time();

@@ -148,16 +148,59 @@ leaves stale jobs published.
 | Watch a run | `journalctl -fu posturi-pipeline` |
 | Last run's outcome | `systemctl status posturi-pipeline.service` |
 | Next slots | `systemctl list-timers 'posturi*'` |
+| Is the pipeline healthy? | `/pipeline-check` in Claude Code, or `.venv/bin/python ops/check-export.py --no-log` |
+| Last few runs, raw | `tail -5 data/pipeline-runs.jsonl \| jq -c '{run_id,kind,exit,status,failed_steps}'` |
 | Deploy code after a `git pull` | on the Mac: `./deploy-php.sh --code-only` |
 | Update the VPS's own checkout | `sudo -u posturi git pull && .venv/bin/python webapp/manage.py migrate` |
 
-Exit codes from `ops/run-pipeline.sh`: `0` fine, `75` a previous run still holds the
-lock, anything else a failure already reported to `HEALTHCHECK_URL`.
+Exit codes from `ops/run-pipeline.sh`: `0` fine, `65` the export failed its hard
+checks and was **not** deployed, `75` a previous run still holds the lock, anything
+else a failure. Every non-zero exit has already been reported to `HEALTHCHECK_URL`.
+
+### Observability
+
+Three artefacts, in increasing order of how often you need them:
+
+| Where | What it holds |
+|---|---|
+| `data/pipeline-runs.jsonl` | one record per run (`kind: "run"`) plus one per export check (`kind: "export-check"`), joined by `run_id`. Step timings, exit codes, and 33 data metrics with run-over-run deltas. |
+| `logs/pipeline.log` | everything the steps printed. Runs are delimited by `=== posturi pipeline run <id> (<trigger>) — … ===`; grep the run id. Rotate it with `ops/logrotate.posturi`. |
+| `HEALTHCHECK_URL` | the dead-man's switch. `/start` at the top of a run, `/fail` on any failure, a bare ping on success. **This is the only signal that can report a run which never happened** — a failure alert cannot. |
+
+`ops/check-export.py` runs between the export and the deploy and is what decides
+whether the file ships. It has two severities:
+
+- **hard** — corruption that cannot be a bad day's data: `integrity_check`, broken
+  foreign keys, a duplicate URL, a short FTS index, anything other than exactly 42
+  județ rows, a collapse to under half the previous run's postings, or a
+  `build_meta.built_at` older than six hours (meaning the export never actually ran
+  and the deploy is about to ship yesterday's file). **A breach aborts before the
+  rsync**, so the shared host keeps serving the previous database.
+- **soft** — quality drift: coverage regressions, an `altele` spike, one profession
+  family or one skill tag taking an implausible share, an anomaly-flag step change,
+  mojibake, cedilla `ş/ţ` in a county name. Printed and recorded, but the deploy
+  proceeds. `--strict` makes them fatal; leave it off until the thresholds have a
+  few weeks of runs behind them.
+
+It reuses `import_csvs.py`'s `expiry_sanity_warnings()` and `judet_sanity_warnings()`
+rather than restating their thresholds, so there is one definition of "too many
+counties" in the tree. Those two need Django importable; without it that one check
+reports itself skipped and the rest still run — which is what makes the script usable
+on a laptop against a copied export:
+
+```bash
+scp gov2-1:g2-dev/posturi.gov.ro/webapp-php/posturi.sqlite /tmp/
+.venv/bin/python ops/check-export.py --db /tmp/posturi.sqlite --no-log
+```
+
+`--no-log` matters: without it an interactive read becomes the baseline the next
+real run compares its deltas against.
 
 ### What a run does
 
 `pipeline.py --continue-on-error --since 7 --active-only --resume --workers 4
---prompt-version v3`, then `./deploy-php.sh --data-only --no-export`.
+--prompt-version v3`, then `ops/check-export.py`, then — only if the check passes —
+`./deploy-php.sh --data-only --no-export`.
 
 - **`--active-only` is the cost guard.** 6,904 postings have no `schema_json` but only
   about 15 of them are active; the rest will never reach the export. Without this flag
@@ -178,6 +221,10 @@ lock, anything else a failure already reported to `HEALTHCHECK_URL`.
 | `below the --min-rows floor` | near-empty export | same — look upstream before forcing |
 | `site returned HTTP 5xx after deploy` | the shared host is unhappy with what landed | the previous database is still intact on disk; investigate before re-running |
 | Healthcheck silent, no failure mail | the timer is not running | `systemctl list-timers 'posturi*'` |
+| `refusing to deploy this export` (exit 65) | a hard check in `ops/check-export.py` failed | read the named check; the previous database is still live, so there is no rush |
+| `43 județ rows, expected exactly 42` | a new badge spelling got past `normalize_judet()` | add it to `judete.ALIASES`, re-run `import` and `export-sqlite` |
+| `built_at … is 18.4h old` | the `export-sqlite` step failed but the run continued | look upstream in the log for that step; the file on disk is from a previous run |
+| A soft check warns every run and nothing is wrong | the threshold was picked before there was any run history | change it in `ops/check-export.py` — `/pipeline-check` will propose a value from the recorded metrics |
 
 The dead-man's-switch is the point of `HEALTHCHECK_URL`: a failure alert cannot tell you
 about a run that never happened, which is exactly how the site went five weeks stale.
@@ -186,10 +233,13 @@ about a run that never happened, which is exactly how the site went five weeks s
 
 ## 6. `gov2-1` — the box this actually runs on
 
-**Status (2026-09-10):** provisioned, Postgres restored from a Mac dump, and
-`ops/run-pipeline.sh` verified end to end — full pipeline + `deploy-php.sh
---data-only` to `mioritics.ro`, live site HTTP 200. Not yet done: the crontab
-entries, `HEALTHCHECK_URL`, and the quality check (`docs/pipeline-quality-checks.md`).
+**Status (2026-09-10):** provisioned, Postgres restored from a Mac dump,
+`ops/run-pipeline.sh` verified end to end (full pipeline + `deploy-php.sh
+--data-only` to `mioritics.ro`, live site HTTP 200), and the crontab installed.
+Observability landed the same day: the run log, `ops/check-export.py` as a deploy
+gate, and `/pipeline-check`. **Still outstanding: `HEALTHCHECK_URL` is empty**, so
+there is no dead-man's switch — see *Alerting* below. `/etc/logrotate.d/posturi` is
+not installed either, so `logs/pipeline.log` grows without bound.
 
 §1–§5 describe a dedicated `posturi` service user under `/srv/posturi` with a systemd
 timer. The live VPS was set up as the plain login user instead. The deltas:
@@ -262,15 +312,35 @@ crontab -l
 ./ops/run-pipeline.sh             # hand-run once; watch: tail -f logs/pipeline.log
 ```
 
-Optional `/etc/logrotate.d/posturi`:
+A hand-run is recorded as `trigger: "manual"` rather than `"cron"`, so
+`/pipeline-check` will not mistake a debugging session for a slot that fired. To
+label one explicitly: `POSTURI_RUN_TRIGGER=backfill ./ops/run-pipeline.sh`.
 
+### Log rotation
+
+```bash
+sudo install -m 644 ops/logrotate.posturi /etc/logrotate.d/posturi
+sudo logrotate -d /etc/logrotate.d/posturi     # dry run
 ```
-/home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log {
-    weekly
-    rotate 8
-    compress
-    missingok
-    notifempty
-    copytruncate
-}
+
+`copytruncate`, not `create`: cron appends through a shell redirect that holds the
+fd open for the whole run, so a renamed file would keep receiving the rest of a run
+still going at rotation time. `data/pipeline-runs.jsonl` is not rotated — it is one
+line per run.
+
+### Alerting
+
+`ops/run-pipeline.sh` already pings `HEALTHCHECK_URL` at `/start`, on `/fail`, and
+bare on success. **It is currently empty in `.env`, so none of that happens.** Fix:
+
+```bash
+# healthchecks.io → new check → "Period 12 hours, Grace 3 hours" (the slots are
+# 11:45 and 18:33, so a 12h period tolerates one late run and catches a missed day).
+echo 'HEALTHCHECK_URL=https://hc-ping.com/<uuid>' >> .env
+./ops/run-pipeline.sh    # or wait for a slot; the check should go green
 ```
+
+This is the only signal that reports a run which *never happened*. `MAILTO` in the
+crontab mails any run that produced output, but only if the box has an MTA — verify
+with `command -v sendmail` before relying on it, because a dead MAILTO is
+indistinguishable from a clean run.

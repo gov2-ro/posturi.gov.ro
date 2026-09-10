@@ -374,10 +374,46 @@ Mac (dev) ──git push──> GitHub ──git pull (manual)──> VPS
 
 | Path | What it is |
 |------|------------|
-| `ops/run-pipeline.sh` | the unattended entry point: flock, pipeline, data deploy, healthcheck ping |
+| `ops/run-pipeline.sh` | the unattended entry point: flock, pipeline, export check, data deploy, healthcheck ping |
+| `ops/check-export.py` | the deploy gate — asserts the SQLite about to ship is fit to ship |
 | `ops/systemd/posturi-pipeline.{service,timer}` | the two daily slots |
 | `ops/env.sh` | `.env` reader shared by the shell scripts (it is never sourced — it holds API keys) |
+| `ops/logrotate.posturi` | rotation for `logs/pipeline.log`, installed into `/etc/logrotate.d/` |
 | `docs/deploy-vps.md` | provisioning runbook, operating commands, failure table |
+
+### Observability
+
+Each run leaves three things behind:
+
+| Where | What |
+|---|---|
+| `data/pipeline-runs.jsonl` | one `kind: "run"` record (step timings, exit codes, flags) and one `kind: "export-check"` record (33 data metrics, every assertion), joined by `run_id` |
+| `logs/pipeline.log` | the steps' own output, runs delimited by `=== posturi pipeline run <id> … ===` |
+| `HEALTHCHECK_URL` | `/start`, `/fail`, success — the only signal that can report a run which *never happened* |
+
+`ops/check-export.py` runs between the export and the deploy. **Hard checks abort
+before the rsync**, so a corrupt export cannot reach the live site: `integrity_check`,
+broken foreign keys, duplicate URLs, a short FTS index, anything other than exactly 42
+județ rows, a collapse below half the previous run, or a `build_meta.built_at` older
+than six hours (which means the export step failed and the deploy is about to ship an
+old file). **Soft checks** — coverage regressions, an `altele` spike, one profession
+family or skill tag taking an implausible share, anomaly-flag step changes, mojibake —
+are recorded and printed but do not block; `--strict` makes them fatal.
+
+Every check is tied to a regression that actually happened here, and the two
+`*_sanity_warnings()` functions from `import_csvs.py` are called rather than restated,
+so "too many counties" has one definition in the tree.
+
+```bash
+.venv/bin/python ops/check-export.py --no-log              # read the live numbers
+.venv/bin/python ops/check-export.py --db /tmp/copy.sqlite --no-log
+```
+
+`--no-log` keeps an interactive read from becoming the baseline the next real run
+compares against. For the narrative pass over the run log — missed slots, recurring
+step failures, metrics sliding while every individual check still passes — run
+**`/pipeline-check`** in Claude Code. See `docs/pipeline-quality-checks.md` for the
+full watch-list and what is still unbuilt.
 
 Full setup — packages, seeding Postgres and the scrape cache from the Mac, SSH keys,
 installing the timer — is in **[docs/deploy-vps.md](docs/deploy-vps.md)**.

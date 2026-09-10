@@ -1,0 +1,24 @@
+# Rotation for the cron logfile. Install on the VPS as root:
+#
+#   sudo install -m 644 ops/logrotate.posturi /etc/logrotate.d/posturi
+#   sudo logrotate -d /etc/logrotate.d/posturi     # dry run, prints what it would do
+#
+# Edit the path if the checkout is not at ~pax/g2-dev/posturi.gov.ro (see
+# docs/deploy-vps.md §6). logrotate does not expand ~, so it is spelled out.
+#
+# The structured record of each run lives in data/pipeline-runs.jsonl and is NOT
+# rotated here -- it is one line per run, pruned by ops/check-export.py's readers
+# rather than by size.
+
+/home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    # copytruncate, not create: cron appends through a shell redirect that holds the
+    # fd open for the whole run, so a renamed file would keep receiving the rest of
+    # a run that is still going at rotation time.
+    copytruncate
+}

@@ -1,8 +1,16 @@
 # Pipeline & data quality checks — what to watch
 
 Design notes for the "data / pipeline-run quality check script & agent command"
-tracked in `docs/backlog.md` (Tooling & ops). Nothing here is built yet; this is
-the watch-list and the shape of the thing.
+tracked in `docs/backlog.md` (Tooling & ops). This is the watch-list and the
+shape of the thing.
+
+> **Built 2026-09-10 — parts 1, 2, 4 and 5.** Part 1 is the run log written by
+> `pipeline.py` (state-derived metrics rather than per-step counters — see the
+> note under Part 1). Part 2 is `ops/check-export.py`, wired into
+> `ops/run-pipeline.sh` between the export and the deploy, with the hard/soft
+> split described in Part 4. Part 5 is `.claude/commands/pipeline-check.md`.
+> **Part 3, the LLM-judge sampling pass, is not built** and is the remaining
+> work in this document.
 
 ## Why
 
@@ -39,6 +47,21 @@ add the trend + run-log layers below.
 
 ## Part 1 — structured run log (per pipeline run)
 
+> **Built, in a cheaper shape than designed below.** `data/pipeline-runs.jsonl`,
+> one `kind: "run"` record per `pipeline.py` invocation (run id, trigger, host,
+> git SHA, timings, flags, and per-step `{step, ok, exit, duration_s}`) plus one
+> `kind: "export-check"` record from `ops/check-export.py` under the same
+> `run_id`, carrying 33 metrics.
+>
+> **The per-step counters below were deliberately skipped.** Harvesting "pages
+> scanned", "files fetched", "tokens in/out" means either parsing nine scripts'
+> stdout with regexes that rot, or adding a sentinel line to all nine. Almost
+> every counter that matters is instead *derivable from the state after the run*
+> — coverage, row counts, family shares — which is what the export-check record
+> holds, at no coupling cost. The two genuinely un-derivable ones are **LLM cost
+> per run** and **the schema step's per-error-class tally**; those still want a
+> sentinel line out of `llm-schema.py`, and are the natural next increment.
+
 Emit one machine-readable record per `run-pipeline.sh` invocation. Candidate homes:
 `data/pipeline-runs.jsonl` (append), or a `pipeline_runs` Postgres table, or both.
 Keep the last ~90 days. Fields:
@@ -65,6 +88,22 @@ Surface the latest record on `/despre` or behind `?dev=1` so "when did the data 
 actually change, and by how much" is answerable without SSH.
 
 ## Part 2 — data-quality assertions (post-export, on the shipped SQLite)
+
+> **Built as `ops/check-export.py`** — 8 hard checks, 16 soft. Not everything on
+> this list made it; what was left out, and why:
+>
+> - **Diacritic-variant duplicate counties** (`Arges` vs `Argeș`) — subsumed by
+>   the exact `judete == 42` assertion, which cannot pass if a variant exists.
+>   The cedilla scan on `judete.name` is kept as a separate soft check.
+> - **`calendar_events` `data`/`ora` parse rate** — the export stores them already
+>   parsed, so a parse failure shows up as a missing row, which the collapse check
+>   catches. Re-deriving the rate would mean going back to `calendar.csv`.
+> - **`responsibilities` fill rate** — needs `schema_json` parsed per row rather
+>   than counted; worth adding when the LLM-judge pass (Part 3) is built, since it
+>   will be reading those payloads anyway.
+> - **Attachment *text* coverage** — `attachment_text` is not exported to SQLite;
+>   only `attachment_meta` is, so the check measures metadata presence. Real text
+>   coverage has to be asserted against Postgres, at import or extract time.
 
 Run after `export-sqlite`, before / instead of trusting the deploy. Each assertion
 is tied to the regression that motivates it. Breach → non-zero exit + `/fail` ping;
@@ -177,7 +216,22 @@ sample report. Extend it, or add a sibling `pipeline-check` command, that:
 
 ## Build order
 
-1. Run log (Part 1) — pure instrumentation, no judgement, immediately useful.
-2. Part 2 assertions, wired between `export-sqlite` and the deploy, `--strict` in cron.
-3. Agent command (Part 5) over 1 + 2.
+1. ~~Run log (Part 1)~~ — **done 2026-09-10**, state-derived rather than
+   step-instrumented.
+2. ~~Part 2 assertions, wired between `export-sqlite` and the deploy~~ — **done
+   2026-09-10.** `--strict` is *not* on in cron: the soft thresholds were picked
+   with no run history behind them, so they warn until a few weeks of records say
+   what normal looks like.
+3. ~~Agent command (Part 5) over 1 + 2~~ — **done 2026-09-10**, `/pipeline-check`.
 4. LLM-judge (Part 3) last — it needs a provider that isn't failing 35% of calls.
+
+### What is left
+
+- **Part 3 in full** — the sampled fidelity pass.
+- **LLM cost and per-error-class tallies per run** — the two counters the
+  state-derived run log genuinely cannot reach (see the note under Part 1).
+- **Tighten the soft thresholds** once there is run history. The ones most likely
+  to be wrong: `family_concentration` at 30% (sănătate already sits at 27.7%),
+  `skill_concentration` at 40%, and the 15-point anomaly-flag step change.
+- **Surface the latest record on `/despre`**, as the original Part 1 note asked —
+  "when did the data last actually change, and by how much" without SSH.

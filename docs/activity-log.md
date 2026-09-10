@@ -2,6 +2,94 @@
 
 ## 2026
 
+### 2026-09-10 — Observability for the unattended run: a run log, a deploy gate, and `/pipeline-check`
+
+The pipeline now runs itself twice a day on `gov2-1` and nothing watched it. The
+only signals were a healthcheck ping that was never configured, whatever the steps
+printed into one append-only logfile, and `export-to-sqlite.py`'s row-count floors.
+Built the MVP slice of `docs/pipeline-quality-checks.md` — parts 1, 2 and 5.
+
+**What was actually missing, found by reading the ops tree:**
+
+- `HEALTHCHECK_URL` is **empty** in `.env`, so `ping_health()` returns early and
+  there is no dead-man's switch at all. The doc has said since 2026-09-08 that this
+  is the point of the whole arrangement; it was never filled in. Left as a backlog
+  item because it needs an account, not a commit.
+- No `logs/` in the repo, no logrotate installed, and `deploy-vps.md` §6 still
+  listed the crontab as outstanding after it had been installed.
+- The logfile had no run delimiter, no run id and no exit code in it — you could
+  watch a run live but could not answer "did the 18:33 slot succeed?" by reading it.
+- `pipeline.py` computed per-step exit codes and durations and then discarded them.
+- Nothing at all inspected the data between `export-sqlite` and the deploy.
+
+**`pipeline.py --run-log`** (default `data/pipeline-runs.jsonl`, `--no-run-log` to
+disable) appends one `kind: "run"` record per invocation: run id, trigger, host, git
+SHA, timings, the flags in effect, and `{step, ok, exit, duration_s}` per step.
+`_run_step()` no longer calls `sys.exit()` — it returns a record and the caller
+decides — so the log gets written on the abort path too. The old contract is intact:
+without `--continue-on-error` the run still stops at the first failure and still
+exits with *that step's* return code, now with `aborted_at` recorded beside it.
+
+**`ops/check-export.py`** is the new deploy gate, wired into `run-pipeline.sh`
+between the pipeline and `deploy-php.sh --data-only`. 24 assertions over the SQLite
+that is about to ship, in two severities:
+
+- **8 hard** — corruption that cannot be a bad day's data: `integrity_check`,
+  `foreign_key_check`, duplicate URLs, an FTS index shorter than `job_postings`,
+  anything other than exactly 42 județ rows, a collapse below half the previous run,
+  and `build_meta.built_at` older than six hours. A breach exits 65 and **aborts
+  before the rsync**, so the shared host keeps serving the previous database.
+- **16 soft** — quality drift: coverage regressions, an `altele` spike, one
+  profession family or skill tag on an implausible share, anomaly-flag step changes,
+  dates out of range, mojibake, cedilla `ş/ţ` in a county name. Recorded and printed;
+  `--strict` makes them fatal.
+
+Every check is tied to a regression that actually happened here. `--strict` is
+deliberately **off** in cron: the soft thresholds were picked with no run history
+behind them, and a false abort is worse than a stale-but-correct site.
+
+Three decisions worth recording:
+
+- **The hard/soft split is what makes a gate safe to add.** `run-pipeline.sh` has
+  deployed through step failures on purpose since 2026-09-08 — "a stale-but-correct
+  site beats a site nobody updated". A gate that could fire on a quiet Tuesday would
+  have undone that. Every hard check is one that can only mean the file is broken.
+- **`build_meta_fresh` is the check that catches the failure mode nobody watches
+  for**: the export step fails, `--continue-on-error` carries on, and the deploy
+  ships whatever SQLite was already on disk. Row counts all look perfect, because it
+  is a perfectly good file from yesterday. Proved it on the local export, which is
+  18.4h old and correctly refused.
+- **The two `*_sanity_warnings()` functions are called, not restated.** Importing
+  them needs Django, which is on the VPS and may not be on a laptop, so the import is
+  guarded and that one check reports itself skipped when Django is absent — which is
+  what keeps the script runnable against a copied export with nothing installed.
+  `judete.COUNTIES` is loaded through `importlib` straight from the file, bypassing
+  the `apps` package so it never pulls Django in for a constant.
+
+**Per-step counters were skipped on purpose.** The design asked for pages scanned,
+files fetched, tokens in/out. Harvesting those means either regex-parsing nine
+scripts' stdout or adding a sentinel line to all nine, and almost every counter that
+matters is derivable from the state *after* the run — which is what the export-check
+record holds at no coupling cost. The genuine losses are LLM cost per run and the
+schema step's per-error-class tally; both are now backlog items.
+
+**`/pipeline-check`** (`.claude/commands/pipeline-check.md`) reads the run log, the
+cron schedule, the live site and the logfile tail, and answers "is the machine
+working?" — as distinct from `/quality-review`, which samples postings and answers
+"is the data right?". It is told to look for the thing the script structurally
+cannot see: a metric sliding 4 points a run past a 5-point per-run threshold. It is
+also told to propose better thresholds from the recorded metrics, and not to run
+`pipeline.py` or drop `--no-log` while poking around.
+
+Also committed `ops/logrotate.posturi` (`copytruncate`, because cron holds the fd
+open for the whole run) and `logs/.gitkeep`.
+
+Verified against the local 54 MB export: 24/24 pass with `--max-age-hours 999`;
+`build_meta_fresh` correctly fails at the real 6h limit; a copy with a 43rd județ row
+and 5 rows deleted from the FTS index fails exactly `judete_count` and `fts_complete`
+and exits 1; three postings dated 2027 produce two soft warnings, exit 0, and exit 1
+under `--strict`; a second run reads the first's metrics and prints deltas.
+
 ### 2026-09-10 — VPS bring-up resumed: fresh Postgres restore, and the runbook meets the real box
 
 Picked the VPS deploy back up. The box (`gov2-1`) had a `posturi` Postgres DB from

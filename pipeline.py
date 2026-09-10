@@ -21,14 +21,22 @@ Usage:
 
   # Backfill the LLM extraction for everything currently live (~1,440 postings):
   python pipeline.py --steps schema --active-only --resume --workers 8 --prompt-version v3
+
+Every run appends one JSON record to data/pipeline-runs.jsonl — step timings, exit
+codes and the flags in effect. ops/check-export.py appends its metrics beside it
+under the same run id, and the /pipeline-check command reads both. --no-run-log
+turns it off.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import socket
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from llm_config import resolve_provider
@@ -43,6 +51,10 @@ _PIPELINE_PROVIDERS = ("gemini", "openai", "anthropic", "deepseek")
 ROOT = Path(__file__).parent.resolve()
 WEBAPP_DIR = ROOT / "webapp"
 VENV_PYTHON = ROOT / ".venv" / "bin" / "python"
+
+#: One JSON object per run, appended. `ops/check-export.py` appends its own
+#: record beside it under the same run id, and `/pipeline-check` reads both.
+DEFAULT_RUN_LOG = ROOT / "data" / "pipeline-runs.jsonl"
 
 ALL_STEPS = [
     "fetch-index",
@@ -83,6 +95,37 @@ def _load_env() -> None:
         load_dotenv(env_path, override=False)
     except ImportError:
         pass  # dotenv not installed — env vars must be set externally
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _git_sha() -> str:
+    """Short SHA of the checkout this run used, or '' outside a repository."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return out.stdout.strip() if out.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def append_run_record(path: Path, record: dict) -> None:
+    """Append one JSON line to the run log.
+
+    Instrumentation must never be the thing that fails a run, so every error
+    here is reported and swallowed: a missing directory, a read-only volume or a
+    full disk costs the record, not the pipeline.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(f"  WARNING: could not write the run log at {path}: {exc}", file=sys.stderr)
 
 
 def _build_cmd(
@@ -146,30 +189,43 @@ def _build_cmd(
     return cmd
 
 
-def _run_step(step: str, cmd: list[str | Path], *, continue_on_error: bool) -> bool:
-    """Run a single step. Returns True on success, False on failure."""
+def _run_step(step: str, cmd: list[str | Path]) -> dict:
+    """Run a single step and return its record.
+
+    Never exits: the caller decides whether a failure ends the run, so that the
+    run log is written either way. `{"ok": False, "exit": N}` is the failure.
+    """
     print(f"\n{'=' * 60}")
     print(f"  STEP: {step}")
     print(f"  CMD:  {' '.join(str(c) for c in cmd)}")
     print(f"{'=' * 60}")
+    started = _utc_now()
     t0 = time.monotonic()
+
+    def record(exit_code: int) -> dict:
+        return {
+            "step": step,
+            "ok": exit_code == 0,
+            "exit": exit_code,
+            "started_at": started,
+            "duration_s": round(time.monotonic() - t0, 1),
+        }
 
     try:
         subprocess.run(cmd, check=True, cwd=ROOT)
-        elapsed = time.monotonic() - t0
-        print(f"\n  ✓ {step} completed in {elapsed:.1f}s")
-        return True
+        rec = record(0)
+        print(f"\n  ✓ {step} completed in {rec['duration_s']:.1f}s")
+        return rec
     except subprocess.CalledProcessError as exc:
-        elapsed = time.monotonic() - t0
-        print(f"\n  ✗ {step} FAILED (exit {exc.returncode}) after {elapsed:.1f}s", file=sys.stderr)
-        if continue_on_error:
-            return False
-        sys.exit(exc.returncode)
+        rec = record(exc.returncode)
+        print(f"\n  ✗ {step} FAILED (exit {exc.returncode}) after {rec['duration_s']:.1f}s",
+              file=sys.stderr)
+        return rec
     except FileNotFoundError as exc:
+        rec = record(127)
+        rec["error"] = str(exc)
         print(f"\n  ✗ {step} FAILED — command not found: {exc}", file=sys.stderr)
-        if continue_on_error:
-            return False
-        sys.exit(1)
+        return rec
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +312,19 @@ def main() -> None:
         action="store_true",
         help="Log failures and continue rather than aborting.",
     )
+    parser.add_argument(
+        "--run-log",
+        default=str(DEFAULT_RUN_LOG),
+        metavar="PATH",
+        help=f"Append one JSON record per run to this file "
+             f"(default: {DEFAULT_RUN_LOG.relative_to(ROOT)}). Read by "
+             f"ops/check-export.py and the /pipeline-check command.",
+    )
+    parser.add_argument(
+        "--no-run-log",
+        action="store_true",
+        help="Do not write a run record.",
+    )
 
     args = parser.parse_args()
 
@@ -300,8 +369,16 @@ def main() -> None:
         )
 
     print(f"Running {len(selected)} step(s): {', '.join(selected)}")
+    # run-pipeline.sh exports both, so the pipeline record and the export-check
+    # record that follows it land under one id and describe the same run.
+    run_id = os.environ.get("POSTURI_RUN_ID") or _utc_now()
+    trigger = os.environ.get("POSTURI_RUN_TRIGGER", "manual")
+    started_at = _utc_now()
     t_total = time.monotonic()
+    steps: list[dict] = []
     failures: list[str] = []
+    aborted_at: str | None = None
+    exit_code = 0
 
     for step in selected:
         cmd = _build_cmd(
@@ -316,18 +393,58 @@ def main() -> None:
             active_only=args.active_only,
             prompt_version=args.prompt_version,
         )
-        ok = _run_step(step, cmd, continue_on_error=args.continue_on_error)
-        if not ok:
+        rec = _run_step(step, cmd)
+        steps.append(rec)
+        if not rec["ok"]:
             failures.append(step)
+            if not args.continue_on_error:
+                # Same contract as before: abort, and exit with the step's own code.
+                aborted_at = step
+                exit_code = rec["exit"]
+                break
 
     total_elapsed = time.monotonic() - t_total
+    if failures and exit_code == 0:
+        exit_code = 1
+
+    if not args.no_run_log:
+        append_run_record(Path(args.run_log), {
+            "kind": "run",
+            "run_id": run_id,
+            "trigger": trigger,
+            "host": socket.gethostname(),
+            "git_sha": _git_sha(),
+            "started_at": started_at,
+            "finished_at": _utc_now(),
+            "duration_s": round(total_elapsed, 1),
+            "steps_selected": selected,
+            "steps": steps,
+            "failed_steps": failures,
+            "aborted_at": aborted_at,
+            "exit": exit_code,
+            "flags": {
+                "force": args.force,
+                "no_llm": args.no_llm,
+                "provider": args.provider,
+                "limit": args.limit,
+                "workers": args.workers,
+                "resume": args.resume,
+                "prompt_version": args.prompt_version,
+                "active_only": args.active_only,
+                "since": args.since,
+                "continue_on_error": args.continue_on_error,
+            },
+        })
+
     print(f"\n{'=' * 60}")
     if failures:
         print(f"  Pipeline finished with {len(failures)} failure(s): {', '.join(failures)}")
+        if aborted_at:
+            print(f"  Aborted at {aborted_at}; {len(selected) - len(steps)} step(s) not run.")
         print(f"  Total time: {total_elapsed:.1f}s")
-        sys.exit(1)
-    else:
-        print(f"  Pipeline complete. {len(selected)} step(s) in {total_elapsed:.1f}s")
+        print("=" * 60)
+        sys.exit(exit_code)
+    print(f"  Pipeline complete. {len(selected)} step(s) in {total_elapsed:.1f}s")
     print("=" * 60)
 
 

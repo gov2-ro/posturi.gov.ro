@@ -27,6 +27,7 @@ import json
 import os
 import socket
 import sqlite3
+from zoneinfo import ZoneInfo
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -48,6 +49,12 @@ def pg_connect():
         # that demands a password. Pass None so libpq falls back to PGHOST / socket.
         host=r.hostname or None,
         port=r.port or None,
+        # Pin the session timezone. `data_limita_depunere` is a timestamptz at
+        # local midnight, which is 21:00 UTC the day before in summer. Any date
+        # derived from it therefore depends on the server's TimeZone setting —
+        # Europe/Bucharest on the dev box, UTC on the VPS — and the same export
+        # silently produced deadlines a day apart on the two machines.
+        options="-c TimeZone=Europe/Bucharest",
         row_factory=dict_row,
     )
 
@@ -468,6 +475,27 @@ def _salary_columns(salary_json_text) -> dict:
     }
 
 
+#: Everything the site publishes is in Romanian local time; the database stores
+#: instants. One conversion point, named, rather than a bare `str()[:10]`.
+BUCHAREST = ZoneInfo("Europe/Bucharest")
+
+
+def _local_date(value) -> str | None:
+    """The calendar date a timestamp falls on *in Bucharest*.
+
+    A naive `str(value)[:10]` reads whatever timezone the connection happened to
+    be in. `data_limita_depunere` is stored at local midnight — 21:00 UTC the
+    previous day in summer — so under a UTC session that lops a day off every
+    deadline, silently and only on the machine that matters.
+    """
+    if value is None:
+        return None
+    tzinfo = getattr(value, "tzinfo", None)
+    if tzinfo is not None:
+        return value.astimezone(BUCHAREST).date().isoformat()
+    return str(value)[:10]
+
+
 def _apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
     """The last day anyone can apply, and where that date came from.
 
@@ -482,11 +510,12 @@ def _apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
     worse than it was, and every posting v4 reaches gets quietly more accurate.
     """
     if v4_deadline:
+        # Already a plain ISO date string from the model, never an instant.
         return {"date": str(v4_deadline)[:10], "source": "concurs"}
     if data_limita_depunere:
-        return {"date": str(data_limita_depunere)[:10], "source": "anunt"}
+        return {"date": _local_date(data_limita_depunere), "source": "anunt"}
     if expires_at:
-        return {"date": str(expires_at)[:10], "source": "expirare"}
+        return {"date": _local_date(expires_at), "source": "expirare"}
     return {"date": None, "source": ""}
 
 

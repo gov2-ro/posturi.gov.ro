@@ -36,8 +36,13 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://localhost/posturi_dev"
 
 SUMMARY = """
 WITH v AS (
+    -- AT TIME ZONE, not a bare ::date. `data_limita_depunere` is stored at
+    -- local midnight (21:00 UTC the previous day in summer), so a plain cast
+    -- returns a different day depending on the server's TimeZone setting —
+    -- Europe/Bucharest on the dev box, UTC on the VPS. That alone produced two
+    -- of the four "disagreements" this script was written to investigate.
     SELECT p.id, p.expires_at,
-           p.data_limita_depunere::date AS scraped_dl,
+           (p.data_limita_depunere AT TIME ZONE 'Europe/Bucharest')::date AS scraped_dl,
            (s.schema_json->'competition_calendar'->>'application_deadline')::date AS v4_dl,
            s.schema_json->'employer_context'->>'parent_institution' AS parent,
            s.schema_json->'funding'->>'source' AS funding,

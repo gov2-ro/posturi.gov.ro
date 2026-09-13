@@ -6,6 +6,7 @@ index_csv_path = 'data/posturi_gov_ro.csv'
 import csv
 import os
 import re
+from datetime import datetime
 import glob
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
@@ -167,6 +168,14 @@ def _p_lines(p):
     return [l for l in lines if l]
 
 
+def _as_date(value):
+    """`DD.MM.YYYY` as a date, or None. Used only to sanity-check ranges."""
+    try:
+        return datetime.strptime(value, "%d.%m.%Y").date()
+    except (ValueError, TypeError):
+        return None
+
+
 def extract_calendar(body_soup):
     """Return list of (eveniment, data, ora) from the competition calendar."""
     rows = []
@@ -197,8 +206,28 @@ def extract_calendar(body_soup):
         time_m = TIME_RE.search(line[date_m.start():])
         time_str = time_m.group(1) if time_m else ''
         eveniment = line[:date_m.start()].strip().rstrip(',.').strip()
+        # A submission row often states a window: "Depunerea dosarelor de la
+        # 11.09.2026 până la 30.09.2026". The row's own date stays the first one
+        # (when the stage begins), but the closing date is what a candidate has
+        # to act on, so it is carried for `_find_deadline` to prefer.
+        all_dates = DATE_RE.findall(line)
+        end_str = all_dates[-1] if len(all_dates) > 1 else ''
+        # A window that closes before it opens is a typo in the announcement,
+        # not a date. One real posting reads "-20.05.2025-03.06.2024-": taking
+        # the closing date faithfully would publish a deadline a year in the
+        # past. Fall back to the row's own date and let it be merely imprecise.
+        if end_str and _as_date(end_str) and _as_date(date_str):
+            if _as_date(end_str) < _as_date(date_str):
+                end_str = ''
+        if end_str:
+            # "între orele 8.00 – 16.00" — if the closing date is taken, the
+            # closing hour has to come with it, or the deadline reads eight
+            # hours earlier than it is.
+            all_times = TIME_RE.findall(line)
+            if len(all_times) > 1:
+                time_str = all_times[-1]
         if eveniment:
-            rows.append((eveniment, date_str, time_str))
+            rows.append((eveniment, date_str, time_str, end_str))
     return rows
 
 
@@ -251,9 +280,53 @@ def extract_contact(body_text):
 # --- Calendar date helpers ---
 
 def _find_calendar_date(calendar_rows, keywords):
-    for eveniment, data, ora in calendar_rows:
+    for eveniment, data, ora, _end in calendar_rows:
         if any(kw.lower() in eveniment.lower() for kw in keywords):
             return data + (f', ora {ora}' if ora else '')
+    return ''
+
+
+#: Rows that mention dosare but are not the submission deadline. `dosar` alone
+#: matched "Selectarea dosarelor de concurs" and "Afişarea rezultatelor
+#: selecţiei dosarelor", so the scraped deadline could land on the selection
+#: date — days after applications had actually closed.
+_NOT_A_DEADLINE = re.compile(
+    r'selec[tțţ]|afi[sșş]|rezultat|contesta[tțţ]|solu[tțţ]ion|proba|interviu|'
+    r'evaluar|sus[tțţ]iner',
+    re.IGNORECASE)
+
+#: Most specific first. A row that says "limită" is the deadline; one that only
+#: says "depunere" may be the opening of the window; "înscriere" is weaker
+#: still. Taking the first row that matched any of them, as this used to, meant
+#: the answer depended on the order the institution happened to write its table.
+_DEADLINE_KEYWORDS = (
+    ('limita', 'limită'),
+    ('depunere', 'depunerea', 'se depun'),
+    ('inscriere', 'înscriere', 'inscrierea', 'înscrierea'),
+    ('dosar',),
+)
+
+
+def _find_deadline(calendar_rows):
+    """The date applications close, from the competition calendar.
+
+    Two things this has to get right, both of which it used to get wrong:
+    pick the row that is actually the deadline rather than the first one
+    mentioning a dossier, and take the *closing* date when the row states a
+    window rather than the day submissions opened.
+    """
+    for depth, tier in enumerate(_DEADLINE_KEYWORDS):
+        last_tier = depth == len(_DEADLINE_KEYWORDS) - 1
+        for eveniment, data, ora, end in calendar_rows:
+            label = eveniment.lower()
+            # Exclusions guard the specific tiers. The final `dosar` fallback
+            # drops them: a row combining submission with selection still
+            # carries a usable date, and no date at all helps nobody.
+            if not last_tier and _NOT_A_DEADLINE.search(label):
+                continue
+            if not any(kw in label for kw in tier):
+                continue
+            return (end or data) + (f', ora {ora}' if ora else '')
     return ''
 
 
@@ -423,7 +496,7 @@ def extract_job_details(file_path):
         body_soup = soup.select_one('.entry-content')
         calendar_rows = extract_calendar(body_soup)
 
-    data_limita = _find_calendar_date(calendar_rows, ['depunere', 'inscriere', 'dosar', 'limita'])
+    data_limita = _find_deadline(calendar_rows)
     if not data_limita:
         m = DEADLINE_BODY_RE.search(body_text)
         if m:
@@ -521,7 +594,7 @@ def save_calendar(data_list, path):
         writer.writeheader()
         for d in data_list:
             url = d['source_url']
-            for eveniment, data_str, ora in d['_calendar_rows']:
+            for eveniment, data_str, ora, _end in d['_calendar_rows']:
                 writer.writerow({'url': url, 'eveniment': eveniment, 'data': data_str, 'ora': ora})
 
 
@@ -539,6 +612,11 @@ def process_html_files(directory, output_csv_path):
     save_calendar(all_job_details, output_calendar_path)
 
 
-process_html_files(folder_path, output_csv_path)
-print(f"Data saved to {output_csv_path}")
-print(f"Calendar saved to {output_calendar_path}")
+if __name__ == "__main__":
+    # Guarded so the module can be imported for its functions. Without this,
+    # `import parse_anunturi` re-parsed all 9,691 cached pages and rewrote both
+    # CSVs as a side effect — which is what a test importing it did, and what
+    # an interactive import did before that.
+    process_html_files(folder_path, output_csv_path)
+    print(f"Data saved to {output_csv_path}")
+    print(f"Calendar saved to {output_calendar_path}")

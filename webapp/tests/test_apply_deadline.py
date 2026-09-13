@@ -13,6 +13,7 @@ have no deadline yet.
 
 import importlib.util
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,44 @@ class TestSourcePrecedence:
         """`data_limita_depunere` is a DateTime; SQLite stores dates as text."""
         got = exp._apply_deadline(None, "2026-09-20 14:00:00+03", "2026-09-28")
         assert got["date"] == "2026-09-20"
+
+
+class TestTimezone:
+    """`data_limita_depunere` is a timestamptz stored at local midnight, which
+    is 21:00 UTC the previous day in summer. Any date derived from it depends on
+    the session timezone — Europe/Bucharest on the dev box, UTC on the VPS — so
+    the same export silently produced deadlines a day apart on the two machines,
+    and the wrong one was on the machine that serves the site."""
+
+    def test_an_instant_resolves_to_its_bucharest_date(self, exp):
+        stored = datetime(2026, 9, 23, 21, 0, tzinfo=timezone.utc)
+        assert str(stored)[:10] == "2026-09-23"          # the trap
+        assert exp._local_date(stored) == "2026-09-24"   # the deadline as published
+
+    def test_the_deadline_uses_the_local_date(self, exp):
+        stored = datetime(2026, 9, 24, 21, 0, tzinfo=timezone.utc)
+        got = exp._apply_deadline(None, stored, date(2026, 10, 12))
+        assert got == {"date": "2026-09-25", "source": "anunt"}
+
+    def test_a_naive_date_is_left_alone(self, exp):
+        """`expires_at` is a DateField — a calendar date, not an instant."""
+        assert exp._local_date(date(2026, 10, 9)) == "2026-10-09"
+
+    def test_winter_time_shifts_by_two_hours_not_three(self, exp):
+        """EET in January, EEST in September — hardcoding +3 would be wrong for
+        half the year, which is why this converts rather than offsets."""
+        assert exp._local_date(datetime(2026, 1, 15, 22, 0, tzinfo=timezone.utc)) == "2026-01-16"
+        assert exp._local_date(datetime(2026, 1, 15, 21, 0, tzinfo=timezone.utc)) == "2026-01-15"
+
+    def test_the_export_pins_the_session_timezone(self):
+        """Belt and braces: every other timestamptz column is derived in SQL."""
+        src = (REPO_ROOT / "export-to-sqlite.py").read_text(encoding="utf-8")
+        assert 'options="-c TimeZone=Europe/Bucharest"' in src
+
+    def test_the_sample_checker_converts_explicitly(self):
+        src = (REPO_ROOT / "ops" / "check-v4-sample.py").read_text(encoding="utf-8")
+        assert "AT TIME ZONE 'Europe/Bucharest'" in src
+        assert "data_limita_depunere::date" not in src
 
     def test_the_deadline_can_precede_the_expiry_by_a_lot(self, exp):
         """The real case this exists for: 9 months of advertising a closed post."""

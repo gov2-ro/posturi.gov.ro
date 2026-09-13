@@ -163,15 +163,22 @@ def build_user_message(title: str, parsed, ctx: dict, cor_cands, grid_cands) -> 
 
 def make_generator(provider: str, model: str, system_prompt: str):
     """Return `generate(user_message) -> (mapping_dict, in_tok, out_tok, cached)`."""
+    # One title is a ~700-token prompt and a ~150-token answer: a call that has
+    # not returned in a minute is not going to. The SDK default is 600s, which
+    # with a bounded worker pool means one stuck request stalls the whole run —
+    # observed mid-way through a 3,723-title pass, silently, with no traceback.
+    timeout_s = 60.0
+
     if provider in ("deepseek", "openai"):
         from openai import OpenAI
         if provider == "deepseek":
             client = OpenAI(api_key=os.environ["DEEPSEEK_API_KEY"],
-                            base_url="https://api.deepseek.com")
+                            base_url="https://api.deepseek.com",
+                            timeout=timeout_s, max_retries=2)
             extra = {"extra_body": {"thinking": {"type": "disabled"}}}
             fmt = {"type": "json_object"}
         else:
-            client = OpenAI()
+            client = OpenAI(timeout=timeout_s, max_retries=2)
             extra = {}
             schema = OccupationMapping.model_json_schema()
             fmt = {"type": "json_schema",
@@ -205,7 +212,7 @@ def make_generator(provider: str, model: str, system_prompt: str):
 
     elif provider == "anthropic":
         import anthropic
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(timeout=timeout_s, max_retries=2)
         tool = {"name": "normalize_occupation",
                 "description": "Return the normalised occupation.",
                 "input_schema": OccupationMapping.model_json_schema()}
@@ -448,7 +455,7 @@ def main() -> int:
             if mapping.grid_selector and mapping.grid_selector.cod:
                 stats["with_grid"] += 1
             print(f"  ✓ {group['sample'][:44]:46s} → {mapping.occupation_canonical[:34]:36s} "
-                  f"COR={mapping.cor_code or '—':7s} {mapping.match_confidence}")
+                  f"COR={mapping.cor_code or '—':7s} {mapping.match_confidence}", flush=True)
 
         elapsed = time.time() - started
         print(f"\nmapped {stats['ok']}/{len(groups)} in {elapsed:.0f}s  (${cost:.4f})")

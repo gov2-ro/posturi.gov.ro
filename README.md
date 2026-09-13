@@ -113,13 +113,54 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `download` | `download-attachments.py` | `data/downloads/` |
 | `import` | `manage.py import_csvs` | Postgres `jobs_jobposting` table (normalises județe — see below) |
 | `extract` | `manage.py extract_attachments` | `JobPosting.attachment_text` |
-| `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
 | `schema` | `llm-schema.py` | `JobPosting.schema_json` JSONB |
+| `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
+| `occupations` | `normalize-titles.py` | `jobs_occupation` + `JobPosting.occupation` |
+| `salary` | `estimate-salaries.py` | `JobPosting.salary_estimate` JSONB |
 
-`--force` re-processes already-done rows for `import`, `extract`, `infer`, and `schema`.
-`--limit N` restricts `infer` to N postings (useful for testing).
-`--provider gemini|openai|anthropic|deepseek` sets the LLM used by the `infer` and `schema` steps (default: `gemini`).
-`--no-llm` skips the LLM portion of `infer` only — the `schema` step is always LLM-driven; use `--skip schema` to omit it.
+`schema` runs **before** `infer`: `infer_postings` reads `schema_json` for the
+announced salary, so the other order leaves `inferred.salary_min` one run stale.
+
+`--force` re-processes already-done rows for `import`, `extract`, `infer`, `schema` and
+`occupations`, and passes `--clear` to `salary` (use it after rebuilding the grid).
+`--limit N` restricts `infer`, `schema` and `occupations` to N items (useful for testing).
+`--provider gemini|openai|anthropic|deepseek` sets the LLM used by the `infer`, `schema` and
+`occupations` steps (default: `gemini`).
+`--no-llm` skips the LLM portion of `infer` and drops `occupations` to `--link-only`
+(postings are still linked to titles already in the dictionary, which needs no calls).
+The `schema` step is always LLM-driven; use `--skip schema` to omit it.
+
+### Estimated pay (`salarii/`, `ocupatii/`)
+
+Romanian public-sector postings essentially never state a salary — **44 of 9,757**
+do in the body, 5 of 917 attachments — so pay is *derived* from the 2026 draft
+salary law rather than scraped.
+
+```
+docs/salarii/…xlsx  --build-salary-grid.py-->  data/salarii/grila-<versiune>.csv
+job title           --normalize-titles.py--->  jobs_occupation (COR + grid selector)
+employer            --uat.py---------------->  population band
+                                    |
+                                    v
+                   salary_grid.estimate()  ->  JobPosting.salary_estimate
+```
+
+The LLM emits a **grid selector, never a number**. The law is an unadopted draft
+with more than one public variant, so re-costing under a new one must be a
+script run, not a re-extraction of 9,600 postings:
+
+```bash
+python build-salary-grid.py --version-id 2026-08-20   # rebuild the registry
+python pipeline.py --steps occupations,salary,export-sqlite --force
+```
+
+`data/salarii/` and `data/ocupatii/` are git-tracked on purpose: every figure the
+site shows must stay traceable to a sheet and row, including under an older
+variant. `python build-salary-grid.py --report` prints coverage and the rows
+flagged for manual review.
+
+Every estimate is gross, at gradation 0, and carries its legal status. Net pay,
+sporuri and the 20% cap are deliberately out of scope — see the activity log.
 
 ### Județe (counties)
 

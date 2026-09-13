@@ -445,3 +445,27 @@ sequential calls, so it cannot be budgeted for. Full 9,603-posting v3 run: ~$15 
 
 ## Data quality issues
 - [x] `job/14140-ingrijitoare` this labeled as IT — fixed 2026-09-09. Not specific to this posting: the `_llm_classify` response validator resolved every unparseable answer to `IT`, and DeepSeek with reasoning on was returning empty content. 57 rows repaired; this one is now `altele` (`Ȋngrijitoare` misses the `ingrijitor` keyword, hence the separate FAMILIES item above). See the activity-log entry.
+- [ ] this `job/14242-referent-de-specialitate-gradul-iii` should be label as 'ministerul apărării' ? by unitate militară — addressed in prompt v4 by `employer_context.parent_institution`, which resolves `Unitatea Militară 01042` → `Ministerul Apărării Naționale` (verified on samples: it returns `Ministerul Educației` for an inspectorat școlar). Still open until v4 has been run over the corpus and the field is surfaced as a facet.
+
+## 260911 Notes
+- [x] add Fonduri Europene in quick choices, also 'cu salariu anunțat' — done 2026-09-13. Both are landing shortcuts now. Note the second is **"Cu salariu estimat"**, not "anunțat": only 44 of 9,757 postings state a salary in the text, so an announced-salary filter would return ~40 jobs. See the activity-log entry.
+- [x] add salariu in filter — done 2026-09-13. The facet existed but was gated behind `>= 100` rows counting `inf_salary_min` (the announced salary), so it had never rendered. It now filters on `COALESCE(inf_salary_min, sal_min)`: an announced figure still wins where one exists, the estimate covers the rest.
+- [x] explain choices — done 2026-09-13 for the salary estimate: a "cum a fost calculat" disclosure on the detail page showing the coefficient, the reference value, where each part of the selector came from, the grid rows used, and the draft-law disclaimer. Not yet done for the other inferred fields (profession family, seniority) — see below.
+- [x] estimare salarizare
+      - [x] normalize titles to grilă propusă 2026 (LLM) — done 2026-09-13. `normalize-titles.py` + `ocupatii.py`, cached in `jobs_occupation`, keyed on the parsed title (3,723 distinct, down from 5,979 raw).
+      - [x] ask estimate — done 2026-09-13, but *not* by asking the LLM. The model emits a grid **selector**; `estimate-salaries.py` does the arithmetic. The law is an unadopted draft with more than one public variant, so re-costing has to be a script run, not a re-extraction.
+- [x] LLM prompt — prompt v4, see `schema_models.JobPostingExtractionV4`
+      - [x] don't botch timelines — done 2026-09-13. `competition_calendar` types every event against an enum and pulls `application_deadline` out as its own field, derived from the submission event when the model omits it. The old expiry read the last row of the table, which is the final-results date.
+      - [x] in doubt, add a "altele / note suplimentare" — done 2026-09-13, `note_suplimentare`.
+      - [x] higlight anything specific - GIS, de exemplu - do we need a vector db for that? — **no.** v3's `skill_list` already emits `GIS` as a controlled tag and it is a facet; FTS5 covers the long tail over ~10k documents. `sqlite-vec` bolts on later without a schema change if free-text search proves insufficient.
+
+## Follow-ups from the salary/occupation work (2026-09-13)
+
+- [ ] **UAT population table.** `uat.py` returns a *set* of plausible population bands where the administrative type does not settle it (an `oraș` may be either side of 10.000), which widens the estimate. Dropping a real `data/uat-populatie.csv` (`nume,judet,populatie`, ~3,200 rows from INS/SIRUTA) in place collapses most of that uncertainty — `load_populations()` already prefers it when present. Worth it: the band spread is 5.541 vs 7.579 lei for the same post.
+- [ ] **Multi-role titles map to one occupation.** The dictionary key is the whole parsed title, so `"ISTORIC, MUZEOGRAF, ARHEOLOG, REFERENT, GARDEROBIER"` resolves to a single occupation (and picked the last one). v3's `positions[]` already models multi-role postings — 21% of active rows — so the occupation pass should read it rather than the title.
+- [ ] **Run prompt v4 over the corpus.** v4 is registered, tested and verified on samples, but only a handful of `--compare` variants exist. Until a full run, `v4_funding_source` / `v4_employer_sector` are empty and the Finanțare and Sector facets stay hidden by design. Budget: roughly v3's ~$15, and the JSON Schema grows 18.7 KB → 24.3 KB.
+- [ ] **12 grid rows are flagged `needs_review`.** `python build-salary-grid.py --report` lists them: rows whose sheet offers a grade/studies axis but that carry none. Not blocking, but each is a row an estimate could silently widen on.
+- [ ] **Only the July 2026 variant has a materialised grid.** `parametri.json` records the 20 August variant (VR 4,000) with `are_grila: false`, and `load_grid("2026-08-20")` fails loudly rather than reusing July's coefficients at a different reference value — the coefficients changed too, not just VR. If that workbook surfaces, re-run `build-salary-grid.py --version-id 2026-08-20`.
+- [ ] **Extend "explain choices" past the salary card.** The same disclosure pattern would suit `inf_profession_family` and `inf_seniority`, which are shown as "Inferat automat" with no way to see why.
+- [ ] **`occ_confidence` is exported but not surfaced in the list.** The detail card shows it ("Potrivire probabilă"); a reader scanning results cannot yet tell a confident mapping from a guess.
+      

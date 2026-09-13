@@ -2,6 +2,108 @@
 
 ## 2026
 
+### 2026-09-13 — Estimated pay from the 2026 draft grid, and occupation normalisation
+
+**Why now.** The site could never show pay from its source text: **44 of 9,757
+postings state a salary in the body, 5 of 917 attachments do.** `baseSalary`,
+`inf_salary_min/max` and the `SALARY_BUCKETS` facet all already existed, and the
+facet was gated behind `>= 100` rows — so it had never once rendered. A "cu
+salariu anunțat" filter would have returned ~40 jobs. The 2026 draft salary law
+makes pay *derivable* instead, which turns a dead field into the site's most
+distinctive one.
+
+**The grid was more usable than its own README said.** `docs/salarii/salarizare_admin_2026_bundle/`
+marked 835 of 1003 Anexa VIII coefficients `formula_XLOOKUP_necalculata`. That
+was a parser artifact — Excel saved the formula results, and
+`openpyxl(data_only=True)` reads them directly. `build-salary-grid.py` now
+materialises **2,189 rows across all 48 sheets, annexes I–IX**, which matters
+because postings are mostly not administration (sănătate 511, tehnic 499,
+administrație 382); matching against Anexa VIII alone reached 12%.
+
+Verified against the 153 rows the old bundle got right: 132 match exactly, and
+**all 21 discrepancies are bugs in the old parser** — it read the `Nr. crt`
+column as a coefficient (`Secretar general` at 1.0 instead of 5.4), and four of
+its "coefficients" were lei-per-hour tariffs.
+
+**The LLM emits a selector, never a number.** This is the load-bearing decision.
+The law is unadopted and has at least two public variants (VR 4,100 vs 4,000,
+and the coefficients differ too, not just the reference value). A number baked
+into extraction would have to be re-extracted every time the draft moves; a
+selector is re-costed by a script in seconds. `pipeline.py --steps
+occupations,salary,export-sqlite` is the whole re-cost path.
+
+**Title normalisation is a dictionary problem.** 9,757 postings carry 5,979
+distinct titles, 4,759 normalised, **3,723** once `ocupatii.parse_title()`
+strips grade, post count and department. Deterministic parsing alone lifts the
+exact-match rate against COR or the grid from 16% to 47%; only the residue goes
+to a model, keyed on the title and cached in `jobs_occupation`, so later runs
+touch almost nothing. 12 sample titles cost $0.0023.
+
+The model is handed shortlists of *real* COR occupations and *real* grid rows
+and asked to pick one or answer `none`; anything not on its shortlist is
+rejected afterwards. That guard is not optional — DeepSeek is the configured
+provider and has no server-side schema enforcement, so Pydantic plus this check
+are all that stand between the prompt and a plausible wrong code.
+
+**Population band is not a refinement, it decides the answer.** `Consilier
+gradul II` is coefficient 1.35 under 10.000 locuitori and 1.85 over 200.000 —
+5.541 vs 7.579 lei. `uat.py` therefore returns a *set* of plausible bands: a
+comună is under 10.000, but an `oraș` may be either side of the line, so the
+estimate widens across both and says so. A wrong narrow answer is worse than an
+honest wide one. Dropping a real `data/uat-populatie.csv` in place collapses
+most of that uncertainty; the code already prefers it when present.
+
+**Prompt v4** is a strict superset of v3, appended to its wording verbatim, with
+four fields: `competition_calendar`, `funding`, `employer_context`,
+`note_suplimentare`. `education` stays top-level because
+`export-to-sqlite.py::_v3_columns` detects a structured payload with
+`"education" in s` — nesting it would silently empty every v3 facet.
+
+The calendar earns its place twice over. `data/calendar.csv` holds 19,335 rows
+whose *event names* include 863 bare en-dashes, 512 bullets and 186 empty
+strings — the table parser transcribing layout instead of content. And the
+expiry date was being read off the last row of that table, which is the
+final-results date, weeks after applications close. v4 pulls
+`application_deadline` out as its own field and derives it from the submission
+event when the model files it only as an event.
+
+**Three bugs found by running it, not by reading it:**
+
+1. v4 truncated mid-JSON at the 2,000 output-token budget. It surfaced as
+   `Expected dict, got str`, because a truncated object does not parse and
+   `parse_json_response` hands back the raw text. The budget is now per-version.
+2. Grid selection must key on the function *name*, not a code prefix. Anexa VIII
+   numbers grades in a code's last segment (`…07.1`, `…07.3`) but Anexa II gives
+   each grade its own base code (`21.00201026` principal, `21.00201028`
+   debutant), so "the same function at another grade" is not expressible as a
+   prefix.
+3. The salary facet matched zero rows with the data sitting right there, and
+   nothing errored. PDO binds every value as text and a `COALESCE(...)`
+   expression has no type affinity, so SQLite compared a REAL against a TEXT —
+   and every number sorts before every string, making `>=` unconditionally
+   false. The old `inf_salary_min >= ?` worked only because a bare column
+   carries affinity and converts the bind. Both sites now `CAST(? AS REAL)`;
+   `test_salary_facet_sql.py` pins it.
+
+**Anexa II needed a source fix too.** It has no grade column — the grade is
+appended to the function cell after a semicolon (`"Asistent medical; …;
+principal"`). Without lifting it out, three rows with different coefficients
+were indistinguishable, and health is the largest family on the site.
+
+**Not done, deliberately:** net pay (the tax engine is versioned on fiscal
+dates, separately from the salary law), sporuri and the 20% cap (aggregated per
+ordonator, unknowable per posting), and a vector database — a controlled
+`skill_list` plus FTS5 covers the "highlight GIS" case, and `sqlite-vec` bolts
+on later without a schema change if it turns out not to.
+
+**Known limitation:** the dictionary key is the whole parsed title, so a posting
+advertising several roles in one title (`"ISTORIC, MUZEOGRAF, ARHEOLOG,
+REFERENT, GARDEROBIER"`) maps to a single occupation. v3's `positions[]` already
+models multi-role postings — 21% of active rows — and wiring it into the
+occupation pass is the obvious next step.
+
+---
+
 ### 2026-09-10 — iCal feed: subscribable, `?title=` custom calendar name
 
 The `/posturi.ics` feed was already a live query that honours every list filter

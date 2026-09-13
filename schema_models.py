@@ -511,6 +511,10 @@ CalendarStage = Literal[
     "publicare",
     "depunere_dosare",
     "selectie_dosare",
+    # Every other stage has a results counterpart; without this one the model
+    # had nowhere right to file "afişarea rezultatelor selecţiei dosarelor" and
+    # scattered it across five stages, including `rezultate_finale`.
+    "rezultate_selectie_dosare",
     "contestatii_dosare",
     "proba_scrisa",
     "rezultate_proba_scrisa",

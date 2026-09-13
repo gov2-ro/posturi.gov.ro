@@ -94,6 +94,21 @@ class TestCompetitionCalendar:
             {"events": [{"stage": "altele", "date": "2024-01-01"}] * 40})
         assert len(calendar.events) == CompetitionCalendar.MAX_EVENTS
 
+    def test_every_stage_that_produces_results_has_a_results_counterpart(self):
+        """A gap here is invisible: the model files the row somewhere plausible.
+
+        Without `rezultate_selectie_dosare`, ten rows whose verbatim label said
+        "rezultate ... dosare" were scattered across five stages — including
+        `rezultate_finale` and `rezultate_proba_scrisa`, both of which give a
+        reader the wrong date for "when do I hear back".
+        """
+        import typing
+        from schema_models import CalendarStage
+        stages = set(typing.get_args(CalendarStage))
+        for stage in ("selectie_dosare", "proba_scrisa", "proba_practica", "interviu"):
+            assert f"rezultate_{stage}" in stages or stage == "interviu", stage
+        assert "rezultate_interviu" in stages
+
     def test_an_unknown_stage_is_rejected_rather_than_stored_as_free_text(self):
         with pytest.raises(ValidationError):
             CompetitionCalendar.model_validate(

@@ -461,7 +461,26 @@ sequential calls, so it cannot be budgeted for. Full 9,603-posting v3 run: ~$15 
 
 ## Follow-ups from the salary/occupation work (2026-09-13)
 
-- [ ] **UAT population table.** `uat.py` returns a *set* of plausible population bands where the administrative type does not settle it (an `oraș` may be either side of 10.000), which widens the estimate. Dropping a real `data/uat-populatie.csv` (`nume,judet,populatie`, ~3,200 rows from INS/SIRUTA) in place collapses most of that uncertainty — `load_populations()` already prefers it when present. Worth it: the band spread is 5.541 vs 7.579 lei for the same post.
+- [ ] **UAT population table** — the largest remaining accuracy gain in the salary estimate, and it needs no code change.
+
+      `uat.py` returns a *set* of plausible population bands where the administrative type does not settle it: a comună is under 10.000, but an `oraș` may be either side of the line, so the estimate widens across two bands rather than guessing. The spread is real — `Consilier gradul II` is 5.541 lei under 10.000 locuitori and 7.579 over 200.000 — and ~4,575 postings sit at local-government employers.
+
+      **Where it goes:** `data/uat-populatie.csv`. `uat.py::load_populations()` already looks for it and prefers it over the type heuristic the moment it exists. After dropping it in: `python pipeline.py --steps salary,export-sqlite`.
+
+      **Required columns**
+      | Column | Example | Why |
+      |---|---|---|
+      | `nume` | `Ciugud` | Join key. Matched diacritic- and punctuation-insensitively against the UAT name parsed out of the employer (`Primăria Comunei Ciugud` → `Ciugud`). |
+      | `judet` | `Alba` | Disambiguation only — ~15 commune names repeat nationally (three `Vama`, several `Dumbrăvița`). |
+      | `populatie` | `3021` | Integer. Only the band boundaries matter: 10.000 / 50.000 / 200.000. |
+
+      **Worth adding if the source has them:** `siruta` (a stable numeric id — names get rewritten, `Vatra Dornei` vs `Vatra-Dornei`, codes do not, so refreshes stay safe) and `tip` (`comuna`/`oras`/`municipiu`, to cross-check the parsed type against the register instead of trusting the regex).
+
+      **~3,181 rows — UATs, not localities.** 2,862 communes, 216 towns, 103 municipalities. Not the ~13,000 component villages: the grid bands on the administrative unit, so a village takes its commune's population.
+
+      **Source:** INS 2021 census, *Populația rezidentă pe localități* — the same basis the draft law's bands are framed against.
+
+      **Sanity-check whatever you find.** A Wikipedia city list tried during this work had a garbled row (a nonexistent city with an impossible population) and a leaked Hungarian-language column, which is why nothing was shipped. The only UATs over 200.000 are București plus Cluj-Napoca, Iași, Constanța, Timișoara, Brașov, Craiova and Galați — a candidate file that disagrees with that is wrong.
 - [ ] **Multi-role titles map to one occupation.** The dictionary key is the whole parsed title, so `"ISTORIC, MUZEOGRAF, ARHEOLOG, REFERENT, GARDEROBIER"` resolves to a single occupation (and picked the last one). v3's `positions[]` already models multi-role postings — 21% of active rows — so the occupation pass should read it rather than the title.
 - [ ] **Run prompt v4 over the corpus.** v4 is registered, tested and verified on samples, but only a handful of `--compare` variants exist. Until a full run, `v4_funding_source` / `v4_employer_sector` are empty and the Finanțare and Sector facets stay hidden by design. Budget: roughly v3's ~$15, and the JSON Schema grows 18.7 KB → 24.3 KB.
 - [ ] **12 grid rows are flagged `needs_review`.** `python build-salary-grid.py --report` lists them: rows whose sheet offers a grade/studies axis but that carry none. Not blocking, but each is a row an estimate could silently widen on.

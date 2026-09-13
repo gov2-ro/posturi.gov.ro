@@ -130,6 +130,31 @@ announced salary, so the other order leaves `inferred.salary_min` one run stale.
 (postings are still linked to titles already in the dictionary, which needs no calls).
 The `schema` step is always LLM-driven; use `--skip schema` to omit it.
 
+### Sampling a prompt before a corpus-wide run
+
+A full run is thousands of LLM calls. `--compare` writes only to
+`jobs_jobpostingschemavariant` and never touches `jobs_jobposting.schema_json`,
+so a sample changes nothing the site serves and the nightly keeps using
+whatever `LLM_PROMPT_VERSION` says.
+
+```bash
+python llm-schema.py --prompt-version v4 --compare --model-filter deepseek \
+    --active-only --limit 200 --workers 4
+python ops/check-v4-sample.py
+```
+
+`--limit` takes the newest postings first, so a sample is reproducible and
+covers what the site is actually serving. `--model-filter` matters: without it
+`--compare` fans out to every model marked `enabled` in `models_config.json`.
+
+`check-v4-sample.py` reports the deadline-extraction rate, how far `expires_at`
+overstates it, how often v4 recovers a deadline the scraper missed and whether
+the two ever disagree, then exits non-zero if the sample is too small, the
+deadline rate too low, or the output hit the token budget — truncation is
+silent, so it has to be checked rather than noticed. It also flags calendar rows
+whose label says "rezultate" but whose stage does not, which is what an enum gap
+looks like from the outside.
+
 ### Estimated pay (`salarii/`, `ocupatii/`)
 
 Romanian public-sector postings essentially never state a salary — **44 of 9,757**

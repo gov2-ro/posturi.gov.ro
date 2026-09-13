@@ -381,6 +381,26 @@ class ExperienceRequirement(BaseModel):
     verbatim: Optional[str] = Field(default=None)
 
 
+#: Spellings the model reaches for that are unambiguously one of the enum
+#: values. `certificat_professional` (English double-s) turned up twice in a
+#: 200-posting sample and cost a repair each time — a second copy of a ~5k-token
+#: prompt to fix one letter. Only add entries here when the intent is beyond
+#: doubt; anything genuinely ambiguous should fail and be looked at.
+_CREDENTIAL_KIND_ALIASES = {
+    "certificat_professional": "certificat_profesional",
+    "certificat_profesionale": "certificat_profesional",
+    "permis_de_conducere": "permis_conducere",
+    "aviz_psihologic": "aviz_medical",
+    "autorizatie_de_practica": "autorizatie",
+}
+
+
+def _normalise_credential_kind(value):
+    if isinstance(value, str):
+        return _CREDENTIAL_KIND_ALIASES.get(value.strip().lower(), value)
+    return value
+
+
 class Credential(BaseModel):
     """Licence, authorisation, certificate or clearance the role requires.
 
@@ -389,8 +409,11 @@ class Credential(BaseModel):
     """
 
     label: str = Field(description="e.g. 'permis categoria B', 'certificat OAMGMAMR', 'autorizație ISCIR'.")
-    kind: Literal["permis_conducere", "certificat_profesional", "autorizatie", "aviz_medical",
-                  "acces_informatii_clasificate", "altele"] = Field(default="altele")
+    kind: Annotated[
+        Literal["permis_conducere", "certificat_profesional", "autorizatie", "aviz_medical",
+                "acces_informatii_clasificate", "altele"],
+        BeforeValidator(_normalise_credential_kind),
+    ] = Field(default="altele")
     issuer: Optional[str] = Field(default=None, description="Issuing body if named.")
     required: NullableTrueBool = Field(default=True)
 

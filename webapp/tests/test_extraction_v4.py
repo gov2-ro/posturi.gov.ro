@@ -122,16 +122,28 @@ class TestCompetitionCalendar:
             {"stage": "contestatii_proba_practica", "date": "2026-09-20"}]})
         assert cal.events[0].stage == "contestatii_proba_practica"
 
-    def test_the_prompt_offers_every_stage_the_schema_accepts(self):
-        """The model can only pick from what the prompt lists. A value present
-        in the schema but absent from the prompt is a gap in the other
-        direction, and just as invisible."""
+    def test_the_prompt_lists_every_stage_literally(self):
+        """Each value must appear verbatim, not as a template.
+
+        The first version of this test stripped the `rezultate_`/`contestatii_`
+        prefixes and checked the base name appeared — so a prompt saying
+        "`rezultate_<stagiu>` for its results" passed. It shouldn't have: the
+        model read `contestatii_selectie_dosare` as a `<stagiu>` and invented
+        `rezultate_contestatii_selectie_dosare`, which pushed the repair rate
+        from 18-in-100 to 111-in-200. A template invites composition; a list
+        does not.
+        """
         import json, typing
         from schema_models import CalendarStage
         prompt = json.loads((REPO_ROOT / "models_config.json").read_text(encoding="utf-8"))["prompts"]["v4"]
-        for stage in typing.get_args(CalendarStage):
-            base = stage.replace("rezultate_", "").replace("contestatii_", "")
-            assert base in prompt, f"{stage} is unreachable — {base} never appears in the prompt"
+        missing = [s for s in typing.get_args(CalendarStage) if f"`{s}`" not in prompt]
+        assert not missing, f"stages the model is never shown: {missing}"
+
+    def test_the_prompt_forbids_composing_new_stage_values(self):
+        import json
+        prompt = json.loads((REPO_ROOT / "models_config.json").read_text(encoding="utf-8"))["prompts"]["v4"]
+        assert "rezultate_contestatii" in prompt, "the invalid compound must be called out by name"
+        assert "<stagiu>" not in prompt, "a template invites the model to build new values"
 
     def test_an_unknown_stage_is_rejected_rather_than_stored_as_free_text(self):
         with pytest.raises(ValidationError):

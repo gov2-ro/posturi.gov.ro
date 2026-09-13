@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "avertisment": "Proiect de lege neadoptat. Orice cifră derivată din acest fișier este o estimare, nu un calcul salarial oficial.",
+  "sursa_coeficienti": "Proiect-COEFICIENTI-1-8-MMFTSS-16.07.2026-1000.xlsx",
+  "variante": {
+    "2026-07-17": {
+      "eticheta": "Varianta II — MMFTSS 16/17 iulie 2026",
+      "valoare_referinta_lei": 4100,
+      "data_aplicare_propusa": "2026-12-01",
+      "status_juridic": "proiect neadoptat",
+      "benzi_populatie": 4,
+      "are_grila": true,
+      "nota": "Singura variantă pentru care avem coeficienții materializați din workbook."
+    },
+    "2026-08-20": {
+      "eticheta": "Varianta III — 20 august 2026",
+      "valoare_referinta_lei": 4000,
+      "data_aplicare_propusa": "2026-12-01",
+      "status_juridic": "proiect neadoptat; cea mai recentă variantă publică identificată la 2026-09-11",
+      "benzi_populatie": 5,
+      "are_grila": false,
+      "nota": "Nu avem workbook-ul acestei variante. Coeficienții diferă, nu doar valoarea de referință, deci NU refolosi grila din iulie cu VR=4000."
+    }
+  },
+  "varianta_implicita": "2026-07-17",
+  "gradatii": {
+    "tip": "compunere_secventiala",
+    "rotunjire": "ceil_dupa_toate_etapele",
+    "sursa": "gradatii_standard.csv; multiplicatorii cumulaţi verificaţi faţă de 'notebook lm'",
+    "niveluri": [
+      {"nivel": 0, "vechime_min_ani": 0,  "vechime_max_exclusiv_ani": 3,    "majorare_pct": 0,   "multiplicator_cumulat": 1.0},
+      {"nivel": 1, "vechime_min_ani": 3,  "vechime_max_exclusiv_ani": 5,    "majorare_pct": 7.5, "multiplicator_cumulat": 1.075},
+      {"nivel": 2, "vechime_min_ani": 5,  "vechime_max_exclusiv_ani": 10,   "majorare_pct": 5.0, "multiplicator_cumulat": 1.12875},
+      {"nivel": 3, "vechime_min_ani": 10, "vechime_max_exclusiv_ani": 15,   "majorare_pct": 5.0, "multiplicator_cumulat": 1.1851875},
+      {"nivel": 4, "vechime_min_ani": 15, "vechime_max_exclusiv_ani": 20,   "majorare_pct": 2.5, "multiplicator_cumulat": 1.2148171875},
+      {"nivel": 5, "vechime_min_ani": 20, "vechime_max_exclusiv_ani": null, "majorare_pct": 2.5, "multiplicator_cumulat": 1.2451876171875}
+    ]
+  },
+  "parametri_legali": {
+    "raport_salarial_maxim": {"valoare": "1:8", "baza_legala": "Art. 5", "observatii": "Interval coeficienți 1,00 – 8,00."},
+    "plafon_sporuri_ordonator_pct": {"valoare": 20, "baza_legala": "Art. 21 alin. (2)", "observatii": "Agregat la nivel de ordonator, NU per angajat. Un calculator individual doar avertizează."},
+    "spor_control_financiar_preventiv_pct": {"valoare": 10, "baza_legala": "Art. 14", "baza_calcul": "salariul de bază"},
+    "spor_proiecte_fonduri_europene_pct": {"valoare": 40, "baza_legala": "Art. 15", "observatii": "„până la” 40%, în funcţie de timpul alocat."},
+    "spor_munca_de_noapte_pct": {"valoare": 25, "baza_legala": "Art. 17", "observatii": "Minim 3 ore între 22:00–06:00."},
+    "spor_handicap_pct": {"valoare": 15, "baza_legala": "Art. 19", "baza_calcul": "valoarea de referinţă"}
+  },
+  "fiscalitate": {
+    "inclusa": false,
+    "motiv": "Regulile fiscale se schimbă independent de legea salarizării şi trebuie versionate pe dată fiscală. Estimarea expusă în aplicaţie este BRUTĂ.",
+    "rate_exemplu_neutilizate": {"CAS": 0.25, "CASS": 0.1, "impozit_venit": 0.1}
+  },
+  "referinte": {
+    "mmftss": "https://mmuncii.gov.ro/legea-salarizarii/",
+    "implementare_de_referinta": "https://salarizare.zed-zen.com/",
+    "cod_sursa_referinta": "https://github.com/Jamaalx/salarizare-bugetari"
+  }
+}

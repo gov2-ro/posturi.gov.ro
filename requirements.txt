@@ -6,6 +6,9 @@ pandas
 markdownify
 pypandoc
 
+# Salary grid (build-salary-grid.py reads the MMFTSS coefficient workbook)
+openpyxl>=3.1
+
 # Document extraction
 PyPDF2
 python-docx>=1.1

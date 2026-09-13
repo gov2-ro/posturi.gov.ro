@@ -13,6 +13,10 @@ selenium/geckodriver.log
 !/data/reference/
 !/data/cached-responses/
 !/data/datasette/
+# The salary grid registry is a versioned artifact, not scratch output: every
+# estimate the site shows must be traceable to a row in it, including for an
+# older variant of the draft law. Rebuild with `python build-salary-grid.py`.
+!/data/salarii/
 /data/cached-responses/*
 /testbench/
 */scraping.log

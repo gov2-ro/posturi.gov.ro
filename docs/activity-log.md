@@ -71,7 +71,13 @@ event when the model files it only as an event.
 
 1. v4 truncated mid-JSON at the 2,000 output-token budget. It surfaced as
    `Expected dict, got str`, because a truncated object does not parse and
-   `parse_json_response` hands back the raw text. The budget is now per-version.
+   `parse_json_response` hands back the raw text — and retrying cannot help,
+   since the repair regenerates and truncates again. The budget is now
+   per-version, and **8,000** for v4. Measured on the 20 newest postings:
+   ordinary answers peak at ~3,050 output tokens even with a 19-event calendar;
+   the cost driver is multi-role postings, where every `positions[]` entry
+   repeats education, experience, skills and credentials. One advertising eight
+   roles used **7,277**.
 2. Grid selection must key on the function *name*, not a code prefix. Anexa VIII
    numbers grades in a code's last segment (`…07.1`, `…07.3`) but Anexa II gives
    each grade its own base code (`21.00201026` principal, `21.00201028`
@@ -85,6 +91,34 @@ event when the model files it only as an event.
    carries affinity and converts the bind. Both sites now `CAST(? AS REAL)`;
    `test_salary_facet_sql.py` pins it.
 
+**Run on the 20 newest postings (2026-09-13), which found three more things.**
+
+*The expiry date is wrong on essentially every posting.* Of the 17 that yielded
+an application deadline, **17 overstate it** — `expires_at` runs a median of 15
+days and up to 52 days past the date applications actually close. And the
+scraper had no `data_limita_depunere` at all for 11 of those 17; v4 recovered
+every one. This is worse than the backlog entry implied: it is not an occasional
+mis-parse, it is the default behaviour, and the site currently advertises closed
+competitions as open. Reconciling `expires_at` with
+`competition_calendar.application_deadline` is now the highest-value thing
+waiting on a corpus-wide v4 run.
+
+*A null boolean was costing a repair on a fifth of all postings — since v2.*
+Rule 1 of every prompt is "use `null` for anything not explicitly stated", but
+`ContractTerms.shift_work` and the six `required` / `in_specialty` /
+`none_required` flags were bare `bool`s. A model that could not tell whether a
+post involved shift work emitted `"shift_work": null`, doing exactly as it was
+told, and validation rejected it — costing a full repair round-trip, a second
+copy of a ~5k-token system prompt. They are now `NullableBool` /
+`NullableTrueBool`, falling back to the field's own default, which is what "not
+stated" already meant. Repairs on the sample dropped from 4 in 20 to 2 in 20.
+**This was a v2/v3 bug, not a v4 one** — every extraction run so far has paid it.
+
+*`--limit` was not reproducible.* `iter_postings` had no `ORDER BY`, so
+`--limit 20` returned whatever Postgres happened to scan first. It now orders
+newest first, which is both repeatable and the set most likely to reveal a
+prompt problem.
+
 **Anexa II needed a source fix too.** It has no grade column — the grade is
 appended to the function cell after a semicolon (`"Asistent medical; …;
 principal"`). Without lifting it out, three rows with different coefficients
@@ -95,6 +129,17 @@ dates, separately from the salary law), sporuri and the 20% cap (aggregated per
 ordonator, unknowable per posting), and a vector database — a controlled
 `skill_list` plus FTS5 covers the "highlight GIS" case, and `sqlite-vec` bolts
 on later without a schema change if it turns out not to.
+
+**What the exploration turned up but this change did not act on** (all now in
+`docs/backlog.md`): v3 already extracts `contract` (1,390 rows),
+`bibliography_topics` (1,041) and `seniority_hint`, and *none* of them is
+exported or displayed anywhere; `skill_list` has drifted to 1,933 distinct
+labels over 1,467 postings, 74% of them appearing exactly once, with
+`operare PC` / `operare calculator` / `Microsoft Office` recording the same fact
+three ways; `policy_domains` has a dead tail (`demografie_migratie` 1,
+`turism` 3); and the PHP app keeps a second, hand-maintained copy of every v3
+vocabulary, which this change extended with three more label constants rather
+than fixing.
 
 **Known limitation:** the dictionary key is the whole parsed title, so a posting
 advertising several roles in one title (`"ISTORIC, MUZEOGRAF, ARHEOLOG,

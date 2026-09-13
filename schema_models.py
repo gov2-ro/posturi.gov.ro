@@ -14,9 +14,21 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import ClassVar, Literal, Optional
+from typing import Annotated, ClassVar, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
+
+
+#: A boolean that tolerates an explicit `null` from the model.
+#:
+#: Rule 1 of every prompt since v2 is "use `null` for anything not explicitly
+#: stated", so a model that cannot tell whether a post involves shift work emits
+#: `"shift_work": null` — doing exactly as it was told. A bare `bool` rejects
+#: that, and the rejection costs a full repair round-trip (a second copy of a
+#: ~5k-token system prompt) on a fifth of all postings. Falling back to the
+#: field's own default is both cheaper and what "not stated" already means here.
+NullableBool = Annotated[bool, BeforeValidator(lambda v: False if v is None else v)]
+NullableTrueBool = Annotated[bool, BeforeValidator(lambda v: True if v is None else v)]
 
 
 SalaryUnit = Literal["HOUR", "DAY", "WEEK", "MONTH", "YEAR"]
@@ -260,7 +272,7 @@ class EducationRequirement(BaseModel):
     specialization: Optional[str] = Field(
         default=None, description="Narrower specialisation if named, e.g. 'medicină de familie'."
     )
-    required: bool = Field(
+    required: NullableTrueBool = Field(
         default=True, description="False when the posting frames this as an advantage, not a condition."
     )
     verbatim: Optional[str] = Field(default=None, description="The original sentence, for display.")
@@ -301,7 +313,7 @@ class SkillRequirement(BaseModel):
     proficiency: Optional[Proficiency] = Field(
         default=None, description="Only when the posting says so ('cunoștințe avansate')."
     )
-    required: bool = Field(default=True, description="False for 'constituie un avantaj'.")
+    required: NullableTrueBool = Field(default=True, description="False for 'constituie un avantaj'.")
     evidence: Optional[str] = Field(default=None, description="Phrase the tag was taken from.")
 
 
@@ -336,7 +348,7 @@ class LanguageRequirement(BaseModel):
     cefr: Optional[CefrLevel] = Field(
         default=None, description="CEFR level if stated or clearly implied."
     )
-    required: bool = Field(default=True)
+    required: NullableTrueBool = Field(default=True)
 
     @model_validator(mode="after")
     def _derive_iso_code(self):
@@ -358,12 +370,12 @@ class ExperienceRequirement(BaseModel):
         default=None, ge=0, le=50,
         description="Minimum years. Use 0.5 for '6 luni'. Null if unstated.",
     )
-    in_specialty: bool = Field(
+    in_specialty: NullableBool = Field(
         default=False,
         description="True for 'vechime în specialitate', false for general 'vechime în muncă'.",
     )
     domain: Optional[str] = Field(default=None, description="Field the experience must be in.")
-    none_required: bool = Field(
+    none_required: NullableBool = Field(
         default=False, description="True when the posting explicitly says no experience is needed."
     )
     verbatim: Optional[str] = Field(default=None)
@@ -380,7 +392,7 @@ class Credential(BaseModel):
     kind: Literal["permis_conducere", "certificat_profesional", "autorizatie", "aviz_medical",
                   "acces_informatii_clasificate", "altele"] = Field(default="altele")
     issuer: Optional[str] = Field(default=None, description="Issuing body if named.")
-    required: bool = Field(default=True)
+    required: NullableTrueBool = Field(default=True)
 
 
 class ContractTerms(BaseModel):
@@ -394,7 +406,7 @@ class ContractTerms(BaseModel):
     hours_per_week: Optional[float] = Field(default=None, ge=1, le=80)
     remote_mode: Optional[RemoteMode] = Field(default=None)
     probation_months: Optional[int] = Field(default=None, ge=0, description="Perioadă de probă.")
-    shift_work: bool = Field(default=False, description="Ture / gărzi / weekend work.")
+    shift_work: NullableBool = Field(default=False, description="Ture / gărzi / weekend work.")
 
 
 class PositionRequirement(BaseModel):

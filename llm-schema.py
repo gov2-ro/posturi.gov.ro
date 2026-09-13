@@ -74,11 +74,16 @@ def get_prompt(prompt_version="v1"):
 
 
 #: Output-token budget per prompt version. v3 fits comfortably in 2,000; v4 adds
-#: a typed competition calendar (up to ~16 dated events, each with a verbatim
-#: label) plus `note_suplimentare`, and a long posting truncates mid-JSON — which
-#: surfaces as "Expected dict, got str", because a truncated object does not
-#: parse and `parse_json_response` hands back the raw text.
-MAX_OUTPUT_TOKENS = {"v4": 4000}
+#: a typed competition calendar plus `note_suplimentare`, and a long posting
+#: truncates mid-JSON — which surfaces as "Expected dict, got str", because a
+#: truncated object does not parse and `parse_json_response` hands back the raw
+#: text. Retrying does not help: the repair regenerates and truncates again.
+#:
+#: Measured on the 20 newest postings: ordinary v4 answers peak at ~3,050 output
+#: tokens even with a 19-event calendar. The cost driver is multi-role postings,
+#: where every entry in `positions[]` repeats education, experience, skills and
+#: credentials — one advertising eight roles blew past 4,000 on its own.
+MAX_OUTPUT_TOKENS = {"v4": 8000}
 DEFAULT_MAX_OUTPUT_TOKENS = 2000
 
 
@@ -499,9 +504,14 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
     """
     where, params = _selection_where(slug_filter, active_only, resume_key)
     with conn.cursor() as cur:
+        # Newest first, so `--limit N` means "the N most recent postings" and is
+        # reproducible. Without an ORDER BY it returned whatever Postgres
+        # happened to scan first, which made a --limit test run un-repeatable
+        # and never showed the postings most likely to reveal a prompt problem.
         cur.execute(
             "SELECT id, url, body_markdown, attachment_text, schema_json "
-            "FROM jobs_jobposting" + where,
+            "FROM jobs_jobposting" + where +
+            " ORDER BY published_at DESC NULLS LAST, id DESC",
             params,
         )
         for row_id, url, body, attachment, existing_schema in cur:

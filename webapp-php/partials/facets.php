@@ -127,6 +127,12 @@
         // job instead of one per spelling of its title. Funding and sector come
         // from prompt v4 and, like the v3 groups, stay hidden until it has run.
         facet_group('Ocupație',          $occupation_options, 'occupation', $occ_sel, true);
+        facet_group('Contract',          $duration_options,   'duration',   $duration_sel);
+        facet_group('Program',           $schedule_options,   'schedule',   $schedule_sel);
+        if ($shift_count) {
+            facet_group('Lucru în ture', [['val' => '1', 'label' => 'Ture, gărzi sau weekend', 'cnt' => $shift_count]],
+                        'shift', $shift ? ['1'] : []);
+        }
         facet_group('Finanțare',         $funding_options,    'funding',    $funding_sel);
         facet_group('Sector angajator',  $sector_options,     'sector',     $sector_sel);
 

@@ -138,6 +138,16 @@ CREATE TABLE job_postings (
     v3_policy_domains       TEXT NOT NULL DEFAULT '[]',
     v3_exam_stages          TEXT NOT NULL DEFAULT '[]',
     v3_positions            INTEGER,
+    -- Extracted by v3 since day one and, until now, exported nowhere: the
+    -- contract terms, the career stage and the bibliography themes. No new LLM
+    -- work — this is data the project already paid for and could not browse.
+    v3_contract_duration    TEXT NOT NULL DEFAULT '',
+    v3_schedule             TEXT NOT NULL DEFAULT '',
+    v3_hours_per_week       REAL,
+    v3_shift_work           INTEGER,
+    v3_remote_mode          TEXT NOT NULL DEFAULT '',
+    v3_seniority_hint       TEXT NOT NULL DEFAULT '',
+    v3_bibliography         TEXT NOT NULL DEFAULT '[]',
     inf_salary_min          REAL,
     inf_salary_max          REAL,
     -- Occupation, from the title dictionary (normalize-titles.py). Collapses
@@ -178,6 +188,8 @@ CREATE INDEX idx_jp_locality   ON job_postings(locality);
 CREATE INDEX idx_jp_eqf        ON job_postings(v3_eqf_level);
 CREATE INDEX idx_jp_expires    ON job_postings(expires_at);
 CREATE INDEX idx_jp_deadline   ON job_postings(apply_deadline);
+CREATE INDEX idx_jp_duration   ON job_postings(v3_contract_duration);
+CREATE INDEX idx_jp_schedule   ON job_postings(v3_schedule);
 CREATE INDEX idx_jp_published  ON job_postings(published_at DESC);
 CREATE INDEX idx_jp_level      ON job_postings(job_level);
 CREATE INDEX idx_jp_family     ON job_postings(inf_profession_family);
@@ -333,6 +345,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             v3["eqf_level"], v3["study_level"], v3["isced_fields"], v3["study_labels"],
             v3["skills"], v3["languages"], v3["credentials"],
             v3["policy_domains"], v3["exam_stages"], v3["positions"],
+            v3["contract_duration"], v3["schedule"], v3["hours_per_week"],
+            v3["shift_work"], v3["remote_mode"], v3["seniority_hint"], v3["bibliography"],
             inferred.get("profession_family"),
             inferred.get("seniority"),
             json.dumps(anomaly_flags, ensure_ascii=False),
@@ -383,7 +397,16 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     con.execute("""
         INSERT INTO job_postings_fts(rowid, title, employer_name, judet_name, body_text)
         SELECT id, title, employer_name, TRIM(locality || ' ' || judet_name),
-               COALESCE(body_markdown, '')
+               -- The body, plus two things worth finding that are not in it.
+               -- `occ_canonical` makes a search for "îngrijitor" match a posting
+               -- titled "ÎNGRIJITOARE"; the bibliography themes make "achiziții
+               -- publice" find the competitions that actually examine on it,
+               -- which is usually the reason someone searches for a subject.
+               -- FTS5's unicode61 tokeniser treats the JSON punctuation as
+               -- separators, so the array needs no unpacking.
+               COALESCE(body_markdown, '') || ' ' ||
+               COALESCE(occ_canonical, '') || ' ' ||
+               COALESCE(v3_bibliography, '')
         FROM job_postings
     """)
     print("done")
@@ -505,6 +528,9 @@ def _v3_columns(schema_json_text) -> dict:
         "eqf_level": None, "study_level": "", "isced_fields": "[]", "study_labels": "[]",
         "skills": "[]", "languages": "[]", "credentials": "[]",
         "policy_domains": "[]", "exam_stages": "[]", "positions": None,
+        "contract_duration": "", "schedule": "", "hours_per_week": None,
+        "shift_work": None, "remote_mode": "", "seniority_hint": "",
+        "bibliography": "[]",
     }
     if not schema_json_text:
         return empty
@@ -521,6 +547,7 @@ def _v3_columns(schema_json_text) -> dict:
     edu = s.get("education") or {}
     fields = edu.get("fields_of_study") or []
     langs = s.get("language_list") or []
+    contract = s.get("contract") or {}
 
     return {
         "eqf_level": edu.get("eqf_level"),
@@ -537,6 +564,15 @@ def _v3_columns(schema_json_text) -> dict:
         "policy_domains": dumps(s.get("policy_domains") or []),
         "exam_stages": dumps(s.get("exam_stages") or []),
         "positions": len(s.get("positions") or []) or None,
+        "contract_duration": contract.get("duration") or "",
+        "schedule": contract.get("schedule") or "",
+        "hours_per_week": contract.get("hours_per_week"),
+        # Tri-state on purpose: NULL means "no contract block at all", 0 means
+        # the posting was read and says no shift work.
+        "shift_work": (1 if contract.get("shift_work") else 0) if contract else None,
+        "remote_mode": contract.get("remote_mode") or "",
+        "seniority_hint": s.get("seniority_hint") or "",
+        "bibliography": dumps(s.get("bibliography_topics") or []),
     }
 
 
@@ -557,6 +593,8 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
             v3_eqf_level, v3_study_level, v3_isced_fields, v3_study_labels,
             v3_skills, v3_languages, v3_credentials,
             v3_policy_domains, v3_exam_stages, v3_positions,
+            v3_contract_duration, v3_schedule, v3_hours_per_week,
+            v3_shift_work, v3_remote_mode, v3_seniority_hint, v3_bibliography,
             inf_profession_family, inf_seniority, inf_anomaly_flags,
             inf_work_type, inf_remote_eligible, inf_requires_computer,
             inf_experience_years, inf_studies_required,
@@ -568,7 +606,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
             apply_deadline, deadline_source
         ) VALUES (
             ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
         )
     """, batch)
 

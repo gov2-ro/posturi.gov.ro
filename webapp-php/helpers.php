@@ -287,6 +287,44 @@ const STUDIES_LABELS = [
     'generala'    => 'Generală',
 ];
 
+// ---- Contract terms (prompt v3, exported from 2026-09-13) ----
+
+/** Fixed-term vs open-ended. Finer than the scraped `job_type`, which only ever
+ *  says Permanent/Temporar and disagrees with this on a minority of rows. */
+const CONTRACT_DURATION_LABELS = [
+    'nedeterminata' => 'Perioadă nedeterminată',
+    'determinata'   => 'Perioadă determinată',
+    'sezonier'      => 'Sezonier',
+    'proiect'       => 'Pe durata proiectului',
+];
+
+const SCHEDULE_LABELS = [
+    'norma_intreaga' => 'Normă întreagă',
+    'norma_partiala' => 'Normă parțială',
+    'schimburi'      => 'În schimburi',
+    'tura_noapte'    => 'Tură de noapte',
+    'flexibil'       => 'Program flexibil',
+];
+
+const REMOTE_MODE_LABELS = [
+    'la_sediu'  => 'La sediu',
+    'hibrid'    => 'Hibrid',
+    'telemunca' => 'Telemuncă',
+];
+
+/** Career stage as v3 reads it. A different axis from `inf_seniority`, which
+ *  names the role family (referent, inspector, consilier) rather than the
+ *  stage — they are not interchangeable and are not merged. */
+const SENIORITY_HINT_LABELS = [
+    'debutant'   => 'Debutant',
+    'asistent'   => 'Asistent',
+    'practicant' => 'Practicant',
+    'specialist' => 'Specialist',
+    'principal'  => 'Principal',
+    'superior'   => 'Superior',
+    'conducere'  => 'Conducere',
+];
+
 // ---- Occupation, funding and employer sector (prompt v4 + the title dictionary) ----
 
 const FUNDING_SOURCE_LABELS = [
@@ -785,6 +823,9 @@ const FILTER_CHIP_GROUPS = [
     'funding'        => 'Finanțare',
     'sector'         => 'Sector',
     'has_salary'     => '',
+    'duration'       => 'Contract',
+    'schedule'       => 'Program',
+    'shift'          => '',
 ];
 
 /**
@@ -797,7 +838,7 @@ const MULTI_PARAMS = [
     'judet', 'level', 'type', 'categorie', 'employer_cat',
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
-    'occupation', 'funding', 'sector',
+    'occupation', 'funding', 'sector', 'duration', 'schedule',
 ];
 
 /** Form field name for a filter param. */
@@ -858,6 +899,9 @@ function filter_value_label(string $key, string $value): string {
         'stage'                            => exam_stage_label($value),
         'computer'                         => $value === 'solicitat' ? 'Calculator solicitat' : 'Fără calculator',
         'funding'                          => FUNDING_SOURCE_LABELS[$value] ?? $value,
+        'duration'                         => CONTRACT_DURATION_LABELS[$value] ?? $value,
+        'schedule'                         => SCHEDULE_LABELS[$value] ?? $value,
+        'shift'                            => 'Lucru în ture / gărzi',
         'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
         'has_salary'                       => 'Cu salariu estimat',
         'expires_after', 'expires_before'  => fmt_date($value),
@@ -1190,6 +1234,13 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         }
     }
 
+    // Shift work is a yes/no a reader either wants or rules out, so it is a
+    // switch rather than a facet group. NULL means "no contract block", which
+    // is not the same as "no shift work" and must not match either way.
+    if (($p['shift'] ?? '') === '1' && $excl !== 'shift') {
+        $where[] = "j.v3_shift_work = 1";
+    }
+
     // Quick choice: only postings we can put a number on.
     if (($p['has_salary'] ?? '') === '1' && $excl !== 'has_salary') {
         $where[] = SALARY_EXPR . " IS NOT NULL";
@@ -1200,6 +1251,8 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         'occupation' => 'occ_canonical',
         'funding'    => 'v4_funding_source',
         'sector'     => 'v4_employer_sector',
+        'duration'   => 'v3_contract_duration',
+        'schedule'   => 'v3_schedule',
     ] as $param => $column) {
         $values = array_filter((array)($p[$param] ?? []), fn ($v) => (string)$v !== '');
         if (!$values || $excl === $param) continue;

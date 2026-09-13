@@ -35,6 +35,9 @@ $occ_sel       = (array)($_GET['occupation'] ?? []);
 $funding_sel   = (array)($_GET['funding']    ?? []);
 $sector_sel    = (array)($_GET['sector']     ?? []);
 $has_salary    = $_GET['has_salary'] ?? '';
+$duration_sel  = (array)($_GET['duration'] ?? []);
+$schedule_sel  = (array)($_GET['schedule'] ?? []);
+$shift         = $_GET['shift'] ?? '';
 $sort         = $_GET['sort']          ?? '';
 $page         = max(1, (int)($_GET['page'] ?? 1));
 
@@ -375,6 +378,17 @@ $salary_options = [];
 // most — before the title dictionary, `Îngrijitor`, `ÎNGRIJITOR` and
 // `îngrijitor` were three separate values of the free-text title.
 $occupation_options = get_facet('occ_canonical',      'occupation', 40);
+// Contract terms: extracted by v3 all along, exported and browsable from
+// 2026-09-13. `duration` is finer than the scraped `job_type` (Permanent /
+// Temporar) — it distinguishes a fixed-term post from one that runs only as
+// long as its project.
+$duration_options = get_facet('v3_contract_duration', 'duration');
+$schedule_options = get_facet('v3_schedule',          'schedule');
+foreach ($duration_options as &$o) { $o['label'] = CONTRACT_DURATION_LABELS[$o['val']] ?? $o['val']; }
+unset($o);
+foreach ($schedule_options as &$o) { $o['label'] = SCHEDULE_LABELS[$o['val']] ?? $o['val']; }
+unset($o);
+$shift_count = scope_count(facet_scope('shift'), ["j.v3_shift_work = 1"]);
 $funding_options    = get_facet('v4_funding_source',  'funding');
 $sector_options     = get_facet('v4_employer_sector', 'sector');
 foreach ($funding_options as &$o) { $o['label'] = FUNDING_SOURCE_LABELS[$o['val']] ?? $o['val']; }

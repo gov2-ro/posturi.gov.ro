@@ -129,3 +129,49 @@ class TestLikeProbeCompatibility:
     def test_diacritics_are_not_escaped(self, v3cols):
         out = v3cols(json.dumps(V3_PAYLOAD))
         assert "analiză spațială" in out["skills"]
+
+
+class TestContractAndBibliography:
+    """Extracted by v3 from the start; exported and browsable only from
+    2026-09-13. `contract` was populated on 1,470 of 1,549 structured payloads
+    and `bibliography_topics` on 1,102, none of it reachable from the site."""
+
+    def test_contract_terms_are_flattened(self, v3cols):
+        got = v3cols(json.dumps({"education": {}, "contract": {
+            "duration": "determinata", "duration_months": 12,
+            "schedule": "norma_partiala", "hours_per_week": 20.0,
+            "remote_mode": "hibrid", "shift_work": True,
+        }}))
+        assert got["contract_duration"] == "determinata"
+        assert got["schedule"] == "norma_partiala"
+        assert got["hours_per_week"] == 20.0
+        assert got["remote_mode"] == "hibrid"
+        assert got["shift_work"] == 1
+
+    def test_shift_work_is_tri_state(self, v3cols):
+        """NULL ("the posting was never read for it") is not 0 ("it says no").
+
+        A facet that treats them the same silently claims thousands of postings
+        involve no shift work when nothing was ever extracted about them.
+        """
+        no_contract = v3cols(json.dumps({"education": {}}))
+        assert no_contract["shift_work"] is None
+
+        says_no = v3cols(json.dumps({"education": {}, "contract": {"shift_work": False}}))
+        assert says_no["shift_work"] == 0
+
+    def test_bibliography_topics_are_a_json_array(self, v3cols):
+        got = v3cols(json.dumps({"education": {},
+                                 "bibliography_topics": ["Codul administrativ", "achiziții publice"]}))
+        assert json.loads(got["bibliography"]) == ["Codul administrativ", "achiziții publice"]
+
+    def test_seniority_hint_is_carried(self, v3cols):
+        got = v3cols(json.dumps({"education": {}, "seniority_hint": "principal"}))
+        assert got["seniority_hint"] == "principal"
+
+    def test_a_v2_payload_leaves_all_of_them_empty(self, v3cols):
+        got = v3cols(json.dumps({"responsibilities": "x", "baseSalary": None}))
+        assert got["contract_duration"] == "" and got["schedule"] == ""
+        assert got["hours_per_week"] is None and got["shift_work"] is None
+        assert got["bibliography"] == "[]" and got["seniority_hint"] == ""
+

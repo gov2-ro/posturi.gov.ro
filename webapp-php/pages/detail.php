@@ -465,6 +465,57 @@ require __DIR__ . '/../inc/header.php';
       </div>
       <?php endif; ?>
 
+      <!-- Contract terms and bibliography — extracted by v3 since it first ran
+           and, until 2026-09-13, displayed nowhere. No new extraction: this is
+           data the project had already paid for and could not see. -->
+      <?php
+        $v3c = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : [];
+        $ct  = $v3c['contract'] ?? null;
+        $bib = $v3c['bibliography_topics'] ?? [];
+        $sen = $v3c['seniority_hint'] ?? null;
+        $terms = [];
+        if ($ct) {
+            if (!empty($ct['duration'])) {
+                $d = CONTRACT_DURATION_LABELS[$ct['duration']] ?? $ct['duration'];
+                if (!empty($ct['duration_months'])) $d .= ' (' . (int)$ct['duration_months'] . ' luni)';
+                $terms['Contract'] = $d;
+            }
+            if (!empty($ct['schedule']))    $terms['Program'] = SCHEDULE_LABELS[$ct['schedule']] ?? $ct['schedule'];
+            if (!empty($ct['hours_per_week'])) $terms['Ore/săptămână'] = rtrim(rtrim(number_format((float)$ct['hours_per_week'], 1, ',', '.'), '0'), ',');
+            if (!empty($ct['remote_mode'])) $terms['Loc de muncă'] = REMOTE_MODE_LABELS[$ct['remote_mode']] ?? $ct['remote_mode'];
+            if (!empty($ct['probation_months'])) $terms['Perioadă de probă'] = (int)$ct['probation_months'] . ' luni';
+            if (!empty($ct['shift_work']))  $terms['Ture'] = 'Da — ture, gărzi sau weekend';
+        }
+        if ($sen && isset(SENIORITY_HINT_LABELS[$sen])) $terms['Grad'] = SENIORITY_HINT_LABELS[$sen];
+      ?>
+      <?php if ($terms || $bib): ?>
+      <section class="mb-6 rounded-lg border border-line bg-sunken p-4">
+        <?php if ($terms): ?>
+        <h2 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții contractuale</h2>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <?php foreach ($terms as $k => $v): ?>
+            <dt class="text-ink-muted"><?= e($k) ?></dt>
+            <dd class="text-ink"><?= e((string)$v) ?></dd>
+          <?php endforeach; ?>
+        </dl>
+        <?php endif; ?>
+
+        <?php if ($bib): ?>
+        <div class="<?= $terms ? 'mt-4 border-t border-line/60 pt-3' : '' ?>">
+          <h2 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Tematica examenului</h2>
+          <div class="flex flex-wrap gap-1.5">
+            <?php foreach ($bib as $topic): ?>
+              <?php $t = trim((string)$topic); if ($t === '') continue; ?>
+              <a href="/?q=<?= urlencode($t) ?>"
+                 class="rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-ink hover:border-gov hover:text-gov"><?= e($t) ?></a>
+            <?php endforeach; ?>
+          </div>
+          <p class="mt-2 text-xs text-ink-faint">Temele din bibliografie, pe scurt. Caută alte concursuri pe aceeași temă.</p>
+        </div>
+        <?php endif; ?>
+      </section>
+      <?php endif; ?>
+
       <!-- Estimated pay from the 2026 draft salary grid.
            Derived, never scraped: 44 of 9,757 postings state a salary in the
            text. The law is an unadopted draft, so the card never shows a bare

@@ -2,6 +2,61 @@
 
 ## 2026
 
+### 2026-09-13 — "Active" means you can still apply; v3's unused fields surfaced
+
+**Two changes, both about data we already had and were not using.**
+
+**"Active" now follows the application deadline.** The site treated `expires_at`
+as the cutoff, but that is when the *competition* ends — the final-results date.
+On the 20-posting v4 sample it ran a median of 15 days, up to 52, past the day
+applications closed, and on the live export **33 postings shown as active had a
+deadline that passed between 4 and 275 days ago**. One had been advertising a
+competition that closed nine months earlier. If you cannot apply, it is not
+active.
+
+`apply_deadline` is computed at export time from the best source available —
+the v4 competition calendar (`concurs`), else the scraped card field (`anunt`),
+else `expires_at` (`expirare`) — and `deadline_source` records which. The
+fallback is the point: v4 has not run corpus-wide and only 81 of 1,621 active
+postings carry a scraped deadline, so 94% keep exactly the behaviour they had
+and every posting v4 later reaches improves on its own.
+
+Status, "expiră în 7 zile", deadline sorting, the date-range filters, countdown
+badges, the employer split, the employers/stats counts, the sitemap staleness
+check and Schema.org `validThrough` all follow it. So do the feeds — an iCal
+reminder for a competition that closed three weeks ago is worse than no
+reminder. `expires_at` stays where it still means something: the detail page
+shows "concursul se încheie" beside the deadline when they differ, and
+`pages/stats.php` still measures competition duration with it. **Showing only
+one of the two dates is what made closed competitions read as open.** Active
+drops 1613 → 1580 on the current export.
+
+**v3's unused fields are now browsable.** `contract` was populated on 1,470 of
+1,549 structured payloads, `bibliography_topics` on 1,102, `seniority_hint` on
+635 — extracted since v3 first ran, exported nowhere, visible nowhere. No new
+LLM work was needed; the project had already paid for all of it.
+
+They now drive three facets (Contract, Program, Lucru în ture) and a detail-page
+block. `contract.duration` is strictly better than the scraped `job_type`: it
+separates a fixed-term post from one that runs only as long as its project,
+where `job_type` only ever says Permanent or Temporar.
+
+Two smaller things came out of it. `shift_work` is exported **tri-state** —
+NULL means no contract block was ever read, 0 means the posting says no shift
+work, and collapsing them would claim thousands of postings involve no shift
+work on the strength of no evidence at all. And the FTS index now covers
+`occ_canonical` and the bibliography themes, so a search for "îngrijitor"
+matches a posting titled "ÎNGRIJITOARE", and "achiziții publice" finds the 102
+competitions that actually examine on it rather than only those that say the
+words in the body.
+
+**Deliberately not merged:** `inf_seniority` names the role family (referent,
+inspector, consilier) and v3's `seniority_hint` the career stage (debutant,
+principal, superior). They are different axes, not two versions of one, so they
+are not reconciled — but they now both appear, which is a backlog item.
+
+---
+
 ### 2026-09-13 — Estimated pay from the 2026 draft grid, and occupation normalisation
 
 **Why now.** The site could never show pay from its source text: **44 of 9,757

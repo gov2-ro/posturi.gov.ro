@@ -324,6 +324,25 @@ const OCC_CONFIDENCE_LABELS = [
     'none'     => 'Fără corespondent',
 ];
 
+/**
+ * Display form for one value of the salary selector.
+ *
+ * The selector is stored in the grid's own vocabulary so the calculator can be
+ * re-run against it; this is only for reading. A value may be a list — an
+ * unresolved population band is two plausible bands, not a guess.
+ */
+function selector_value_label(string $field, $value): string {
+    if (is_array($value)) {
+        return implode(' sau ', array_map(fn($v) => selector_value_label($field, $v), $value));
+    }
+    $value = (string)$value;
+    return match ($field) {
+        'studii'   => STUDIES_LABELS[$value] ?? $value,
+        'anexa'    => 'Anexa ' . $value,
+        default    => $value,
+    };
+}
+
 /** Selector fields shown in the "cum a fost calculat" breakdown. */
 const SELECTOR_FIELD_LABELS = [
     'grad_treapta'        => 'Grad',
@@ -336,6 +355,16 @@ const SELECTOR_FIELD_LABELS = [
 ];
 
 // ---- Salary/experience buckets ----
+
+/**
+ * The pay figure the site filters and sorts on, in SQL.
+ *
+ * An announced salary wins where one exists, but only 44 of 9,757 postings
+ * state one, so in practice this is the estimate from the 2026 draft grid.
+ * Defined once because three call sites have to agree: build_filters(), the
+ * facet counts in pages/list.php, and the landing shortcut.
+ */
+const SALARY_EXPR = 'COALESCE(j.inf_salary_min, j.sal_min)';
 
 const SALARY_BUCKETS = [
     ['key' => 'sub-3000',   'label' => 'sub 3000',    'min' => 0,    'max' => 3000],
@@ -1119,14 +1148,20 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // opened. `sal_min` comes from the draft salary grid and covers everything
     // with a resolved occupation. COALESCE keeps a genuinely announced salary
     // ahead of the estimate where one exists.
+    //
+    // CAST(? AS REAL) is load-bearing. PDO's execute($array) binds every value
+    // as text, and COALESCE() returns an expression with no column affinity, so
+    // SQLite compares a REAL against a TEXT — and a number is always less than
+    // a string, making every `>=` false. The old `inf_salary_min >= ?` only
+    // worked because a bare column carries REAL affinity and converts the bind.
     if ($sal_bucket && $excl !== 'salary_bucket') {
         foreach (SALARY_BUCKETS as $b) {
             if ($b['key'] !== $sal_bucket) continue;
-            $where[] = "COALESCE(j.inf_salary_min, j.sal_min) IS NOT NULL";
-            $where[] = "COALESCE(j.inf_salary_min, j.sal_min) >= ?";
+            $where[] = SALARY_EXPR . " IS NOT NULL";
+            $where[] = SALARY_EXPR . " >= CAST(? AS REAL)";
             $binds[] = $b['min'];
             if ($b['max'] !== null) {
-                $where[] = "COALESCE(j.inf_salary_min, j.sal_min) < ?";
+                $where[] = SALARY_EXPR . " < CAST(? AS REAL)";
                 $binds[] = $b['max'];
             }
         }
@@ -1134,7 +1169,7 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
 
     // Quick choice: only postings we can put a number on.
     if (($p['has_salary'] ?? '') === '1' && $excl !== 'has_salary') {
-        $where[] = "COALESCE(j.inf_salary_min, j.sal_min) IS NOT NULL";
+        $where[] = SALARY_EXPR . " IS NOT NULL";
     }
 
     // Plain-column facets added with the occupation dictionary and prompt v4.

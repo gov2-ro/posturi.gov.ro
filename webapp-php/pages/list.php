@@ -351,16 +351,17 @@ $exp_options = [];
 $salary_options = [];
 {
     $sal_total = (int)db()->query(
-        "SELECT COUNT(*) FROM job_postings WHERE COALESCE(inf_salary_min, sal_min) IS NOT NULL"
+        "SELECT COUNT(*) FROM job_postings j WHERE " . SALARY_EXPR . " IS NOT NULL"
     )->fetchColumn();
     if ($sal_total >= 100) {
         $s = facet_scope('salary_bucket');
         foreach (SALARY_BUCKETS as $bk) {
-            $extra_w = ["COALESCE(j.inf_salary_min, j.sal_min) IS NOT NULL",
-                        "COALESCE(j.inf_salary_min, j.sal_min) >= ?"];
+            // CAST(? AS REAL): see the note in build_filters() — a COALESCE
+            // expression has no column affinity and PDO binds text.
+            $extra_w = [SALARY_EXPR . " IS NOT NULL", SALARY_EXPR . " >= CAST(? AS REAL)"];
             $extra_b = [$bk['min']];
             if ($bk['max'] !== null) {
-                $extra_w[] = "COALESCE(j.inf_salary_min, j.sal_min) < ?";
+                $extra_w[] = SALARY_EXPR . " < CAST(? AS REAL)";
                 $extra_b[] = $bk['max'];
             }
             $cnt = scope_count($s, $extra_w, $extra_b);

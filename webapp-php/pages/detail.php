@@ -501,10 +501,8 @@ require __DIR__ . '/../inc/header.php';
               <?php endif; ?>
               <?php foreach ((array)($sal['selector_provenienta'] ?? []) as $field => $basis): ?>
                 <dt class="text-ink-muted"><?= e(SELECTOR_FIELD_LABELS[$field] ?? $field) ?></dt>
-                <dd><?php
-                  $v = ($sal['selector'] ?? [])[$field] ?? null;
-                  echo e(is_array($v) ? implode(' sau ', $v) : (string)$v);
-                ?> <span class="text-ink-muted">— <?= e((string)$basis) ?></span></dd>
+                <dd><?= e(selector_value_label((string)$field, ($sal['selector'] ?? [])[$field] ?? '')) ?>
+                  <span class="text-ink-muted">— <?= e((string)$basis) ?></span></dd>
               <?php endforeach; ?>
               <?php if (!empty($sal['randuri'])): ?>
                 <dt class="text-ink-muted">Rânduri din grilă</dt>

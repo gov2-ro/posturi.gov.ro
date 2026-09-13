@@ -219,6 +219,16 @@ occupation pass is the obvious next step.
 
 ---
 
+### 2026-09-11 — /pipeline-check found the posturi cron running 3h off Bucharest time; fixed
+
+**What:** First `/pipeline-check` run on `gov2-1` since the observability work landed (2026-09-10). Data and deploy were healthy (1 run logged, all 23 export checks pass, live site in sync with the local build), but the run's `started_at` didn't line up with the documented schedule.
+
+**Finding:** The only run in `data/pipeline-runs.jsonl` has `started_at: "2026-09-10T18:33:02Z"` — the literal crontab time (`33 18`) with no Bucharest offset applied. If `CRON_TZ=Europe/Bucharest` had been honored, that run would show `15:33Z`. Cause: the box's system TZ is `Etc/UTC` (`timedatectl`), and the posturi section of the crontab had the line commented out — `# CRON_TZ=Europe/Bucharest` — so `45 11` / `33 18` were being evaluated against system UTC, not Bucharest. Net effect: the pipeline was actually firing at 14:45 and 21:33 Bucharest, 3h later than intended (11:45/18:33). It happened to not cross a UTC midnight boundary today, but the `expires_at >= CURRENT_DATE` filter (which the skill instructions call out) would have been vulnerable if the drift had landed near local midnight.
+
+**Fix:** Uncommented `CRON_TZ=Europe/Bucharest` in the posturi crontab section on `gov2-1` (live `crontab -e`, not tracked in this repo). Not yet independently confirmed against `/var/log/syslog` (no read access, and `sudo -n journalctl` needs an interactive password) — confirmation is a single precise timestamp match, which is strong but not multi-sample. Follow-up tracked in `docs/backlog.md`: watch the next 2-3 runs' `started_at` land on `08:45Z`/`15:33Z`.
+
+---
+
 ### 2026-09-10 — iCal feed: subscribable, `?title=` custom calendar name
 
 The `/posturi.ics` feed was already a live query that honours every list filter

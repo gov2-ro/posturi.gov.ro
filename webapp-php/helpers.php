@@ -366,6 +366,29 @@ const SELECTOR_FIELD_LABELS = [
  */
 const SALARY_EXPR = 'COALESCE(j.inf_salary_min, j.sal_min)';
 
+/**
+ * The date the site treats as "can I still apply?".
+ *
+ * NOT `expires_at`. That is when the *competition* ends — the final-results
+ * date — and on a 20-posting sample it ran a median of 15 days, up to 52, past
+ * the day applications actually closed. The site was advertising closed
+ * competitions as open. `apply_deadline` is the real deadline where one is
+ * known (from the v4 competition calendar, else the scraped card field) and
+ * falls back to `expires_at` where none is, so nothing regresses.
+ *
+ * `expires_at` is still the right column for how long a competition runs
+ * (pages/stats.php) and for showing a reader when the announcement itself
+ * lapses.
+ */
+const DEADLINE_COL = 'j.apply_deadline';
+
+/** Where a posting's application deadline came from. */
+const DEADLINE_SOURCE_LABELS = [
+    'concurs'  => 'din calendarul concursului',
+    'anunt'    => 'din anunț',
+    'expirare' => 'estimat din data expirării anunțului',
+];
+
 const SALARY_BUCKETS = [
     ['key' => 'sub-3000',   'label' => 'sub 3000',    'min' => 0,    'max' => 3000],
     ['key' => '3000-4000',  'label' => '3000 – 4000', 'min' => 3000, 'max' => 4000],
@@ -978,10 +1001,10 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     if ($excl !== 'status') {
         $today = date('Y-m-d');
         if ($status === 'active') {
-            $where[] = "(j.expires_at IS NULL OR j.expires_at >= ?)";
+            $where[] = "(" . DEADLINE_COL . " IS NULL OR " . DEADLINE_COL . " >= ?)";
             $binds[] = $today;
         } elseif ($status === 'soon') {
-            $where[] = "(j.expires_at >= ? AND j.expires_at <= ?)";
+            $where[] = "(" . DEADLINE_COL . " >= ? AND " . DEADLINE_COL . " <= ?)";
             $binds[] = $today;
             $binds[] = date('Y-m-d', strtotime('+7 days'));
         }
@@ -1040,13 +1063,13 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     }
     if ($exp_before) {
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp_before)) {
-            $where[] = "j.expires_at <= ?";
+            $where[] = DEADLINE_COL . " <= ?";
             $binds[] = $exp_before;
         }
     }
     if ($exp_after) {
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp_after)) {
-            $where[] = "j.expires_at >= ?";
+            $where[] = DEADLINE_COL . " >= ?";
             $binds[] = $exp_after;
         }
     }

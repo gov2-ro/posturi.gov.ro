@@ -5,7 +5,7 @@ $today = date('Y-m-d');
 $judet_filter = trim($_GET['judet'] ?? '');
 
 $total_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn();
-$active_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings WHERE expires_at >= '$today'")->fetchColumn();
+$active_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings WHERE apply_deadline >= '$today'")->fetchColumn();
 $total_postings  = (int)db()->query("SELECT COUNT(*) FROM job_postings")->fetchColumn();
 $ttl_e = $total_employers ?: 1;
 
@@ -13,7 +13,7 @@ $ttl_e = $total_employers ?: 1;
 $top_employers = db()->query("SELECT j.employer_id, j.employer_name, e.slug AS employer_slug, COUNT(*) AS cnt FROM job_postings j LEFT JOIN employers e ON e.id = j.employer_id GROUP BY j.employer_id ORDER BY cnt DESC LIMIT 20")->fetchAll();
 
 // Top 20 active
-$top_active = db()->query("SELECT j.employer_id, j.employer_name, e.slug AS employer_slug, COUNT(*) AS cnt FROM job_postings j LEFT JOIN employers e ON e.id = j.employer_id WHERE j.expires_at >= '$today' GROUP BY j.employer_id ORDER BY cnt DESC LIMIT 20")->fetchAll();
+$top_active = db()->query("SELECT j.employer_id, j.employer_name, e.slug AS employer_slug, COUNT(*) AS cnt FROM job_postings j LEFT JOIN employers e ON e.id = j.employer_id WHERE j.apply_deadline >= '$today' GROUP BY j.employer_id ORDER BY cnt DESC LIMIT 20")->fetchAll();
 
 $max_employer = $top_employers ? $top_employers[0]['cnt'] : 1;
 $max_active   = $top_active ? $top_active[0]['cnt'] : 1;

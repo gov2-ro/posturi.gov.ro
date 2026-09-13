@@ -70,7 +70,7 @@ $chips = $active_chips ?? [];
   <ul class="divide-y divide-line border-t border-line">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
-        $days = days_until($p['expires_at']);
+        $days = days_until($p['apply_deadline'] ?? $p['expires_at']);
     ?>
     <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken">
       <div class="flex items-start justify-between gap-4">

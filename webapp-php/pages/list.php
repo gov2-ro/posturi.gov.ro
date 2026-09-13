@@ -67,7 +67,7 @@ if ($match_expr !== '' && !$sort) {
     // bm25 with column weights, so a title hit outranks a passing body mention
     $order = "ORDER BY " . FTS_RANK . ", j.published_at DESC";
 } elseif ($sort === 'deadline') {
-    $order = "ORDER BY j.expires_at ASC, j.published_at DESC";
+    $order = "ORDER BY " . DEADLINE_COL . " ASC, j.published_at DESC";
 } elseif ($sort === 'employer') {
     $order = "ORDER BY j.employer_name ASC, j.published_at DESC";
 } else {
@@ -108,7 +108,7 @@ if ($is_unfiltered) {
     // that stayed are corpus scale, and they now render as one line of text
     // rather than as four cards above the fold.
     $quick_stats = [
-        'active'    => (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE expires_at >= '$today'")->fetchColumn(),
+        'active'    => (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE apply_deadline >= '$today'")->fetchColumn(),
         'employers' => (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn(),
     ];
 }
@@ -123,7 +123,7 @@ if ($is_unfiltered) {
 $shortcuts = [];
 if ($is_unfiltered) {
     $today = date('Y-m-d');
-    $live  = "(expires_at IS NULL OR expires_at >= '$today')";
+    $live  = "(apply_deadline IS NULL OR apply_deadline >= '$today')";
 
     foreach (db()->query(
         "SELECT inf_profession_family AS v, COUNT(*) AS c FROM job_postings
@@ -229,8 +229,8 @@ $studies_options   = get_facet('inf_studies_required', 'studies_levels');
     $today = date('Y-m-d');
     $in7   = date('Y-m-d', strtotime('+7 days'));
     $st = db()->prepare("SELECT
-            SUM(CASE WHEN j.expires_at IS NULL OR j.expires_at >= ? THEN 1 ELSE 0 END) AS active,
-            SUM(CASE WHEN j.expires_at >= ? AND j.expires_at <= ? THEN 1 ELSE 0 END)   AS soon
+            SUM(CASE WHEN j.apply_deadline IS NULL OR j.apply_deadline >= ? THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN j.apply_deadline >= ? AND j.apply_deadline <= ? THEN 1 ELSE 0 END)   AS soon
         FROM job_postings j {$s['join']} $where_st");
     $st->execute(array_merge([$today, $today, $in7], $s['binds']));
     $r = $st->fetch() ?: [];

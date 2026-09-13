@@ -160,7 +160,16 @@ CREATE TABLE job_postings (
     v4_funding_programme    TEXT NOT NULL DEFAULT '',
     v4_employer_sector      TEXT NOT NULL DEFAULT '',
     v4_parent_institution   TEXT NOT NULL DEFAULT '',
-    v4_application_deadline TEXT
+    v4_application_deadline TEXT,
+    -- The date after which nobody can apply any more, and therefore the one the
+    -- site treats as "active". NOT `expires_at`: that is when the competition
+    -- ends, which on a 20-posting sample ran a median of 15 days — up to 52 —
+    -- past the day applications closed, so the site was advertising closed
+    -- competitions as open. Falls back through the scraped `data_limita_depunere`
+    -- to `expires_at`, so it is correct wherever a deadline is known and no
+    -- worse than before where none is.
+    apply_deadline          TEXT,
+    deadline_source         TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -168,6 +177,7 @@ CREATE INDEX idx_jp_judet      ON job_postings(judet_id);
 CREATE INDEX idx_jp_locality   ON job_postings(locality);
 CREATE INDEX idx_jp_eqf        ON job_postings(v3_eqf_level);
 CREATE INDEX idx_jp_expires    ON job_postings(expires_at);
+CREATE INDEX idx_jp_deadline   ON job_postings(apply_deadline);
 CREATE INDEX idx_jp_published  ON job_postings(published_at DESC);
 CREATE INDEX idx_jp_level      ON job_postings(job_level);
 CREATE INDEX idx_jp_family     ON job_postings(inf_profession_family);
@@ -288,6 +298,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         v3 = _v3_columns(r["schema_json"])
         v4 = _v4_columns(r["schema_json"])
         est = _salary_columns(r["salary_estimate"])
+        deadline = _apply_deadline(v4["application_deadline"],
+                                   r["data_limita_depunere"], r["expires_at"])
 
         anomaly_flags = inferred.get("anomaly_flags") or []
         requires_computer = inferred.get("requires_computer")
@@ -335,6 +347,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             est["min"], est["max"], est["confidence"], est["variant"], r["salary_estimate"],
             v4["funding_source"], v4["funding_programme"],
             v4["employer_sector"], v4["parent_institution"], v4["application_deadline"],
+            deadline["date"], deadline["source"],
         ))
         total += 1
         if len(batch) >= 500:
@@ -430,6 +443,28 @@ def _salary_columns(salary_json_text) -> dict:
         "min": est.get("lei_min"), "max": est.get("lei_max"),
         "confidence": est.get("incredere") or "", "variant": est.get("varianta") or "",
     }
+
+
+def _apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
+    """The last day anyone can apply, and where that date came from.
+
+    Three sources, best first:
+      `concurs`   the competition calendar parsed by prompt v4 — the actual
+                  "data limită de depunere a dosarelor" row;
+      `anunt`     the deadline the scraper lifted off the posting card;
+      `expirare`  no deadline known, so fall back to `expires_at`.
+
+    The fallback matters: v4 has not run over the corpus, and only 81 of 1,621
+    active postings carry a scraped deadline. Falling back keeps the site no
+    worse than it was, and every posting v4 reaches gets quietly more accurate.
+    """
+    if v4_deadline:
+        return {"date": str(v4_deadline)[:10], "source": "concurs"}
+    if data_limita_depunere:
+        return {"date": str(data_limita_depunere)[:10], "source": "anunt"}
+    if expires_at:
+        return {"date": str(expires_at)[:10], "source": "expirare"}
+    return {"date": None, "source": ""}
 
 
 def _v4_columns(schema_json_text) -> dict:
@@ -529,10 +564,11 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
             occ_canonical, occ_cor_code, occ_isco_group, occ_confidence,
             sal_min, sal_max, sal_confidence, sal_variant, sal_json,
             v4_funding_source, v4_funding_programme,
-            v4_employer_sector, v4_parent_institution, v4_application_deadline
+            v4_employer_sector, v4_parent_institution, v4_application_deadline,
+            apply_deadline, deadline_source
         ) VALUES (
             ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
         )
     """, batch)
 

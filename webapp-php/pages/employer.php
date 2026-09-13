@@ -16,10 +16,10 @@ $total = (int)db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id
 $stmt2 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ?");
 $stmt2->execute([$eid]); $total = (int)$stmt2->fetchColumn();
 
-$stmt3 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND expires_at >= ?");
+$stmt3 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND apply_deadline >= ?");
 $stmt3->execute([$eid, $today]); $active_count = (int)$stmt3->fetchColumn();
 
-$stmt4 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND (expires_at < ? OR expires_at IS NULL)");
+$stmt4 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND (apply_deadline < ? OR apply_deadline IS NULL)");
 $stmt4->execute([$eid, $today]); $expired_count = (int)$stmt4->fetchColumn();
 
 // By judet
@@ -33,11 +33,11 @@ $stmt6->execute([$eid]); $top_cat_row = $stmt6->fetch();
 $top_category = $top_cat_row ? $top_cat_row['employer_category'] : null;
 
 // Active postings (50)
-$stmt7 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND expires_at >= ? ORDER BY expires_at ASC LIMIT 50");
+$stmt7 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND apply_deadline >= ? ORDER BY apply_deadline ASC LIMIT 50");
 $stmt7->execute([$eid, $today]); $active_postings = $stmt7->fetchAll();
 
 // Recent expired (25)
-$stmt8 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (expires_at < ? OR expires_at IS NULL) ORDER BY published_at DESC LIMIT 25");
+$stmt8 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (apply_deadline < ? OR apply_deadline IS NULL) ORDER BY published_at DESC LIMIT 25");
 $stmt8->execute([$eid, $today]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
@@ -120,7 +120,7 @@ require __DIR__ . '/../inc/header.php';
         <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Anunțuri active (<?= count($active_postings) ?>)
         </h2>
-        <?php foreach ($active_postings as $p): $days = days_until($p['expires_at']); ?>
+        <?php foreach ($active_postings as $p): $days = days_until($p['apply_deadline'] ?? $p['expires_at']); ?>
         <div class="py-3 border-b border-line last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div>
@@ -136,7 +136,7 @@ require __DIR__ . '/../inc/header.php';
               <span class="text-xs font-mono <?= $days <= 3 ? 'text-alert-ink font-semibold' : ($days <= 7 ? 'text-note-ink' : 'text-ink-muted') ?>">
                 <?= $days ?>z
               </span>
-              <div class="text-xs text-ink-faint font-mono"><?= fmt_date($p['expires_at']) ?></div>
+              <div class="text-xs text-ink-faint font-mono"><?= fmt_date($p['apply_deadline'] ?? $p['expires_at']) ?></div>
             </div>
             <?php endif; ?>
           </div>

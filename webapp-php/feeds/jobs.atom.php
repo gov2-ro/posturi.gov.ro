@@ -52,7 +52,8 @@ echo '<?xml version="1.0" encoding="utf-8"?>' . "\n";
     if ($r['judet_name_disp'] ?? $r['judet_name']) $parts[] = 'Județ: ' . ($r['judet_name_disp'] ?? $r['judet_name']);
     if ($r['job_type']) $parts[] = 'Tip: ' . $r['job_type'];
     if ($r['categorie']) $parts[] = 'Categorie: ' . $r['categorie'];
-    if ($r['expires_at']) $parts[] = 'Termen: ' . substr($r['expires_at'], 0, 10);
+    $dl = $r['apply_deadline'] ?? $r['expires_at'];
+    if ($dl) $parts[] = 'Termen depunere: ' . substr((string)$dl, 0, 10);
     $summary = e(implode(' | ', $parts));
 ?>
   <entry>

@@ -5,7 +5,7 @@ $today = date('Y-m-d');
 $seven_ago = date('Y-m-d', strtotime('-7 days'));
 
 $total    = (int)db()->query("SELECT COUNT(*) FROM job_postings")->fetchColumn();
-$active   = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE expires_at >= '$today'")->fetchColumn();
+$active   = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE apply_deadline >= '$today'")->fetchColumn();
 $inferred_cnt = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inferred != '{}'")->fetchColumn();
 $unique_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn();
 $unique_judete    = (int)db()->query("SELECT COUNT(DISTINCT judet_id) FROM job_postings WHERE judet_id IS NOT NULL")->fetchColumn();

@@ -40,6 +40,11 @@ foreach ($rows as $r) {
         'judet'            => $r['judet_name_disp'] ?? $r['judet_name'],
         'published_at'     => $r['published_at'] ? substr($r['published_at'], 0, 10) : null,
         'expires_at'       => $r['expires_at'] ? substr($r['expires_at'], 0, 10) : null,
+        // The date the site treats as "still open". `expires_at` is kept for
+        // compatibility, but it is when the competition ends, not when
+        // applications close — see deadline_source for where this came from.
+        'apply_deadline'   => $r['apply_deadline'] ? substr((string)$r['apply_deadline'], 0, 10) : null,
+        'deadline_source'  => $r['deadline_source'] ?: null,
         'job_level'        => $r['job_level'],
         'job_type'         => $r['job_type'],
         'categorie'        => $r['categorie'],

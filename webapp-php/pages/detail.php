@@ -42,7 +42,8 @@ if ($p['body_markdown']) {
 // Schema sections
 $schema_sections = render_schema_sections($p['schema_json'] ?? null);
 
-$days = days_until($p['expires_at']);
+$deadline = $p['apply_deadline'] ?? $p['expires_at'];
+$days = days_until($deadline);
 
 // Return to the filtered list the reader came from, when there is one.
 // `javascript:history.back()` broke for anyone arriving from a feed, a shared
@@ -65,7 +66,7 @@ $_desc_src = preg_replace('/\s+/u', ' ', $_desc_src) ?? '';
 $meta_description = trim(implode(' · ', array_filter([
     $p['employer_name'] ?? null,
     place_label($p) ?: null,
-    $p['expires_at'] ? 'termen ' . fmt_date($p['expires_at']) : null,
+    $deadline ? 'termen ' . fmt_date($deadline) : null,
 ])) . '. ' . mb_substr($_desc_src, 0, 150));
 
 // ---- JSON-LD (Google Jobs) ----
@@ -120,12 +121,12 @@ $ld = [
 if ($p['published_at']) {
     $ld['datePosted'] = substr($p['published_at'], 0, 10);
 }
-if ($p['expires_at']) {
+if ($deadline) {
     try {
-        $vt = new DateTime(substr($p['expires_at'], 0, 10) . ' 23:59:59', new DateTimeZone('Europe/Bucharest'));
+        $vt = new DateTime(substr((string)$deadline, 0, 10) . ' 23:59:59', new DateTimeZone('Europe/Bucharest'));
         $ld['validThrough'] = $vt->format('c');
     } catch (Exception $e) {
-        $ld['validThrough'] = substr($p['expires_at'], 0, 10);
+        $ld['validThrough'] = substr((string)$deadline, 0, 10);
     }
 }
 if (($p['nr_posturi'] ?? 0) > 1) {
@@ -222,13 +223,13 @@ require __DIR__ . '/../inc/header.php';
       <?php endif; ?>
       <?php if ($days !== null): ?>
         <?php if ($days < 0): ?>
-          <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Expirat <?= fmt_date($p['expires_at']) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Înscrieri închise <?= fmt_date($deadline) ?></span>
         <?php elseif ($days <= 3): ?>
-          <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold">Expiră în <?= e(days_label($days)) ?>!</span>
+          <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold">Înscrieri: <?= e(days_label($days)) ?>!</span>
         <?php elseif ($days <= 7): ?>
-          <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono">Expiră în <?= e(days_label($days)) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono">Înscrieri: <?= e(days_label($days)) ?></span>
         <?php else: ?>
-          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Expiră <?= fmt_date($p['expires_at']) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Înscrieri până la <?= fmt_date($deadline) ?></span>
         <?php endif; ?>
       <?php endif; ?>
     </div>
@@ -247,12 +248,23 @@ require __DIR__ . '/../inc/header.php';
            class="w-full sm:w-64 sm:shrink-0">
       <div class="grid grid-cols-2 gap-x-4 gap-y-4 text-sm sm:block sm:space-y-4">
 
-        <?php if ($p['data_limita_depunere']): ?>
+        <?php if ($deadline): ?>
         <div class="col-span-2">
           <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-1">Termen depunere</div>
-          <div class="font-mono text-ink text-base"><?= fmt_datetime($p['data_limita_depunere'], 'd.m.Y') ?></div>
-          <?php if (fmt_datetime($p['data_limita_depunere'], 'H:i') !== '00:00'): ?>
+          <div class="font-mono text-ink text-base"><?= fmt_date($deadline) ?></div>
+          <?php if ($p['data_limita_depunere'] && fmt_datetime($p['data_limita_depunere'], 'H:i') !== '00:00'): ?>
             <div class="text-xs text-ink-muted">ora <?= fmt_datetime($p['data_limita_depunere'], 'H:i') ?></div>
+          <?php endif; ?>
+          <?php if (!empty($p['deadline_source']) && isset(DEADLINE_SOURCE_LABELS[$p['deadline_source']])): ?>
+            <div class="text-xs text-ink-faint"><?= e(DEADLINE_SOURCE_LABELS[$p['deadline_source']]) ?></div>
+          <?php endif; ?>
+          <?php
+            // The competition runs on past the deadline — results, contestations.
+            // Showing only one date is what made closed competitions read as open.
+            $ends = $p['expires_at'] ? substr((string)$p['expires_at'], 0, 10) : null;
+            if ($ends && $ends !== substr((string)$deadline, 0, 10)):
+          ?>
+            <div class="mt-1 text-xs text-ink-muted">concursul se încheie <?= fmt_date($p['expires_at']) ?></div>
           <?php endif; ?>
         </div>
         <?php endif; ?>

@@ -2,6 +2,78 @@
 
 ## 2026
 
+### 2026-09-14 — A v4 sample on the VPS found three bugs, two of them mine
+
+Ran prompt v4 over 100 active postings on the VPS with `--compare` (variants
+only, `schema_json` untouched) before committing to a corpus-wide run. The
+headline held: **95% yielded an application deadline**, `expires_at` was later
+than it on 106 of 113, and 109 were recovered from postings the scraper got
+nothing for. Peak output 4,982 of an 8,000 budget.
+
+**Nine hard failures, one cause — and I had fixed the wrong layer.**
+`contestatii_proba_practica` was missing from the stage enum: ~850 postings at
+corpus scale. This was the *second* instance in two days, so instead of adding
+the value, an audit: `proba_practica` had no contestations, `proba_sportiva` and
+`test_psihologic` had neither results nor contestations. Three more gaps
+waiting. It is now a rule — every stage in `EVALUATION_STAGES` has all three
+forms, and a test fails if one goes missing, plus a second test that the prompt
+lists every value the schema accepts, since a stage the model is never shown is
+equally unreachable.
+
+**"4 disagreements" was 4 out of 4, not 4 out of 113.** The checker printed the
+count with no denominator, and that is a defect in a tool whose whole job is to
+gate a decision. Of 113 deadlines, 109 were recoveries, so only four postings
+had both a scraped and a v4 date — and all four differed. It now prints the
+denominator, separates disagreements over three days from off-by-one noise, and
+fails the sample on the former.
+
+**Chasing those four found the real bugs, and none of them were v4's.**
+
+*Two were a timezone artifact in my own query.* `data_limita_depunere` is a
+timestamptz stored at local midnight — 21:00 UTC the previous day in summer — so
+a plain `::date` cast returns a different day depending on the server's TimeZone
+setting: `Europe/Bucharest` on the dev box, `UTC` on the VPS. The same query
+gave different answers on the two machines. Worse, `export-to-sqlite.py` derived
+`apply_deadline` with `str(value)[:10]`, so **the column shipped the day before
+was a day early on the VPS and correct locally** — the wrong one being the
+machine that serves the site. Fixed at both levels: the export pins the session
+timezone on connect, and `_local_date()` converts explicitly so the function is
+right however it is called. Same class as the cron running 3h off Bucharest time
+found on 2026-09-11.
+
+*Two were genuine scraper bugs, and v4 caught them.* `_find_calendar_date`
+returned the first row matching any of `['depunere','inscriere','dosar','limita']`
+— and `dosar` also matches "Selectarea dosarelor de concurs", so the deadline
+could land on the selection date, days after applications closed. And
+`DATE_RE.search` takes the first date on a line, so "Depunerea dosarelor de la
+11.09.2026 până la 30.09.2026" yielded the day submissions *opened*.
+
+Re-parsing the corpus moved **530 of 1,692 comparable deadlines, 92% of them
+later** — exactly the signature of both bugs. Coverage held at 1,702, but only
+after relaxing the exclusions on the fallback tier; the first version lost 148
+postings by refusing rows that combine submission with selection, and a worse
+date beats no date.
+
+A third thing fell out: one posting reads `-20.05.2025-03.06.2024-`, an
+institution typo, and reading the window's closing date faithfully published a
+deadline a year in the past. A window that closes before it opens is a typo, not
+a date. After the guard, no posting has a deadline preceding its own
+publication.
+
+**And `parse-anunturi.py` never had an `if __name__ == "__main__"` guard.**
+Importing it re-parsed all 9,691 cached pages and rewrote both CSVs as a side
+effect. It made the new test file take 74 seconds and had already mutated
+pipeline output once during this work. Now 0.22s.
+
+**What this changes about trusting v4.** The claim "v4 dates are more accurate
+than scraped ones" was resting on six agreements. It now rests on four
+disagreements that were investigated and resolved in v4's favour — two were my
+measurement error, two were scraper bugs v4 exposed. That is better evidence
+than agreement would have been, but it came from reading four postings, not from
+a number in a report.
+
+---
+
 ### 2026-09-13 — "Active" means you can still apply; v3's unused fields surfaced
 
 **Two changes, both about data we already had and were not using.**

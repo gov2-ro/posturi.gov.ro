@@ -124,6 +124,21 @@ appended to the function cell after a semicolon (`"Asistent medical; …;
 principal"`). Without lifting it out, three rows with different coefficients
 were indistinguishable, and health is the largest family on the site.
 
+**What it produced.** The full dictionary run mapped **3,723 distinct titles in
+220s for $0.19** (1,456 exact, 1,294 probabil, 112 incert, 905 none — the `none`
+bucket is almost entirely singleton long-tail titles with no grid or COR
+counterpart, which is the honest answer). 9,750 of 9,756 postings are now linked
+to an occupation, and **8,367 carry a salary estimate, up from 13**.
+
+On the active export the effect on browsing is the clearer number: **1,251
+distinct job titles collapse to 276 occupations**, and the 57 spellings of
+"îngrijitor" become 12. After the null-boolean fix the 20-posting v4 sample
+runs 20/20 with 2 repairs.
+
+Coverage is 86% of postings rather than 100% because an occupation the model
+answered `none` for has no grid row to price — deliberately, since a wrong
+salary is worse than no salary.
+
 **Not done, deliberately:** net pay (the tax engine is versioned on fiscal
 dates, separately from the salary law), sporuri and the 20% cap (aggregated per
 ordonator, unknowable per posting), and a vector database — a controlled

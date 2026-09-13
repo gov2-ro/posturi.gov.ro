@@ -53,8 +53,11 @@ SELECT count(*) AS sampled,
        coalesce(max(expires_at - v4_dl), 0) AS worst_days_over,
        coalesce(round(avg(expires_at - v4_dl)), 0) AS avg_days_over,
        count(*) FILTER (WHERE scraped_dl IS NULL AND v4_dl IS NOT NULL) AS recovered_missing,
+       count(*) FILTER (WHERE scraped_dl IS NOT NULL AND v4_dl IS NOT NULL) AS both_have_a_date,
        count(*) FILTER (WHERE scraped_dl IS NOT NULL AND v4_dl IS NOT NULL
                           AND v4_dl <> scraped_dl) AS disagrees_with_scraper,
+       count(*) FILTER (WHERE scraped_dl IS NOT NULL AND v4_dl IS NOT NULL
+                          AND abs(v4_dl - scraped_dl) > 3) AS disagrees_badly,
        count(*) FILTER (WHERE parent IS NOT NULL) AS got_parent_inst,
        count(*) FILTER (WHERE funding IS NOT NULL AND funding <> 'nespecificat') AS got_funding,
        count(*) FILTER (WHERE notes IS NOT NULL) AS got_notes,
@@ -110,8 +113,17 @@ def main() -> int:
     print(f"    of those, expires_at is later   {row['expiry_overstates']}"
           f"  (avg {row['avg_days_over']} days, worst {row['worst_days_over']})")
     print(f"    recovered where the scraper had none  {row['recovered_missing']}")
-    print(f"    disagrees with the scraped date       {row['disagrees_with_scraper']}"
-          f"{'   <-- inspect these' if row['disagrees_with_scraper'] else '   (none — they agree)'}")
+    # The denominator is the point. "4 disagreements" out of 113 deadlines reads
+    # as noise; out of the 4 postings where both sources actually had a date it
+    # is a 100% disagreement rate. Almost every v4 deadline is a recovery, so
+    # the overlap is always small and the rate is what has to be reported.
+    both = row["both_have_a_date"]
+    if both:
+        bad = row["disagrees_badly"]
+        print(f"    both sources had a date               {both}")
+        print(f"      of those, they disagree             {row['disagrees_with_scraper']}"
+              f"/{both} ({row['disagrees_with_scraper'] / both:.0%})"
+              f"{f', {bad} by more than 3 days' if bad else ', all within 3 days'}")
     print()
     print(f"  parent institution resolved      {row['got_parent_inst']}/{n}")
     print(f"  funding source identified        {row['got_funding']}/{n}")
@@ -132,6 +144,13 @@ def main() -> int:
     if rate < args.min_deadline_rate:
         problems.append(f"deadline rate {rate:.0%} is below {args.min_deadline_rate:.0%}")
     budget = _budget()
+    # A date nobody can cross-check is the one worth doubting. Small
+    # disagreements are the usual off-by-one over which endpoint counts; a large
+    # one means the two sources are reading different rows of the table.
+    if row["disagrees_badly"]:
+        problems.append(
+            f"{row['disagrees_badly']} deadline(s) differ from the scraped date by more "
+            "than 3 days — read those postings before trusting v4 dates over scraped ones")
     if row["peak_out_tokens"] >= budget:
         problems.append(f"output hit the {budget}-token budget — answers are being truncated")
     elif row["peak_out_tokens"] >= budget * 0.9:

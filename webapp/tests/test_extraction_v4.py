@@ -94,20 +94,44 @@ class TestCompetitionCalendar:
             {"events": [{"stage": "altele", "date": "2024-01-01"}] * 40})
         assert len(calendar.events) == CompetitionCalendar.MAX_EVENTS
 
-    def test_every_stage_that_produces_results_has_a_results_counterpart(self):
-        """A gap here is invisible: the model files the row somewhere plausible.
+    def test_every_evaluation_stage_has_both_counterparts(self):
+        """Every stage can produce a result and attract a contestation.
 
-        Without `rezultate_selectie_dosare`, ten rows whose verbatim label said
-        "rezultate ... dosare" were scattered across five stages — including
-        `rezultate_finale` and `rezultate_proba_scrisa`, both of which give a
-        reader the wrong date for "when do I hear back".
+        A gap here is invisible — nothing errors, the model files the row under
+        the nearest stage it was offered and a reader gets a plausible wrong
+        date. Learned twice: `rezultate_selectie_dosare` was missing and
+        scattered ten rows across five stages; `contestatii_proba_practica` was
+        then missing and caused 9 of 100 hard failures in a VPS sample, which is
+        ~850 postings at corpus scale.
+
+        Hence a rule rather than another one-off patch.
         """
         import typing
-        from schema_models import CalendarStage
+        from schema_models import CalendarStage, EVALUATION_STAGES
         stages = set(typing.get_args(CalendarStage))
-        for stage in ("selectie_dosare", "proba_scrisa", "proba_practica", "interviu"):
-            assert f"rezultate_{stage}" in stages or stage == "interviu", stage
-        assert "rezultate_interviu" in stages
+        missing = [f"{prefix}_{base}"
+                   for base in EVALUATION_STAGES
+                   for prefix in ("rezultate", "contestatii")
+                   if f"{prefix}_{base}" not in stages]
+        assert not missing, f"stages with no counterpart: {missing}"
+        assert set(EVALUATION_STAGES) <= stages
+
+    def test_the_stage_that_broke_the_vps_sample_validates(self):
+        from schema_models import CompetitionCalendar
+        cal = CompetitionCalendar.model_validate({"events": [
+            {"stage": "contestatii_proba_practica", "date": "2026-09-20"}]})
+        assert cal.events[0].stage == "contestatii_proba_practica"
+
+    def test_the_prompt_offers_every_stage_the_schema_accepts(self):
+        """The model can only pick from what the prompt lists. A value present
+        in the schema but absent from the prompt is a gap in the other
+        direction, and just as invisible."""
+        import json, typing
+        from schema_models import CalendarStage
+        prompt = json.loads((REPO_ROOT / "models_config.json").read_text(encoding="utf-8"))["prompts"]["v4"]
+        for stage in typing.get_args(CalendarStage):
+            base = stage.replace("rezultate_", "").replace("contestatii_", "")
+            assert base in prompt, f"{stage} is unreachable — {base} never appears in the prompt"
 
     def test_an_unknown_stage_is_rejected_rather_than_stored_as_free_text(self):
         with pytest.raises(ValidationError):

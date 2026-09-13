@@ -507,25 +507,45 @@ class JobPostingExtractionV3(JobPostingExtraction):
 #: strings — the table parser transcribing layout instead of content. A closed
 #: vocabulary is what makes the timeline queryable, and what lets the expiry
 #: date be the application deadline rather than the last row of the table.
+#: The evaluation stages a Romanian public competition can have. Each one can
+#: produce results and attract contestations, so each gets all three forms —
+#: see `test_every_evaluation_stage_has_both_counterparts`, which exists because
+#: a gap here is invisible: nothing errors, the model files the row under the
+#: nearest stage it was offered, and a reader gets a plausible wrong date.
+#:
+#: Learned twice. `rezultate_selectie_dosare` was missing and scattered ten rows
+#: across five stages; `contestatii_proba_practica` was then missing and caused
+#: 9 of 100 hard failures in a VPS sample — ~850 postings at corpus scale.
+EVALUATION_STAGES = (
+    "selectie_dosare",
+    "proba_scrisa",
+    "proba_practica",
+    "proba_sportiva",
+    "interviu",
+    "test_psihologic",
+)
+
 CalendarStage = Literal[
     "publicare",
     "depunere_dosare",
     "selectie_dosare",
-    # Every other stage has a results counterpart; without this one the model
-    # had nowhere right to file "afişarea rezultatelor selecţiei dosarelor" and
-    # scattered it across five stages, including `rezultate_finale`.
     "rezultate_selectie_dosare",
-    "contestatii_dosare",
+    "contestatii_selectie_dosare",
     "proba_scrisa",
     "rezultate_proba_scrisa",
     "contestatii_proba_scrisa",
     "proba_practica",
     "rezultate_proba_practica",
+    "contestatii_proba_practica",
     "proba_sportiva",
+    "rezultate_proba_sportiva",
+    "contestatii_proba_sportiva",
     "interviu",
     "rezultate_interviu",
     "contestatii_interviu",
     "test_psihologic",
+    "rezultate_test_psihologic",
+    "contestatii_test_psihologic",
     "rezultate_finale",
     "altele",
 ]

@@ -123,6 +123,13 @@
         facet_group('Nivel studii (EQF)',$eqf_options,    'eqf',   $eqf_sel);
         facet_group('Limbi străine',     $lang_options,   'lang',  $lang_sel);
 
+        // Occupation is the facet the title dictionary exists for: one value per
+        // job instead of one per spelling of its title. Funding and sector come
+        // from prompt v4 and, like the v3 groups, stay hidden until it has run.
+        facet_group('Ocupație',          $occupation_options, 'occupation', $occ_sel, true);
+        facet_group('Finanțare',         $funding_options,    'funding',    $funding_sel);
+        facet_group('Sector angajator',  $sector_options,     'sector',     $sector_sel);
+
         if ($remote_count) {
             facet_group('Telemuncă', [['val' => '1', 'label' => 'Disponibil remote', 'cnt' => $remote_count]],
                         'remote', $remote ? ['1'] : []);
@@ -137,7 +144,10 @@
           </summary>
           <div class="pt-1">
             <?php
-            facet_group('Salariu',   $salary_options,  'salary_bucket', $sal_bucket ? [$sal_bucket] : [], true);
+            // Estimated from the 2026 draft grid, not announced — postings
+            // essentially never state a salary. See pages/detail.php for the
+            // per-posting breakdown and the legal-status disclaimer.
+            facet_group('Salariu estimat', $salary_options, 'salary_bucket', $sal_bucket ? [$sal_bucket] : [], true);
             facet_group('Angajator', $emp_cat_options, 'employer_cat',  $emp_cats,                        true);
 
             facet_group('Anomalii',  $anomaly_options, 'anomaly', $anomaly_flags, true);

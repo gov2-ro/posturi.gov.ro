@@ -31,6 +31,10 @@ $domain_sel    = (array)($_GET['domain']     ?? []);
 $stage_sel     = (array)($_GET['stage']      ?? []);
 // `(array)` keeps a legacy scalar `?eqf=6` link (detail.php ships them) working.
 $eqf_sel       = (array)($_GET['eqf'] ?? []);
+$occ_sel       = (array)($_GET['occupation'] ?? []);
+$funding_sel   = (array)($_GET['funding']    ?? []);
+$sector_sel    = (array)($_GET['sector']     ?? []);
+$has_salary    = $_GET['has_salary'] ?? '';
 $sort         = $_GET['sort']          ?? '';
 $page         = max(1, (int)($_GET['page'] ?? 1));
 
@@ -134,6 +138,10 @@ if ($is_unfiltered) {
         ['employer_cat', 'Funcție publică',      'Funcție publică',      "employer_category = 'Funcție publică'"],
         ['employer_cat', 'Funcție contractuală', 'Funcție contractuală', "employer_category = 'Funcție contractuală'"],
         ['remote',       '1',                    'Telemuncă',            "inf_remote_eligible = 1"],
+        // Two of the backlog's "260911 Notes": a way into EU-funded posts, and
+        // into the ones we can put a number on.
+        ['funding',      'fonduri_europene',     'Fonduri europene',     "v4_funding_source = 'fonduri_europene'"],
+        ['has_salary',   '1',                    'Cu salariu estimat',   "COALESCE(inf_salary_min, sal_min) IS NOT NULL"],
     ];
     foreach ($probes as [$param, $value, $label, $clause]) {
         $c = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE $clause AND $live")->fetchColumn();
@@ -333,21 +341,45 @@ $exp_options = [];
     }
 }
 
-// Salary buckets
+// Salary buckets, over the estimate from the draft salary grid.
+//
+// The >= 100 gate that used to guard this never opened: it counted
+// `inf_salary_min`, the announced salary, and only 44 of 9,757 postings state
+// one. The gate stays — the facet should still hide itself before
+// `estimate-salaries.py` has ever run — but it now counts what the filter
+// actually matches on.
 $salary_options = [];
 {
-    $sal_total = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inf_salary_min IS NOT NULL")->fetchColumn();
+    $sal_total = (int)db()->query(
+        "SELECT COUNT(*) FROM job_postings WHERE COALESCE(inf_salary_min, sal_min) IS NOT NULL"
+    )->fetchColumn();
     if ($sal_total >= 100) {
         $s = facet_scope('salary_bucket');
         foreach (SALARY_BUCKETS as $bk) {
-            $extra_w = ["j.inf_salary_min IS NOT NULL", "j.inf_salary_min >= ?"];
+            $extra_w = ["COALESCE(j.inf_salary_min, j.sal_min) IS NOT NULL",
+                        "COALESCE(j.inf_salary_min, j.sal_min) >= ?"];
             $extra_b = [$bk['min']];
-            if ($bk['max'] !== null) { $extra_w[] = "j.inf_salary_min < ?"; $extra_b[] = $bk['max']; }
+            if ($bk['max'] !== null) {
+                $extra_w[] = "COALESCE(j.inf_salary_min, j.sal_min) < ?";
+                $extra_b[] = $bk['max'];
+            }
             $cnt = scope_count($s, $extra_w, $extra_b);
             if ($cnt) $salary_options[] = ['val' => $bk['key'], 'cnt' => $cnt, 'label' => $bk['label']];
         }
     }
 }
+
+// Occupation, funding source and employer sector: plain columns, counted like
+// any other single-value facet. Occupation is the one that changes browsing
+// most — before the title dictionary, `Îngrijitor`, `ÎNGRIJITOR` and
+// `îngrijitor` were three separate values of the free-text title.
+$occupation_options = get_facet('occ_canonical',      'occupation', 40);
+$funding_options    = get_facet('v4_funding_source',  'funding');
+$sector_options     = get_facet('v4_employer_sector', 'sector');
+foreach ($funding_options as &$o) { $o['label'] = FUNDING_SOURCE_LABELS[$o['val']] ?? $o['val']; }
+unset($o);
+foreach ($sector_options as &$o) { $o['label'] = EMPLOYER_SECTOR_LABELS[$o['val']] ?? $o['val']; }
+unset($o);
 
 // ---- Empty state: which single filter is over-narrowing? ----
 // Only computed on the zero-results branch, so the extra COUNT per chip is free

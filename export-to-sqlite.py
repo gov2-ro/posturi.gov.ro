@@ -139,7 +139,28 @@ CREATE TABLE job_postings (
     v3_exam_stages          TEXT NOT NULL DEFAULT '[]',
     v3_positions            INTEGER,
     inf_salary_min          REAL,
-    inf_salary_max          REAL
+    inf_salary_max          REAL,
+    -- Occupation, from the title dictionary (normalize-titles.py). Collapses
+    -- `Îngrijitor`/`ÎNGRIJITOR`/`îngrijitor` into one facet value instead of three.
+    occ_canonical           TEXT NOT NULL DEFAULT '',
+    occ_cor_code            TEXT NOT NULL DEFAULT '',
+    occ_isco_group          TEXT NOT NULL DEFAULT '',
+    occ_confidence          TEXT NOT NULL DEFAULT '',
+    -- Estimated gross pay from the 2026 draft salary grid (estimate-salaries.py).
+    -- Derived, never scraped: 44 of 9,757 postings state a salary in the text.
+    -- `sal_json` carries the coefficient, the grid rows used, the warnings and
+    -- the disclaimer, so the detail page can show how the number was reached.
+    sal_min                 REAL,
+    sal_max                 REAL,
+    sal_confidence          TEXT NOT NULL DEFAULT '',
+    sal_variant             TEXT NOT NULL DEFAULT '',
+    sal_json                TEXT,
+    -- Prompt v4 scalars (empty until llm-schema.py --prompt-version v4 runs).
+    v4_funding_source       TEXT NOT NULL DEFAULT '',
+    v4_funding_programme    TEXT NOT NULL DEFAULT '',
+    v4_employer_sector      TEXT NOT NULL DEFAULT '',
+    v4_parent_institution   TEXT NOT NULL DEFAULT '',
+    v4_application_deadline TEXT
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -151,6 +172,9 @@ CREATE INDEX idx_jp_published  ON job_postings(published_at DESC);
 CREATE INDEX idx_jp_level      ON job_postings(job_level);
 CREATE INDEX idx_jp_family     ON job_postings(inf_profession_family);
 CREATE INDEX idx_jp_seniority  ON job_postings(inf_seniority);
+CREATE INDEX idx_jp_salary     ON job_postings(sal_min);
+CREATE INDEX idx_jp_occupation ON job_postings(occ_canonical);
+CREATE INDEX idx_jp_cor        ON job_postings(occ_cor_code);
 
 CREATE TABLE calendar_events (
     id          INTEGER PRIMARY KEY,
@@ -238,10 +262,16 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             jp.other_links::text AS other_links,
             jp.attachment_meta::text AS attachment_meta,
             jp.inferred::text AS inferred,
-            jp.schema_json::text AS schema_json
+            jp.schema_json::text AS schema_json,
+            jp.salary_estimate::text AS salary_estimate,
+            COALESCE(o.canonical, '')        AS occ_canonical,
+            COALESCE(o.cor_code, '')         AS occ_cor_code,
+            COALESCE(o.isco_group, '')       AS occ_isco_group,
+            COALESCE(o.match_confidence, '') AS occ_confidence
         FROM jobs_jobposting jp
         JOIN jobs_employer e ON e.id = jp.employer_id
         LEFT JOIN jobs_judet j ON j.id = jp.judet_id
+        LEFT JOIN jobs_occupation o ON o.id = jp.occupation_id
         {active_filter}
         ORDER BY jp.id
     """)
@@ -256,6 +286,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             pass
 
         v3 = _v3_columns(r["schema_json"])
+        v4 = _v4_columns(r["schema_json"])
+        est = _salary_columns(r["salary_estimate"])
 
         anomaly_flags = inferred.get("anomaly_flags") or []
         requires_computer = inferred.get("requires_computer")
@@ -299,6 +331,10 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             inferred.get("studies_required"),
             inferred.get("salary_min"),
             inferred.get("salary_max"),
+            r["occ_canonical"], r["occ_cor_code"], r["occ_isco_group"], r["occ_confidence"],
+            est["min"], est["max"], est["confidence"], est["variant"], r["salary_estimate"],
+            v4["funding_source"], v4["funding_programme"],
+            v4["employer_sector"], v4["parent_institution"], v4["application_deadline"],
         ))
         total += 1
         if len(batch) >= 500:
@@ -375,6 +411,55 @@ def write_build_meta(con: sqlite3.Connection, *, active_only: bool):
     )
 
 
+def _salary_columns(salary_json_text) -> dict:
+    """Flatten `JobPosting.salary_estimate` into sortable columns.
+
+    Empty until `estimate-salaries.py` has run, so the salary facet simply stays
+    hidden rather than half-populated.
+    """
+    empty = {"min": None, "max": None, "confidence": "", "variant": ""}
+    if not salary_json_text:
+        return empty
+    try:
+        est = json.loads(salary_json_text)
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(est, dict):
+        return empty
+    return {
+        "min": est.get("lei_min"), "max": est.get("lei_max"),
+        "confidence": est.get("incredere") or "", "variant": est.get("varianta") or "",
+    }
+
+
+def _v4_columns(schema_json_text) -> dict:
+    """Flatten the prompt-v4 scalars worth faceting or sorting on.
+
+    A v3 payload has none of these keys and returns empty, exactly as a v2
+    payload does for `_v3_columns`.
+    """
+    empty = {"funding_source": "", "funding_programme": "", "employer_sector": "",
+             "parent_institution": "", "application_deadline": None}
+    if not schema_json_text:
+        return empty
+    try:
+        s = json.loads(schema_json_text)
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(s, dict):
+        return empty
+    funding = s.get("funding") or {}
+    employer = s.get("employer_context") or {}
+    calendar = s.get("competition_calendar") or {}
+    return {
+        "funding_source": funding.get("source") or "",
+        "funding_programme": funding.get("programme") or "",
+        "employer_sector": employer.get("sector") or "",
+        "parent_institution": employer.get("parent_institution") or "",
+        "application_deadline": calendar.get("application_deadline"),
+    }
+
+
 def _v3_columns(schema_json_text) -> dict:
     """Flatten prompt-v3 `schema_json` into queryable SQLite columns.
 
@@ -440,9 +525,14 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
             inf_profession_family, inf_seniority, inf_anomaly_flags,
             inf_work_type, inf_remote_eligible, inf_requires_computer,
             inf_experience_years, inf_studies_required,
-            inf_salary_min, inf_salary_max
+            inf_salary_min, inf_salary_max,
+            occ_canonical, occ_cor_code, occ_isco_group, occ_confidence,
+            sal_min, sal_max, sal_confidence, sal_variant, sal_json,
+            v4_funding_source, v4_funding_programme,
+            v4_employer_sector, v4_parent_institution, v4_application_deadline
         ) VALUES (
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+            ?,?,?,?,?,?,?,?,?,?,?,?,?,?
         )
     """, batch)
 

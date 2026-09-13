@@ -287,6 +287,54 @@ const STUDIES_LABELS = [
     'generala'    => 'Generală',
 ];
 
+// ---- Occupation, funding and employer sector (prompt v4 + the title dictionary) ----
+
+const FUNDING_SOURCE_LABELS = [
+    'fonduri_europene' => 'Fonduri europene',
+    'buget_stat'       => 'Buget de stat',
+    'buget_local'      => 'Buget local',
+    'venituri_proprii' => 'Venituri proprii',
+    'mixt'             => 'Finanțare mixtă',
+    'nespecificat'     => 'Nespecificat',
+];
+
+const EMPLOYER_SECTOR_LABELS = [
+    'administratie_locala'   => 'Administrație locală',
+    'administratie_centrala' => 'Administrație centrală',
+    'sanatate'               => 'Sănătate',
+    'educatie'               => 'Educație',
+    'cultura'                => 'Cultură',
+    'aparare'                => 'Apărare',
+    'ordine_publica'         => 'Ordine publică',
+    'justitie'               => 'Justiție',
+    'asistenta_sociala'      => 'Asistență socială',
+    'cercetare'              => 'Cercetare',
+    'transport'              => 'Transport',
+    'mediu'                  => 'Mediu',
+    'agricultura'            => 'Agricultură',
+    'altele'                 => 'Altele',
+];
+
+/** How sure the title -> occupation mapping is. Shown, not hidden: the salary
+ *  estimate is built on it, so a reader deserves to know when it is a guess. */
+const OCC_CONFIDENCE_LABELS = [
+    'exact'    => 'Potrivire exactă',
+    'probabil' => 'Potrivire probabilă',
+    'incert'   => 'Potrivire incertă',
+    'none'     => 'Fără corespondent',
+];
+
+/** Selector fields shown in the "cum a fost calculat" breakdown. */
+const SELECTOR_FIELD_LABELS = [
+    'grad_treapta'        => 'Grad',
+    'studii'              => 'Nivel studii',
+    'tip_post'            => 'Tip post',
+    'nivel_administrativ' => 'Nivel administrativ',
+    'banda_populatie'     => 'Mărime UAT',
+    'regim'               => 'Regim',
+    'anexa'               => 'Anexa',
+];
+
 // ---- Salary/experience buckets ----
 
 const SALARY_BUCKETS = [
@@ -681,6 +729,10 @@ const FILTER_CHIP_GROUPS = [
     'anomaly'        => 'Anomalie',
     'expires_after'  => 'Termen de la',
     'expires_before' => 'Termen până la',
+    'occupation'     => 'Ocupație',
+    'funding'        => 'Finanțare',
+    'sector'         => 'Sector',
+    'has_salary'     => '',
 ];
 
 /**
@@ -693,6 +745,7 @@ const MULTI_PARAMS = [
     'judet', 'level', 'type', 'categorie', 'employer_cat',
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
+    'occupation', 'funding', 'sector',
 ];
 
 /** Form field name for a filter param. */
@@ -752,6 +805,9 @@ function filter_value_label(string $key, string $value): string {
         'domain'                           => policy_domain_label($value),
         'stage'                            => exam_stage_label($value),
         'computer'                         => $value === 'solicitat' ? 'Calculator solicitat' : 'Fără calculator',
+        'funding'                          => FUNDING_SOURCE_LABELS[$value] ?? $value,
+        'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
+        'has_salary'                       => 'Cu salariu estimat',
         'expires_after', 'expires_before'  => fmt_date($value),
         'family', 'seniority'              => ucfirst(str_replace('_', ' ', $value)),
         default                            => $value,
@@ -1057,16 +1113,41 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     if ($schema && $excl !== 'schema') {
         $where[] = $schema === 'yes' ? "j.schema_json IS NOT NULL" : "j.schema_json IS NULL";
     }
+    // Salary buckets read the ESTIMATE, not the announced figure. Only 44 of
+    // 9,757 postings state a salary in the text, so the old `inf_salary_min`
+    // facet matched ~13 rows and was gated behind a >= 100 threshold that never
+    // opened. `sal_min` comes from the draft salary grid and covers everything
+    // with a resolved occupation. COALESCE keeps a genuinely announced salary
+    // ahead of the estimate where one exists.
     if ($sal_bucket && $excl !== 'salary_bucket') {
         foreach (SALARY_BUCKETS as $b) {
             if ($b['key'] !== $sal_bucket) continue;
-            $where[] = "j.inf_salary_min IS NOT NULL AND j.inf_salary_min >= ?";
+            $where[] = "COALESCE(j.inf_salary_min, j.sal_min) IS NOT NULL";
+            $where[] = "COALESCE(j.inf_salary_min, j.sal_min) >= ?";
             $binds[] = $b['min'];
             if ($b['max'] !== null) {
-                $where[] = "j.inf_salary_min < ?";
+                $where[] = "COALESCE(j.inf_salary_min, j.sal_min) < ?";
                 $binds[] = $b['max'];
             }
         }
+    }
+
+    // Quick choice: only postings we can put a number on.
+    if (($p['has_salary'] ?? '') === '1' && $excl !== 'has_salary') {
+        $where[] = "COALESCE(j.inf_salary_min, j.sal_min) IS NOT NULL";
+    }
+
+    // Plain-column facets added with the occupation dictionary and prompt v4.
+    foreach ([
+        'occupation' => 'occ_canonical',
+        'funding'    => 'v4_funding_source',
+        'sector'     => 'v4_employer_sector',
+    ] as $param => $column) {
+        $values = array_filter((array)($p[$param] ?? []), fn ($v) => (string)$v !== '');
+        if (!$values || $excl === $param) continue;
+        $ph = implode(',', array_fill(0, count($values), '?'));
+        $where[] = "j.$column IN ($ph)";
+        array_push($binds, ...array_values($values));
     }
 
     return ['where' => $where, 'binds' => $binds, 'fts' => $fts];

@@ -453,6 +453,75 @@ require __DIR__ . '/../inc/header.php';
       </div>
       <?php endif; ?>
 
+      <!-- Estimated pay from the 2026 draft salary grid.
+           Derived, never scraped: 44 of 9,757 postings state a salary in the
+           text. The law is an unadopted draft, so the card never shows a bare
+           number — the range, its legal status and the rows it came from are
+           all part of the claim, and "cum a fost calculat" is open to anyone
+           who wants to check it. -->
+      <?php $sal = ($p['sal_json'] ?? null) ? (json_decode($p['sal_json'], true) ?: []) : []; ?>
+      <?php if (!empty($sal['lei_min'])): ?>
+      <section class="mb-6 rounded-lg border border-note-line bg-note p-4">
+        <h2 class="mb-1 text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu estimat</h2>
+        <p class="text-2xl font-semibold text-ink">
+          <?php if ((int)$sal['lei_min'] === (int)$sal['lei_max']): ?>
+            <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?> lei
+          <?php else: ?>
+            <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?>–<?= number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei
+          <?php endif; ?>
+          <span class="text-sm font-normal text-ink-muted">brut / lună, la gradația 0</span>
+        </p>
+
+        <?php if (!empty($sal['avertismente'])): ?>
+        <ul class="mt-2 space-y-1 text-xs text-ink-muted">
+          <?php foreach ($sal['avertismente'] as $w): ?>
+            <li>• <?= e((string)$w) ?></li>
+          <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+
+        <details class="mt-3 border-t border-note-line/60 pt-2">
+          <summary class="cursor-pointer list-none text-xs font-semibold uppercase tracking-widest text-note-ink marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+            Cum a fost calculat ▾
+          </summary>
+          <div class="pt-2 text-sm text-ink">
+            <p class="mb-2 font-mono text-xs text-ink-muted">
+              coeficient
+              <?= e(rtrim(rtrim(number_format((float)$sal['coef_min'], 4, ',', '.'), '0'), ',')) ?><?php
+                if ((float)$sal['coef_min'] !== (float)$sal['coef_max']): ?>–<?= e(rtrim(rtrim(number_format((float)$sal['coef_max'], 4, ',', '.'), '0'), ',')) ?><?php endif; ?>
+              × valoare de referință <?= number_format((float)$sal['valoare_referinta'], 0, ',', '.') ?> lei
+              × gradația <?= (int)$sal['gradatie'] ?>
+            </p>
+            <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+              <?php if (!empty($sal['ocupatie'])): ?>
+                <dt class="text-ink-muted">Ocupație</dt>
+                <dd><?= e((string)$sal['ocupatie']) ?><?php if (!empty($sal['incredere_ocupatie'])): ?>
+                  <span class="text-ink-muted">(<?= e(OCC_CONFIDENCE_LABELS[$sal['incredere_ocupatie']] ?? (string)$sal['incredere_ocupatie']) ?>)</span>
+                <?php endif; ?></dd>
+              <?php endif; ?>
+              <?php foreach ((array)($sal['selector_provenienta'] ?? []) as $field => $basis): ?>
+                <dt class="text-ink-muted"><?= e(SELECTOR_FIELD_LABELS[$field] ?? $field) ?></dt>
+                <dd><?php
+                  $v = ($sal['selector'] ?? [])[$field] ?? null;
+                  echo e(is_array($v) ? implode(' sau ', $v) : (string)$v);
+                ?> <span class="text-ink-muted">— <?= e((string)$basis) ?></span></dd>
+              <?php endforeach; ?>
+              <?php if (!empty($sal['randuri'])): ?>
+                <dt class="text-ink-muted">Rânduri din grilă</dt>
+                <dd class="font-mono"><?= e(implode(', ', (array)$sal['randuri'])) ?></dd>
+              <?php endif; ?>
+              <dt class="text-ink-muted">Varianta</dt>
+              <dd><?= e((string)$sal['varianta']) ?></dd>
+            </dl>
+          </div>
+        </details>
+
+        <p class="mt-3 border-t border-note-line/60 pt-2 text-xs text-ink-muted">
+          <?= e((string)($sal['disclaimer'] ?? '')) ?>
+        </p>
+      </section>
+      <?php endif; ?>
+
       <!-- Prompt-v3 structured requirements. Absent until a v3 extraction has
            run, so this whole block simply does not render for v2 rows. -->
       <?php $v3 = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : []; ?>

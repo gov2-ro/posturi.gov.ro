@@ -18,6 +18,7 @@ Usage:
   python pipeline.py --force --no-llm
   python pipeline.py --steps infer --provider anthropic --limit 100
   python pipeline.py --steps export-sqlite    # rebuild SQLite only
+  python pipeline.py --steps occupations,salary,export-sqlite  # re-cost after a grid change
 
   # Backfill the LLM extraction for everything currently live (~1,440 postings):
   python pipeline.py --steps schema --active-only --resume --workers 8 --prompt-version v3
@@ -63,8 +64,17 @@ ALL_STEPS = [
     "download",
     "import",
     "extract",
-    "infer",
+    # `schema` runs BEFORE `infer`: `infer_postings._extract_salary_range` reads
+    # `schema_json`, so with the old order `inferred.salary_min` was always one
+    # run behind — which is why the live export had 13 rows with a denormalised
+    # salary while 40 carried a `baseSalary` object.
     "schema",
+    "infer",
+    # Occupations then pay. Both are cheap and re-runnable on their own: the
+    # salary law is an unadopted draft, so when a new variant lands only
+    # `occupations` and `salary` rerun, not the 9,600-posting extraction.
+    "occupations",
+    "salary",
     "export-sqlite",
 ]
 
@@ -75,6 +85,8 @@ _SCRAPER_STEPS = {
     "parse":         ROOT / "parse-anunturi.py",
     "download":      ROOT / "download-attachments.py",
     "schema":        ROOT / "llm-schema.py",
+    "occupations":   ROOT / "normalize-titles.py",
+    "salary":        ROOT / "estimate-salaries.py",
     "export-sqlite": ROOT / "export-to-sqlite.py",
 }
 
@@ -163,6 +175,27 @@ def _build_cmd(
                 cmd.extend(["--prompt-version", prompt_version])
             if limit is not None:
                 cmd.extend(["--limit", str(limit)])
+        if step == "occupations":
+            if no_llm:
+                # Still worth running: linking postings to the titles already in
+                # the dictionary is pure Python, and new postings mostly repeat
+                # titles that have been mapped before.
+                cmd.append("--link-only")
+            else:
+                # The dictionary is keyed on the title, so a normal run only
+                # touches titles it has not seen; --force re-maps everything
+                # (after a grid rebuild or a prompt change).
+                if force:
+                    cmd.append("--force")
+                if provider:
+                    cmd.extend(["--provider", provider])
+                if workers is not None:
+                    cmd.extend(["--workers", str(workers)])
+                if limit is not None:
+                    cmd.extend(["--limit", str(limit)])
+        if step == "salary" and force:
+            # A new grid variant invalidates every stored estimate.
+            cmd.append("--clear")
         if step == "download" and since is not None:
             cmd.extend(["--since", str(since)])
         if step == "export-sqlite":
@@ -251,19 +284,19 @@ def main() -> None:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Pass --force to import, extract, infer, and schema steps.",
+        help="Pass --force to import, extract, infer, schema and occupations; --clear to salary.",
     )
     parser.add_argument(
         "--no-llm",
         action="store_true",
-        help="Pass --no-llm to infer step (skip LLM fallback).",
+        help="Skip every LLM call: --no-llm for infer, --link-only for occupations.",
     )
     parser.add_argument(
         "--provider",
-        # Both LLM-consuming steps (infer and schema) support this full set.
+        # All three LLM-consuming steps (infer, schema, occupations) take this set.
         choices=_PIPELINE_PROVIDERS,
         default=None,
-        help="LLM provider for infer and schema steps. Defaults to $LLM_PROVIDER, "
+        help="LLM provider for the infer, schema and occupations steps. Defaults to $LLM_PROVIDER, "
              "then models_config.json \"defaults.provider\".",
     )
     parser.add_argument(

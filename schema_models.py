@@ -12,8 +12,9 @@ tool-use input_schema).
 
 from __future__ import annotations
 
+import re
 import unicodedata
-from typing import Literal, Optional
+from typing import ClassVar, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -480,11 +481,267 @@ class JobPostingExtractionV3(JobPostingExtraction):
     )
 
 
+# ---------------------------------------------------------------------------
+# Prompt v4 — what v3 leaves on the table
+# ---------------------------------------------------------------------------
+#
+# v4 is a strict superset of v3, exactly as v3 is of v2. `education` MUST stay a
+# top-level key: `export-to-sqlite.py::_v3_columns` detects a structured payload
+# with `"education" in s`, so nesting or renaming it silently empties every v3
+# facet on the site.
+
+#: Competition timeline stages. `data/calendar.csv` currently holds 19,335 rows
+#: whose *event names* include 863 bare en-dashes, 512 bullets and 186 empty
+#: strings — the table parser transcribing layout instead of content. A closed
+#: vocabulary is what makes the timeline queryable, and what lets the expiry
+#: date be the application deadline rather than the last row of the table.
+CalendarStage = Literal[
+    "publicare",
+    "depunere_dosare",
+    "selectie_dosare",
+    "contestatii_dosare",
+    "proba_scrisa",
+    "rezultate_proba_scrisa",
+    "contestatii_proba_scrisa",
+    "proba_practica",
+    "rezultate_proba_practica",
+    "proba_sportiva",
+    "interviu",
+    "rezultate_interviu",
+    "contestatii_interviu",
+    "test_psihologic",
+    "rezultate_finale",
+    "altele",
+]
+
+FundingSource = Literal[
+    "buget_stat", "buget_local", "venituri_proprii",
+    "fonduri_europene", "mixt", "nespecificat",
+]
+
+#: Which part of the state the employer belongs to. Coarser than the occupation
+#: and independent of it: a driver at a hospital works in `sanatate`.
+EmployerSector = Literal[
+    "administratie_locala", "administratie_centrala", "sanatate", "educatie",
+    "cultura", "aparare", "ordine_publica", "justitie", "asistenta_sociala",
+    "cercetare", "transport", "mediu", "agricultura", "altele",
+]
+
+
+class CalendarEntry(BaseModel):
+    """One dated step of the competition."""
+
+    stage: CalendarStage = Field(description="Which step this is.")
+    date: Optional[str] = Field(
+        default=None, description="ISO date, YYYY-MM-DD. Null if the posting gives none.")
+    time: Optional[str] = Field(default=None, description="HH:MM, 24-hour, when stated.")
+    verbatim: Optional[str] = Field(
+        default=None,
+        description="The row label as written, trimmed to the event itself — "
+                    "not the address or instructions that share the cell.")
+
+
+class CompetitionCalendar(BaseModel):
+    """The competition timeline, with the application deadline pulled out.
+
+    The deadline is a separate field on purpose. It is the only date that
+    decides whether a reader can still apply, and it is NOT the last row of the
+    calendar table — that is the final-results date, weeks later. Treating the
+    table's last row as the expiry silently advertises closed competitions.
+    """
+
+    application_deadline: Optional[str] = Field(
+        default=None,
+        description="ISO date by which the dosar must be submitted — the "
+                    "'data limită de depunere a dosarelor' row, never the last row.")
+    application_deadline_time: Optional[str] = Field(default=None, description="HH:MM if stated.")
+    events: list[CalendarEntry] = Field(default_factory=list)
+
+    #: A calendar longer than this is a parsing artefact, not a competition.
+    MAX_EVENTS: ClassVar[int] = 24
+
+    @model_validator(mode="after")
+    def _derive_deadline(self):
+        """Fall back to the `depunere_dosare` event when the deadline is absent.
+
+        The deadline is the one date that decides whether a reader can still
+        apply, and the model sometimes files it only as an event. Deriving it is
+        strictly better than leaving it null and letting a consumer reach for
+        the last row of the table, which is the final-results date.
+        """
+        if len(self.events) > self.MAX_EVENTS:
+            object.__setattr__(self, "events", self.events[: self.MAX_EVENTS])
+        if self.application_deadline:
+            return self
+        dated = [e for e in self.events if e.stage == "depunere_dosare" and e.date]
+        if dated:
+            # Latest, not earliest: postings state a submission *window* and it
+            # is the closing date that matters.
+            last = max(dated, key=lambda e: e.date)
+            object.__setattr__(self, "application_deadline", last.date)
+            if last.time and not self.application_deadline_time:
+                object.__setattr__(self, "application_deadline_time", last.time)
+        return self
+
+
+class Funding(BaseModel):
+    """Where the post's money comes from."""
+
+    source: FundingSource = Field(default="nespecificat")
+    programme: Optional[str] = Field(
+        default=None, description="Funding programme, e.g. 'PNRR', 'POCU', 'POEO', 'Interreg'.")
+    project_code: Optional[str] = Field(
+        default=None, description="Project or contract identifier as written.")
+    project_name: Optional[str] = Field(default=None, description="Project title, if named.")
+
+
+class EmployerContext(BaseModel):
+    """Who the employer actually is, beyond the name on the announcement.
+
+    Two things depend on this. `parent_institution` resolves
+    'Unitatea Militară 01042 Curtea de Argeș' to Ministerul Apărării Naționale,
+    which is how a reader finds every MApN post. And `uat_type`/`uat_name` feed
+    the population band that the salary estimate needs — Anexa VIII pays local
+    posts on four sheets and the spread across them is over 30%.
+    """
+
+    sector: Optional[EmployerSector] = Field(default=None)
+    parent_institution: Optional[str] = Field(
+        default=None,
+        description="The ministry or authority the employer answers to, when it "
+                    "can be told from the posting. Null rather than guessed.")
+    uat_type: Optional[Literal["comuna", "oras", "municipiu", "sector", "judet"]] = Field(
+        default=None, description="Kind of administrative unit, for a local employer.")
+    uat_name: Optional[str] = Field(
+        default=None, description="Name of that unit, e.g. 'Ciugud', 'Cluj-Napoca'.")
+
+
+class JobPostingExtractionV4(JobPostingExtractionV3):
+    """v4 = every v3 field, unchanged, plus four the site could not answer without.
+
+    Deliberately small. The v3 system prompt is already ~5k tokens and its JSON
+    Schema 19.2 KB, which is the real cost driver on the structured-output path,
+    and the configured provider has no server-side schema enforcement — so every
+    field added here has to earn its place.
+    """
+
+    competition_calendar: Optional[CompetitionCalendar] = Field(
+        default=None, description="Typed competition timeline and the real application deadline.")
+    funding: Optional[Funding] = Field(
+        default=None, description="Budget line or EU programme funding the post.")
+    employer_context: Optional[EmployerContext] = Field(
+        default=None, description="Sector, parent institution and administrative unit.")
+    note_suplimentare: Optional[str] = Field(
+        default=None,
+        description="Anything role-specific of real use to a candidate that none "
+                    "of the other fields captured. Markdown bullets. Null when "
+                    "the structured fields already cover the posting.")
+
+
+# ---------------------------------------------------------------------------
+# Occupation normalisation (the title-dictionary pass, `normalize-titles.py`)
+# ---------------------------------------------------------------------------
+#
+# This is a different shape of job from the extraction models above: the input
+# is a job *title*, not a posting body, and the unit of work is the distinct
+# title (3,723 of them across 9,757 postings) rather than the posting. Running
+# it separately keeps the v3 body prompt untouched and makes the mapping
+# re-runnable when the salary grid changes without paying for extraction again.
+#
+# The model picks from shortlists of real COR occupations and real grid rows
+# supplied in the user message, so it selects rather than invents. Anything
+# derivable is derived afterwards and overwrites whatever the model said --
+# the same rule `_derive_eqf_level` and `_derive_iso_code` already apply.
+
+MatchConfidence = Literal["exact", "probabil", "incert", "none"]
+
+#: How a post is employed, which decides which half of Anexa VIII applies.
+Regim = Literal["functionar_public", "personal_contractual", "militar", "demnitate"]
+
+#: Where in the administrative hierarchy the employer sits.
+NivelAdministrativ = Literal["central", "teritorial", "local", "specializat", "transversal"]
+
+
+class GridSelector(BaseModel):
+    """Which row of the draft salary grid this occupation is paid on.
+
+    Deliberately NOT a salary. The law is an unadopted draft with more than one
+    public variant, so a number baked in here would have to be re-extracted
+    every time the draft moves; a selector is re-costed by a script in a second.
+    """
+
+    anexa: Optional[Literal["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]] = Field(
+        default=None, description="Annex of the draft law this occupation is paid under.")
+    cod: Optional[str] = Field(
+        default=None,
+        description="Grid function code (e.g. '82.60128002.07.3') copied verbatim "
+                    "from one of the supplied candidates. Null if none fits.")
+    functie_grila: Optional[str] = Field(
+        default=None,
+        description="Grid function name, copied verbatim from a supplied candidate.")
+    regim: Optional[Regim] = Field(default=None)
+    tip_post: Optional[Literal["executie", "conducere"]] = Field(default=None)
+    nivel_administrativ: Optional[NivelAdministrativ] = Field(default=None)
+
+
+class OccupationMapping(BaseModel):
+    """One normalised occupation: canonical title, COR code, grid selector."""
+
+    occupation_canonical: str = Field(
+        description="The occupation in its common singular form, without grade, "
+                    "count, department or post number: 'Îngrijitor', "
+                    "'Asistent medical generalist', 'Referent de specialitate'.")
+    cor_code: Optional[str] = Field(
+        default=None, pattern=r"^\d{6}$",
+        description="6-digit COR code, copied verbatim from a supplied candidate. "
+                    "Null when none of them is the same occupation.")
+    cor_label: Optional[str] = Field(
+        default=None,
+        description="Ignored on input — the caller fills it from the COR table.")
+    isco_group: Optional[str] = Field(
+        default=None, description="Ignored on input — derived from cor_code[:4].")
+    grade_token: Optional[str] = Field(
+        default=None,
+        description="Professional grade as the grid spells it ('gradul II', "
+                    "'debutant', 'treapta I'). Null when the title states none.")
+    study_level: Optional[StudyLevel] = Field(
+        default=None, description="Lowest study level the occupation implies.")
+    # No bounds: the value is always overwritten from `study_level`, so a
+    # nonsense number from the model must not fail validation and burn a repair.
+    eqf_level: Optional[int] = Field(
+        default=None, description="Ignored on input — derived from study_level.")
+    grid_selector: Optional[GridSelector] = Field(default=None)
+    match_confidence: MatchConfidence = Field(
+        default="incert",
+        description="'exact' when a candidate names this same occupation, "
+                    "'probabil' for a close relative, 'incert' for a guess, "
+                    "'none' when nothing supplied fits.")
+
+    @model_validator(mode="after")
+    def _derive(self):
+        """Never trust the model for anything that can be computed.
+
+        `cor_label` and `isco_group` follow from `cor_code`, and `eqf_level`
+        from `study_level`. Asking for them is useful -- it makes the model
+        commit -- but the derived value always wins.
+        """
+        # `cor_label` is always cleared: only the COR table may set it, and
+        # this module stays dependency-free so `normalize-titles.py` fills it in.
+        object.__setattr__(self, "cor_label", None)
+        object.__setattr__(
+            self, "isco_group", self.cor_code[:4] if self.cor_code else None
+        )
+        if self.study_level is not None:
+            object.__setattr__(self, "eqf_level", STUDY_LEVEL_TO_EQF[self.study_level])
+        return self
+
+
 #: Prompt version → Pydantic model. `llm-schema.py` looks the model up here
 #: rather than hard-coding one, so adding v4 is a one-line change.
 EXTRACTION_MODELS: dict[str, type[BaseModel]] = {
     "v2": JobPostingExtraction,
     "v3": JobPostingExtractionV3,
+    "v4": JobPostingExtractionV4,
 }
 
 #: Versions that use provider-native structured output. v1 is free-form JSON.

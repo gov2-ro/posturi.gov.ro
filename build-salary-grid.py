@@ -273,6 +273,15 @@ def parse_sheet(ws, version_id: str) -> tuple[list[dict], list[dict]]:
         # continuation rows; sheets like `I CIII A` indent it there too.
         if functie and not grad and GRADE_TOKENS.match(functie):
             grad, functie = functie, ""
+        # Anexa II has no grade column: it appends the grade to the function
+        # cell after a semicolon ("Asistent medical; ...; principal"). Without
+        # lifting it out, three rows with different coefficients are
+        # indistinguishable — and health is the largest job family on the site.
+        if functie and not grad and ";" in functie:
+            head, _, tail = functie.rpartition(";")
+            if GRADE_TOKENS.match(tail.strip()):
+                grad, functie = tail.strip(), head.strip()
+
         if functie:
             cur_functie = functie
         if studii:

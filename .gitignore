@@ -17,6 +17,9 @@ selenium/geckodriver.log
 # estimate the site shows must be traceable to a row in it, including for an
 # older variant of the draft law. Rebuild with `python build-salary-grid.py`.
 !/data/salarii/
+# The COR occupation table is reference data with a recorded provenance, not
+# pipeline output. See data/ocupatii/README.md.
+!/data/ocupatii/
 /data/cached-responses/*
 /testbench/
 */scraping.log

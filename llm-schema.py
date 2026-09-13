@@ -73,6 +73,19 @@ def get_prompt(prompt_version="v1"):
     return MODELS_CONFIG.get("prompts", {}).get(prompt_version, "")
 
 
+#: Output-token budget per prompt version. v3 fits comfortably in 2,000; v4 adds
+#: a typed competition calendar (up to ~16 dated events, each with a verbatim
+#: label) plus `note_suplimentare`, and a long posting truncates mid-JSON — which
+#: surfaces as "Expected dict, got str", because a truncated object does not
+#: parse and `parse_json_response` hands back the raw text.
+MAX_OUTPUT_TOKENS = {"v4": 4000}
+DEFAULT_MAX_OUTPUT_TOKENS = 2000
+
+
+def max_output_tokens(prompt_version: str) -> int:
+    return MAX_OUTPUT_TOKENS.get(prompt_version, DEFAULT_MAX_OUTPUT_TOKENS)
+
+
 def get_enabled_models():
     """Return list of (provider, model_id) tuples for enabled models only."""
     enabled = []
@@ -297,6 +310,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
     """
     use_schema = prompt_version in EXTRACTION_MODELS
     extraction_model = model_for_version(prompt_version)
+    out_budget = max_output_tokens(prompt_version)
 
     if provider == 'gemini':
         from google import genai
@@ -339,7 +353,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 ],
                 # GPT-5 family rejects `max_tokens` and requires `max_completion_tokens`;
                 # GPT-4o family accepts both. We use the new one uniformly.
-                "max_completion_tokens": 2000,
+                "max_completion_tokens": out_budget,
             }
             # GPT-5 reasoning models eat the completion budget with internal
             # reasoning tokens (default reasoning_effort is high). For
@@ -380,7 +394,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
         def generate(content):
             kwargs = {
                 "model": model,
-                "max_tokens": 2000,
+                "max_tokens": out_budget,
                 "system": [{
                     "type": "text",
                     "text": system_prefix,
@@ -419,7 +433,7 @@ def make_generator(provider, model, system_prefix, prompt_version):
                     {"role": "system", "content": system_prefix},
                     {"role": "user", "content": content},
                 ],
-                "max_tokens": 2000,
+                "max_tokens": out_budget,
                 "temperature": 0.2,
                 # deepseek-v4-* are reasoning models: left on, they spend
                 # 1,400–2,600 tokens thinking before emitting any JSON, blow the

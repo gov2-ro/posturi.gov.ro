@@ -39,6 +39,30 @@ DISCLAIMER = (
 #: Population bands, widest first. Only Anexa VIII local rows are banded.
 POPULATION_BANDS = ["peste 200.000", "50.000-200.000", "10.000-50.000", "sub 10.000"]
 
+#: The extraction schema uses ASCII enum values (`personal_contractual`), the
+#: workbook uses Romanian prose (`personal contractual`). One map, here, so the
+#: translation cannot drift between the prompt and the calculator.
+SELECTOR_REGIM = {
+    "functionar_public": "funcționar public",
+    "personal_contractual": "personal contractual",
+    "militar": "",        # Anexa VI does not split by regim
+    "demnitate": "",      # Anexa IX either
+}
+SELECTOR_TIP_POST = {"executie": "execuție", "conducere": "conducere"}
+
+
+def selector_to_grid(selector: dict) -> dict:
+    """Translate an `OccupationMapping.grid_selector` into grid vocabulary."""
+    out = dict(selector or {})
+    if out.get("regim"):
+        out["regim"] = SELECTOR_REGIM.get(out["regim"], out["regim"])
+    if out.get("tip_post"):
+        out["tip_post"] = SELECTOR_TIP_POST.get(out["tip_post"], out["tip_post"])
+    if out.get("functie_grila") and not out.get("functie"):
+        out["functie"] = out["functie_grila"]
+    return out
+
+
 #: Study-level notations. The grid writes `S / SSD / PL / M / M;G / G`; v3
 #: extraction writes `licenta / postliceala / liceala / ...`. This is the bridge
 #: between them -- see `ocupatii.py`, which owns the wider reconciliation.
@@ -142,11 +166,15 @@ class Grid:
         self.params = params
         self.by_cod: dict[str, list[GridRow]] = {}
         self.by_name: dict[str, list[GridRow]] = {}
+        #: normalised synonym -> the spelling the workbook uses, for display.
+        self.display_name: dict[str, str] = {}
         for r in rows:
             if r.cod:
                 self.by_cod.setdefault(r.cod, []).append(r)
             for name in r.sinonime:
-                self.by_name.setdefault(norm(name), []).append(r)
+                key = norm(name)
+                self.by_name.setdefault(key, []).append(r)
+                self.display_name.setdefault(key, name)
         self._name_tokens = {n: set(n.split()) for n in self.by_name}
 
     # -- variants and gradations ------------------------------------------
@@ -180,20 +208,31 @@ class Grid:
 
     # -- retrieval ---------------------------------------------------------
     def candidates(self, title: str, *, anexa: str = "", regim: str = "",
-                   nivel_administrativ: str = "", k: int = 15) -> list[tuple[float, GridRow]]:
+                   nivel_administrativ: str = "", k: int = 15,
+                   ) -> list[tuple[float, GridRow, str]]:
         """Shortlist real grid functions for a free-text job title.
 
         This is what keeps the LLM honest: it picks from rows that exist rather
         than inventing a coefficient. Scoring is string similarity plus a small
-        bonus when the posting's context agrees with the row's, so
-        `Consilier` at a primărie ranks the local rows above the central ones.
+        bonus when the posting's context agrees with the row's, so `Consilier`
+        at a primărie ranks the local rows above the central ones.
+
+        Returns `(score, row, matched_name)`. The third element matters because
+        a grid row can carry 27 synonyms — Anexa II pays two dozen health
+        professions off one line — and the caller should show the name that
+        actually matched, not 1,500 characters of alternatives.
+
+        Results are deduplicated by function code. The same `cod` repeats across
+        all four population-band sheets with different coefficients, but the
+        band is resolved later from the employer, not chosen by the model, so
+        showing it four times only crowds out genuinely different functions.
         """
         q = norm(title)
         if not q:
             return []
         qt = set(q.split())
-        scored: list[tuple[float, GridRow]] = []
-        seen: set[tuple[str, int]] = set()
+        scored: list[tuple[float, GridRow, str]] = []
+        seen_rows: set[tuple[str, int]] = set()
         for name, rows in self.by_name.items():
             nt = self._name_tokens[name]
             overlap = len(qt & nt) / max(len(qt | nt), 1)
@@ -210,12 +249,25 @@ class Grid:
                 if nivel_administrativ and r.nivel_administrativ == nivel_administrativ:
                     bonus += 0.04
                 key = (r.sheet, r.source_row)
-                if key in seen:
+                if key in seen_rows:
                     continue
-                seen.add(key)
-                scored.append((round(base + bonus, 4), r))
+                seen_rows.add(key)
+                scored.append((round(base + bonus, 4), r, self.display_name[name]))
         scored.sort(key=lambda t: (-t[0], t[1].sheet, t[1].source_row))
-        return scored[:k]
+
+        out: list[tuple[float, GridRow, str]] = []
+        seen_cod: set[str] = set()
+        for score, row, name in scored:
+            # Rows without a code cannot be deduplicated on one, so keep them all.
+            dedupe_key = (row.cod, row.grad_treapta, row.studii) if row.cod else None
+            if dedupe_key is not None:
+                if dedupe_key in seen_cod:
+                    continue
+                seen_cod.add(dedupe_key)
+            out.append((score, row, name))
+            if len(out) >= k:
+                break
+        return out
 
     # -- selection ---------------------------------------------------------
     def select(self, selector: dict) -> list[GridRow]:
@@ -227,10 +279,28 @@ class Grid:
         widens the resulting range.
         """
         cod = (selector.get("cod") or "").strip()
-        rows = list(self.by_cod.get(cod, [])) if cod else []
-        if not rows:
-            name = norm(selector.get("functie") or "")
-            rows = list(self.by_name.get(name, []))
+        name = norm(selector.get("functie") or "")
+
+        # Name first, code second. A code identifies one row, and what counts as
+        # "the same function at another grade" is not expressible as a code
+        # prefix: Anexa VIII numbers grades in the last segment (…07.1, …07.3)
+        # but Anexa II gives each grade its own base code entirely
+        # (21.00201026 principal, 21.00201028 debutant). The function *name* is
+        # the one key that means the same thing in both.
+        rows = list(self.by_name.get(name, [])) if name else []
+        if not rows and cod:
+            rows = list(self.by_cod.get(cod, []))
+            # Reached only when the name is missing: widen along the grade axis
+            # within the same sheet, so the posting's grade can still choose.
+            if rows and selector.get("grad_treapta"):
+                sheets = {r.sheet for r in rows}
+                widened = {(r.sheet, r.source_row): r for r in rows}
+                for seed in list(rows):
+                    for syn in seed.sinonime:
+                        for r in self.by_name.get(norm(syn), []):
+                            if r.sheet in sheets:
+                                widened[(r.sheet, r.source_row)] = r
+                rows = list(widened.values())
         if not rows:
             return []
 
@@ -244,7 +314,15 @@ class Grid:
             """
             if not value:
                 return candidates
-            wanted = set(aliases or [value])
+            if aliases is not None:
+                wanted = set(aliases)
+            elif isinstance(value, (set, frozenset, list, tuple)):
+                # A set of plausible values, not a guess: `uat.bands_for()`
+                # returns two bands when an `oraș` could be either side of
+                # 10.000 locuitori, and the estimate widens across both.
+                wanted = set(value)
+            else:
+                wanted = {value}
             exact = [r for r in candidates if getattr(r, key) in wanted]
             if exact:
                 return exact

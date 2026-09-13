@@ -133,6 +133,22 @@ class JobPosting(models.Model):
     inferred = models.JSONField(default=dict, blank=True, help_text="Reserved for v2/v3 derived fields")
     schema_json = models.JSONField(null=True, blank=True, help_text="LLM-extracted structured sections for display (responsibilities, qualifications, skills, etc.)")
 
+    # ---- Occupation and estimated pay ----
+    occupation = models.ForeignKey(
+        "Occupation", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="postings",
+        help_text="Normalised occupation, resolved from the title by normalize-titles.py.",
+    )
+    salary_estimate = models.JSONField(
+        null=True, blank=True,
+        help_text=(
+            "Gross monthly estimate from the draft salary grid, written by "
+            "estimate-salaries.py. Derived, never scraped: postings almost never "
+            "state a salary. Recomputable from occupation + context alone, so a "
+            "new variant of the draft costs a script run, not a re-extraction."
+        ),
+    )
+
     # ---- Full-text search ----
     search_vector = SearchVectorField(null=True, blank=True)
 
@@ -148,12 +164,82 @@ class JobPosting(models.Model):
             models.Index(fields=["locality"]),
             models.Index(fields=["judet_raw"]),
             models.Index(fields=["job_level"]),
+            models.Index(fields=["occupation"]),
             GinIndex(fields=["search_vector"]),
             GinIndex(fields=["inferred"]),
         ]
 
     def __str__(self):
         return self.title or self.url
+
+
+class Occupation(models.Model):
+    """One normalised occupation, keyed on the parsed job title.
+
+    A dictionary, not a per-posting field. 9,757 postings carry 5,979 distinct
+    titles, 3,723 once `ocupatii.parse_title()` strips grade, count and
+    department — so normalising the *titles* costs a fraction of normalising
+    every posting, and new postings mostly hit rows that already exist.
+
+    Keyed on `title_norm` (diacritic- and punctuation-stripped) so that
+    `Îngrijitor`, `ÎNGRIJITOR` and `îngrijitor` collapse to one row instead of
+    three facet values.
+    """
+
+    title_norm = models.CharField(
+        max_length=300, unique=True,
+        help_text="ocupatii.parse_title(raw).base_norm — the dictionary key.",
+    )
+    title_sample = models.CharField(
+        max_length=300, blank=True, default="",
+        help_text="One raw title that produced this key, for debugging.",
+    )
+    canonical = models.CharField(
+        max_length=300, help_text="Display form, e.g. 'Asistent medical generalist'."
+    )
+
+    # ---- COR / ISCO-08 ----
+    cor_code = models.CharField(max_length=6, blank=True, default="", db_index=True)
+    cor_label = models.CharField(max_length=300, blank=True, default="")
+    isco_group = models.CharField(
+        max_length=4, blank=True, default="", db_index=True,
+        help_text="ISCO-08 unit group, always cor_code[:4]. Derived, never asked of a model.",
+    )
+
+    # ---- Salary grid selector ----
+    grid_selector = models.JSONField(
+        default=dict, blank=True,
+        help_text=(
+            "Which row of the draft grid this occupation is paid on "
+            "{anexa, cod, functie_grila, regim, tip_post, nivel_administrativ}. "
+            "A selector, not a salary: the law is an unadopted draft, so pay is "
+            "recomputed from here whenever the variant changes."
+        ),
+    )
+    study_level = models.CharField(max_length=20, blank=True, default="")
+    match_confidence = models.CharField(
+        max_length=12, default="incert",
+        help_text="exact | probabil | incert | none — how sure the mapping is.",
+    )
+
+    # ---- Provenance ----
+    provider = models.CharField(max_length=50, blank=True, default="")
+    model = models.CharField(max_length=100, blank=True, default="")
+    grid_version = models.CharField(max_length=20, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["canonical"]
+        verbose_name = "Ocupație"
+        verbose_name_plural = "Ocupații"
+        indexes = [
+            models.Index(fields=["match_confidence"]),
+            models.Index(fields=["canonical"]),
+        ]
+
+    def __str__(self):
+        return f"{self.canonical} ({self.cor_code or 'fără COR'})"
 
 
 class JobPostingUpdate(models.Model):

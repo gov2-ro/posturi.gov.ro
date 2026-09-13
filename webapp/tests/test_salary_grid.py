@@ -144,6 +144,33 @@ class TestSelection:
         assert est.lei_min <= 5541 and est.lei_max >= 7579
         assert any("Banda de populație" in w for w in est.avertismente)
 
+    def test_the_postings_grade_overrides_the_code_the_dictionary_pinned(self, grid):
+        """A code names the function; the grade belongs to the posting.
+
+        The occupation dictionary is keyed on the grade-stripped title, so one
+        entry serves "Consilier gradul I" and "Consilier debutant" alike. Its
+        stored code is necessarily one specific grade's row (a code's last
+        segment IS the grade index), so selection has to widen along the grade
+        axis and let the posting decide.
+        """
+        pinned_at_grade_i_a = "82.60128002.07.1"
+        base = {"cod": pinned_at_grade_i_a, "functie": "Consilier", "anexa": "VIII",
+                "regim": "personal contractual", "nivel_administrativ": "local",
+                "banda_populatie": "sub 10.000"}
+        by_grade = {g: grid.estimate(dict(base, grad_treapta=g)).lei_min
+                    for g in ("gradul I A", "gradul I", "gradul II", "debutant")}
+        assert by_grade == {"gradul I A": 6309, "gradul I": 6095,
+                            "gradul II": 5541, "debutant": 5337}
+
+    def test_widening_along_grades_does_not_drag_in_neighbouring_functions(self, grid):
+        """`Consilier` and `arhitect` share a grid line but are not one job."""
+        rows = grid.select({
+            "cod": "82.60128002.07.1", "functie": "Consilier", "grad_treapta": "gradul II",
+            "anexa": "VIII", "regim": "personal contractual",
+            "nivel_administrativ": "local", "banda_populatie": "sub 10.000",
+        })
+        assert [r.ref for r in rows] == ["VIII CII A 3_local4!23"]
+
     def test_an_unmatched_selector_returns_no_number_rather_than_a_guess(self, grid):
         est = grid.estimate({"functie": "Vrăjitor de curte"})
         assert est.lei_min is None and est.incredere == "necunoscut"
@@ -190,7 +217,17 @@ class TestRetrieval:
     def test_an_obvious_title_retrieves_its_grid_function_first(self, grid, title, expected):
         top = grid.candidates(title, k=5)
         assert top, f"no candidates for {title!r}"
-        assert any(sg.norm(n) == expected for _, row in top[:3] for n in row.sinonime)
+        assert any(sg.norm(name) == expected for _, _row, name in top[:3])
+
+    def test_the_matched_synonym_comes_back_in_the_workbook_spelling(self, grid):
+        """A row can carry 27 synonyms; the caller needs the one that matched.
+
+        Anexa II pays two dozen health professions off a single line, so pasting
+        whole rows into a prompt would be mostly alternatives. And the spelling
+        must be the workbook's, not the normalised key.
+        """
+        top = grid.candidates("Îngrijitor", k=3)
+        assert any(name.startswith(("Î", "î")) for _, _row, name in top)
 
     def test_context_lifts_the_matching_annex(self, grid):
         """`Consilier` exists in Anexa IV and VIII; context should break the tie."""

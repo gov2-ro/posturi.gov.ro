@@ -13,6 +13,11 @@ selenium/geckodriver.log
 !/data/reference/
 !/data/cached-responses/
 !/data/datasette/
+# Source material for the salary grid — the MMFTSS workbook, the draft annexes,
+# ~5 MB of .docx/.xlsx/.pdf. Out of the repo; `data/salarii/` below carries what
+# was parsed out of them, which is what the site actually reads.
+docs/salarii/
+
 # The salary grid registry is a versioned artifact, not scratch output: every
 # estimate the site shows must be traceable to a row in it, including for an
 # older variant of the draft law. Rebuild with `python build-salary-grid.py`.

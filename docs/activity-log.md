@@ -74,6 +74,55 @@ a number in a report.
 
 ---
 
+### 2026-09-14 — Re-import with the parser fix, then a v4 re-sample found a fourth enum gap
+
+**Re-import.** Ran `pipeline.py --steps parse,import` to pick up the deadline
+parser fix from earlier the same day. Detail rows: 9986/9987 matched (1 error,
+see below). Calendar: 28596/28597 events imported. Index: 9992 updated, 86
+marked cancelled. 1848 active postings now carry the corrected deadlines instead
+of the stale scraped ones.
+
+One posting failed both detail and calendar import:
+`value too long for character varying(40)` on
+`1-post-muncitor-treapta-i`. Logged to backlog rather than chased — 1/9987.
+
+**v4 re-sample, round one: same bug, one layer deeper.** Cleared the 190 stale
+v4 variant rows from the prior VPS sample (disposable per the 2026-09-14 sample
+note above) and re-ran 50 active postings through deepseek. 46/50 succeeded, but
+26 needed a repair retry and 4 hard-failed — worse than the fix was supposed to
+leave things. The failures all named the same shape of value:
+`rezultate_contestatii_selectie_dosare`, `rezultate_contestatii_proba_scrisa`,
+`rezultate_contestatii_interviu`. The enum had been made symmetric one level
+(`<stagiu>` → `rezultate_<stagiu>` → `contestatii_<stagiu>`) but postings that
+report a *contested* result also report the outcome of that contestation, and
+nothing in `CalendarStage` could hold it.
+
+**Fix and round two.** Added `rezultate_contestatii_<stagiu>` to
+`schema_models.py::CalendarStage` for all six testing stages, and extended the
+`competition_calendar` explanation in the v4 prompt (`models_config.json`) to
+describe the third tier. Cleared the round-one sample and re-ran the identical
+50 postings: 50/50 succeeded, 1 retry. `ops/check-v4-sample.py`: 48/50 deadline
+extraction, 45 overstate `expires_at` (avg 15 days, worst 62), 0/2 disagreements
+where both sources had a date — **"Sample looks fit to scale up."**
+
+The script still prints 3 "stage/verbatim mismatch" lines; read against the raw
+`verbatim` text, all three are the word *rezultat* used as an ordinary Romanian
+past participle ("punctajul rezultat din analiza...") rather than the
+calendar-stage sense. The keyword heuristic can't distinguish the two — not an
+extraction bug, just a noisy check. Worth narrowing later if the false-positive
+rate on a corpus run gets annoying.
+
+**One more found and left alone.** `credentials.kind` hard-failed once on
+`certificat_professional` — the model's own spelling drift toward English,
+since both the schema and the prompt already say `certificat_profesional`
+correctly. Logged to backlog as a candidate for repair-time normalization rather
+than another schema/prompt change.
+
+**Not done yet:** the corpus-wide v4 run. This was a 50-posting fitness check,
+same as the VPS's 100-posting one — see backlog.
+
+---
+
 ### 2026-09-13 — "Active" means you can still apply; v3's unused fields surfaced
 
 **Two changes, both about data we already had and were not using.**

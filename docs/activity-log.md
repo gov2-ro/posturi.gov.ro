@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-09-16 — Two unpushed v4 calendar-stage fixes disagreed; checked the source data to settle it
+
+**What:** Pushing this box's unpushed commit hit a real merge conflict with `origin/main`, not a fast-forward. This box's `8e9a8ba` (2026-09-14, dev machine) and the VPS-pushed `c17deb0` (2026-09-14, a few hours earlier) had both independently touched the v4 prompt's calendar-stage instruction in `models_config.json`, in response to the same symptom, and reached opposite conclusions.
+
+**Finding:** `c17deb0` found the model composing `rezultate_contestatii_<stagiu>` values it decided were invented — the templated instruction (`rezultate_<stagiu>` / `contestatii_<stagiu>`) let the model treat `contestatii_selectie_dosare` itself as a `<stagiu>` and build a third level. It fixed this by listing all 22 stage values literally and explicitly denying the compound exists, folding a contestation's outcome into `contestatii_<stagiu>`. `8e9a8ba`, working from the same pre-fix base a day later without knowledge of that commit, hit the identical shape of failure in a 50-posting resample and drew the opposite conclusion: the compound is real content, not a hallucination, and added it as a genuine 4th tier. Before picking a side, checked `data/calendar.csv` directly: postings routinely carry both "Depunerea contestațiilor" and, a day or more later, "Afișarea rezultatelor în urma soluționării contestațiilor" as separate dated rows (6,758 matching lines). Folding them into one stage value silently drops one of the two dates.
+
+**Fix:** Merged rather than picked a side — kept `c17deb0`'s discipline (list every value literally, no `<stagiu>` template anywhere, generated from the enum so it can't drift) but applied it to the fuller 28-value enum with the outcome tier, and replaced the denial sentence with a concrete example instead of a template. `schema_models.py`'s unrelated `Credential.kind` normalisation (origin-only) merged clean with no overlap. Updated `test_every_evaluation_stage_has_both_counterparts` to require the 3rd tier too, and replaced `test_the_prompt_forbids_composing_new_stage_values` (asserted the compound must be denied) with `test_the_prompt_lists_no_stage_template` (asserts only the still-true template-placeholder rule). 440 tests pass. Commit `9b16f8c`.
+
+---
+
 ### 2026-09-16 — The 2026-09-11 CRON_TZ fix didn't take; the cron on `gov2-1` doesn't support CRON_TZ at all
 
 **What:** `/pipeline-check` run. Data and deploy were healthy — no hard or soft check failures across 10 recorded export-checks, schema coverage climbing (97.7%→99.6%), live site in sync with the local build. Flagged as a possible missed slot the 2026-09-16 11:45 run not yet having appeared, which led to re-checking the cron schedule directly.

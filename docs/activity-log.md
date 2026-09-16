@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-09-16 — The 2026-09-11 CRON_TZ fix didn't take; the cron on `gov2-1` doesn't support CRON_TZ at all
+
+**What:** `/pipeline-check` run. Data and deploy were healthy — no hard or soft check failures across 10 recorded export-checks, schema coverage climbing (97.7%→99.6%), live site in sync with the local build. Flagged as a possible missed slot the 2026-09-16 11:45 run not yet having appeared, which led to re-checking the cron schedule directly.
+
+**Finding:** The 2026-09-11 entry above concluded the fix was uncommenting `CRON_TZ=Europe/Bucharest`. That variable was in fact set — both globally at the top of the crontab and again in the posturi block — and the jobs were still firing 3h off. Confirmed via `sudo journalctl -u cron --since "2026-09-16 08:40" --until "2026-09-16 08:55"`: only root's `debian-sa1` sysstat job ran in that window, no posturi invocation — the 08:45 UTC slot (which is where 11:45 Bucharest lands *if* CRON_TZ worked) never fired, because the real slot is 11:45 UTC. Cross-checked against two unrelated jobs sharing the same crontab and the same top-level `CRON_TZ`: `monitorulpreturilor`'s `0 6 * * *` audit wrote its log at 06:06 UTC (not ~03:06) and its `40 3 * * *` gas-price fetch at 03:59 UTC (not ~00:59) — both running on literal UTC, confirming this isn't posturi-specific. Root cause: `gov2-1` runs `cron` 3.0pl1-184ubuntu2, Debian/Ubuntu's classic vixie-derived package, which does not implement `CRON_TZ` (that's a `cronie`/RHEL-family feature) — the variable is silently ignored, no warning anywhere.
+
+**Fix:** Dropped `CRON_TZ` from the posturi crontab block and rewrote the schedule in literal UTC: `45 11`/`33 18` → `45 8`/`33 15`, which land at 11:45/18:33 Bucharest under the current EEST (UTC+3) offset. Verified live with `crontab -l`. Left the rest of the crontab (monitorulpreturilor, monitoruloficial, sumal) untouched — same underlying bug likely affects their documented local-time comments too, but that's their call to make, out of scope here. Needs a manual -1h shift around 2026-10-25 (DST changeover to EET) — tracked in `docs/backlog.md`, along with the proper long-term fix (`ops/systemd/posturi-pipeline.timer`, already written and DST-aware, but blocked on a `/srv/posturi` + dedicated-user migration that hasn't happened).
+
+**Also found:** this box's `crontab <file>` command truncates/corrupts filenames longer than ~99 characters instead of erroring — installing from a long scratch path (`/tmp/claude-.../scratchpad/crontab-after.txt`, 114 chars) silently failed with a garbage "file not found" on a truncated path. Installing from a short path (`~/crontab-posturi-new.txt`, 33 chars) worked. Worth remembering for any future crontab edit on this host.
+
+---
+
 ### 2026-09-14 — A v4 sample on the VPS found three bugs, two of them mine
 
 Ran prompt v4 over 100 active postings on the VPS with `--compare` (variants

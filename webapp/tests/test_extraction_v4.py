@@ -95,14 +95,18 @@ class TestCompetitionCalendar:
         assert len(calendar.events) == CompetitionCalendar.MAX_EVENTS
 
     def test_every_evaluation_stage_has_both_counterparts(self):
-        """Every stage can produce a result and attract a contestation.
+        """Every stage can produce a result and attract a contestation, whose
+        outcome is announced separately.
 
         A gap here is invisible — nothing errors, the model files the row under
         the nearest stage it was offered and a reader gets a plausible wrong
-        date. Learned twice: `rezultate_selectie_dosare` was missing and
+        date. Learned three times: `rezultate_selectie_dosare` was missing and
         scattered ten rows across five stages; `contestatii_proba_practica` was
-        then missing and caused 9 of 100 hard failures in a VPS sample, which is
-        ~850 postings at corpus scale.
+        then missing and caused 9 of 100 hard failures in a VPS sample, ~850
+        postings at corpus scale; `rezultate_contestatii_<stagiu>` — the later
+        announcement of a contestation's outcome, which postings routinely date
+        separately from the filing deadline — was missing next and caused 4 of
+        50 hard failures in the following sample.
 
         Hence a rule rather than another one-off patch.
         """
@@ -111,7 +115,7 @@ class TestCompetitionCalendar:
         stages = set(typing.get_args(CalendarStage))
         missing = [f"{prefix}_{base}"
                    for base in EVALUATION_STAGES
-                   for prefix in ("rezultate", "contestatii")
+                   for prefix in ("rezultate", "contestatii", "rezultate_contestatii")
                    if f"{prefix}_{base}" not in stages]
         assert not missing, f"stages with no counterpart: {missing}"
         assert set(EVALUATION_STAGES) <= stages
@@ -122,16 +126,40 @@ class TestCompetitionCalendar:
             {"stage": "contestatii_proba_practica", "date": "2026-09-20"}]})
         assert cal.events[0].stage == "contestatii_proba_practica"
 
-    def test_the_prompt_offers_every_stage_the_schema_accepts(self):
-        """The model can only pick from what the prompt lists. A value present
-        in the schema but absent from the prompt is a gap in the other
-        direction, and just as invisible."""
+    def test_the_prompt_lists_every_stage_literally(self):
+        """Each value must appear verbatim, not as a template.
+
+        The first version of this test stripped the `rezultate_`/`contestatii_`
+        prefixes and checked the base name appeared — so a prompt saying
+        "`rezultate_<stagiu>` for its results" passed. It shouldn't have: the
+        model read `contestatii_selectie_dosare` as a `<stagiu>` and invented
+        `rezultate_contestatii_selectie_dosare`, which pushed the repair rate
+        from 18-in-100 to 111-in-200. A template invites composition; a list
+        does not.
+        """
         import json, typing
         from schema_models import CalendarStage
         prompt = json.loads((REPO_ROOT / "models_config.json").read_text(encoding="utf-8"))["prompts"]["v4"]
-        for stage in typing.get_args(CalendarStage):
-            base = stage.replace("rezultate_", "").replace("contestatii_", "")
-            assert base in prompt, f"{stage} is unreachable — {base} never appears in the prompt"
+        missing = [s for s in typing.get_args(CalendarStage) if f"`{s}`" not in prompt]
+        assert not missing, f"stages the model is never shown: {missing}"
+
+    def test_the_prompt_lists_no_stage_template(self):
+        """No `<stagiu>` placeholder anywhere.
+
+        This test previously asserted the opposite of today's design: that
+        `rezultate_contestatii_<stagiu>` was an invalid compound the prompt must
+        call out by name, because it looked like the model composing a value
+        from the `rezultate_<stagiu>`/`contestatii_<stagiu>` template rather than
+        reading real content. A later sample showed postings do genuinely date a
+        contestation's outcome separately from its filing deadline — see
+        `test_every_evaluation_stage_has_both_counterparts` — so the compound was
+        promoted to a real, literally-listed stage instead of being denied. What
+        stays true either way: no `<stagiu>` placeholder, since a template
+        invites composition and a list does not.
+        """
+        import json
+        prompt = json.loads((REPO_ROOT / "models_config.json").read_text(encoding="utf-8"))["prompts"]["v4"]
+        assert "<stagiu>" not in prompt, "a template invites the model to build new values"
 
     def test_an_unknown_stage_is_rejected_rather_than_stored_as_free_text(self):
         with pytest.raises(ValidationError):

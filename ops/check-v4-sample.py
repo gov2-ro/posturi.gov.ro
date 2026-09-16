@@ -155,7 +155,11 @@ def main() -> int:
     if row["disagrees_badly"]:
         problems.append(
             f"{row['disagrees_badly']} deadline(s) differ from the scraped date by more "
-            "than 3 days — read those postings before trusting v4 dates over scraped ones")
+            "than 3 days — read those postings before trusting v4 dates over scraped ones.\n"
+            "      If `parse-anunturi.py` has been fixed but `pipeline.py --steps parse,import`\n"
+            "      has not been re-run, the scraped side is stale and this is expected:\n"
+            "      the known cases are a deadline row read off the selection date, and a\n"
+            "      submission window read at its opening instead of its close.")
     if row["peak_out_tokens"] >= budget:
         problems.append(f"output hit the {budget}-token budget — answers are being truncated")
     elif row["peak_out_tokens"] >= budget * 0.9:

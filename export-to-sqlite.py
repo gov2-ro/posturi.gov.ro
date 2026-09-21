@@ -27,6 +27,7 @@ import json
 import os
 import socket
 import sqlite3
+from pathlib import Path
 from zoneinfo import ZoneInfo
 import subprocess
 import sys
@@ -35,6 +36,26 @@ from urllib.parse import urlparse
 
 import psycopg
 from psycopg.rows import dict_row
+
+
+def _load_env() -> None:
+    """Load .env into the environment if present, without overriding an
+    explicitly-set DATABASE_URL (e.g. `DATABASE_URL=... python export-to-sqlite.py`).
+
+    Lets this script be run standalone (deploy-php.sh, a bare shell) and still
+    find Postgres, the way pipeline.py's own steps already do.
+    """
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(env_path, override=False)
+    except ImportError:
+        pass  # dotenv not installed — env vars must be set externally
+
+
+_load_env()
 
 
 def pg_connect():

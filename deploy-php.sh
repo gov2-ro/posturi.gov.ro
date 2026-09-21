@@ -24,6 +24,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DB_FILE="$SCRIPT_DIR/webapp-php/posturi.sqlite"
 
+# Prefer the project venv (same convention as pipeline.py's VENV_PYTHON) so this
+# runs correctly from a plain shell, not just one with the venv activated.
+if [[ -x "$SCRIPT_DIR/.venv/bin/python" ]]; then
+    PYTHON="$SCRIPT_DIR/.venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
 deploy_code=1
 deploy_data=1
 do_export=1
@@ -88,7 +96,7 @@ fi
 
 if [[ $deploy_data -eq 1 && $do_export -eq 1 ]]; then
     echo "==> Exporting PostgreSQL -> SQLite (active only)..."
-    python "$SCRIPT_DIR/export-to-sqlite.py" --active-only --out "$DB_FILE"
+    "$PYTHON" "$SCRIPT_DIR/export-to-sqlite.py" --active-only --out "$DB_FILE"
 fi
 
 # The export enforces its own floors, but --no-export means somebody else built this

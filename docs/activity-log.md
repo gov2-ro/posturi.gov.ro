@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-09-21 — Normalised occupation title surfaced in the UI, and a week of undeployed PHP found in the process
+
+**What:** `normalize-titles.py`'s COR-normalised occupation (`occ_canonical`, exported to `job_postings.occ_canonical`, populated on 2,035 of 2,042 active postings) was extracted and indexed but only ever used as the "occupation" search facet. Every place a posting's title actually renders — the detail page `<h1>`, listing cards, the employer profile, feeds — showed the raw scraped string verbatim, grade/seat-count/casing clutter and all ("asistent medical generalist Pl" instead of "Asistent medical generalist").
+
+**Fix:** Added `display_title(array $p): array` to `webapp-php/helpers.php` — primary is `occ_canonical` when it's non-empty and differs from the raw title (case-insensitive), secondary is the raw title, falling back to raw-only for the ~7 unmatched postings. Wired into `pages/detail.php` (h1 + a "normalizat" abbr badge, reusing the existing "v3" tag's visual convention), `partials/result_list.php` (listing cards) and `pages/employer.php` (which needed `occ_canonical` added to its two hand-rolled `SELECT`s). Left the `<title>` tag, meta description, JSON-LD and the feeds on the raw title — those represent what the source posting actually said, not the UI headline.
+
+**Also found:** the change didn't appear live after editing, because the shared host hadn't had a *code* deploy since before `35bbd78` (2026-09-13) — `deploy-php.sh`'s cron entry only ever runs `--data-only` (the twice-daily SQLite push); `--code-only`/full deploys are a manual step nobody had run in over a week. `deploy-php.sh --code-only --dry-run` showed 12 files pending, not the 4 just edited — the other 8 were already-committed work (the 2026-09-13 v3-fields-display feature, feeds, stats, sitemap, facets) sitting live-but-invisible the whole time. Confirmed via a raw `curl` diff of the live detail page against the pre-edit source, since no Chrome/Playwright browser is installed on `gov2-1` for a visual check. Deployed with `./deploy-php.sh --code-only` (HTTP 200 verified); re-fetched both a detail page and a search-results page live to confirm the primary/secondary titles render correctly. Backlog item added for the missing deploy-freshness signal.
+
+---
+
 ### 2026-09-16 — Two unpushed v4 calendar-stage fixes disagreed; checked the source data to settle it
 
 **What:** Pushing this box's unpushed commit hit a real merge conflict with `origin/main`, not a fast-forward. This box's `8e9a8ba` (2026-09-14, dev machine) and the VPS-pushed `c17deb0` (2026-09-14, a few hours earlier) had both independently touched the v4 prompt's calendar-stage instruction in `models_config.json`, in response to the same symptom, and reached opposite conclusions.

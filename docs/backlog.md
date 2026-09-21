@@ -103,6 +103,8 @@ Open follow-ups. Reference: `docs/ui-spec.md` for the broader feature set and ph
 
 - [ ] **Surface the latest run record on `/despre`** — asked for in part 1 of `docs/pipeline-quality-checks.md` and not built. "When did the data last actually change, and by how much" should be answerable without SSH. The record is in `data/pipeline-runs.jsonl` on the VPS, which the shared host never sees, so this needs the headline metrics folding into the `build_meta` row at export time — where `helpers.php::build_meta()` already reads them for the provenance block.
 
+- [ ] **Nothing reminds anyone to run a code deploy after a PHP template commit.** Found 2026-09-21: the shared host had been serving PHP from before `35bbd78` (2026-09-13) — 8 already-committed template files (the v3-fields-display feature, feeds, stats, sitemap, facets) sat live-but-invisible for over a week, discovered only because a *further* UI change (occupation-title display, same commit) also didn't show up live. Root cause: cron only ever runs `deploy-php.sh --data-only` (the twice-daily SQLite push); `--code-only`/full deploys are a manual step with nothing to trigger or remind. Consider: a `/pipeline-check` step comparing the shared host's served markup (or a version marker) against `git log`'s last `webapp-php/` commit, or a pre-commit/CI nudge on `webapp-php/**` changes. Diagnosing this also confirmed there is no Chrome/Playwright available on `gov2-1` — visual live-site checks there have to go through a raw HTML diff instead.
+
 ## UX / UI
 
 Findings from a 2026-09-06 read of `webapp-php/` (deployed) — every one also exists in the Django templates under `webapp/templates/jobs/`, since the PHP app was ported from them, so each fix lands twice.

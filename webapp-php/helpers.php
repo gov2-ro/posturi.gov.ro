@@ -985,6 +985,24 @@ function place_label(array $p): string {
     return $locality . ', ' . $judet;
 }
 
+/**
+ * Primary/secondary title pair for a posting row.
+ *
+ * `occ_canonical` (the COR-normalised occupation from `normalize-titles.py`)
+ * is the primary title when present — the raw scraped `title` still carries
+ * grade, seat count and department clutter ("ASISTENT MEDICAL GENERALIST,
+ * TREAPTA I (2 POSTURI)"). The raw title is always kept as the secondary
+ * line, unless it's blank or the two already read the same.
+ */
+function display_title(array $p): array {
+    $raw       = trim((string)($p['title'] ?? ''));
+    $canonical = trim((string)($p['occ_canonical'] ?? ''));
+    if ($canonical === '' || $raw === '' || mb_strtolower($canonical) === mb_strtolower($raw)) {
+        return ['primary' => $raw ?: $canonical, 'secondary' => null, 'normalized' => false];
+    }
+    return ['primary' => $canonical, 'secondary' => $raw, 'normalized' => true];
+}
+
 function site_origin(): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     if (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') $scheme = 'https';

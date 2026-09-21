@@ -187,11 +187,19 @@ require __DIR__ . '/../inc/header.php';
   </nav>
 
   <!-- Title block -->
+  <?php $dt = display_title($p); ?>
   <div class="border-b border-line pb-5 mb-6">
-    <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink leading-tight mb-2">
-      <?= e($p['title']) ?>
+    <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink leading-tight">
+      <?= e($dt['primary']) ?>
+      <?php if ($dt['normalized']): ?>
+        <abbr title="Titlu normalizat automat pe ocupațiile COR — poate fi incomplet sau greșit."
+              class="ml-1 cursor-help font-mono text-[10px] font-normal uppercase not-italic tracking-wider text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">normalizat</abbr>
+      <?php endif; ?>
     </h1>
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
+    <?php if ($dt['secondary']): ?>
+      <p class="mt-0.5 text-sm not-italic text-ink-muted"><?= e($dt['secondary']) ?></p>
+    <?php endif; ?>
+    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
       <a href="/angajator/<?= e($p['employer_slug'] ?? '') ?>/"
          class="font-medium text-gov hover:underline"><?= e($p['employer_name'] ?? '') ?></a>
       <?php if ($place = place_label($p)): ?>

@@ -75,11 +75,15 @@ $chips = $active_chips ?? [];
     <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken">
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
+          <?php $dt = display_title($p); ?>
           <h2 class="font-display text-lg font-semibold italic leading-snug text-ink">
             <a href="<?= e(job_url($p)) ?>" class="inline-block py-0.5 transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-              <?= e($p['title']) ?>
+              <?= e($dt['primary']) ?>
             </a>
           </h2>
+          <?php if ($dt['secondary']): ?>
+            <p class="truncate text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></p>
+          <?php endif; ?>
           <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
             <a href="/angajator/<?= e($p['employer_slug_display'] ?? $p['employer_slug'] ?? '') ?>/"
                class="max-w-xs truncate py-1 font-medium text-ink-muted hover:text-gov hover:underline">

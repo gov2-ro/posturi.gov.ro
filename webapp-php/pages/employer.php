@@ -33,11 +33,11 @@ $stmt6->execute([$eid]); $top_cat_row = $stmt6->fetch();
 $top_category = $top_cat_row ? $top_cat_row['employer_category'] : null;
 
 // Active postings (50)
-$stmt7 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND apply_deadline >= ? ORDER BY apply_deadline ASC LIMIT 50");
+$stmt7 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND apply_deadline >= ? ORDER BY apply_deadline ASC LIMIT 50");
 $stmt7->execute([$eid, $today]); $active_postings = $stmt7->fetchAll();
 
 // Recent expired (25)
-$stmt8 = db()->prepare("SELECT id, title, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (apply_deadline < ? OR apply_deadline IS NULL) ORDER BY published_at DESC LIMIT 25");
+$stmt8 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (apply_deadline < ? OR apply_deadline IS NULL) ORDER BY published_at DESC LIMIT 25");
 $stmt8->execute([$eid, $today]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
@@ -120,11 +120,14 @@ require __DIR__ . '/../inc/header.php';
         <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Anunțuri active (<?= count($active_postings) ?>)
         </h2>
-        <?php foreach ($active_postings as $p): $days = days_until($p['apply_deadline'] ?? $p['expires_at']); ?>
+        <?php foreach ($active_postings as $p): $days = days_until($p['apply_deadline'] ?? $p['expires_at']); $dt = display_title($p); ?>
         <div class="py-3 border-b border-line last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
+              <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a>
+              <?php if ($dt['secondary']): ?>
+                <div class="text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></div>
+              <?php endif; ?>
               <div class="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-muted">
                 <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
                 <?php if ($p['job_level']): ?><span>· <?= e($p['job_level']) ?></span><?php endif; ?>
@@ -150,9 +153,12 @@ require __DIR__ . '/../inc/header.php';
         <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line text-ink-muted">
           Anunțuri recente expirate
         </h2>
-        <?php foreach ($expired_postings as $p): ?>
+        <?php foreach ($expired_postings as $p): $dt = display_title($p); ?>
         <div class="py-3 border-b border-line last:border-0 opacity-70">
-          <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($p['title']) ?></a>
+          <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a>
+          <?php if ($dt['secondary']): ?>
+            <div class="text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></div>
+          <?php endif; ?>
           <div class="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-muted">
             <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
             <?php if ($p['expires_at']): ?><span class="font-mono">· expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>

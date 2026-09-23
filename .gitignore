@@ -35,6 +35,13 @@ Archive.zip
 *zip
 posturi.sqlite
 */posturi.sqlite
+# environment secrets
+.env
+
+# runtime logs (rotated pipeline logs included)
+logs/*
+!logs/.gitkeep
+
 # virtualenv
 .venv/
 # webapp

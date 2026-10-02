@@ -1,4 +1,4 @@
-import requests, csv, random, time, os, re, unicodedata
+import requests, csv, random, time, os, re, sys, unicodedata
 from bs4 import BeautifulSoup
 from datetime import datetime
 
@@ -191,7 +191,9 @@ def scrape_and_save_page(page_number, existing_data):
     new_entries = 0
     updated_entries = 0
 
-    cards = soup.select('article.pg-card')
+    # Since 2026-09-30 the card is itself the link (`a.pg-card.pg-card--link`);
+    # before that it was `article.pg-card` wrapping an `a.pg-card-link`.
+    cards = soup.select('.pg-card')
 
     for card in cards:
         job = {}
@@ -201,8 +203,8 @@ def scrape_and_save_page(page_number, existing_data):
         job['pozitie'] = title_el.text.strip() if title_el else ''
 
         # URL
-        link_el = card.select_one('a.pg-card-link')
-        job['url'] = link_el['href'] if link_el else ''
+        link_el = card if card.name == 'a' else card.select_one('a.pg-card-link')
+        job['url'] = link_el.get('href', '') if link_el else ''
 
         # Employer
         inst_el = card.select_one('div.pg-card-inst')
@@ -216,9 +218,12 @@ def scrape_and_save_page(page_number, existing_data):
         pub_el = card.select_one('div.pg-card-published')
         job['publicat_in'] = pub_el.text.strip() if pub_el else ''
 
-        # Expiration (relative: "X zile rămase")
+        # Expiration (relative: "X zile rămase"). The 2026-09-30 cards dropped it; the
+        # expiry then comes from the detail page only. Leave the key out rather than
+        # write '' so compare_and_update() does not log a change on every stored row.
         deadline_el = card.select_one('div.pg-card-deadline')
-        job['expira_in'] = deadline_el.text.strip() if deadline_el else ''
+        if deadline_el:
+            job['expira_in'] = deadline_el.text.strip()
 
         # County (display name from the city badge span)
         city_el = card.select_one('div.pg-card-city span')
@@ -259,7 +264,7 @@ def scrape_and_save_page(page_number, existing_data):
 
     unchanged = len(cards) - new_entries - updated_entries
     print(f"Page {page_number}: {new_entries} new, {updated_entries} updated, {unchanged} unchanged ({len(cards)} total)")
-    return new_entries, updated_entries
+    return new_entries, updated_entries, len(cards)
 
 
 def scrape_all_pages():
@@ -267,12 +272,14 @@ def scrape_all_pages():
     max_pages = get_total_pages()
     total_new = 0
     total_updated = 0
+    total_cards = 0
     skip_count = 0
     seen_any_change = False
 
     for page_number in range(1, max_pages + 1):
         print(f"Scraping page {page_number}/{max_pages}...")
-        new_entries, updated_entries = scrape_and_save_page(page_number, existing_data)
+        new_entries, updated_entries, n_cards = scrape_and_save_page(page_number, existing_data)
+        total_cards += n_cards
         total_new += new_entries
         total_updated += updated_entries
 
@@ -291,6 +298,11 @@ def scrape_all_pages():
         time.sleep(random.uniform(0.5, 1.1))
 
     print(f"Scraping complete. Total: {total_new} new, {total_updated} updated")
+    if total_cards == 0:
+        # The site answered (pagination was discovered) but no card matched: the
+        # markup changed. Fail loudly — 2026-09-30 → 10-02 this ran 12 times at exit 0.
+        sys.exit(f"ERROR: {max_pages} listing pages scanned, 0 job cards matched — "
+                 f"the card selector in scrape_and_save_page() is stale.")
     return existing_data
 
 

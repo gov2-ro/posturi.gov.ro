@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-10-02 — fetch-index: the listing card became the link; scrape works again, and a 0-card scan now fails
+
+The source changed its listing markup on 2026-09-30: each card is now `<a class="pg-card pg-card--link" href="…/joburi/…">` instead of `<article class="pg-card">` wrapping `a.pg-card-link`, and the deadline countdown (`div.pg-card-deadline`) was removed. `fetch-index.py` now selects `.pg-card` and takes `href` from the card when it is an `<a>`, falling back to the inner link for the old markup. All other card selectors (title, employer, city, published date, tags) still match.
+
+Non-obvious: when the card has no deadline, `expira_in` is **left out** of the scraped dict rather than set to `''`. `compare_and_update()` only diffs the keys present, so an empty value would have logged an `expira_in` change on every stored row and rewritten the CSV on every page. Expiry has come from the detail page (`.pg-meta-deadline`) since ~09-15 anyway. Checked in memory against the live site: page 1 had 12 new rows with every field filled, and page 60 had 12 unchanged with no diff.
+
+Added backlog guard (1): if a full scan matches 0 cards, the script exits non-zero (`sys.exit` with a message naming the selector), so healthchecks.io gets `/fail` instead of the 12 silent exit-0 runs we had.
+
+A Sonnet sub-agent checked every detail-page selector in `parse-anunturi.py` / `fetch-anunturi.py` against three fresh `/joburi/` pages. The detail markup did not change, and all fields parse. It found two problems, both now in the backlog: cancellation detection relied on the vanished index field (`.pg-status.is-off` on the detail page is the replacement), and an older gap where `data_limita_depunere` is mostly empty.
+
+DeepSeek was topped up by the operator; `/user/balance` shows $9.98 available. The backfill run was not started from this session, because the pipeline wrapper also deploys. The next cron slot, or a manual `ops/run-pipeline.sh`, picks up both the missed postings and the ~790 pending extractions.
+
 ### 2026-10-02 — /pipeline-check: the cron ran every slot and reported success, while scraping nothing for 3 days and extracting nothing for 10
 
 **What:** Ran `/pipeline-check` on `gov2-1`. Mechanically the machine is healthy — 16 of 16 slots in the last 8 days fired (45 cron runs since 2026-09-10, one failed run on 09-13 and nothing since), `HEALTHCHECK_URL` is set, the live site returns 200 and carries the latest build (18:56 local = `built_at` 15:56Z), and all 44 `export-check` records are `ok`. The data underneath is not healthy, and nothing that watches the pipeline could see it.

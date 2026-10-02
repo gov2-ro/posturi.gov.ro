@@ -2,6 +2,22 @@
 
 ## 2026
 
+### 2026-10-02 — /pipeline-check: the cron ran every slot and reported success, while scraping nothing for 3 days and extracting nothing for 10
+
+**What:** Ran `/pipeline-check` on `gov2-1`. Mechanically the machine is healthy — 16 of 16 slots in the last 8 days fired (45 cron runs since 2026-09-10, one failed run on 09-13 and nothing since), `HEALTHCHECK_URL` is set, the live site returns 200 and carries the latest build (18:56 local = `built_at` 15:56Z), and all 44 `export-check` records are `ok`. The data underneath is not healthy, and nothing that watches the pipeline could see it.
+
+**Two silent failures, both exit 0:**
+1. **Scraper blind since 2026-09-30 08:45Z.** The source now wraps each card in `<a class="pg-card pg-card--link" href=".../joburi/...">` instead of `<article class="pg-card">`, so `fetch-index.py`'s `article.pg-card` matches nothing. Every page logs `0 new, 0 updated, 0 unchanged (0 total)`. Tell-tale in the run log: `fetch-index` 6–36 s → ~315 s (it still walks ~225 pages) and `fetch-detail` 2 s even on weekday mornings.
+2. **LLM account out of credit since 2026-09-22 08:45Z.** DeepSeek returns 402 `Insufficient Balance` (partway through the 09-22 08:45Z run); `schema` has had 0 successes in the 21 runs since. `schema_coverage_pct` 94.7 (09-21) → 60.1 and `v3_coverage_pct` 82.2 → 55.4, about -1.5 pts per run — never near the per-run 5-pt threshold.
+
+**Not changed:** no code was touched; fixes and the guards that would have caught these are in `docs/backlog.md` (three new items under *Pipeline & data quality*).
+
+**Also found:** `MAX(last_seen_at)` is the *import* date, not a scrape date (`import_csvs.py:363` stamps `today` on every imported row), so it reads 2026-10-02 on all 1,981 active rows and cannot flag staleness; the comments claiming otherwise are wrong. The system timezone is `Etc/UTC` rather than `Europe/Bucharest`, which is the known, documented workaround (cron here ignores `CRON_TZ`) and harmless at the two run times — but the slots shift an hour at the 2026-10-25 DST change (already in the backlog).
+
+**Cost baseline** (measured from the logs, `schema` step only): about $0.10 per 100 postings on DeepSeek-V4-Flash, ≈ $1.80/month at the observed ~58 extractions/day, so a $5 top-up lasts ~86 days. The same tokens on Haiku 4.5 would be ≈ $1.05–1.56 per 100. Full figures and caveats are in the backlog.
+
+---
+
 ### 2026-09-21 — Normalised occupation title surfaced in the UI, and a week of undeployed PHP found in the process
 
 **What:** `normalize-titles.py`'s COR-normalised occupation (`occ_canonical`, exported to `job_postings.occ_canonical`, populated on 2,035 of 2,042 active postings) was extracted and indexed but only ever used as the "occupation" search facet. Every place a posting's title actually renders — the detail page `<h1>`, listing cards, the employer profile, feeds — showed the raw scraped string verbatim, grade/seat-count/casing clutter and all ("asistent medical generalist Pl" instead of "Asistent medical generalist").

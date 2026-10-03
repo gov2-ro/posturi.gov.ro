@@ -330,11 +330,20 @@ def check_attachment(row: dict) -> dict:
     if not announce_url:
         return {"readability": "no_attachment", "file": None, "text_length": 0, "alpha_ratio": 0.0, "text": ""}
 
-    filename = os.path.basename(announce_url)
-    path = DOWNLOADS_DIR / filename
+    # Shared cache resolution: a file that exists but fails validation reports
+    # its reason instead of silently reading as a missing download.
+    from download_manifest import resolve_local_path
 
-    if not path.exists():
-        return {"readability": "missing_file", "file": filename, "text_length": 0, "alpha_ratio": 0.0, "text": ""}
+    resolved = resolve_local_path(DOWNLOADS_DIR, announce_url)
+    path = resolved.path
+    filename = path.name if path else Path(announce_url).name
+
+    if path is None:
+        readability = "invalid_file" if resolved.status == "invalid" else "missing_file"
+        return {
+            "readability": readability, "file": filename, "reason": resolved.reason,
+            "text_length": 0, "alpha_ratio": 0.0, "text": "",
+        }
 
     text = extract_text(path)
 

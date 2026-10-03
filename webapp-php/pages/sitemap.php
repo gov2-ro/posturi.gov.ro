@@ -42,7 +42,7 @@ $rows = db()->query(
 )->fetchAll();
 
 foreach ($rows as $r) {
-    $expired = ($r['apply_deadline'] ?? $r['expires_at']) && ($r['apply_deadline'] ?? $r['expires_at']) < date('Y-m-d');
+    $expired = ($r['apply_deadline'] ?? $r['expires_at']) && ($r['apply_deadline'] ?? $r['expires_at']) < ro_today();
     sm_url(
         $origin . job_url($r),
         $r['updated_at'] ?: $r['last_seen_at'],

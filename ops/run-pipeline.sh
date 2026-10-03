@@ -72,9 +72,22 @@ pipeline_status=$?
 set -e
 
 if [ "$pipeline_status" -ne 0 ]; then
-    echo "WARNING: pipeline reported step failures (exit ${pipeline_status}). Continuing"
-    echo "         to the export check — a stale-but-correct site beats a site nobody"
-    echo "         updated, and the check is what decides whether this one is correct."
+    # Degraded publication is an EXPLICIT configured policy, off by default:
+    # step failures mean the data pipeline did not complete, so the site keeps
+    # the last whole export rather than silently shipping a partial run. Set
+    # POSTURI_ALLOW_DEGRADED_DEPLOY=1 (and read /pipeline-check, which surfaces
+    # the degraded flag) to opt into deploying anyway when the check passes.
+    if [ "${POSTURI_ALLOW_DEGRADED_DEPLOY:-0}" != "1" ]; then
+        echo "ABORT: pipeline steps failed (exit ${pipeline_status}) and"
+        echo "       POSTURI_ALLOW_DEGRADED_DEPLOY is not 1 — not deploying. The"
+        echo "       shared host keeps serving the previous database."
+        ping_health /fail
+        echo "=== aborted before deploy — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+        exit "$pipeline_status"
+    fi
+    echo "WARNING: pipeline reported step failures (exit ${pipeline_status}) but"
+    echo "         POSTURI_ALLOW_DEGRADED_DEPLOY=1 — continuing to the export check;"
+    echo "         the deployment will be recorded as degraded."
 fi
 
 # The gate. Hard checks are corruption-shaped -- 43 counties, a short FTS index, a
@@ -97,11 +110,15 @@ fi
 # --no-export: pipeline.py's export-sqlite step already built the file, floors and all.
 ./deploy-php.sh --data-only --no-export
 
+# Tie the deploy outcome to the candidate run id so check-export's baselines
+# only ever learn from candidates that actually reached the shared host.
 if [ "$pipeline_status" -ne 0 ]; then
+    "$PYTHON" ops/record-deploy.py --degraded
     ping_health /fail
     echo "=== finished with failures — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     exit "$pipeline_status"
 fi
 
+"$PYTHON" ops/record-deploy.py
 ping_health
 echo "=== done — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="

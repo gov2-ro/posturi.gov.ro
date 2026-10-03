@@ -2,7 +2,6 @@
 // Variables expected from parent scope:
 // $postings, $total_count, $page, $num_pages, $PAGE_SIZE, $q, $is_htmx
 // $active_chips, $relaxations
-$today = date('Y-m-d');
 $start = ($page - 1) * $PAGE_SIZE + 1;
 $end   = min($page * $PAGE_SIZE, $total_count);
 $chips = $active_chips ?? [];
@@ -70,7 +69,11 @@ $chips = $active_chips ?? [];
   <ul class="divide-y divide-line border-t border-line">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
-        $days = days_until($p['apply_deadline'] ?? $p['expires_at']);
+        // Countdown and printed date come from ONE value — this is the fix for
+        // rows that showed "13 zile" beside a different date.
+        $dl   = posting_deadline($p);
+        $days = days_until($dl['date']);
+        $est  = $dl['source'] === 'expirare';
     ?>
     <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken">
       <div class="flex items-start justify-between gap-4">
@@ -138,19 +141,26 @@ $chips = $active_chips ?? [];
 
         <!-- Deadline badge -->
         <div class="min-w-[80px] shrink-0 text-right">
-          <?php if ($p['expires_at'] && $days !== null): ?>
+          <?php if ($days !== null): ?>
             <?php if ($days < 0): ?>
-              <span class="font-mono text-xs text-ink-muted">Expirat</span>
+              <span class="font-mono text-xs text-ink-muted"><?= $est ? 'Termen estimat depășit' : 'Expirat' ?></span>
             <?php elseif ($days === 0): ?>
-              <span class="font-mono text-xs font-semibold text-alert-ink">Azi!</span>
+              <span class="font-mono text-xs font-semibold text-alert-ink"><?= $est ? 'Azi (estimat)' : 'Azi!' ?></span>
             <?php elseif ($days <= 3): ?>
-              <span class="font-mono text-xs font-semibold text-alert-ink"><?= e(days_label($days)) ?></span>
+              <span class="font-mono text-xs font-semibold text-alert-ink"><?= $est ? '≈ ' : '' ?><?= e(days_label($days)) ?></span>
             <?php elseif ($days <= 7): ?>
-              <span class="font-mono text-xs font-medium text-note-ink"><?= e(days_label($days)) ?></span>
+              <span class="font-mono text-xs font-medium text-note-ink"><?= $est ? '≈ ' : '' ?><?= e(days_label($days)) ?></span>
             <?php else: ?>
-              <span class="font-mono text-xs text-ink-muted"><?= e(days_label($days)) ?></span>
+              <span class="font-mono text-xs text-ink-muted"><?= $est ? '≈ ' : '' ?><?= e(days_label($days)) ?></span>
             <?php endif; ?>
-            <time datetime="<?= e(substr($p['expires_at'], 0, 10)) ?>" class="mt-0.5 block font-mono text-xs text-ink-muted"><?= fmt_date($p['expires_at']) ?></time>
+            <time datetime="<?= e($dl['date']) ?>" class="mt-0.5 block font-mono text-xs text-ink-muted"><?= fmt_date($dl['date']) ?></time>
+            <?php if ($est): ?>
+              <!-- Visible, not tooltip-only: this date is the announcement
+                   expiry, not a confirmed application deadline. -->
+              <span class="mt-0.5 block text-[10px] italic text-ink-faint" title="Data expirării; termenul de înscriere nu este confirmat">estimat</span>
+            <?php endif; ?>
+          <?php else: ?>
+            <span class="font-mono text-xs text-ink-faint">Termen neprecizat</span>
           <?php endif; ?>
         </div>
       </div>

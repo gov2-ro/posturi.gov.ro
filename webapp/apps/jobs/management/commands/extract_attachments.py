@@ -8,8 +8,8 @@ Usage:
 """
 from __future__ import annotations
 
-import os
 import subprocess
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -20,13 +20,25 @@ from django.db.models import Q
 from apps.jobs.attachments import classify_attachment
 from apps.jobs.models import JobPosting
 
+# Cache identity/validation is shared with the downloader so this command and
+# the fetcher agree on where a URL's file lives (see download_manifest.py).
+REPO_ROOT = Path(__file__).resolve().parents[5]
+sys.path.insert(0, str(REPO_ROOT))
+from download_manifest import resolve_local_path  # noqa: E402
 
-def _local_path(url: str, downloads_dir: Path) -> Path | None:
+
+def _local_path(url: str, downloads_dir: Path) -> tuple[Path | None, str]:
+    """Resolve a URL to its cache file. Returns (path, reason).
+
+    The reason is '' on a hit and explains a miss — a file that exists but
+    fails validation says so, instead of silently reading as "not downloaded".
+    """
     if not url:
-        return None
-    name = os.path.basename(url)
-    p = downloads_dir / name
-    return p if p.exists() else None
+        return None, "empty url"
+    resolved = resolve_local_path(downloads_dir, url)
+    if resolved.path is not None:
+        return resolved.path, ""
+    return None, resolved.reason
 
 
 def _extract_docx(path: Path) -> str:
@@ -119,9 +131,10 @@ def extract_for_posting(posting: JobPosting, downloads_dir: Path) -> tuple[str, 
     meta: list[dict] = []
     for i, url in enumerate(urls):
         role = "announcement" if (i == 0 and posting.announcement_url) else "other"
-        path = _local_path(url, downloads_dir)
+        path, missing_reason = _local_path(url, downloads_dir)
         if path is None:
-            failures.append(f"{url.rstrip('/').split('/')[-1]}: not downloaded")
+            name = url.rstrip('/').split('/')[-1] or url
+            failures.append(f"{name}: {missing_reason}")
             meta.append({"url": url, "ext": "", "bytes": None, "kind": None, "role": role})
             continue
         text, reason = extract_text(path)

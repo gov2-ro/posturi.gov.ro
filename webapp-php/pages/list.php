@@ -105,7 +105,7 @@ $is_unfiltered = $page === 1 && !$active_chips;
 // ---- Quick stats (unfiltered home page only) ----
 $quick_stats = null;
 if ($is_unfiltered) {
-    $today = date('Y-m-d');
+    $today = ro_today();
     // Județe and domenii counts were dropped 2026-09-08: as numbers they said
     // nothing a visitor could act on, and both are reachable as facets. The two
     // that stayed are corpus scale, and they now render as one line of text
@@ -125,7 +125,7 @@ if ($is_unfiltered) {
 // the facet lists cannot quietly change what the landing offers.
 $shortcuts = [];
 if ($is_unfiltered) {
-    $today = date('Y-m-d');
+    $today = ro_today();
     $live  = "(apply_deadline IS NULL OR apply_deadline >= '$today')";
 
     foreach (db()->query(
@@ -229,7 +229,7 @@ $studies_options   = get_facet('inf_studies_required', 'studies_levels');
 {
     $s = facet_scope('status');
     $where_st = $s['where'] ? 'WHERE ' . implode(' AND ', $s['where']) : '';
-    $today = date('Y-m-d');
+    $today = ro_today();
     $in7   = date('Y-m-d', strtotime('+7 days'));
     $st = db()->prepare("SELECT
             SUM(CASE WHEN j.apply_deadline IS NULL OR j.apply_deadline >= ? THEN 1 ELSE 0 END) AS active,

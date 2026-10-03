@@ -123,11 +123,13 @@ if [[ $dry_run -eq 1 ]]; then rsync_common+=(--dry-run); fi
 if [[ $deploy_code -eq 1 ]]; then
     echo "==> Deploying code (PHP, static, .htaccess)"
     # Excluding *.sqlite* also protects it from --delete: the live database is not
-    # ours to remove, and assets/ + router.php are development-only.
+    # ours to remove, and assets/, router.php and tests/ are development-only —
+    # the fixture tests spawn servers and must never be web-requestable.
     rsync "${rsync_common[@]}" --delete \
         --exclude='.DS_Store' \
         --exclude='assets/' \
         --exclude='router.php' \
+        --exclude='tests/' \
         --exclude='*.sqlite' \
         --exclude='*.sqlite-wal' \
         --exclude='*.sqlite-shm' \

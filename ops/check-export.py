@@ -35,6 +35,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DB = ROOT / "webapp-php" / "posturi.sqlite"
@@ -138,6 +139,23 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
     m["duplicate_urls"] = one(
         "SELECT COUNT(*) FROM (SELECT url FROM job_postings "
         "GROUP BY url HAVING COUNT(*) > 1)")
+
+    # Field fill rates — a scrape/parse failure empties these before it empties
+    # the row count, so they are the earlier warning signal.
+    m["title_fill_pct"] = _pct(one(
+        "SELECT COUNT(*) FROM job_postings WHERE title != ''"), total)
+    m["employer_fill_pct"] = _pct(one(
+        "SELECT COUNT(*) FROM job_postings WHERE employer_name != ''"), total)
+    m["published_fill_pct"] = _pct(one(
+        "SELECT COUNT(*) FROM job_postings WHERE published_at IS NOT NULL "
+        "AND published_at != ''"), total)
+    m["body_fill_pct"] = _pct(one(
+        "SELECT COUNT(*) FROM job_postings WHERE body_markdown != ''"), total)
+
+    # Intake freshness — how recently the source actually produced something,
+    # independent of when this file was built.
+    m["newest_published"] = one(
+        "SELECT COALESCE(MAX(published_at), '') FROM job_postings")
 
     # Dates -----------------------------------------------------------------
     m["published_recent"] = one(
@@ -272,10 +290,14 @@ def _age_hours(stamp: str | None) -> float | None:
 def evaluate(
     con: sqlite3.Connection,
     m: dict,
-    previous: dict | None,
+    baselines: dict | None,
     *,
     prompt_version: str | None,
     max_age_hours: float,
+    schema_floor: float | None = None,
+    v3_floor: float | None = None,
+    sustained_drop: float = 5.0,
+    intake_max_age_days: float = 2.0,
 ) -> list[Check]:
     checks: list[Check] = []
 
@@ -285,8 +307,15 @@ def evaluate(
     def soft(name, ok, message):
         checks.append(Check(name, "soft", ok, message))
 
+    previous = (baselines or {}).get("previous")
+    window: list[dict] = (baselines or {}).get("window") or []
+
     def prev(key, default=None):
         return previous.get(key, default) if previous else default
+
+    def window_best(key):
+        values = [w.get(key) for w in window if w.get(key) is not None]
+        return max(values) if values else None
 
     # -- HARD: the file is intact ------------------------------------------
     integrity = con.execute("PRAGMA integrity_check").fetchone()[0]
@@ -371,9 +400,74 @@ def evaluate(
              f"{label} {now:.1f}%"
              + (f" vs {was:.1f}% last run ({-drop:+.1f} pts)" if was is not None else ""))
 
+    def sustained(name, key, label):
+        # A 1.5-point loss per run never trips the single-run drop above, but
+        # against the best of the last seven HEALTHY runs it accumulates — the
+        # baseline cannot be dragged down by the decline it is measuring.
+        best = window_best(key)
+        if best is None:
+            soft(name, True, f"{label}: no healthy window yet for sustained comparison")
+            return
+        soft(name, m[key] >= best - sustained_drop,
+             f"{label} {m[key]:.1f}% vs {best:.1f}% best of the last "
+             f"{len(window)} healthy run(s) (limit {sustained_drop:g} pts)")
+
     coverage("schema_coverage", "schema_coverage_pct", "schema_json on")
+    sustained("schema_sustained", "schema_coverage_pct", "schema_json")
     coverage("attachment_coverage", "attachment_coverage_pct", "attachment metadata on")
+    sustained("attachment_sustained", "attachment_coverage_pct", "attachment metadata")
     coverage("v3_coverage", "v3_coverage_pct", "v3 columns on")
+    sustained("v3_sustained", "v3_coverage_pct", "v3 columns")
+
+    # Fill rates follow the same drop-vs-baseline rule — an emptied body or
+    # title column is a scrape/parse failure, not coverage churn.
+    def fill(name, key, label):
+        was = prev(key)
+        soft(name, was is None or m[key] >= was - 5.0,
+             f"{label} {m[key]:.1f}%"
+             + (f" vs {was:.1f}% last run" if was is not None else ""))
+
+    fill("title_fill", "title_fill_pct", "titles present")
+    fill("employer_fill", "employer_fill_pct", "employers present")
+    fill("published_fill", "published_fill_pct", "publication dates present")
+    fill("body_fill", "body_fill_pct", "bodies present")
+
+    # Absolute floors — configurable, off by default, SOFT even when set: these
+    # are starting values to calibrate against real runs (see the rollout note
+    # in docs/specs/2026-10-03-project-audit/04-pipeline-health.md), not blind
+    # production gates.
+    if schema_floor is not None:
+        soft("schema_floor", m["schema_coverage_pct"] >= schema_floor,
+             f"schema_json {m['schema_coverage_pct']:.1f}% vs floor {schema_floor}%")
+    if v3_floor is not None:
+        if prompt_version == "v4":
+            # Versioned expectations: a deliberate v4 rollout stops growing the
+            # v3 columns without being a coverage failure.
+            soft("v3_floor", True, "skipped — the run pinned v4; v3 columns are "
+                                   "not expected to grow under a v4 rollout")
+        else:
+            soft("v3_floor", m["v3_coverage_pct"] >= v3_floor,
+                 f"v3 columns {m['v3_coverage_pct']:.1f}% vs floor {v3_floor}%")
+
+    # Intake freshness — separate from build freshness. A stale build_meta is
+    # hard (the export never ran); a fresh build of three-day-old intake is
+    # this one. Weekdays only: weekends and known outages are not failures,
+    # and this is a warning signal among several (scan time, card count, fill
+    # rates above), not a gate by itself.
+    newest = m.get("newest_published") or ""
+    try:
+        newest_age = (date.today() - date.fromisoformat(newest[:10])).days if newest else None
+    except ValueError:
+        newest_age = None
+    bucharest_now = datetime.now(ZoneInfo("Europe/Bucharest"))
+    weekday = bucharest_now.weekday() < 5
+    if newest_age is None:
+        soft("intake_fresh", True, "no publication dates in the export — skipped")
+    else:
+        soft("intake_fresh",
+             not (weekday and newest_age > intake_max_age_days),
+             f"newest posting published {newest_age} day(s) ago"
+             + (f" (limit {intake_max_age_days:g} on weekdays)" if weekday else " (weekend — no limit)"))
 
     # A v2 payload landing under a --prompt-version v3 run leaves every v3 facet
     # empty and nothing else fails.
@@ -477,11 +571,23 @@ def print_report(m: dict, previous: dict | None, checks: list[Check]) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
-def load_previous(run_log: Path) -> dict | None:
-    """Metrics from the most recent export-check record, or None."""
+def load_baselines(run_log: Path) -> dict:
+    """Healthy comparison points, not "whatever ran last".
+
+    Returns {"previous": metrics | None, "window": [metrics, ...]}:
+      - `previous` is the most recent export-check whose candidate was actually
+        deployed (a `deploy` record with the same run id says `deployed: true`).
+        Logs predating deploy records fall back to the last export-check with
+        status "ok". Failed candidates are preserved for diagnosis but never
+        become the baseline — a bad run must not lower the bar for the next one.
+      - `window` is the last seven such healthy runs, oldest first, for
+        sustained-decline comparison.
+    """
     if not run_log.exists():
-        return None
-    latest = None
+        return {"previous": None, "window": []}
+
+    export_checks: list[tuple[str, str, dict]] = []   # (run_id, status, metrics)
+    deploy_map: dict[str, bool] = {}
     try:
         with run_log.open(encoding="utf-8") as fh:
             for line in fh:
@@ -492,11 +598,25 @@ def load_previous(run_log: Path) -> dict | None:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if rec.get("kind") == "export-check" and rec.get("metrics"):
-                    latest = rec["metrics"]
+                if rec.get("kind") == "deploy" and "run_id" in rec:
+                    deploy_map[rec["run_id"]] = bool(rec.get("deployed"))
+                elif rec.get("kind") == "export-check" and rec.get("metrics"):
+                    export_checks.append((rec.get("run_id"), rec.get("status"), rec["metrics"]))
     except OSError as exc:
         print(f"  WARNING: could not read {run_log}: {exc}", file=sys.stderr)
-    return latest
+
+    have_deploy_records = bool(deploy_map)
+    healthy: list[dict] = []
+    for run_id, status, metrics in export_checks:
+        if have_deploy_records:
+            if deploy_map.get(run_id) is True:
+                healthy.append(metrics)
+        elif status == "ok":
+            healthy.append(metrics)
+
+    if not healthy:
+        return {"previous": None, "window": []}
+    return {"previous": healthy[-1], "window": healthy[-7:]}
 
 
 def main() -> int:
@@ -519,6 +639,18 @@ def main() -> int:
     ap.add_argument("--max-age-hours", type=float, default=6.0, metavar="H",
                     help="Fail if build_meta.built_at is older than this (default 6). "
                          "Catches a deploy of a file the export never rebuilt.")
+    ap.add_argument("--schema-floor", type=float, default=None, metavar="PCT",
+                    help="Warn when schema_json coverage is below this percentage. "
+                         "Off by default: a starting value to calibrate, not a gate.")
+    ap.add_argument("--v3-floor", type=float, default=None, metavar="PCT",
+                    help="Warn when v3 column coverage is below this percentage. "
+                         "Skipped when the run pinned --prompt-version v4.")
+    ap.add_argument("--sustained-drop", type=float, default=5.0, metavar="PTS",
+                    help="Warn when coverage is this many points below the best of "
+                         "the last seven healthy runs (default 5).")
+    ap.add_argument("--intake-max-age-days", type=float, default=2.0, metavar="D",
+                    help="Warn when the newest published posting is older than this "
+                         "on a Bucharest weekday (default 2).")
     args = ap.parse_args()
 
     db_path = Path(args.db)
@@ -533,19 +665,23 @@ def main() -> int:
         return 1
 
     run_log = Path(args.run_log)
-    previous = load_previous(run_log)
+    baselines = load_baselines(run_log)
     try:
         metrics = collect_metrics(con, db_path)
-        checks = evaluate(con, metrics, previous,
+        checks = evaluate(con, metrics, baselines,
                           prompt_version=args.prompt_version,
-                          max_age_hours=args.max_age_hours)
+                          max_age_hours=args.max_age_hours,
+                          schema_floor=args.schema_floor,
+                          v3_floor=args.v3_floor,
+                          sustained_drop=args.sustained_drop,
+                          intake_max_age_days=args.intake_max_age_days)
     except sqlite3.Error as exc:
         print(f"ERROR: the export at {db_path} is unreadable: {exc}", file=sys.stderr)
         return 1
     finally:
         con.close()
 
-    print_report(metrics, previous, checks)
+    print_report(metrics, baselines.get("previous"), checks)
 
     failed_hard = [c for c in checks if not c.ok and c.level == "hard"]
     warned = [c for c in checks if not c.ok and c.level == "soft"]

@@ -122,11 +122,16 @@ class TestPhpUsesTheDeadline:
 
     def test_the_ical_reminder_lands_on_the_deadline(self, sources):
         """A reminder for a competition that closed three weeks ago is worse
-        than no reminder."""
+        than no reminder. The date comes from the shared resolver
+        (posting_deadline), never from expires_at directly."""
         src = sources["feeds/jobs.ics.php"]
         assert "j.apply_deadline IS NOT NULL" in src
         assert "ORDER BY j.apply_deadline ASC" in src
-        assert "$r['apply_deadline']" in src
+        assert "posting_deadline($r)" in src
+        assert "$dl['date']" in src
+        assert "expires_at" not in src  # no direct expiry reads
+        # DTSTART derives from the resolved deadline date.
+        assert "$start_day = new DateTimeImmutable($dl['date']" in src
 
     def test_the_json_feed_exposes_the_deadline_and_its_provenance(self, sources):
         src = sources["feeds/jobs.json.php"]
@@ -135,10 +140,19 @@ class TestPhpUsesTheDeadline:
 
     @pytest.mark.parametrize("name", [
         "pages/employer.php", "pages/employers.php", "pages/stats.php",
-        "pages/sitemap.php", "partials/result_list.php",
+        "pages/sitemap.php",
     ])
     def test_every_active_or_countdown_site_uses_the_deadline(self, sources, name):
         assert "apply_deadline" in sources[name]
+
+    def test_the_result_list_resolves_the_deadline_once(self, sources):
+        """The list row that used to count from one date and print another now
+        takes both from the shared resolver. The rendered counterpart is
+        tests/deadline_test.php — source strings never caught this bug."""
+        src = sources["partials/result_list.php"]
+        assert "posting_deadline($p)" in src
+        assert "days_until($dl['date'])" in src
+        assert "expires_at" not in src  # the printed date is never the expiry
 
     def test_competition_duration_still_measures_the_competition(self, sources):
         """The one place `expires_at` is still right: how long a contest runs."""

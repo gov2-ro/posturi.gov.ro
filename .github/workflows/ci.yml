@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-tests:
+    # Django suite against a real PostgreSQL, isolated from the PHP jobs.
+    # Shape adapted from the workflow archived under _OBSOLETE/.
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: posturi_dev
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/posturi_dev
+      DJANGO_SETTINGS_MODULE: posturi.settings
+
+    defaults:
+      run:
+        working-directory: webapp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: webapp/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Check migrations are up to date
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run tests
+        run: pytest
+
+  php-tests:
+    # Lint plus the fixture-based suites. Each test script builds its own
+    # SQLite fixture and serves the app on the built-in PHP router — no
+    # database service, no network, no paid APIs.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: none
+
+      - name: Lint every PHP file (vendored lib included)
+        working-directory: webapp-php
+        run: |
+          find . -name '*.php' -print0 | xargs -0 -n1 php -l >/dev/null
+
+      - name: Sanitizer fixture tests (FIX-01)
+        working-directory: webapp-php
+        run: php tests/sanitize_test.php
+
+      - name: Deadline presentation tests (FIX-02)
+        working-directory: webapp-php
+        run: php tests/deadline_test.php
+
+      - name: Request validation and route tests (FIX-07)
+        working-directory: webapp-php
+        run: php tests/request_test.php
+
+  browser-tests:
+    # Playwright against the fixture-served app at 320/375/1280, including the
+    # no-execution proof for sanitized Markdown.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          coverage: none
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser checks
+        run: npx playwright test --config webapp-php/tests/browser/playwright.config.js
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

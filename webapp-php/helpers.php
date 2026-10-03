@@ -3,19 +3,33 @@
  * Shared helpers for the PHP webapp.
  */
 
-// ---- Parsedown (bundled) ----
-// Inline a minimal Parsedown-compatible renderer.
-// For production, drop in the full Parsedown.php from https://parsedown.org/
+// ---- Markdown rendering ----
 
+/**
+ * Markdown → HTML. Parsedown is bundled (see Parsedown.php); when it is absent
+ * a minimal fallback covers paragraphs and emphasis.
+ *
+ * Parsedown safe mode is deliberately OFF: the announcement bodies arrive from
+ * a DOCX→Markdown conversion whose fallback path can emit raw HTML (tables,
+ * images), and safe mode would print those tags as literal text. The security
+ * boundary is NOT Parsedown — every rendered path below passes through
+ * sanitize_html(), whose allowlist is what strips script-bearing markup.
+ */
 function markdown_to_html(string $text): string {
     if (trim($text) === '') return '';
-    // Use Parsedown if available (drop Parsedown.php into this directory)
     if (class_exists('Parsedown')) {
         static $pd = null;
-        if ($pd === null) { $pd = new Parsedown(); $pd->setSafeMode(false); }
+        if ($pd === null) { $pd = new Parsedown(); }
         return $pd->text($text);
     }
-    // Minimal fallback: convert newlines and basic markdown
+    return markdown_fallback_to_html($text);
+}
+
+/**
+ * Minimal fallback: paragraphs and emphasis only, everything escaped. Named
+ * separately so the fixture tests can exercise it without unloading Parsedown.
+ */
+function markdown_fallback_to_html(string $text): string {
     $html = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     // Paragraphs: blank lines
     $html = preg_replace('/\n{2,}/', '</p><p>', $html);
@@ -29,26 +43,118 @@ function markdown_to_html(string $text): string {
     return $html;
 }
 
-// Allowed HTML tags for sanitization (strip_tags allowlist)
-const ALLOWED_TAGS = '<p><br><ul><ol><li><strong><b><em><i><h1><h2><h3><h4><h5><h6><table><thead><tbody><tr><th><td><blockquote><pre><code><a>';
+// ---- HTML sanitization ----
 
-function sanitize_html(string $html): string {
-    return strip_tags($html, ALLOWED_TAGS);
+/**
+ * The one sanitizer every rendered path must go through. Parser-based
+ * (HTMLPurifier v4.19.1, LGPL-2.1+, vendored under lib/htmlpurifier-library/
+ * — see lib/htmlpurifier-LICENSE.txt). `strip_tags()` passed attributes and
+ * URLs through untouched; this validates elements, attributes and URL
+ * schemes, so an `<a onclick>` or a `javascript:` href cannot survive from
+ * scraped or model-produced text. lib/ ships with the normal rsync deploy.
+ */
+function sanitizer(): HTMLPurifier {
+    static $purifier = null;
+    if ($purifier === null) {
+        $auto = __DIR__ . '/lib/htmlpurifier-library/HTMLPurifier.auto.php';
+        if (!class_exists('HTMLPurifier') && file_exists($auto)) {
+            require_once $auto;
+        }
+        if (!class_exists('HTMLPurifier')) {
+            throw new RuntimeException('HTMLPurifier missing — vendored copy expected under lib/htmlpurifier-library/');
+        }
+        $config = HTMLPurifier_Config::createDefault();
+        // Same elements the strip_tags() allowlist admitted, plus the attributes
+        // real announcement tables need. Everything else is removed.
+        $config->set('HTML.Allowed',
+            'p,br,ul,ol,li,strong,b,em,i,h1,h2,h3,h4,h5,h6,'
+            . 'table,thead,tbody,tr,th[scope|colspan|rowspan],td[colspan|rowspan],'
+            . 'blockquote,pre,code,a[href|title|target|rel]');
+        // Document links only. Relative and fragment URLs stay allowed (no
+        // URI.MakeAbsolute); script/data schemes — encoded or not — do not.
+        $config->set('URI.AllowedSchemes', [
+            'http' => true, 'https' => true, 'mailto' => true, 'tel' => true,
+        ]);
+        // A link that does open a new tab must not inherit this page.
+        $config->set('Attr.AllowedFrameTargets', ['_blank' => true, '_self' => true, '_top' => true]);
+        $config->set('Attr.AllowedRel', ['noopener' => true, 'noreferrer' => true, 'nofollow' => true, 'external' => true]);
+        $config->set('HTML.TargetNoopener', true);
+        $config->set('HTML.TargetNoreferrer', true);
+        // Belt and braces on top of the allowlist: never keep these anywhere.
+        $config->set('HTML.ForbiddenAttributes', ['style' => true, 'class' => true, 'id' => true]);
+        $purifier = new HTMLPurifier($config);
+    }
+    return $purifier;
 }
 
+/** Sanitize a rendered HTML fragment with the parser-based allowlist. */
+function sanitize_html(string $html): string {
+    if (trim($html) === '') return '';
+    return sanitizer()->purify($html);
+}
+
+/** Markdown → sanitized HTML. The only renderer callers should use. */
 function render_markdown(string $text): string {
     return sanitize_html(markdown_to_html($text));
 }
 
 // ---- Date helpers ----
 
+/**
+ * Today in Europe/Bucharest. Every "still open?" comparison and countdown must
+ * use this — the shared host's clock may sit in any timezone, and a deadline
+ * must flip at Bucharest midnight, not at 21:00 or 02:00 local time.
+ *
+ * POSTURI_TODAY (a Y-m-d string) fixes the clock for the fixture tests; it is
+ * unset in production.
+ */
+function ro_today(): string {
+    $fixed = getenv('POSTURI_TODAY');
+    if ($fixed !== false && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fixed)) {
+        return $fixed;
+    }
+    return (new DateTimeImmutable('today', new DateTimeZone('Europe/Bucharest')))->format('Y-m-d');
+}
+
+/**
+ * The one application deadline a posting is judged by, plus where it came from.
+ *
+ * `apply_deadline` is already resolved at export time (v4 calendar, then the
+ * scraped card field, then the announcement-expiry fallback), so this returns
+ * that date with the stored `deadline_source`; for old exports without the
+ * column it infers `expirare` when the date is exactly the expiry. Returns
+ * `['date' => ?string, 'source' => ?string]` — source is one of
+ * `concurs|anunt|expirare` or null. Callers must render the qualification for
+ * `expirare`; never present it as a confirmed deadline.
+ */
+function posting_deadline(array $p): array {
+    $date = $p['apply_deadline'] ?? null;
+    if ($date === null || $date === '') {
+        if (!empty($p['expires_at'])) {
+            return ['date' => substr((string)$p['expires_at'], 0, 10), 'source' => 'expirare'];
+        }
+        return ['date' => null, 'source' => null];
+    }
+    $date = substr((string)$date, 0, 10);
+    $source = (string)($p['deadline_source'] ?? '');
+    if (!in_array($source, ['concurs', 'anunt', 'expirare'], true)) {
+        $ends = $p['expires_at'] ? substr((string)$p['expires_at'], 0, 10) : null;
+        $source = ($ends !== null && $date === $ends) ? 'expirare' : null;
+    }
+    return ['date' => $date, 'source' => $source];
+}
+
+/** Whole days from Bucharest-today to the deadline; negative when past. */
 function days_until(?string $date_str): ?int {
     if (!$date_str) return null;
     try {
-        $d = new DateTime(substr($date_str, 0, 10));
-        $today = new DateTime(date('Y-m-d'));
-        $diff = $today->diff($d);
-        return $diff->invert ? -$diff->days : $diff->days;
+        $tz = new DateTimeZone('Europe/Bucharest');
+        $d = new DateTimeImmutable(substr($date_str, 0, 10), $tz);
+        $today = new DateTimeImmutable('today', $tz);
+        // $d->diff($today) is the interval *from the deadline back to today*,
+        // so invert=1 means the deadline is still ahead of us.
+        $diff = $d->diff($today);
+        return $diff->invert ? $diff->days : -$diff->days;
     } catch (Exception $e) {
         return null;
     }
@@ -1076,14 +1182,15 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     }
 
     if ($excl !== 'status') {
-        $today = date('Y-m-d');
+        $today = ro_today();
         if ($status === 'active') {
             $where[] = "(" . DEADLINE_COL . " IS NULL OR " . DEADLINE_COL . " >= ?)";
             $binds[] = $today;
         } elseif ($status === 'soon') {
             $where[] = "(" . DEADLINE_COL . " >= ? AND " . DEADLINE_COL . " <= ?)";
             $binds[] = $today;
-            $binds[] = date('Y-m-d', strtotime('+7 days'));
+            $binds[] = (new DateTimeImmutable($today, new DateTimeZone('Europe/Bucharest')))
+                ->modify('+7 days')->format('Y-m-d');
         }
         // 'all' adds no clause
     }

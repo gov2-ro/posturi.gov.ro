@@ -46,7 +46,7 @@ echo "BEGIN:VCALENDAR\r\n";
 echo "VERSION:2.0\r\n";
 echo "PRODID:-//posturi.gov2.ro//RO\r\n";
 echo "X-WR-CALNAME:" . ical_escape($calname) . "\r\n";
-echo "X-WR-CALDESC:" . ical_escape('Termene de depunere — ' . $calname) . "\r\n";
+echo "X-WR-CALDESC:" . ical_escape('Termene de depunere — ' . $calname . ' (primele 200, în ordinea termenului)') . "\r\n";
 echo "CALSCALE:GREGORIAN\r\n";
 
 foreach ($rows as $r) {
@@ -54,10 +54,23 @@ foreach ($rows as $r) {
     $title = trim($r['title'] . ($employer ? ' — ' . $employer : ''));
     // The deadline, not the expiry: a reminder for a competition that closed
     // three weeks ago is worse than no reminder.
-    $dtstart = str_replace('-', '', substr((string)($r['apply_deadline'] ?? $r['expires_at']), 0, 10));
-    $dtend   = $dtstart;
+    $dl = posting_deadline($r);
+    // All-day event: DTEND is EXCLUSIVE, so it must be the next day. The old
+    // DTEND == DTSTART emitted a zero-day event that some clients hid or
+    // showed as an instant. Europe/Bucharest has no midnight DST transition
+    // (shifts happen at 03:00/04:00), so +1 day from midnight is 24h.
+    $tz = new DateTimeZone('Europe/Bucharest');
+    $start_day = new DateTimeImmutable($dl['date'], $tz);
+    $end_day   = $start_day->modify('+1 day');
+    $dtstart = $start_day->format('Ymd');
+    $dtend   = $end_day->format('Ymd');
     $dtstamp = $r['published_at'] ? str_replace('-', '', substr($r['published_at'], 0, 10)) . 'T000000Z' : gmdate('Ymd') . 'T000000Z';
     $parts = [];
+    if ($dl['source'] === 'expirare') {
+        $parts[] = 'Termen estimat (data expirării anunțului): ' . $dl['date'];
+    } else {
+        $parts[] = 'Termen depunere: ' . $dl['date'];
+    }
     if ($r['judet_name_disp'] ?? $r['judet_name']) $parts[] = 'Județ: ' . ($r['judet_name_disp'] ?? $r['judet_name']);
     if ($r['categorie']) $parts[] = 'Categorie: ' . $r['categorie'];
     if ($r['contact_phone']) $parts[] = 'Tel: ' . $r['contact_phone'];

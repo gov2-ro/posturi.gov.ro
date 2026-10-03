@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-$today = date('Y-m-d');
+$today = ro_today();
 $seven_ago = date('Y-m-d', strtotime('-7 days'));
 
 $total    = (int)db()->query("SELECT COUNT(*) FROM job_postings")->fetchColumn();

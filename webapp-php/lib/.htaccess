@@ -1,0 +1,4 @@
+# Vendored libraries are included by helpers.php, never served directly.
+# (Same 2.2-era syntax as the root .htaccess, for host compatibility.)
+Order allow,deny
+Deny from all

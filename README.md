@@ -393,6 +393,28 @@ python3 -m venv .venv
 
 A lightweight PHP frontend that runs on commodity shared hosting (cPanel). Reads from a read-only SQLite database — no Python, no web server config, just PHP + SQLite.
 
+### Tests
+
+The PHP app has its own fixture-based suites under `webapp-php/tests/` — no
+network, no production data, no paid APIs. Each suite builds a deterministic
+SQLite fixture (`tests/fixtures/build_db.php`) and, where it needs rendered
+pages, serves the real app on the built-in PHP router with a fixed clock.
+
+```bash
+php tests/sanitize_test.php     # FIX-01: Markdown sanitizer payload battery
+php tests/deadline_test.php     # FIX-02: one deadline across list/detail/feeds
+php tests/request_test.php      # FIX-07: request validation, routes, feeds, filters
+
+npx playwright test --config webapp-php/tests/browser/playwright.config.js
+                                # FIX-07: browser checks at 320/375/1280
+```
+
+These run in CI (`.github/workflows/ci.yml`) alongside the Django/PostgreSQL
+suite: lint + PHP suites on PHP 8.2, Playwright with pinned Chromium. The
+fixture query decoder is `webapp-php/query.php` — every request passes through
+`validated_query()` at the front controller, and `?q[]=medic` (a 500 before
+FIX-07) is a controlled 400.
+
 ### Export & deploy
 
 ```bash
@@ -418,7 +440,7 @@ The deploy script:
 1. Aborts if `webapp-php/static/app.css` is missing (see *Stylesheet* below), or if `DEPLOY_PATH` looks like a home directory — it runs `rsync --delete`
 2. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`, unless `--no-export`
 3. Refuses to ship a database that fails `integrity_check` or has no postings
-4. **Code**: rsyncs `webapp-php/` with `--delete`, minus `assets/` (Tailwind source), `router.php` (dev only) and `*.sqlite*` — excluding the database also protects it from the deletion pass
+4. **Code**: rsyncs `webapp-php/` with `--delete`, minus `assets/` (Tailwind source), `router.php` and `tests/` (dev only) and `*.sqlite*` — excluding the database also protects it from the deletion pass
 5. **Data**: rsyncs `posturi.sqlite` alone, no `--delete` and no `--inplace`, so rsync's write-temp-then-rename swaps it atomically and a request mid-transfer still sees the whole previous database
 6. Checks `SITE_URL` returns HTTP 200
 

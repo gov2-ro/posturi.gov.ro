@@ -52,8 +52,14 @@ echo '<?xml version="1.0" encoding="utf-8"?>' . "\n";
     if ($r['judet_name_disp'] ?? $r['judet_name']) $parts[] = 'Județ: ' . ($r['judet_name_disp'] ?? $r['judet_name']);
     if ($r['job_type']) $parts[] = 'Tip: ' . $r['job_type'];
     if ($r['categorie']) $parts[] = 'Categorie: ' . $r['categorie'];
-    $dl = $r['apply_deadline'] ?? $r['expires_at'];
-    if ($dl) $parts[] = 'Termen depunere: ' . substr((string)$dl, 0, 10);
+    $dl = posting_deadline($r);
+    if ($dl['date']) {
+        $parts[] = $dl['source'] === 'expirare'
+            ? 'Termen estimat (data expirării anunțului): ' . $dl['date']
+            : 'Termen depunere: ' . $dl['date'];
+    } else {
+        $parts[] = 'Termen depunere: neprecizat';
+    }
     $summary = e(implode(' | ', $parts));
 ?>
   <entry>

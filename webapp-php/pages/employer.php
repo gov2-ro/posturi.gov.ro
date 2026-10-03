@@ -9,7 +9,7 @@ $stmt->execute([$slug]);
 $employer = $stmt->fetch();
 if (!$employer) { http_response_code(404); echo "Angajator negăsit."; exit; }
 
-$today = date('Y-m-d');
+$today = ro_today();
 $eid = (int)$employer['id'];
 
 $total = (int)db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ?")->execute([$eid]) ? 0 : 0;
@@ -120,7 +120,7 @@ require __DIR__ . '/../inc/header.php';
         <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Anunțuri active (<?= count($active_postings) ?>)
         </h2>
-        <?php foreach ($active_postings as $p): $days = days_until($p['apply_deadline'] ?? $p['expires_at']); $dt = display_title($p); ?>
+        <?php foreach ($active_postings as $p): $dl = posting_deadline($p); $days = days_until($dl['date']); $est = $dl['source'] === 'expirare'; $dt = display_title($p); ?>
         <div class="py-3 border-b border-line last:border-0">
           <div class="flex items-start justify-between gap-3">
             <div>
@@ -137,10 +137,12 @@ require __DIR__ . '/../inc/header.php';
             <?php if ($days !== null): ?>
             <div class="shrink-0 text-right">
               <span class="text-xs font-mono <?= $days <= 3 ? 'text-alert-ink font-semibold' : ($days <= 7 ? 'text-note-ink' : 'text-ink-muted') ?>">
-                <?= $days ?>z
+                <?= $est ? '≈' : '' ?><?= $days ?>z
               </span>
-              <div class="text-xs text-ink-faint font-mono"><?= fmt_date($p['apply_deadline'] ?? $p['expires_at']) ?></div>
+              <div class="text-xs text-ink-faint font-mono"><?= fmt_date($dl['date']) ?><?= $est ? ' (estimat)' : '' ?></div>
             </div>
+            <?php else: ?>
+            <div class="shrink-0 text-right text-xs font-mono text-ink-faint">Termen neprecizat</div>
             <?php endif; ?>
           </div>
         </div>

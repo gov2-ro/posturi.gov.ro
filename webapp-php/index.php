@@ -5,7 +5,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/query.php';
 
 // Load Parsedown if present
 if (file_exists(__DIR__ . '/Parsedown.php')) {
@@ -14,6 +14,34 @@ if (file_exists(__DIR__ . '/Parsedown.php')) {
 
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $uri = '/' . trim($uri ?? '/', '/');
+
+// ---- Request validation: one decoder, one 400 path ----
+// Every page, filter builder and feed reads the normalized $_GET that this
+// produces; a malformed shape (?q[]=medic) never reaches trim() or SQL.
+[$valid_params, $query_error] = validated_query($_GET);
+$is_feed = in_array($uri, ['/posturi.json', '/posturi.atom', '/posturi.ics'], true);
+
+if ($query_error !== null) {
+    http_response_code(400);
+    if ($is_feed) {
+        // Machine-readable, same shape as the feed errors anywhere else.
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['error' => $query_error], JSON_UNESCAPED_UNICODE);
+    } else {
+        // Standalone: renders without the database, which a bad request must
+        // never be able to depend on.
+        echo '<!doctype html><html lang="ro"><head><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>Cerere invalidă — posturi.gov2.ro</title></head>'
+            . '<body style="font-family:system-ui,sans-serif;margin:2rem;color:#1e293b">'
+            . '<h1 style="font-size:1.25rem">Cerere invalidă</h1>'
+            . '<p>' . e($query_error) . '.</p>'
+            . '<p><a href="/" style="color:#1d4ed8">← Înapoi acasă</a></p>'
+            . '</body></html>';
+    }
+    exit;
+}
+$_GET = $valid_params;
 
 // Route feeds first (exact match, sets Content-Type before any output)
 if ($uri === '/posturi.json') { require __DIR__ . '/feeds/jobs.json.php';  exit; }

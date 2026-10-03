@@ -40,6 +40,9 @@ import sys
 import time
 import itertools
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 import psycopg
 from pydantic import ValidationError
 from tqdm import tqdm
@@ -60,7 +63,6 @@ from schema_models import (
     JobPostingExtraction,
     json_schema_for,
     model_for_version,
-    openai_json_schema,
 )
 
 load_dotenv()
@@ -192,6 +194,35 @@ def _is_repairable(exc) -> bool:
     return isinstance(exc, (ValidationError, ValueError, StopIteration))
 
 
+class FatalError(Exception):
+    """Provider-wide failure — no retry, no further calls scheduled.
+
+    HTTP 402 (payment required) and 401/403 (invalid or revoked credentials)
+    mean every remaining call would fail identically and burn the run's time;
+    the correct response is to stop scheduling new work, drain what is already
+    in flight, and report the run as failed.
+    """
+
+
+#: Statuses that are fatal for the whole provider, not the one posting.
+_FATAL_STATUS = frozenset({401, 402, 403})
+
+#: Exception-name hints for SDKs that hide the numeric status.
+_FATAL_HINTS = (
+    "paymentrequired", "payment_required", "insufficientbalance",
+    "insufficient_balance", "insufficientquota", "invalidapi", "invalid_api",
+    "apikey", "authentication", "unauthorized", "unauthenticated",
+)
+
+
+def _is_fatal(exc) -> bool:
+    status = _status_of(exc)
+    if status is not None:
+        return status in _FATAL_STATUS
+    name = type(exc).__name__.lower()
+    return any(hint in name for hint in _FATAL_HINTS)
+
+
 def generate_with_retry(generate, content, *, max_attempts=4, base_delay=2.0, on_retry=None):
     """Call `generate(content)`, retrying transient failures and repairing invalid output.
 
@@ -210,10 +241,16 @@ def generate_with_retry(generate, content, *, max_attempts=4, base_delay=2.0, on
     for attempt in range(1, max_attempts + 1):
         try:
             return generate(payload)
+        except FatalError:
+            raise
         except Exception as exc:  # noqa: BLE001 — classified immediately below
             last_exc = exc
             if attempt == max_attempts:
                 break
+            if _is_fatal(exc):
+                # The whole provider is unusable — retrying here would only
+                # delay the same conclusion for the other postings.
+                raise FatalError(f"{type(exc).__name__}: {exc}") from exc
             if _is_transient(exc):
                 delay = base_delay * (2 ** (attempt - 1)) * random.uniform(0.8, 1.2)
                 if on_retry:
@@ -574,6 +611,114 @@ def write_variant(conn, posting_id, provider, model, schema, input_tokens, outpu
     conn.commit()
 
 
+# ---------------------------------------------------------------------------
+# Run summary and exit status (FIX-04)
+# ---------------------------------------------------------------------------
+# A run that printed "0 ok, N failed" and exited 0 was indistinguishable from
+# success. The summary below is the durable, machine-readable record of one
+# model-run — appended to the pipeline run log under the same run id — and
+# `evaluate_exit` turns it into the exit status.
+
+@dataclass
+class RunSummary:
+    """What one (provider, model, prompt) run did.
+
+    All counts are POSTINGS, except `retried`, which counts the extra API
+    attempts those postings needed. `skipped` is postings the selection
+    yielded with no usable body+attachment text — they were never callable.
+    """
+    provider: str
+    model: str
+    prompt_version: str
+    selected: int = 0
+    attempted: int = 0
+    ok: int = 0
+    failed: int = 0
+    skipped: int = 0
+    retried: int = 0
+    ungrounded: int = 0
+    fatal: bool = False
+    fatal_reason: str = ""
+    failure_classes: dict = field(default_factory=dict)
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cached_input_tokens: int = 0
+    cost_usd: float = 0.0
+    duration_s: float = 0.0
+
+    @property
+    def zero_work(self) -> bool:
+        return self.attempted == 0 and self.skipped == 0
+
+    def to_record(self, run_id: str) -> dict:
+        return {
+            "kind": "llm-schema",
+            "format": 1,
+            "run_id": run_id,
+            "step": "schema",
+            "provider": self.provider,
+            "model": self.model,
+            "prompt_version": self.prompt_version,
+            # Postings, except retried (extra API attempts) — see the dataclass.
+            "selected": self.selected,
+            "attempted": self.attempted,
+            "ok": self.ok,
+            "failed": self.failed,
+            "skipped": self.skipped,
+            "retried": self.retried,
+            "ungrounded": self.ungrounded,
+            "failure_classes": self.failure_classes,
+            "fatal": self.fatal,
+            "fatal_reason": self.fatal_reason,
+            "zero_work": self.zero_work,
+            "duration_s": round(self.duration_s, 1),
+            "usage": {
+                "input_tokens": self.input_tokens,
+                "output_tokens": self.output_tokens,
+                "cached_input_tokens": self.cached_input_tokens,
+                "cost_usd": round(self.cost_usd, 6),
+            },
+        }
+
+
+def evaluate_exit(summaries: list, max_failure_share: float) -> int:
+    """Exit code for a run, from its per-model summaries.
+
+    0 — every model did healthy work (including a legitimately empty
+        selection, which the summary reports explicitly as `zero_work`);
+    1 — a model failed on more than `max_failure_share` of its attempted
+        postings, or was selected work it could not even attempt;
+    2 — a provider-wide fatal error (402 / invalid auth): the run stopped
+        scheduling new calls.
+    """
+    code = 0
+    for s in summaries:
+        if s.fatal:
+            code = max(code, 2)
+        elif s.attempted > 0:
+            if s.failed / s.attempted > max_failure_share:
+                code = max(code, 1)
+        elif s.skipped > 0:
+            # Selected but nothing attemptable: every posting had an empty
+            # body+attachment. That is a data problem, not a healthy no-op.
+            code = max(code, 1)
+    return code
+
+
+def _append_schema_record(run_log: Path, summary: RunSummary, run_id: str) -> None:
+    """Append the summary to the pipeline run log (same shape as pipeline.py).
+
+    Instrumentation never fails a run: errors are reported and swallowed.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from pipeline import append_run_record
+
+        append_run_record(run_log, summary.to_record(run_id))
+    except Exception as exc:  # noqa: BLE001
+        print(f"  WARNING: could not write the schema run record: {exc}", file=sys.stderr)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract structured job sections and store in Postgres schema_json')
     parser.add_argument('--provider', choices=list(PROVIDERS), default=None,
@@ -604,12 +749,25 @@ if __name__ == '__main__':
     parser.add_argument('--resume', action='store_true',
                         help='Skip postings that already have a variant row for this exact '
                              'provider/model/prompt-version. Makes an interrupted run restartable.')
+    parser.add_argument('--max-failure-share', type=float, default=0.5, metavar='F',
+                        help='Exit non-zero when more than this share of attempted postings '
+                             'fails (default: %(default)s). A provider-wide fatal error '
+                             '(402 / invalid auth) always exits non-zero.')
+    parser.add_argument('--run-log', default=str(Path('data/pipeline-runs.jsonl')), metavar='PATH',
+                        help='Append one JSON summary record per model to this file '
+                             '(default: %(default)s).')
+    parser.add_argument('--no-run-log', action='store_true',
+                        help='Do not write the schema run summary records.')
     args = parser.parse_args()
 
     if args.workers < 1:
         parser.error("--workers must be at least 1")
 
     args.prompt_version = resolve_prompt_version(args.prompt_version)
+
+    # One id ties this summary to the pipeline record that spawned it, and to
+    # the export-check record that follows — see ops/run-pipeline.sh.
+    run_id = os.environ.get("POSTURI_RUN_ID") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Load the prompt version
     system_prefix = get_prompt(args.prompt_version)
@@ -635,6 +793,7 @@ if __name__ == '__main__':
             providers_to_run = [(provider, model)]
             print(f"Provider: {provider}, model: {model}, prompt: {args.prompt_version}")
 
+        summaries = []
         for provider, model in providers_to_run:
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
             generate = make_generator(provider, model, system_prefix, args.prompt_version)
@@ -653,7 +812,9 @@ if __name__ == '__main__':
             if args.limit:
                 postings = itertools.islice(postings, args.limit)
 
-            stats = {"ok": 0, "failed": 0, "retried": 0, "ungrounded": 0}
+            summary = RunSummary(provider=provider, model=model,
+                                 prompt_version=args.prompt_version, selected=total)
+            run_start = time.monotonic()
 
             def call(row, _generate=generate):
                 """Runs on a worker thread: LLM call + local checks, no database."""
@@ -679,6 +840,11 @@ if __name__ == '__main__':
                 ungrounded = check_grounding(schema, content) if isinstance(schema, dict) else []
                 return schema, input_tokens, output_tokens, cached_tokens, latency_ms, ungrounded, retries
 
+            def failure_class(exc) -> str:
+                status = _status_of(exc)
+                return f"HTTP_{status}" if status is not None else type(exc).__name__
+
+            fatal_error = None
             with tqdm(total=total, unit="post", dynamic_ncols=True) as bar:
                 for (posting_id, url, content), future in imap_unordered(
                     call, postings, args.workers
@@ -686,23 +852,38 @@ if __name__ == '__main__':
                     slug = url.rstrip('/').split('/')[-1]
                     bar.set_description(slug[:55])
                     bar.update(1)
+                    summary.attempted += 1
                     try:
                         (schema, input_tokens, output_tokens, cached_tokens,
                          latency_ms, ungrounded, retries) = future.result()
+                    except FatalError as e:
+                        # Provider-wide: stop pulling the iterator (no new calls
+                        # are scheduled) and let the in-flight ones drain — the
+                        # pool shuts down when this generator closes.
+                        summary.fatal = True
+                        summary.fatal_reason = str(e)
+                        summary.failed += 1
+                        fatal_error = e
+                        tqdm.write(f"  ✗✗ FATAL ({provider}/{model}): {e} — stopping this model, "
+                                   f"already-running calls will drain")
+                        break
                     except Exception as e:
-                        stats["failed"] += 1
+                        summary.failed += 1
+                        summary.failure_classes[failure_class(e)] = \
+                            summary.failure_classes.get(failure_class(e), 0) + 1
                         tqdm.write(f"  ✗ {slug}: {type(e).__name__}: {e}")
                         continue
 
-                    stats["retried"] += bool(retries)
+                    summary.retried += bool(retries)
 
                     if not isinstance(schema, dict):
-                        stats["failed"] += 1
+                        summary.failed += 1
+                        summary.failure_classes["non_dict"] = summary.failure_classes.get("non_dict", 0) + 1
                         tqdm.write(f"  ✗ {slug}: non-dict: {repr(schema)[:80]}")
                         continue
 
                     for finding in ungrounded:
-                        stats["ungrounded"] += 1
+                        summary.ungrounded += 1
                         tqdm.write(f"  ⚠ {slug}: unsupported quote — {finding}")
 
                     cost = compute_cost(provider, model, input_tokens, output_tokens, cached_tokens)
@@ -711,7 +892,12 @@ if __name__ == '__main__':
                     if not args.compare:
                         write_schema(conn, posting_id, schema)
 
-                    stats["ok"] += 1
+                    summary.ok += 1
+                    summary.input_tokens += input_tokens or 0
+                    summary.output_tokens += output_tokens or 0
+                    summary.cached_input_tokens += cached_tokens or 0
+                    if cost:
+                        summary.cost_usd += cost
                     tok_parts = []
                     if input_tokens and output_tokens:
                         tok_parts.append(f"in={input_tokens}")
@@ -722,6 +908,29 @@ if __name__ == '__main__':
                     cost_info = f"${cost:.6f}" if cost else "cost=?"
                     bar.set_postfix_str(f"✓ {latency_ms}ms {token_info} {cost_info}")
 
-            print(f"  {stats['ok']} ok, {stats['failed']} failed, "
-                  f"{stats['retried']} needed a retry, "
-                  f"{stats['ungrounded']} unsupported quote(s)")
+            summary.skipped = max(0, summary.selected - summary.attempted)
+            summary.duration_s = time.monotonic() - run_start
+            summaries.append(summary)
+
+            if fatal_error:
+                print(f"  ✗✗ {provider}/{model}: provider-wide failure — "
+                      f"{summary.ok} ok, {summary.failed} failed ({summary.fatal_reason})")
+            elif summary.zero_work:
+                print("  ✓ 0 eligible postings — the selection succeeded and there is "
+                      "nothing to do; this is a healthy run")
+            else:
+                print(f"  {summary.ok} ok, {summary.failed} failed, "
+                      f"{summary.skipped} skipped (empty content), "
+                      f"{summary.retried} needed a retry, "
+                      f"{summary.ungrounded} unsupported quote(s)")
+
+        if not args.no_run_log:
+            for summary in summaries:
+                _append_schema_record(Path(args.run_log), summary, run_id)
+
+        exit_code = evaluate_exit(summaries, args.max_failure_share)
+        if exit_code == 2:
+            print("\n✗✗ Extraction stopped: a provider-wide fatal error (402 / invalid auth).")
+        elif exit_code == 1:
+            print("\n✗ Extraction finished with too many failures — see the summary above.")
+        sys.exit(exit_code)

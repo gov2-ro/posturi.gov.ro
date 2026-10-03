@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-$today = date('Y-m-d');
+$today = ro_today();
 $judet_filter = trim($_GET['judet'] ?? '');
 
 $total_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn();

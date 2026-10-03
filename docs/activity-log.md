@@ -2,6 +2,205 @@
 
 ## 2026
 
+### 2026-10-03 — FIX-04: pipeline failure status, healthy baselines and quality gates (code + tests)
+
+**What:** `llm-schema.py` now emits one machine-readable summary per model
+(kind `llm-schema`, format 1, appended to `data/pipeline-runs.jsonl` under the
+pipeline's run id): postings selected/attempted/ok/failed/skipped, extra API
+attempts (retried), failure classes by status/name, usage totals, duration,
+fatal reason and an explicit `zero_work` flag. Exit codes: 0 for healthy work
+including a legitimately empty selection (reported, not silent); 1 when more
+than `--max-failure-share` (default 0.5) of attempted postings fail, or when
+selected work was skipped wholesale for empty content; 2 for provider-wide
+fatal errors (HTTP 401/402/403 or payment/auth exception names) — the run
+stops scheduling new calls, drains in-flight work and reports; comparison runs
+aggregate to the worst model, so the last model cannot mask an earlier fatal.
+`ops/check-export.py` baselines now come from the last **deployed** candidate
+(a `deploy` record with the same run id; legacy logs fall back to status ok)
+and a rolling window of the last seven healthy runs — failed candidates are
+preserved for diagnosis but never lower the bar. New checks: sustained
+decline (coverage vs the best healthy run, so a 1.5-pt-per-run bleed trips
+without any single 5-pt drop), configurable absolute schema/v3 floors (soft,
+off by default, v3 floor skipped under a pinned v4 rollout), intake freshness
+(newest publication age, Bucharest weekdays only) and title/employer/
+published/body fill rates against the baseline. `ops/run-pipeline.sh` now
+blocks deployment after any pipeline step failure unless
+`POSTURI_ALLOW_DEGRADED_DEPLOY=1` is set explicitly (the previous
+deploy-if-the-check-passes behavior was implicit degraded publication), and
+`ops/record-deploy.py` records every deploy outcome (healthy or degraded)
+against the candidate run id.
+
+**Validation:** 30 new tests (webapp/tests/test_pipeline_health.py): fatal
+classification and no-retry behavior, 429 recovery, exit-code matrix
+(all-success, 1/10, >50%, all-fail, fatal, zero-work, skipped-all, mixed
+comparison aggregation), record contract, baseline selection with
+deploy-gating, failed-candidate exclusion, seven-run window, legacy-log
+fallback, absent/malformed logs, sustained decline (the 1.5-pt scenario),
+floors incl. the v4 skip, intake freshness on a fixed weekday/weekend clock
+and fill-rate drops. Full suite: 509 passed. Live run of check-export against
+a real export renders every new check. PHP suite unaffected (374 assertions).
+
+**Non-obvious decisions:** Fatal is per-provider: a 402 stops that model's
+scheduling while other comparison models still run. Summary counts are
+postings, with `retried` as the extra-API-attempt counter — stated in the
+record's contract. The new default (block deploy on step failure) is stricter
+than the old behavior and is visible to the VPS operator; degraded
+publication stays one env-var opt-in away with a persistent `degraded` record.
+
+**Still open (rollout):** threshold calibration against copied historical
+JSONL records, one verified unattended success and one controlled failure on
+the VPS, and host verification of the new default. Not closable from unit
+tests alone — per the spec.
+
+---
+### 2026-10-03 — FIX-08: atomic, validated attachment downloads (code + tests + real-cache audit)
+
+**What:** New `download_manifest.py` owns the download cache: identity is a
+hash of the normalized URL (query strings part of identity, basename
+collisions impossible), files land as `<key>.<ext>` beside a JSON manifest
+(source URL, sha256, size, retrieval time, content type), and `download_file`
+streams to a temp file that is renamed only after the transfer stayed within
+size/time bounds and the body validated — magic bytes (DOCX/DOC/PDF), DOCX ZIP
+integrity, Content-Length comparison, HTML-error-pages-with-200 rejected by
+sniffing, unsupported formats get an explicit reason. A failed replacement
+leaves existing bytes untouched; extensionless URLs take the sniffed format.
+Cache hits are validated (magic + manifest size; deep container checks are the
+audit/repair paths only, so the hot path stays cheap). Legacy basename files
+keep resolving for compatibility; `--repair-legacy` adopts valid ones into the
+hashed cache and records invalid ones in `legacy-invalid.json` without
+deleting anything. `download-attachments.py` is now the CLI (summary with
+cached/downloaded/replaced/invalid/failed counts, >50%-failure batches exit
+nonzero per FIX-04, pacing unchanged); `extract_attachments` and
+`quality_check.py` resolve through the same module, and failures say *why*
+(“cached file invalid: …”) instead of reading as “not downloaded”.
+
+**Validation:** 33 new tests (webapp/tests/test_download_manifest.py) cover
+the acceptance matrix with a scripted fake session: interrupted streams,
+empty/length-mismatch/HTML bodies, broken DOCX, valid chunked PDF, duplicate
+basenames, query-string and extensionless URLs, size bounds, failed-vs-
+successful replacement, legacy adoption and batch usability. Full Django suite
+green (479 passed). Real-cache audit (`--audit`, read-only) over 9,994 URLs:
+9,925 valid legacy files, 3 invalid (one corrupt DOCX, one JPG under .doc,
+one unsupported), 35 missing — evidence recorded, no repair run (operational
+step, distinct from code completion).
+
+**Non-obvious decisions:** A failed *download* never lands in the cache, so
+“replaced” only occurs when an invalid file already sat at the hashed target.
+Valid files are never re-fetched (cache hit), which is why the
+old-bytes-intact guarantee is exercised through the invalid-entry path.
+Changed-remote-content invalidation stays with FIX-03 revision handling.
+
+---
+### 2026-10-03 — FIX-07: request validation, fixture test harness, active CI (code + local evidence)
+
+**What:** New `webapp-php/query.php` decodes every request at the front
+controller: scalar params (`q`, `sort`, `status`, `page`, `employer`, dates…)
+must be single strings; facet params normalize to flat bounded arrays (legacy
+`?eqf=6` scalars included); nested arrays, array-valued scalars, oversized
+values and over-long facet lists get one controlled 400 — HTML for pages, JSON
+for feeds — through `index.php` before any page or feed runs. `?q[]=medic` is
+no longer a 500. Built `tests/fixtures/build_db.php` (schema mirrors
+export-to-sqlite.py; deadline matrix, hostile Markdown, multi-role v3,
+diacritics, 38 rows, no real data), a shared fixture server helper, and three
+suites: request_test.php (134 assertions: 400s, valid/legacy shapes, all
+routes, canonical 301s, DB-access denial, feed format parsing with filtered
+feeds, facet/result parity, chips, pagination, sort, search, HTMX partial),
+deadline_test.php refactored onto the shared helper, sanitize_test.php. Added
+a Playwright suite (12 tests at 320/375/1280: overflow, one-deadline row,
+drawer keyboard/focus + HTMX + URL/back state on mobile, chip removal on
+desktop, and the FIX-01 no-execution proof — no dialogs, no `javascript:`
+anchors, no inline handlers, legitimate link intact). New
+`.github/workflows/ci.yml` replaces the archived workflow: Django+PostgreSQL
+job (shape from the archived file), PHP 8.2 lint + three suites, and a
+Playwright job with pinned tooling; README documents the runnable commands.
+
+**Validation:** All three PHP suites green locally (374 assertions), whole
+tree lints, Playwright 12/12 with the fixture server, `npm ci` clean.
+CI-run evidence requires the first push — the workflow itself is not yet
+proven green on GitHub Actions.
+
+**Non-obvious decisions:** Facet param set derives from `MULTI_PARAMS` so form
+field names and the decoder cannot drift. Unknown params pass through (compat);
+unknown enum/date values fall back predictably instead of 400ing. The 400 page
+renders without the database. Playwright's webServer starts before any
+globalSetup hook, so the fixture is built inside the server command itself.
+One real bug found en route: Romanian quotes adjacent to `$key` in string
+interpolation parse as part of the variable name (`„$key”` → `$key”`) — fixed
+with braces.
+
+---
+### 2026-10-03 — FIX-02: one deadline per posting, Bucharest boundaries, qualified estimates (code + tests)
+
+**What:** Every surface now resolves the same application date through
+`posting_deadline()` (helpers.php) — `apply_deadline` plus its stored
+`deadline_source`. The list row that showed “13 zile” beside the expiry now
+prints the deadline in both places (`<time datetime>` included); detail badges,
+sidebar, meta description and employer page follow. `expirare` rows are
+visibly qualified (“estimat” on rows, ≈ countdowns, “Termen estimat” badges,
+and “Data expirării; termenul de înscriere nu este confirmat.” on the detail
+sidebar) and never read “Înscrieri până la”. Rows without any date show
+“Termen neprecizat” instead of nothing. All day-boundary math moved to
+`ro_today()` in Europe/Bucharest (status filter, +7d window, quick stats,
+employer/stats counts, sitemap), with `POSTURI_TODAY` as a documented test
+seam. JSON-LD `validThrough` now uses the exact source hour when
+`data_limita_depunere` carries one (same day only), instead of claiming 23:59.
+Atom summaries label estimates (“Termen estimat (data expirării anunțului)”);
+the iCal feed now emits exclusive next-day `DTEND` (the old `DTEND == DTSTART`
+was a zero-day event), labels estimates in DESCRIPTION, declares the 200-item
+cap in `X-WR-CALDESC` and keeps UIDs stable. `expires_at`/`apply_deadline`/
+`deadline_source` JSON keys are unchanged.
+
+**Validation:** New `tests/deadline_test.php` (57 assertions): fixed-clock
+`days_until` and `posting_deadline` units, `ro_today()` independence from
+host TZ (UTC/New York/Tokyo subprocesses), and a rendered suite that builds
+the new fixture DB (`tests/fixtures/build_db.php`, deterministic, no real
+data), serves the app on the built-in router with `POSTURI_TODAY=2026-10-03`
+and asserts countdown/`<time>`/printed date agreement per row (future,
+same-day, past via `?status=all`, expiry fallback, no-dates), the detail
+warning, exact-time `validThrough`, the non-duplicated end line, Atom/iCal
+labels, one-day iCal durations and JSON key compatibility. The real export's
+`posturi.ics` (200 events) parses with the Python `icalendar` 7.1.2 parser:
+zero non-one-day events. Sanitizer suite still green (155), whole PHP tree
+lints.
+
+**Non-obvious decisions:** `deadline_source` is trusted when present; for
+exports predating the column, a date equal to the expiry infers `expirare`.
+Parsedown stays on the sanitized path; no JSON field names changed, so feed
+consumers are unaffected. Rollout is code-only via `deploy-php.sh --code-only`
+(pending, like FIX-01).
+
+---
+### 2026-10-03 — FIX-01: parser-based Markdown sanitization (code + tests)
+
+**What:** Replaced the attribute-passing `strip_tags()` sanitizer with vendored
+HTMLPurifier v4.19.1 (LGPL-2.1+, `webapp-php/lib/htmlpurifier-library/`, license
+copy at `lib/htmlpurifier-LICENSE.txt`; `lib/.htaccess` denies direct access).
+`sanitizer()` in `helpers.php` is the single config: allowlisted elements,
+`http/https/mailto/tel` schemes only (relative/fragment URLs stay allowed),
+frame-target and rel allowlists with automatic `noopener noreferrer`, and
+`style/class/id` forbidden. Both render call sites (detail body, schema sections)
+flow through it; the fallback renderer is now a named, testable function and is
+sanitized on the same path. Parsedown safe mode stays off — the DOCX→Markdown
+conversion can emit raw HTML (tables/images), which safe mode would print as
+literal text; the sanitizer is the security boundary.
+
+**Validation:** New `webapp-php/tests/` harness (bootstrap.php + sanitize_test.php):
+155 assertions across the audit payload, encoded/mixed-case/whitespace
+`javascript:` and `data:`/`vbscript:` schemes, event attributes on allowed tags,
+script/SVG/iframe/object embedding, malformed HTML repair, link survival,
+tables/code/lists, diacritics, realistic announcement formatting, and the
+fallback path. Every output must also re-parse as well-formed HTML. All green;
+`php -l` clean. Live-page smoke test against a fresh local export (`POSTURI_DB`
+pointed at `/tmp/posturi-test.sqlite`): list, raw-body detail, structured detail,
+three feeds, employers/stats/about/robots/sitemap all render; no `javascript:`
+or event-handler markup survives in scraped content (the only `onchange=` match
+is the template-owned skin picker).
+
+**Rollout:** Code deploy (`deploy-php.sh --code-only`) is pending — not yet
+shipped to the host. The lib/ tree rides the normal rsync; no re-extraction or
+backfill is needed. Browser-level no-execution fixture lands with FIX-07.
+
+---
 ### 2026-10-03 — Record the agreed user-facing product direction
 
 **What:** Saved the feature discussion in [the product direction](product-direction.md),

@@ -42,8 +42,11 @@ if ($p['body_markdown']) {
 // Schema sections
 $schema_sections = render_schema_sections($p['schema_json'] ?? null);
 
-$deadline = $p['apply_deadline'] ?? $p['expires_at'];
+// Countdown, badges, sidebar, feeds and JSON-LD all read this one value.
+$dl   = posting_deadline($p);
+$deadline = $dl['date'];
 $days = days_until($deadline);
+$est  = $dl['source'] === 'expirare';
 
 // Return to the filtered list the reader came from, when there is one.
 // `javascript:history.back()` broke for anyone arriving from a feed, a shared
@@ -66,7 +69,7 @@ $_desc_src = preg_replace('/\s+/u', ' ', $_desc_src) ?? '';
 $meta_description = trim(implode(' · ', array_filter([
     $p['employer_name'] ?? null,
     place_label($p) ?: null,
-    $deadline ? 'termen ' . fmt_date($deadline) : null,
+    $deadline ? ($est ? 'termen estimat ' : 'termen ') . fmt_date($deadline) : null,
 ])) . '. ' . mb_substr($_desc_src, 0, 150));
 
 // ---- JSON-LD (Google Jobs) ----
@@ -123,10 +126,22 @@ if ($p['published_at']) {
 }
 if ($deadline) {
     try {
-        $vt = new DateTime(substr((string)$deadline, 0, 10) . ' 23:59:59', new DateTimeZone('Europe/Bucharest'));
+        $tz = new DateTimeZone('Europe/Bucharest');
+        // A deadline the source pins to an exact hour must not be described as
+        // open until 23:59 merely because other surfaces only have date
+        // precision. Only a same-day source time wins over end-of-day.
+        $vt = null;
+        $exact = $p['data_limita_depunere'] ?? null;
+        if ($exact && preg_match('/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/', (string)$exact)) {
+            $vt = new DateTime((string)$exact, $tz);
+            if ($vt->format('Y-m-d') !== $deadline) $vt = null;
+        }
+        if ($vt === null) {
+            $vt = new DateTime($deadline . ' 23:59:59', $tz);
+        }
         $ld['validThrough'] = $vt->format('c');
     } catch (Exception $e) {
-        $ld['validThrough'] = substr((string)$deadline, 0, 10);
+        $ld['validThrough'] = $deadline;
     }
 }
 if (($p['nr_posturi'] ?? 0) > 1) {
@@ -231,14 +246,18 @@ require __DIR__ . '/../inc/header.php';
       <?php endif; ?>
       <?php if ($days !== null): ?>
         <?php if ($days < 0): ?>
-          <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Înscrieri închise <?= fmt_date($deadline) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?> <?= fmt_date($deadline) ?></span>
         <?php elseif ($days <= 3): ?>
-          <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold">Înscrieri: <?= e(days_label($days)) ?>!</span>
+          <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold"><?= $est ? 'Termen estimat: ' : 'Înscrieri: ' ?><?= e(days_label($days)) ?>!</span>
         <?php elseif ($days <= 7): ?>
-          <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono">Înscrieri: <?= e(days_label($days)) ?></span>
+          <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono"><?= $est ? 'Termen estimat: ' : 'Înscrieri: ' ?><?= e(days_label($days)) ?></span>
+        <?php elseif ($est): ?>
+          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Termen estimat: <?= fmt_date($deadline) ?></span>
         <?php else: ?>
           <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Înscrieri până la <?= fmt_date($deadline) ?></span>
         <?php endif; ?>
+      <?php else: ?>
+        <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Termen neprecizat</span>
       <?php endif; ?>
     </div>
   </div>
@@ -263,14 +282,21 @@ require __DIR__ . '/../inc/header.php';
           <?php if ($p['data_limita_depunere'] && fmt_datetime($p['data_limita_depunere'], 'H:i') !== '00:00'): ?>
             <div class="text-xs text-ink-muted">ora <?= fmt_datetime($p['data_limita_depunere'], 'H:i') ?></div>
           <?php endif; ?>
-          <?php if (!empty($p['deadline_source']) && isset(DEADLINE_SOURCE_LABELS[$p['deadline_source']])): ?>
-            <div class="text-xs text-ink-faint"><?= e(DEADLINE_SOURCE_LABELS[$p['deadline_source']]) ?></div>
+          <?php if (!empty($dl['source']) && isset(DEADLINE_SOURCE_LABELS[$dl['source']])): ?>
+            <div class="text-xs text-ink-faint"><?= e(DEADLINE_SOURCE_LABELS[$dl['source']]) ?></div>
+          <?php endif; ?>
+          <?php if ($est): ?>
+            <!-- The expiry fallback must read as uncertainty, not as the
+                 confirmed submission date the heading above implies. -->
+            <div class="mt-1 rounded border border-note-line bg-note px-2 py-1 text-xs text-note-ink">
+              Data expirării; termenul de înscriere nu este confirmat.
+            </div>
           <?php endif; ?>
           <?php
             // The competition runs on past the deadline — results, contestations.
             // Showing only one date is what made closed competitions read as open.
             $ends = $p['expires_at'] ? substr((string)$p['expires_at'], 0, 10) : null;
-            if ($ends && $ends !== substr((string)$deadline, 0, 10)):
+            if ($ends && $ends !== $deadline):
           ?>
             <div class="mt-1 text-xs text-ink-muted">concursul se încheie <?= fmt_date($p['expires_at']) ?></div>
           <?php endif; ?>

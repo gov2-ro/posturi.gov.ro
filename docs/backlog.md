@@ -7,6 +7,7 @@ not current acceptance thresholds.
 
 - [Initial project audit](audits/2026-10-03-project-audit.md)
 - [Delegation-ready technical specifications](specs/2026-10-03-project-audit/README.md)
+- [Agreed user-facing product direction](product-direction.md)
 - [Consolidation decisions and old-item mapping](audits/2026-10-03-backlog-consolidation.md)
 - [Original backlog, preserved before consolidation](archive-reference/backlog-2026-10-03-before-consolidation.md)
 - [Activity log](activity-log.md) and [broader product spec](ui-spec.md)
@@ -54,8 +55,11 @@ bounded follow-ups, not permission for broad paid backfills.
 
 ## Product follow-ups
 
-These require a focused design/acceptance spec before implementation. The broad
-UI spec is context, not a direction to build every listed feature at once.
+The user confirmed on 2026-10-03 that we should aim to implement or address all
+the user-facing capabilities discussed in [the product direction](product-direction.md),
+including the additional enhancements below. Delivery is phased; these items
+remain open. Prepare focused design/acceptance specs before implementation.
+The broad UI spec is context, not a direction to build everything at once.
 
 - [ ] **UX-01 — Simplify facets and explain inferred choices.** Consolidate overlapping study/EQF, role/seniority and source/v3 contract/program controls. Define nominal vs min/max semantics and matching count queries; preserve shared URLs. Reduce default-open groups, move pipeline diagnostics behind an explicit advanced/debug disclosure, translate internal enum labels, and reconsider shortcuts that select almost the entire corpus. Explain family/seniority/occupation uncertainty alongside salary provenance.
 - [ ] **UX-02 — Locality discovery.** Add county-scoped locality filtering, conservative employer/body locality backfill with unknown confidence, and a sourced gazetteer for coordinates/map drill-in. Existing normalized locality names do not themselves provide coordinates. Review before/after matches and same-name localities across counties.
@@ -65,6 +69,11 @@ UI spec is context, not a direction to build every listed feature at once.
 - [ ] **UX-06 — Theme/language and asset cleanup.** Keep skins; consider a separate light/dark axis with contrast checks and RO/EN translations. Review active-skin font preload behavior (current default is Manrope, not the old DM Sans/Fraunces note). Replace structural card-shadow selectors only if another skin needs the utility. Avoid cache-fragmenting cookies merely to choose a preload.
 - [ ] **UX-07 — Candidate profile matching before CV upload.** Validate hard requirements and uncertainty on a structured profile form first; distinguish unobserved requirements from satisfied ones and prevent cross-role matches. CV/Europass parsing, accounts, saved searches, alerts and application tracking follow an explicit privacy/retention decision. Do not assume a vector database is needed; measure baseline matching/search before adding one. Optional MCP access belongs to a separate bounded interface design.
 - [ ] **UX-08 — Expanded research analytics.** After FIX-09, consider all-county/per-capita regional views, maps, institution hierarchy and similar/reposted-job tracking (`is_repost_of`). Define source population vintage, denominator, duplication/window and historical observations before calling any curve a hiring trend.
+- [ ] **UX-09 — Save and hide jobs without an account.** Add a browser-local shortlist and reversible “not interested” action; show saved jobs on return visits. Explain browser-local persistence and data-clearing limits. Preserve stable announcement identity and plan optional transfer/sync under UX-07 without making accounts mandatory. [Direction](product-direction.md#save-and-hide-jobs-without-an-account--ux-09).
+- [ ] **UX-10 — Compact “Can I apply?” panel.** Compare reader-supplied education, experience and licences against a specific role's requirements and show matches/missing/unknown. Unobserved requirements remain unknown; never combine qualifications from different roles or present an official eligibility verdict. This is the focused first step toward UX-07 profile matching; depends on reliable requirements and DATA-04 role handling. [Direction](product-direction.md#a-compact-can-i-apply-panel--ux-10).
+- [ ] **UX-11 — Application preparation checklist.** Turn source-derived documents and competition stages into tickable items with official links and visible extraction uncertainty. Save progress locally first; preparation is not proof of submission. Connect to UX-07 application tracking later. [Direction](product-direction.md#an-application-checklist--ux-11).
+- [ ] **UX-12 — “What changed?” notices for saved jobs.** Show revised deadlines, cancellations and requirement changes with old/new facts and observation time. Depends on FIX-03 revisions/refresh and UX-09 saved identity. Start with notices on return visits, then optional alert delivery under UX-07; a failed refresh must not look like “no change”. [Direction](product-direction.md#what-changed-notices--ux-12).
+- [ ] **UX-13 — Source evidence for important requirements.** Expand extracted education/experience/licence requirements to show the original sentence and document/page source. Verify quotes, preserve source/inference distinctions and show missing evidence honestly. Supports UX-10/11 and complements DATA-03 quality review and UX-01 explanations. [Direction](product-direction.md#evidence-beside-important-requirements--ux-13).
 
 ## Deferred engineering and source expansion
 

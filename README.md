@@ -16,6 +16,9 @@ for bounded coding-agent assignments. Historical tracking is preserved in
 [the activity log](docs/activity-log.md) and
 [the pre-consolidation backlog](docs/archive-reference/backlog-2026-10-03-before-consolidation.md).
 
+[The agreed product direction](docs/product-direction.md) captures the user-facing
+feature scope and recommended sequence toward an application companion.
+
 ## Pipeline
 
 ```mermaid

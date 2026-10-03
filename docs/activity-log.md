@@ -2,6 +2,29 @@
 
 ## 2026
 
+### 2026-10-03 — Record the agreed user-facing product direction
+
+**What:** Saved the feature discussion in [the product direction](product-direction.md),
+covering existing user-facing backlog capabilities and five additional enhancements:
+browser-local save/hide, a compact eligibility panel, application checklists,
+change notices for saved jobs and source evidence beside requirements. Added
+UX-09 through UX-13 to [the backlog](backlog.md) and linked the direction from README.
+
+**Intent:** The user confirmed that we should aim to implement or address the
+whole list. The recommended first release combines clearer deadlines, simpler
+filters, locality/employer discovery and a shortlist without accounts; preparation,
+change tracking and matching follow their data-quality prerequisites. All listed
+capabilities remain intended scope, with phased delivery and no promised dates.
+
+**Non-obvious decisions:** Kept profile matching under UX-07 and linked its compact
+eligibility entry point under UX-10. Account-free local state is the first step,
+with privacy/retention design before server-side CV/account features. Unknown
+requirements stay unknown, and multi-role matches must be role-specific. This
+records product intent, not implementation completion. Checked document links,
+heading anchors, task IDs and whitespace; runtime code is unchanged.
+
+---
+
 ### 2026-10-03 — Track Codex guidance and project-local skills
 
 **What:** Committed the existing `AGENTS.md` update and the project-local

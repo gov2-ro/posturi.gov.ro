@@ -2,6 +2,17 @@
 
 ## 2026
 
+### 2026-10-03 — Track Codex guidance and project-local skills
+
+**What:** Committed the existing `AGENTS.md` update and the project-local
+`source-command-pipeline-check` and `source-command-quality-review` skills under
+`.agents/skills/`, as requested. This makes the guidance and migrated operator
+commands available in future checkouts. Reviewed their contents; no runtime code
+changed and neither skill was executed. Left `AGENTS.md.old` as an untracked local
+backup. Known guidance drift remains assigned to FIX-12 in the consolidated backlog.
+
+---
+
 ### 2026-10-03 — Project audit, remediation specifications and backlog consolidation
 
 **What:** Saved the initial code/documentation/live-site assessment in

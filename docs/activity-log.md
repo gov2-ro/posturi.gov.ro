@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-10-03 — Postpone GitHub CI (user decision)
+
+**What:** The CI workflow written for FIX-07 (`.github/workflows/ci.yml`) will
+not be pushed/activated for now. The request-validation code, the three PHP
+suites, the Playwright checks and the workflow file remain in the repo, fully
+runnable locally; only the GitHub Actions activation is deferred. Recorded in
+the backlog as a revisit point on FIX-07. The user also verified the deployed
+landing page after the Immediate-fixes deploy and reported it looks fine.
+
+---
 ### 2026-10-03 — FIX-04: pipeline failure status, healthy baselines and quality gates (code + tests)
 
 **What:** `llm-schema.py` now emits one machine-readable summary per model

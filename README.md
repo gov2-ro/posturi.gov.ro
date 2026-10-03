@@ -6,6 +6,16 @@ Alternative browser / explorer for [posturi.gov.ro](https://posturi.gov.ro). Scr
 
 Derivative work: [mariuscomper.uk/posturi-publice](https://mariuscomper.uk/posturi-publice/)
 
+## Project review and next work
+
+[The October 3 project audit](docs/audits/2026-10-03-project-audit.md) records
+the code, documentation and live-site findings. Use
+[the consolidated backlog](docs/backlog.md) for current priorities and
+[the remediation specifications](docs/specs/2026-10-03-project-audit/README.md)
+for bounded coding-agent assignments. Historical tracking is preserved in
+[the activity log](docs/activity-log.md) and
+[the pre-consolidation backlog](docs/archive-reference/backlog-2026-10-03-before-consolidation.md).
+
 ## Pipeline
 
 ```mermaid

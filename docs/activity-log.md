@@ -2,6 +2,49 @@
 
 ## 2026
 
+### 2026-10-03 — Project audit, remediation specifications and backlog consolidation
+
+**What:** Saved the initial code/documentation/live-site assessment in
+[the project audit](audits/2026-10-03-project-audit.md). Prepared
+[12 technical remediation specifications](specs/2026-10-03-project-audit/README.md)
+with bounded scope, acceptance criteria, fixture-based validation, dependencies
+and migration/rollout guidance for later assignment to coding agents. Rewrote
+[the active backlog](backlog.md) around stable IDs and priorities, separating
+implementation from paid backfills, host verification and production deployment.
+
+**Why:** The audit found unsafe PHP Markdown attributes/URLs, uncertain application
+deadlines, immutable detail caches, extraction runs that can falsely exit cleanly,
+misleading freshness/history claims, malformed query 500s and non-atomic attachment
+downloads. The current interface and architecture are useful; source correctness
+and unattended reliability take priority over new product features.
+
+**Evidence:** At baseline `2c5e480`, all 446 Python tests passed with PostgreSQL
+access; all 22 PHP files passed syntax checks. Playwright checked desktop/mobile
+pages and an HTMX county filter without browser errors/overflow. Live data showed
+1,875 application-active announcements and October 2 intake; the newest 200 JSON
+results had 194 expiry-fallback deadlines and six scraped deadlines. These are
+dated audit observations, not whole-corpus accuracy measurements. No production
+host inspection, paid model calls or deployments were made.
+
+**Non-obvious decisions:** Preserved the old backlog verbatim in
+[a dated archive](archive-reference/backlog-2026-10-03-before-consolidation.md),
+with [a mapping of every previously open checkbox](audits/2026-10-03-backlog-consolidation.md).
+Superseded old outage/count claims using source or later evidence, while retaining
+current operational verification tasks. Corrected the DST task's minute drift;
+current VPS schedule still needs inspection. Kept PHP/SQLite serving and
+Django/Postgres processing as the implementation baseline. No issue is marked
+fixed merely because its specification was written; frontend retirement must
+retain models, migrations, admin and useful variant-comparison tools.
+
+**Documentation validation:** Checked local links, stable ID/spec references,
+complete old-item mapping, exact archive preservation and whitespace before
+commit. New/edited content passes whitespace checks; the verbatim archive retains
+the original file's existing trailing whitespace. Runtime test results above are from the initial audit; this follow-up
+changes documentation only. Pre-existing `AGENTS.md` edits and unrelated
+untracked agent files remain outside the documentation commit.
+
+---
+
 ### 2026-10-03 — /statistici shows daily LLM extraction spend
 
 **What:** `/statistici` has a new "Costuri inferență" section: three tiles (total, last 30 days, cost per 100 postings) and a per-day list of the last 30 days with activity. It answers the "make spend visible" half of the cost-baseline backlog item without anyone having to grep logs.

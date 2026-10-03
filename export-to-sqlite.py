@@ -19,6 +19,7 @@ Output: posturi.sqlite with tables:
   judete         — county names
   calendar_events — competition timeline
   job_postings_fts — FTS5 virtual table (rowid = job_posting id)
+  llm_costs       — daily LLM extraction spend, for /statistici (not sliced by --active-only)
   build_meta      — one row: when this file was built, from which commit and host
 """
 
@@ -91,6 +92,7 @@ PRAGMA journal_mode=DELETE;
 PRAGMA foreign_keys=ON;
 
 DROP TABLE IF EXISTS build_meta;
+DROP TABLE IF EXISTS llm_costs;
 DROP TABLE IF EXISTS calendar_events;
 DROP TABLE IF EXISTS job_postings_fts;
 DROP TABLE IF EXISTS job_postings;
@@ -235,6 +237,22 @@ CREATE TABLE calendar_events (
 );
 CREATE INDEX idx_ce_posting ON calendar_events(posting_id);
 CREATE INDEX idx_ce_data    ON calendar_events(data);
+
+-- Daily LLM extraction spend, one row per (day, provider, model, prompt version).
+-- Aggregated at export time because the shared host has no Postgres. `day` is the
+-- Bucharest calendar day of the call. It reflects each posting's *current* extraction:
+-- a re-extraction upserts the variant and moves its cost to the new day.
+CREATE TABLE llm_costs (
+    day             TEXT NOT NULL,
+    provider        TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    prompt_version  TEXT NOT NULL,
+    calls           INTEGER NOT NULL,
+    input_tokens    INTEGER NOT NULL,
+    output_tokens   INTEGER NOT NULL,
+    cost_usd        REAL NOT NULL,
+    PRIMARY KEY (day, provider, model, prompt_version)
+);
 
 -- One row, written last. Lets the deploy verify on the remote that the file that
 -- landed is the file this run built, and gives the site a real "generated at"
@@ -439,7 +457,46 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     """)
     print("done")
 
+    export_llm_costs(cur, con)
+
     write_build_meta(con, active_only=active_only)
+
+
+def export_llm_costs(cur, con: sqlite3.Connection) -> None:
+    """Aggregate `jobs_jobpostingschemavariant` into `llm_costs`, one row per day/model.
+
+    Reads the variants table directly, so it covers all history whatever `--active-only`
+    does to `job_postings`. Two choices matter:
+
+    * The day is converted to Bucharest explicitly. The export pins its own session
+      zone, but anything else handing us a cursor (Django's is UTC) would otherwise
+      push the 18:33 cron run's late-evening rows onto the wrong date.
+    * Rows with a NULL cost are skipped. NULL means the provider returned no usage,
+      not that the call was free, and counting it would drag the per-posting average
+      toward zero.
+    """
+    print("Exporting llm_costs...", end=" ", flush=True)
+    cur.execute("""
+        SELECT (created_at AT TIME ZONE 'Europe/Bucharest')::date AS day,
+               provider, model, prompt_version,
+               COUNT(*)                          AS calls,
+               COALESCE(SUM(input_tokens), 0)    AS input_tokens,
+               COALESCE(SUM(output_tokens), 0)   AS output_tokens,
+               SUM(cost_usd)                     AS cost_usd
+        FROM jobs_jobpostingschemavariant
+        WHERE cost_usd IS NOT NULL
+        GROUP BY 1, 2, 3, 4
+        ORDER BY 1, 2, 3, 4
+    """)
+    rows = cur.fetchall()
+    con.executemany(
+        "INSERT INTO llm_costs(day, provider, model, prompt_version, calls, "
+        "input_tokens, output_tokens, cost_usd) VALUES (?,?,?,?,?,?,?,?)",
+        [(fmt_date(r["day"]), r["provider"], r["model"], r["prompt_version"],
+          r["calls"], int(r["input_tokens"]), int(r["output_tokens"]),
+          float(r["cost_usd"])) for r in rows],
+    )
+    print(f"{len(rows)} rows")
 
 
 def git_sha() -> str:

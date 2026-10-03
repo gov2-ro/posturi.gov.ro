@@ -424,6 +424,13 @@ different things: the visible stamp is `MAX(last_seen_at)`, when the source was 
 scraped, while `built_at` is when the file was generated. `source_host` is recorded for
 the deploy to verify against, never rendered.
 
+The export also carries `llm_costs` — one row per Bucharest day, provider, model and
+prompt version, summed from `jobs_jobpostingschemavariant` — which feeds the "Costuri
+inferență" section of `/statistici`. It is not cut down by `--active-only`, and it covers
+the `schema` extraction step only: `infer` and `occupations` record no tokens or cost. A
+variant is upserted, so a re-extracted posting's cost moves to its newest day. An export
+that predates the table makes the section read "Date indisponibile" instead of failing.
+
 ### Continuous deployment
 
 The pipeline runs unattended on a VPS twice a day (11:45 and 18:33 Europe/Bucharest) and

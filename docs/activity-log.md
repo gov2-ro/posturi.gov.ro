@@ -2,6 +2,25 @@
 
 ## 2026
 
+### 2026-10-03 — /statistici shows daily LLM extraction spend
+
+**What:** `/statistici` has a new "Costuri inferență" section: three tiles (total, last 30 days, cost per 100 postings) and a per-day list of the last 30 days with activity. It answers the "make spend visible" half of the cost-baseline backlog item without anyone having to grep logs.
+
+**How:** `export-to-sqlite.py` gains an `llm_costs` table (`day, provider, model, prompt_version, calls, input_tokens, output_tokens, cost_usd`), summed from `jobs_jobpostingschemavariant` by `export_llm_costs()`. The PHP site has no Postgres, so the totals have to ride in the SQLite file. `stats.php` reads it behind a `try/catch (PDOException)`, so an export from before the table existed renders "Date indisponibile" instead of a 500. New helpers `usd_label()` and `postings_label()` (Romanian plural rule, "722 de anunțuri") are in `helpers.php`.
+
+**Non-obvious:**
+- The day is `created_at AT TIME ZONE 'Europe/Bucharest'`, converted in the query rather than trusting the session. A UTC session splits one run across two dates. The 2026-10-03 backfill (821 postings, 00:45–12:29 local) shows as 722 on 10-02 and 99 on 10-03 if grouped in UTC, and as one 10-03 row in the export. `test_day_is_the_bucharest_day_not_the_utc_day` pins it (Django's connection is UTC, so it would fail on a naive `::date`).
+- Rows with a NULL `cost_usd` are skipped, not counted as free: NULL means the provider returned no usage, and counting them would drag the per-100 figure toward zero.
+- The table is **not** a ledger. `write_variant()` upserts on `(posting, provider, model, prompt_version)` and resets `created_at`, so a re-extracted posting's cost moves to the new day and the old spend disappears. The page footnotes this. An append-only ledger is on the backlog.
+- Scope is the `schema` step only. `infer` and `occupations` also call DeepSeek but record nothing, and the footnote says so; the page's total is not the whole bill.
+- The section is on the public page, as requested.
+
+**Checked:** 6 new tests (`webapp/tests/test_llm_costs_export.py`, real Postgres aggregation); full suite 446 passed. A real `--active-only` export into the scratchpad gave 34 rows summing to 5,006 calls and $5.5825 over 2026-05-27 → 2026-10-03, identical to a direct `SELECT` on Postgres. The page's three queries were run in `sqlite3` against that file, and against the old `posturi.sqlite`, where `no such table: llm_costs` is the error the `catch` handles. Every CSS class the section uses already exists in the compiled `static/app.css`, so no `npm run css` was needed.
+
+**Not checked:** the page was not rendered, because this machine has no PHP (and no Docker). Needs one look in a browser after deploy.
+
+**Rollout:** the cron only pushes data (`--data-only`), and code deploys are manual. Either order is safe: new code on an old SQLite shows "Date indisponibile", and new SQLite under old code is ignored. The section appears once both have landed (`./deploy-php.sh --code-only`, then the next cron data push).
+
 ### 2026-10-02 — fetch-index: the listing card became the link; scrape works again, and a 0-card scan now fails
 
 The source changed its listing markup on 2026-09-30: each card is now `<a class="pg-card pg-card--link" href="…/joburi/…">` instead of `<article class="pg-card">` wrapping `a.pg-card-link`, and the deadline countdown (`div.pg-card-deadline`) was removed. `fetch-index.py` now selects `.pg-card` and takes `href` from the card when it is an `<a>`, falling back to the inner link for the old markup. All other card selectors (title, employer, city, published date, tags) still match.

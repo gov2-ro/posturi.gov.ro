@@ -51,6 +51,24 @@ foreach (array_keys(ANOMALY_LABELS) as $flag) {
     $anomaly_counts[$flag] = (int)$stmt->fetchColumn();
 }
 
+// LLM extraction spend (llm_costs is built by export-to-sqlite.py). An export
+// from before the table existed has no such table — show the section as unavailable
+// rather than take the whole page down.
+$llm = null;
+$llm_days = [];
+try {
+    $thirty_ago = date('Y-m-d', strtotime('-30 days'));
+    $llm = db()->query("SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(calls), 0) AS calls, MIN(day) AS since FROM llm_costs")->fetch();
+    $stmt = db()->prepare("SELECT COALESCE(SUM(cost_usd), 0) AS usd FROM llm_costs WHERE day >= ?");
+    $stmt->execute([$thirty_ago]);
+    $llm['usd_30'] = (float)$stmt->fetchColumn();
+    $llm_days = db()->query("SELECT day, SUM(calls) AS calls, SUM(cost_usd) AS usd FROM llm_costs GROUP BY day ORDER BY day DESC LIMIT 30")->fetchAll();
+} catch (PDOException $e) {
+    $llm = null;
+}
+if ($llm !== null && (int)$llm['calls'] === 0) $llm = null;
+$max_llm_day = $llm_days ? max(array_map(fn($d) => (float)$d['usd'], $llm_days)) : 0.0;
+
 $ttl = $total ?: 1;
 
 $page_title = 'Statistici';
@@ -211,6 +229,46 @@ require __DIR__ . '/../inc/header.php';
       </div>
       <?php endforeach; ?>
     </div>
+  </section>
+
+  <!-- LLM extraction spend -->
+  <section class="bg-surface border border-line rounded-lg p-6 mb-8">
+    <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Costuri inferență</h2>
+    <p class="text-xs text-ink-faint mb-4">Extracția structurată a anunțurilor (modelul LLM), în USD, pe zile.</p>
+    <?php if ($llm === null): ?>
+      <p class="text-ink-muted text-sm italic">Date indisponibile.</p>
+    <?php else: ?>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+        <div class="border border-line rounded p-3">
+          <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label((float)$llm['usd'])) ?></div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Total</div>
+          <div class="text-xs text-ink-faint mt-0.5">din <?= e(fmt_date($llm['since'])) ?></div>
+        </div>
+        <div class="border border-line rounded p-3">
+          <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label($llm['usd_30'])) ?></div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Ultimele 30 zile</div>
+        </div>
+        <div class="border border-line rounded p-3 col-span-2 sm:col-span-1">
+          <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label(100 * (float)$llm['usd'] / (int)$llm['calls'])) ?></div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">La 100 de anunțuri</div>
+          <div class="text-xs text-ink-faint mt-0.5"><?= e(postings_label((int)$llm['calls'])) ?> procesate</div>
+        </div>
+      </div>
+      <div class="space-y-1.5">
+        <?php foreach ($llm_days as $d): ?>
+        <div>
+          <div class="flex justify-between text-xs mb-0.5">
+            <span class="font-mono text-ink-muted"><?= e(fmt_date($d['day'])) ?> · <?= e(postings_label((int)$d['calls'])) ?></span>
+            <span class="text-ink-muted font-mono"><?= e(usd_label((float)$d['usd'])) ?></span>
+          </div>
+          <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
+            <div class="h-full bg-gov rounded-full" style="width:<?= $max_llm_day > 0 ? round(100 * (float)$d['usd'] / $max_llm_day) : 0 ?>%"></div>
+          </div>
+        </div>
+        <?php endforeach; ?>
+      </div>
+      <p class="text-xs text-ink-faint mt-4">Fiecare anunț este numărat la data ultimei sale extrageri; o reextragere mută costul pe ziua nouă. Clasificarea și normalizarea ocupațiilor nu sunt incluse.</p>
+    <?php endif; ?>
   </section>
 
 </div>

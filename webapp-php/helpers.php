@@ -64,6 +64,21 @@ function days_label(int $n): string {
     return ($mod === 0 || ($mod >= 20)) ? "$n de zile" : "$n zile";
 }
 
+/** Romanian posting count: 1 anunț · 2–19 anunțuri · 20+ de anunțuri. */
+function postings_label(int $n): string {
+    if ($n === 1) return '1 anunț';
+    $mod = $n % 100;
+    return ($mod === 0 || $mod >= 20) ? "$n de anunțuri" : "$n anunțuri";
+}
+
+/**
+ * US dollars for LLM spend. Daily figures are fractions of a cent per posting, so
+ * below $1 three decimals ($0.095) keep a quiet weekend day from reading as $0.00.
+ */
+function usd_label(float $v): string {
+    return '$' . number_format($v, $v >= 1 ? 2 : 3, '.', ',');
+}
+
 /** Romanian year count: 1 an · 2–19 ani · 20+ de ani. */
 function years_label(int $n): string {
     if ($n === 1) return '1 an';

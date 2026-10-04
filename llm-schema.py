@@ -502,19 +502,29 @@ def make_generator(provider, model, system_prefix, prompt_version):
     return generate
 
 
-def _selection_where(slug_filter=None, active_only=False, resume_key=None):
+def _selection_where(slug_filter=None, active_only=False, resume_key=None,
+                     upgrade_legacy=False):
     """Build the shared WHERE clause for posting selection.
 
     Returns (sql_fragment, params) — used by both iter_postings and
     count_postings so the progress total always matches what is processed.
 
     `resume_key` is a (provider, model, prompt_version) triple. With it, a
-    posting is skipped only when its PRODUCTION extraction is current: the
-    same key, and the source revision it was extracted from still matches the
-    posting's current content hash (FIX-03/FIX-05). Either side empty — legacy
-    provenance or a legacy hash — means "cannot prove current", so the row is
-    selected for upgrade. Without it (a plain run), the old behaviour stands:
-    any non-null schema_json is skipped unless --force.
+    posting with a PRODUCTION extraction is re-paid only when that extraction
+    is provably stale (FIX-03/FIX-05, REV-07):
+      - the source changed: its recorded revision and the posting's current
+        content hash are both known and differ; or
+      - the configuration changed: the row has provenance and a different
+        provider/model/prompt version.
+    Unknown is not stale. A row with no provenance (extracted before migration
+    0014) or no hash on either side is skipped — selecting those made the
+    unattended --resume run a full paid backfill of every active posting, and
+    re-select the unhashed ones on every run. Upgrading legacy rows is the
+    reviewed FIX-05-RUN step, opted into with `upgrade_legacy`. A confirmed
+    source change on a legacy row still gets it re-extracted: import stamps
+    the pre-change hash as its revision (import_csvs.invalidate_enrichment).
+    Without `resume_key` (a plain run) any non-null schema_json is skipped
+    unless --force.
     """
     conds, params = [], []
     if slug_filter:
@@ -524,22 +534,22 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None):
         conds.append("expires_at >= CURRENT_DATE")
     if resume_key:
         provider, model, prompt_version = resume_key
+        jp = "jobs_jobposting"
         conds.append(
-            "NOT (jobs_jobposting.schema_json IS NOT NULL "
-            "AND jobs_jobposting.schema_provider = %s "
-            "AND jobs_jobposting.schema_model = %s "
-            "AND jobs_jobposting.schema_prompt_version = %s "
-            "AND jobs_jobposting.schema_source_revision != '' "
-            "AND jobs_jobposting.detail_content_hash != '' "
-            "AND jobs_jobposting.schema_source_revision "
-            "= jobs_jobposting.detail_content_hash)"
+            f"({jp}.schema_json IS NULL"
+            f" OR ({jp}.schema_source_revision != '' AND {jp}.detail_content_hash != ''"
+            f"     AND {jp}.schema_source_revision != {jp}.detail_content_hash)"
+            f" OR ({jp}.schema_provider != '' AND ({jp}.schema_provider != %s"
+            f"     OR {jp}.schema_model != %s OR {jp}.schema_prompt_version != %s))"
+            + (f" OR {jp}.schema_provider = ''" if upgrade_legacy else "")
+            + ")"
         )
         params.extend([provider, model, prompt_version])
     return (" WHERE " + " AND ".join(conds) if conds else ""), params
 
 
 def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
-                  active_only=False, resume_key=None):
+                  active_only=False, resume_key=None, upgrade_legacy=False):
     """Yield (posting_id, url, content_hash, combined_content) rows needing schema work.
 
     Combines body_markdown (web page text) and attachment_text (extracted from
@@ -550,7 +560,7 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
     under resume_key, where the WHERE clause already encodes revision-aware
     currency and stale production rows must be yielded, not skipped here.
     """
-    where, params = _selection_where(slug_filter, active_only, resume_key)
+    where, params = _selection_where(slug_filter, active_only, resume_key, upgrade_legacy)
     with conn.cursor() as cur:
         # Newest first, so `--limit N` means "the N most recent postings" and is
         # reproducible. Without an ORDER BY it returned whatever Postgres
@@ -578,9 +588,10 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
                 yield row_id, url, content_hash or "", content
 
 
-def count_postings(conn, slug_filter=None, force=False, active_only=False, resume_key=None):
+def count_postings(conn, slug_filter=None, force=False, active_only=False, resume_key=None,
+                   upgrade_legacy=False):
     """Return the number of postings that iter_postings would yield."""
-    where, params = _selection_where(slug_filter, active_only, resume_key)
+    where, params = _selection_where(slug_filter, active_only, resume_key, upgrade_legacy)
     if not force and resume_key is None:
         where += (" AND " if where else " WHERE ") + "schema_json IS NULL"
     with conn.cursor() as cur:
@@ -779,6 +790,10 @@ if __name__ == '__main__':
     parser.add_argument('--resume', action='store_true',
                         help='Skip postings that already have a variant row for this exact '
                              'provider/model/prompt-version. Makes an interrupted run restartable.')
+    parser.add_argument('--upgrade-legacy', action='store_true',
+                        help='With --resume: also re-extract production rows that have no '
+                             'provenance (extracted before migration 0014). This is the paid '
+                             'FIX-05-RUN backfill — run it deliberately, never from the cron.')
     parser.add_argument('--max-failure-share', type=float, default=0.5, metavar='F',
                         help='Exit non-zero when more than this share of attempted postings '
                              'fails (default: %(default)s). A provider-wide fatal error '
@@ -834,6 +849,7 @@ if __name__ == '__main__':
                 force=force_flag,
                 active_only=args.active_only,
                 resume_key=resume_key,
+                upgrade_legacy=args.upgrade_legacy and resume_key is not None,
             )
             total = count_postings(conn, **selection)
             if args.limit:

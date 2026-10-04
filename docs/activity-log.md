@@ -2,6 +2,32 @@
 
 ## 2026
 
+### 2026-10-04 — REV-12: stop the cron's `--resume` from re-paying for every active posting
+
+**What:** FIX-05 made `--resume` select any production row whose provenance
+or hash was empty ("cannot prove current"). Migration 0014 adds those columns
+empty, and the bounded refresh hashes only 200 pages per run, so the first
+unattended run after `migrate` would have re-extracted every active posting
+(~2,250 on the live data) and every later run would have re-paid for the
+active rows not yet hashed — an unreviewed paid backfill, which the FIX-05 spec
+reserves for FIX-05-RUN. `--resume` now re-pays only for provable staleness: no
+schema; recorded revision and current hash both known and different; or
+recorded provenance with a different provider/model/prompt. Legacy rows are
+upgraded only with the new `--upgrade-legacy` flag. To keep REV-07 complete,
+a confirmed source change at import stamps the pre-change hash on extractions
+that carry no revision, which makes them provably stale.
+
+**Validation:** a selection-matrix test runs the real SQL against PostgreSQL for
+seven states, with and without `--upgrade-legacy`; an import test covers the
+stamping. Full suite 564 passed. Local copy (stale, 374 active): old rule 374,
+new rule 17 — exactly the active rows with no schema.
+
+**Rollout:** this must reach the VPS together with (or before) `480e7e3` and
+migration 0014. The FIX-05-RUN backfill command becomes
+`python llm-schema.py --active-only --resume --upgrade-legacy --prompt-version v4 --workers 8`.
+
+---
+
 ### 2026-10-04 — REV-06(a): adopt legacy downloads instead of re-fetching them
 
 **What:** `download_file()` treated a valid pre-manifest ("cached-legacy") file

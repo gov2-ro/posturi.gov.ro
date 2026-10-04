@@ -308,7 +308,8 @@ python llm-schema.py --prompt-version v3 --workers 8 --resume
 ```
 
 - `--workers N` (default 4) — concurrent LLM calls; database writes stay single-threaded. Measured 5.13 s/post at 4 workers against 15–20 s sequential.
-- `--resume` — revision-aware: skips a posting only when its production extraction has this exact provider/model/prompt-version *and* was made from the posting's current content hash. Stale rows and legacy rows with no recorded revision or hash are re-extracted.
+- `--resume` — re-pays only for provably stale extractions: no schema yet; a recorded source revision that differs from the posting's current content hash (both known); or recorded provenance with a different provider/model/prompt-version. Unknown is not stale — rows extracted before migration 0014 (no provenance) and rows whose page has not been hashed yet are skipped, so the unattended run never turns into a backfill. A confirmed source change still re-extracts a legacy row: import stamps its pre-change hash.
+- `--upgrade-legacy` — with `--resume`, also re-extracts production rows that have no provenance. This is the reviewed, paid FIX-05-RUN backfill (`python llm-schema.py --active-only --resume --upgrade-legacy --prompt-version v4 --workers 8`); never put it in the cron.
 - `--max-attempts N` (default 4) — transient errors (429/5xx/timeout) back off exponentially; invalid output gets one repair attempt that shows the model its own validation error.
 
 Exit status: `0` healthy (an empty selection is a healthy no-op); `1` a model failed on more than `--max-failure-share` (default 0.5) of its attempted postings, or was selected work it could not attempt (every body empty); `2` a provider-wide fatal error (HTTP 401/402/403), after which no new calls are scheduled. Each model's run summary is appended to `data/pipeline-runs.jsonl` as `kind: "llm-schema"`.

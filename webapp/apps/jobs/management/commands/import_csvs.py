@@ -199,23 +199,33 @@ def unique_slug(name: str, model, taken: set[str], max_len: int = 240) -> str:
 STALE_MARKER = "stale_revision"
 
 
-def invalidate_enrichment(posting: JobPosting, prev_hash: str, new_hash: str) -> bool:
+def invalidate_enrichment(posting: JobPosting, prev_hash: str, new_hash: str) -> list[str]:
     """REV-07: requeue what was derived from a detail page that changed.
 
     Only a confirmed change counts — both hashes known and different. A legacy
     row (no previous hash) or a fetch without one is "unknown", and requeueing
-    those would turn the first production refresh into a full re-run. Schema
-    extraction needs nothing here: `llm-schema.py --resume` already compares its
-    recorded source revision with `detail_content_hash`. Occupation and salary
-    recompute every row on each run. That leaves attachment text (refilled by
-    extract_attachments from the cache, which the download step updated from the
-    new links) and inference.
+    those would turn the first production refresh into a full re-run.
+
+    Schema extraction is re-paid by `llm-schema.py --resume` when its recorded
+    source revision and `detail_content_hash` are both known and differ. An
+    extraction with no recorded revision (legacy, or made before the page was
+    first hashed) is stamped with the pre-change hash: it was certainly not made
+    from the new content, so --resume now sees it as provably stale. Occupation
+    and salary recompute every row on each run. That leaves attachment text
+    (refilled by extract_attachments from the cache, which the download step
+    updated from the new links) and inference.
+
+    Returns the extra fields to save — empty when nothing was invalidated.
     """
     if not (prev_hash and new_hash and prev_hash != new_hash):
-        return False
+        return []
     posting.attachment_text = ""
     posting.inferred = {**(posting.inferred or {}), STALE_MARKER: new_hash}
-    return True
+    fields = ["attachment_text", "inferred"]
+    if posting.schema_json is not None and not posting.schema_source_revision:
+        posting.schema_source_revision = prev_hash
+        fields.append("schema_source_revision")
+    return fields
 
 
 class Command(BaseCommand):
@@ -464,8 +474,8 @@ class Command(BaseCommand):
                         "data_rezultate_finale", "updated_at",
                         "detail_fetched_at", "detail_content_hash", "cancelled",
                     ]
-                    if invalidate_enrichment(posting, prev_hash, detail_hash):
-                        fields += ["attachment_text", "inferred"]
+                    if extra := invalidate_enrichment(posting, prev_hash, detail_hash):
+                        fields += extra
                         revised += 1
                     posting.save(update_fields=fields)
                     detail_ids.add(posting.pk)

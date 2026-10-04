@@ -663,3 +663,18 @@ class TestRevisionInvalidation:
         posting = JobPosting.objects.get(url=self.URL)
         assert "stale_revision" not in posting.inferred
         assert posting.inferred.get("profession_family")
+
+    @pytest.mark.django_db(transaction=True)
+    def test_source_change_stamps_unrevisioned_extractions_stale(self, import_env):
+        tmp_path, call_command = import_env
+        posting = self._import(tmp_path, call_command, "a" * 64)
+        # A legacy extraction: schema present, no provenance, no revision.
+        JobPosting.objects.filter(pk=posting.pk).update(schema_json={"x": 1})
+
+        posting = self._import(tmp_path, call_command, "b" * 64)
+        assert posting.schema_source_revision == "a" * 64, "pre-change hash recorded"
+        assert posting.schema_source_revision != posting.detail_content_hash
+
+        # An unchanged re-import leaves a revisioned row alone.
+        posting = self._import(tmp_path, call_command, "b" * 64)
+        assert posting.schema_source_revision == "a" * 64

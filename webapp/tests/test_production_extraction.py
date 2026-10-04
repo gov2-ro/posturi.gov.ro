@@ -72,6 +72,61 @@ class TestRevisionAwareSelection:
         assert "schema_provider" not in where
 
 
+KEY = ("deepseek", "deepseek-chat", "v3")
+
+
+class TestResumeSelectsOnlyProvablyStale:
+    """REV-12 rollout guard: migration 0014 leaves every existing extraction
+    with empty provenance. The unattended `--resume` run must not treat that
+    as stale — it would re-pay for every active posting, and keep re-paying
+    for the ones the bounded refresh has not hashed yet."""
+
+    CASES = {
+        # name: (fields, selected_without_flag, selected_with_upgrade_legacy)
+        "no schema": (dict(schema_json=None), True, True),
+        "legacy provenance": (dict(), False, True),
+        "legacy, source change stamped at import":
+            (dict(schema_source_revision="a", detail_content_hash="b"), True, True),
+        "current, unhashed revision": (dict(provider=True, detail_content_hash="h"), False, False),
+        "current, same revision":
+            (dict(provider=True, schema_source_revision="a", detail_content_hash="a"), False, False),
+        "source changed":
+            (dict(provider=True, schema_source_revision="a", detail_content_hash="b"), True, True),
+        "other prompt version": (dict(provider=True, schema_prompt_version="v2"), True, True),
+    }
+
+    def _make(self, i, fields):
+        from apps.jobs.models import Employer, JobPosting
+        employer, _ = Employer.objects.get_or_create(name="Primăria Test", defaults={"slug": "primaria-test"})
+        f = dict(fields)
+        provider = f.pop("provider", False)
+        defaults = dict(
+            url=f"https://posturi.gov.ro/joburi/resume-{i}/", title="Referent", employer=employer,
+            schema_json={"responsibilities": "x"},
+            schema_provider=KEY[0] if provider else "",
+            schema_model=KEY[1] if provider else "",
+            schema_prompt_version=KEY[2] if provider else "",
+        )
+        defaults.update(f)
+        return JobPosting.objects.create(**defaults)
+
+    def _selected(self, llm, upgrade_legacy):
+        from django.db import connection
+        where, params = llm._selection_where(resume_key=KEY, upgrade_legacy=upgrade_legacy)
+        with connection.cursor() as cur:
+            cur.execute("SELECT url FROM jobs_jobposting" + where, params)
+            return {r[0] for r in cur.fetchall()}
+
+    @pytest.mark.django_db
+    def test_selection_matrix(self, llm):
+        made = {name: self._make(i, fields).url
+                for i, (name, (fields, _, _)) in enumerate(self.CASES.items())}
+        plain, upgrade = self._selected(llm, False), self._selected(llm, True)
+        for name, (_, want_plain, want_upgrade) in self.CASES.items():
+            assert (made[name] in plain) is want_plain, f"--resume: {name}"
+            assert (made[name] in upgrade) is want_upgrade, f"--resume --upgrade-legacy: {name}"
+
+
 # ------------------------------------------------------- production provenance
 
 

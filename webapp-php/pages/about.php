@@ -63,8 +63,19 @@ require __DIR__ . '/../inc/header.php';
 <?php if ($_bm && $_bt): ?>
     <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs font-mono
                bg-sunken border border-line rounded p-4 my-4">
-      <dt class="text-ink-faint">Generată la</dt>
+      <dt class="text-ink-faint">Bază generată</dt>
       <dd class="text-ink"><?= e($_bt) ?> <span class="text-ink-faint">(ora României)</span></dd>
+
+      <dt class="text-ink-faint">Sursă verificată</dt>
+      <dd class="text-ink">
+        <?php if (!empty($_bm['detail_fetched_at_max'])): ?>
+          <?= fmt_date($_bm['detail_fetched_at_max']) ?>
+          <span class="text-ink-faint">— data la care pagina anunțului a fost citită cu succes, direct de la sursă</span>
+        <?php else: ?>
+          <span class="text-note-ink">neverificată</span>
+          <span class="text-ink-faint">— acest export nu conține încă observații de sursă (metadatele au apărut pe 04.10.2026)</span>
+        <?php endif; ?>
+      </dd>
 
       <dt class="text-ink-faint">Anunțuri active</dt>
       <dd class="text-ink"><?= number_format((int) $_bm['job_postings'], 0, ',', '.') ?></dd>
@@ -76,18 +87,27 @@ require __DIR__ . '/../inc/header.php';
       <dd class="text-ink"><?= number_format((int) $_bm['calendar_events'], 0, ',', '.') ?></dd>
 
 <?php if (!empty($_bm['git_sha'])): ?>
-      <dt class="text-ink-faint">Cod sursă</dt>
+      <dt class="text-ink-faint">Versiune date</dt>
       <dd>
         <a href="https://github.com/gov2-ro/posturi.gov.ro/commit/<?= e($_bm['git_sha']) ?>"
            class="text-gov hover:underline" target="_blank" rel="noopener"><?= e($_bm['git_sha']) ?></a>
+        <span class="text-ink-faint">— commit-ul care a construit baza de date</span>
+      </dd>
+<?php endif; ?>
+<?php if (code_version() !== ''): ?>
+      <dt class="text-ink-faint">Versiune cod</dt>
+      <dd>
+        <a href="https://github.com/gov2-ro/posturi.gov.ro/commit/<?= e(code_version()) ?>"
+           class="text-gov hover:underline" target="_blank" rel="noopener"><?= e(code_version()) ?></a>
+        <span class="text-ink-faint">— commit-ul care a construit site-ul servit acum</span>
       </dd>
 <?php endif; ?>
     </dl>
     <p class="text-xs text-ink-muted">
-      „Date actualizate la” din subsol arată ziua ultimei verificări a anunțurilor la sursă,
-      urmată de ora la care s-a încheiat rularea care a construit fișierul servit acum —
-      aceeași oră cu „Generată la” de mai sus. În mod normal verificarea și construcția au
-      loc în aceeași zi; când nu, sursa nu a putut fi citită la ultima rulare.
+      „Bază generată” este momentul în care fișierul de date servit acum a fost construit.
+      „Sursă verificată” este ultima citire cu succes a paginii anunțului direct de pe
+      posturi.gov.ro — cele două sunt fapte diferite și apar separat. O bază proaspăt
+      generată nu înseamnă că sursa a fost citită azi, și invers.
     </p>
 <?php else: ?>
     <p class="text-xs text-ink-muted">

@@ -36,6 +36,7 @@ deploy_code=1
 deploy_data=1
 do_export=1
 dry_run=0
+verify_only=0
 positional=()
 
 for arg in "$@"; do
@@ -44,6 +45,7 @@ for arg in "$@"; do
         --data-only) deploy_code=0 ;;
         --no-export) do_export=0 ;;
         --dry-run)   dry_run=1 ;;
+        --verify)    verify_only=1 ;;
         -h|--help)   sed -n '2,20p' "$0"; exit 0 ;;
         -*)          echo "Unknown flag: $arg" >&2; exit 2 ;;
         *)           positional+=("$arg") ;;
@@ -87,6 +89,85 @@ if [[ $dry_run -eq 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Version markers (FIX-06)
+# ---------------------------------------------------------------------------
+# The CODE marker is stamped from git at code-deploy time, so the served
+# /versiuni.json always names the exact checkout the host is running. Data-only
+# pushes never touch it; code-only pushes never touch the data marker.
+
+code_sha() {
+    git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo ""
+}
+
+local_data_built_at() {
+    sqlite3 "$DB_FILE" "SELECT built_at FROM build_meta WHERE id=1;" 2>/dev/null || true
+}
+
+# Fetch the served /versiuni.json with cache bypass and print one field:
+#   served_marker code            → the code SHA the host serves
+#   served_marker data.built_at   → the data built_at the host serves
+served_marker() {
+    [ -n "$SITE_URL" ] || { echo ""; return; }
+    curl -fsS -H 'Cache-Control: no-cache' --max-time 30 \
+        "${SITE_URL%/}/versiuni.json" 2>/dev/null \
+        | "$PYTHON" -c "
+import json, sys
+d = json.load(sys.stdin)
+for key in '$1'.split('.'):
+    if d is None: break
+    d = d.get(key)
+print(d or '')" 2>/dev/null || true
+}
+
+# Bounded retry: the shared host may serve the previous file for a moment.
+verify_marker() {  # $1 = field, $2 = expected, $3 = label
+    local field="$1" expected="$2" label="$3" got=""
+    [ -n "$expected" ] || { echo "    (no local $label marker to compare — skipped)"; return 0; }
+    for attempt in 1 2 3 4 5; do
+        got="$(served_marker "$field")"
+        [ "$got" = "$expected" ] && break
+        sleep 5
+    done
+    if [ "$got" != "$expected" ]; then
+        echo "    ✗ $label mismatch: served '$got', expected '$expected'"
+        return 1
+    fi
+    echo "    ✓ $label verified: $expected"
+    return 0
+}
+
+
+# --verify: nothing is pushed — report the drift between this checkout/build
+# and what the host serves, and exit non-zero when a release is pending.
+# Placed after the marker helpers below; defined here for readability.
+if [[ $verify_only -eq 1 ]]; then
+    [[ -n "$SITE_URL" ]] || die "--verify needs SITE_URL"
+    echo "==> Comparing local markers against ${SITE_URL} (nothing is pushed)"
+    drift=0
+    local_code="$(code_sha)"
+    served_code="$(served_marker code)"
+    if [[ -z "$local_code" ]]; then
+        echo "    local code marker: none (outside a git checkout)"
+    elif [[ "$local_code" != "$served_code" ]]; then
+        echo "    ✗ CODE release pending: local $local_code, served ${served_code:-none}"
+        drift=1
+    else
+        echo "    ✓ code in sync: $local_code"
+    fi
+    local_built="$(local_data_built_at)"
+    served_built="$(served_marker data.built_at)"
+    if [[ -z "$local_built" ]]; then
+        echo "    local data marker: none (no local build_meta)"
+    elif [[ "$local_built" != "$served_built" ]]; then
+        echo "    ✗ DATA release pending: local built $local_built, served ${served_built:-none}"
+        drift=1
+    else
+        echo "    ✓ data in sync: built $local_built"
+    fi
+    exit $drift
+fi
+
+# ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
 
@@ -121,6 +202,11 @@ rsync_common=(-avz --no-perms --no-owner --no-group --omit-dir-times)
 if [[ $dry_run -eq 1 ]]; then rsync_common+=(--dry-run); fi
 
 if [[ $deploy_code -eq 1 ]]; then
+    # Stamp the code marker before the push; the file is gitignored, so a
+    # checkout without it simply has no marker until its first code deploy.
+    if [[ $dry_run -eq 0 ]]; then
+        code_sha > "$SCRIPT_DIR/webapp-php/static/code-version.txt"
+    fi
     echo "==> Deploying code (PHP, static, .htaccess)"
     # Excluding *.sqlite* also protects it from --delete: the live database is not
     # ours to remove, and assets/, router.php and tests/ are development-only —
@@ -153,7 +239,7 @@ if [[ $deploy_data -eq 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Verify
+# Verify — the served markers, not just an HTTP 200
 # ---------------------------------------------------------------------------
 
 if [[ $dry_run -eq 0 && -n "$SITE_URL" ]]; then
@@ -161,6 +247,15 @@ if [[ $dry_run -eq 0 && -n "$SITE_URL" ]]; then
     code=$(curl -fsS -o /dev/null -w '%{http_code}' --max-time 30 "$SITE_URL" || echo "000")
     [[ "$code" == "200" ]] || die "site returned HTTP ${code} after deploy"
     echo "    HTTP 200"
+
+    verify_failed=0
+    if [[ $deploy_code -eq 1 ]]; then
+        verify_marker code "$(code_sha)" "code" || verify_failed=1
+    fi
+    if [[ $deploy_data -eq 1 ]]; then
+        verify_marker "data.built_at" "$(local_data_built_at)" "data built_at" || verify_failed=1
+    fi
+    [[ $verify_failed -eq 0 ]] || die "served version markers do not match this push"
 fi
 
 echo "==> Done."

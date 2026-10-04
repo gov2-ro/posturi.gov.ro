@@ -64,3 +64,4 @@ node_modules/
 # Playwright output (browser traces and reports)
 test-results/
 playwright-report/
+webapp-php/static/code-version.txt

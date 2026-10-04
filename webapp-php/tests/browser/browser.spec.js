@@ -20,6 +20,21 @@ test('no horizontal overflow', async ({ page }) => {
   expect(detailOverflow).toBeLessThanOrEqual(1);
 });
 
+// ---- Every width: freshness copy is honest (FIX-06) ----
+test('freshness stamps separate build from source check', async ({ page }) => {
+  await page.goto('/despre/');
+  // The fixture build_meta carries real provenance: build time, source check
+  // and index check as three distinct facts, labelled as such.
+  await expect(page.locator('body')).toContainText('Bază generată');
+  await expect(page.locator('body')).toContainText('Sursă verificată');
+  await expect(page.locator('body')).toContainText('03.10.2026');
+  // The old combined claim is gone.
+  await expect(page.locator('body')).not.toContainText('Date actualizate la');
+  // Footer says the same thing as the page.
+  await page.goto('/');
+  await expect(page.locator('footer')).toContainText('Bază de date generată');
+});
+
 // ---- Every width: countdown and printed date agree on the result row ----
 test('result row shows one deadline', async ({ page }) => {
   await page.goto('/');

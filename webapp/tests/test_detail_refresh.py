@@ -340,6 +340,87 @@ class TestParseProvenance:
         assert rows[0]["Detail Content Hash"] == "b" * 64
 
 
+# ---------------------------------------------------------------- FIX-06 pieces
+
+
+@pytest.fixture(scope="module")
+def indexmod():
+    return _load_module("fetch_index_under_test", "fetch-index.py")
+
+
+@pytest.fixture(scope="module")
+def exportmod():
+    return _load_module("export_sqlite_fix06_under_test", "export-to-sqlite.py")
+
+
+class TestScanStamp:
+    def test_stamp_written_atomically_with_outcome(self, indexmod, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        indexmod.write_scan_stamp(pages_scanned=9, pages_total=12, early_stopped=True,
+                                  cards=40, new=2, updated=1, outcome="partial-early-stop")
+        stamp = json.loads((tmp_path / "data" / "index-scan.json").read_text())
+        assert stamp["outcome"] == "partial-early-stop"
+        assert stamp["early_stopped"] is True
+        assert stamp["checked_at"]  # a real UTC stamp
+        assert not list(tmp_path.rglob("*.tmp")), "atomic write leaves no temp"
+
+    def test_complete_scan_stamps_complete(self, indexmod, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        indexmod.write_scan_stamp(pages_scanned=12, pages_total=12, early_stopped=False,
+                                  cards=40, new=2, updated=1, outcome="complete")
+        stamp = json.loads((tmp_path / "data" / "index-scan.json").read_text())
+        assert stamp["outcome"] == "complete"
+
+
+class TestBuildMetaProvenance:
+    def test_read_index_scan_tolerates_absence_and_garbage(self, exportmod, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert exportmod.read_index_scan() == {}
+        (tmp_path / "data").mkdir()
+        (tmp_path / "data" / "index-scan.json").write_text("not json", encoding="utf-8")
+        assert exportmod.read_index_scan() == {}
+
+    def test_write_build_meta_records_run_and_source_observations(self, exportmod, tmp_path, monkeypatch):
+        import sqlite3
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "data").mkdir()
+        (tmp_path / "data" / "index-scan.json").write_text(json.dumps({
+            "checked_at": "2026-10-04T06:00:00+00:00", "pages_scanned": 12,
+            "early_stopped": False, "cards": 40, "new": 2, "updated": 1,
+            "outcome": "complete",
+        }), encoding="utf-8")
+
+        con = sqlite3.connect(":memory:")
+        con.executescript("""
+            CREATE TABLE build_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                built_at TEXT NOT NULL, git_sha TEXT NOT NULL DEFAULT '',
+                source_host TEXT NOT NULL DEFAULT '', active_only INTEGER NOT NULL DEFAULT 0,
+                job_postings INTEGER NOT NULL DEFAULT 0, employers INTEGER NOT NULL DEFAULT 0,
+                calendar_events INTEGER NOT NULL DEFAULT 0,
+                run_id TEXT NOT NULL DEFAULT '', index_checked_at TEXT,
+                index_scan_pages INTEGER, index_scan_complete INTEGER NOT NULL DEFAULT 0,
+                detail_fetched_at_max TEXT, detail_fetched_rows INTEGER
+            );
+            CREATE TABLE job_postings (id INTEGER PRIMARY KEY);
+            CREATE TABLE employers (id INTEGER PRIMARY KEY);
+            CREATE TABLE calendar_events (id INTEGER PRIMARY KEY);
+        """)
+        exportmod.write_build_meta(
+            con, active_only=True, run_id="run-42",
+            detail_fetched_at_max="2026-10-04T05:00:00+00:00", detail_fetched_rows=37,
+        )
+        row = con.execute("SELECT * FROM build_meta WHERE id = 1").fetchone()
+        cols = [d[0] for d in con.execute("SELECT * FROM build_meta LIMIT 0").description]
+        meta = dict(zip(cols, row))
+        assert meta["run_id"] == "run-42"
+        assert meta["index_checked_at"] == "2026-10-04T06:00:00+00:00"
+        assert meta["index_scan_complete"] == 1
+        assert meta["detail_fetched_at_max"] == "2026-10-04T05:00:00+00:00"
+        assert meta["detail_fetched_rows"] == 37
+
+
 # ---------------------------------------------------------------- import side
 
 

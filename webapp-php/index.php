@@ -47,6 +47,8 @@ $_GET = $valid_params;
 if ($uri === '/posturi.json') { require __DIR__ . '/feeds/jobs.json.php';  exit; }
 if ($uri === '/posturi.atom') { require __DIR__ . '/feeds/jobs.atom.php';  exit; }
 if ($uri === '/posturi.ics')  { require __DIR__ . '/feeds/jobs.ics.php';   exit; }
+// Version marker endpoint — the deploy verifies against it (FIX-06).
+if ($uri === '/versiuni.json') { require __DIR__ . '/feeds/versiuni.json.php'; exit; }
 
 // Crawler surface
 if ($uri === '/robots.txt') { require __DIR__ . '/pages/robots.php';  exit; }

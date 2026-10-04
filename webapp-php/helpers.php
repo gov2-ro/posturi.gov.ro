@@ -256,8 +256,9 @@ function build_time(string $fmt = 'd.m.Y, H:i'): string {
 
 /**
  * Tooltip text for the "actualizat" stamps in the header and footer. The visible
- * stamp is the scrape date plus the build's time-of-day; this adds the row count
- * and commit behind it. `source_host` is deliberately not exposed — infrastructure.
+ * stamp is the database generation time; the tooltip adds the row count, the
+ * data-artifact commit and the deployed code marker. `source_host` is
+ * deliberately not exposed — infrastructure.
  */
 function build_tooltip(): string {
     $when = build_time();
@@ -268,9 +269,56 @@ function build_tooltip(): string {
         $parts[] = number_format((int) $meta['job_postings'], 0, ',', '.') . ' anunțuri active';
     }
     if (!empty($meta['git_sha'])) {
-        $parts[] = 'cod ' . $meta['git_sha'];
+        $parts[] = 'date @ ' . $meta['git_sha'];
+    }
+    if (!empty($meta['run_id'])) {
+        $parts[] = 'rulare ' . $meta['run_id'];
+    }
+    if (code_version() !== '') {
+        $parts[] = 'cod ' . code_version();
     }
     return implode(' · ', $parts);
+}
+
+/**
+ * The deployed CODE version, stamped by deploy-php.sh from the git SHA at code
+ * deploy time (webapp-php/static/code-version.txt). Data-only pushes never
+ * touch it, code-only pushes never touch the data marker — the two drift apart
+ * exactly when a code release is pending, which ops/check-served-version
+ * (deploy-php.sh --verify) surfaces. '' when running from a checkout without a
+ * stamp.
+ */
+function code_version(): string {
+    static $version = false;
+    if ($version === false) {
+        $path = __DIR__ . '/static/code-version.txt';
+        $version = is_file($path) ? trim((string)@file_get_contents($path)) : '';
+    }
+    return $version;
+}
+
+/** How stale a source-verification observation is before the UI says so. */
+const SOURCE_CHECK_STALE_HOURS = 48;
+
+/**
+ * The last real successful detail retrieval (build_meta.detail_fetched_at_max),
+ * rendered honestly: a date when known, an explicit "neverificat" when not, and
+ * a visible stale marker when the observation is old. Null when the export
+ * predates provenance — nothing to claim either way.
+ */
+function source_check_label(): ?string {
+    $meta = build_meta();
+    if (!$meta) return null;
+    $at = $meta['detail_fetched_at_max'] ?? '';
+    if ($at === '' || $at === null) return 'sursă neverificată';
+    try {
+        $when = (new DateTime($at))->setTimezone(new DateTimeZone('Europe/Bucharest'));
+    } catch (Exception $e) {
+        return 'sursă neverificată';
+    }
+    $label = 'sursă verificată ' . $when->format('d.m.Y');
+    $age_h = (time() - $when->getTimestamp()) / 3600;
+    return $age_h > SOURCE_CHECK_STALE_HOURS ? $label . ' (depășită)' : $label;
 }
 
 // ---- Salary / fee renderers ----

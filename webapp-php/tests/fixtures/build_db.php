@@ -134,7 +134,13 @@ CREATE TABLE build_meta (
     active_only     INTEGER NOT NULL DEFAULT 0,
     job_postings    INTEGER NOT NULL DEFAULT 0,
     employers       INTEGER NOT NULL DEFAULT 0,
-    calendar_events INTEGER NOT NULL DEFAULT 0
+    calendar_events INTEGER NOT NULL DEFAULT 0,
+    run_id                  TEXT NOT NULL DEFAULT '',
+    index_checked_at        TEXT,
+    index_scan_pages        INTEGER,
+    index_scan_complete     INTEGER NOT NULL DEFAULT 0,
+    detail_fetched_at_max   TEXT,
+    detail_fetched_rows     INTEGER
 );
 CREATE VIRTUAL TABLE job_postings_fts USING fts5(
     title, employer_name, judet_name, body_text,
@@ -352,7 +358,10 @@ SQL);
         $fts->execute([$r['id'], $r['title'], $r['employer_name'], $r['judet_name'], strip_tags($r['body_markdown'])]);
     }
 
-    $db->exec("INSERT INTO build_meta (id, built_at, git_sha, source_host, active_only, job_postings, employers, calendar_events)
-        VALUES (1, '2026-10-03 09:00:00', 'fixture', 'fixture-host', 1, 38, 3, 4)");
+    $db->exec("INSERT INTO build_meta (id, built_at, git_sha, source_host, active_only, job_postings, employers,
+        calendar_events, run_id, index_checked_at, index_scan_pages, index_scan_complete,
+        detail_fetched_at_max, detail_fetched_rows)
+        VALUES (1, '2026-10-03 09:00:00', 'fixture-data-sha', 'fixture-host', 1, 38, 3, 4,
+        'fixture-run-1', '2026-10-03 08:30:00', 12, 1, '2026-10-03T09:00:00+00:00', 8)");
     $db->exec("INSERT INTO llm_costs VALUES ('2026-10-02', 'openrouter', 'fixture-model', 'v4', 3, 12000, 900, 0.01)");
 }

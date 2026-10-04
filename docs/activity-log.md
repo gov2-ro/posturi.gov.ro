@@ -2,6 +2,49 @@
 
 ## 2026
 
+### 2026-10-04 — FIX-06: truthful freshness and deployed-version markers
+
+**What:** The site no longer presents a cached import date as source
+verification. The visible stamp is now the DATABASE GENERATION time
+(`built_at`, full precision, Bucharest) labelled "bază generată"; the source
+check is a separate observation — `build_meta.detail_fetched_at_max`, written
+only from real successful detail retrievals (FIX-03) — shown as "sursă
+verificată <data>" with a visible "(depășită)" past 48h, or "sursă
+neverificată" when the export has no observations. Header, footer, tooltip and
+/despre/ were rewritten to keep build / source-check / data-version / code
+-version as distinct facts; old exports render without a 500 and without false
+claims. New `/versiuni.json` endpoint exposes `{code, data{built_at, run_id,
+git_sha, postings, detail_fetched_at_max, index_checked_at, …}}` — no
+source_host, no-store. The export's build_meta now carries `run_id`
+(POSTURI_RUN_ID), the index scan stamp (`data/index-scan.json`, written by
+fetch-index.py with pages scanned / early-stopped / outcome — including
+`failed-zero-cards` before the existing loud exit) and the detail-fetch
+aggregates over the exported slice. `deploy-php.sh` stamps the CODE marker
+(`webapp-php/static/code-version.txt`, gitignored) from git at code-deploy
+time — data-only pushes never touch it and vice versa — and after every push
+verifies the SERVED markers with cache-bypass and bounded retry (code SHA on
+code pushes, built_at on data pushes); HTTP 200 alone no longer certifies a
+deploy. `deploy-php.sh --verify` compares local vs served markers and exits
+non-zero when a code or data release is pending. record-deploy still marks the
+verified deploy for FIX-04's baselines.
+
+**Validation:** 4 new Python tests (scan stamp atomicity/outcomes, malformed
+stamp tolerance, build_meta provenance write), request_test grows the
+/versiuni.json contract checks (source_host never leaks), and a Playwright
+test at all three widths asserts the honest copy on header/footer/About
+against the fixture. Full suite 532 passed; export verified end-to-end with
+empty provenance on legacy data; a real stale export (old build_meta schema)
+renders /despre/ and /versiuni.json as "unknown" with HTTP 200.
+
+**Non-obvious decisions:** CLAUDE.md's "fetch-index always scans all pages"
+claim was stale — the early-stop after three unchanged pages still exists, so
+the scan stamp records `partial-early-stop` instead of pretending completeness
+(a periodic full scan remains an open plan). The local-vs-served `--verify`
+check is the manual way to spot a pending code release. Deploy verification
+against the live host happens at the next deploy; the endpoint and the
+checker are what ship now.
+
+---
 ### 2026-10-04 — FIX-03: detail refresh, cancellation from the detail page, source provenance
 
 **What:** `fetch-anunturi.py` now refreshes cached detail pages under a

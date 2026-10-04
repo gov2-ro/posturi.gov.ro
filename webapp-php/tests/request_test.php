@@ -126,6 +126,20 @@ run_suite('direct database access stays denied', function () use ($base) {
 });
 
 run_suite('feeds parse as their formats and respect filters', function () use ($base) {
+    // The version endpoint carries the two markers the deploy verifies
+    // against — code and data as separate facts (FIX-06).
+    [$status, $ver_body, $ver_headers] = fetch_page($base, '/versiuni.json');
+    assert_same(200, $status, 'versiuni.json — 200');
+    assert_true(str_starts_with($ver_headers['content-type'] ?? '', 'application/json'), 'versiuni content type');
+    $ver = json_decode($ver_body, true);
+    assert_true(is_array($ver) && array_key_exists('code', $ver) && array_key_exists('data', $ver),
+                'versiuni has code + data keys');
+    assert_same('fixture-run-1', $ver['data']['run_id'] ?? null, 'versiuni run_id');
+    assert_same('fixture-data-sha', $ver['data']['git_sha'] ?? null, 'versiuni data sha');
+    assert_same('2026-10-03T09:00:00+00:00', $ver['data']['detail_fetched_at_max'] ?? null, 'versiuni source check');
+    assert_same('2026-10-03 08:30:00', $ver['data']['index_checked_at'] ?? null, 'versiuni index check');
+    assert_false(isset($ver['data']['source_host']), 'source_host never leaks');
+
     // Atom is well-formed XML with entries.
     [$status, $atom, $headers] = fetch_page($base, '/posturi.atom');
     assert_same(200, $status, 'atom — 200');

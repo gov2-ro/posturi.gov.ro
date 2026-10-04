@@ -270,7 +270,16 @@ CREATE TABLE build_meta (
     active_only     INTEGER NOT NULL DEFAULT 0,
     job_postings    INTEGER NOT NULL DEFAULT 0,
     employers       INTEGER NOT NULL DEFAULT 0,
-    calendar_events INTEGER NOT NULL DEFAULT 0
+    calendar_events INTEGER NOT NULL DEFAULT 0,
+    -- FIX-06 provenance: the pipeline run that built this file, the last real
+    -- source observations, and the index-scan completeness. All empty on
+    -- legacy builds = unknown, never synthesized from build time.
+    run_id                  TEXT NOT NULL DEFAULT '',
+    index_checked_at        TEXT,
+    index_scan_pages        INTEGER,
+    index_scan_complete     INTEGER NOT NULL DEFAULT 0,
+    detail_fetched_at_max   TEXT,
+    detail_fetched_rows     INTEGER
 );
 
 CREATE VIRTUAL TABLE job_postings_fts USING fts5(
@@ -466,7 +475,23 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
     export_llm_costs(cur, con)
 
-    write_build_meta(con, active_only=active_only)
+    # Source-freshness aggregates for build_meta, over the SAME slice the
+    # export just wrote — MAX(detail_fetched_at) is the last real successful
+    # detail retrieval, never an import/build date (FIX-03/FIX-06).
+    cur.execute(f"""
+        SELECT MAX(jp.detail_fetched_at) AS max_fetched,
+               COUNT(jp.detail_fetched_at) AS fetched_rows
+        FROM jobs_jobposting jp {active_filter}
+    """)
+    agg = cur.fetchone()
+    write_build_meta(
+        con,
+        active_only=active_only,
+        run_id=os.environ.get("POSTURI_RUN_ID", ""),
+        detail_fetched_at_max=(agg["max_fetched"].isoformat(timespec="seconds")
+                               if agg["max_fetched"] else None),
+        detail_fetched_rows=agg["fetched_rows"] or 0,
+    )
 
 
 def export_llm_costs(cur, con: sqlite3.Connection) -> None:
@@ -519,14 +544,32 @@ def git_sha() -> str:
     return out.stdout.strip() if out.returncode == 0 else ""
 
 
-def write_build_meta(con: sqlite3.Connection, *, active_only: bool):
+def read_index_scan() -> dict:
+    """The index step's scan stamp (fetch-index.py → data/index-scan.json).
+
+    Absent or malformed → {} — a legacy export must stay unknown, never
+    "checked now"."""
+    try:
+        with open("data/index-scan.json", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_build_meta(con: sqlite3.Connection, *, active_only: bool,
+                     run_id: str = "", detail_fetched_at_max=None,
+                     detail_fetched_rows: int = 0):
     counts = {
         t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
         for t in ("job_postings", "employers", "calendar_events")
     }
+    scan = read_index_scan()
     con.execute(
         "INSERT INTO build_meta(id, built_at, git_sha, source_host, active_only, "
-        "job_postings, employers, calendar_events) VALUES (1,?,?,?,?,?,?,?)",
+        "job_postings, employers, calendar_events, run_id, index_checked_at, "
+        "index_scan_pages, index_scan_complete, detail_fetched_at_max, "
+        "detail_fetched_rows) VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             datetime.now(timezone.utc).isoformat(timespec="seconds"),
             git_sha(),
@@ -535,6 +578,12 @@ def write_build_meta(con: sqlite3.Connection, *, active_only: bool):
             counts["job_postings"],
             counts["employers"],
             counts["calendar_events"],
+            run_id,
+            scan.get("checked_at") or None,
+            scan.get("pages_scanned"),
+            int(scan.get("outcome") == "complete"),
+            detail_fetched_at_max,
+            detail_fetched_rows,
         ),
     )
 

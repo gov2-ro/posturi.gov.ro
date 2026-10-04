@@ -14,34 +14,18 @@ $_description = $meta_description
 $_canonical = site_origin() . ($canonical_path ?? parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/');
 $_canonical = preg_replace('/\?.*$/', '', $_canonical);
 
-// Last data update — used in header and footer. The date is when the source was
-// last scraped (MAX(last_seen_at), a DateField with no time); the H:i appended to
-// it is build_meta.built_at, written as the final step of that same pipeline run,
-// so the stamp answers "how many hours ago?" without carrying a second date. The
-// two can straddle midnight in rare cases — good enough for a freshness stamp.
-// build_meta() holds the full build provenance and $_build_tooltip carries it.
-if (!isset($_last_updated)) {
-    try {
-        $_last_updated = db()->query("SELECT MAX(last_seen_at) FROM job_postings")->fetchColumn();
-    } catch (Exception $e) {
-        $_last_updated = null;
-    }
+// Freshness stamp — used in header and footer. FIX-06: the visible stamp is
+// the DATABASE GENERATION time (build_meta.built_at, full precision, Bucharest),
+// honestly labelled, and the source check is a separate observation —
+// build_meta.detail_fetched_at_max, written only from real successful detail
+// retrievals (FIX-03). Combining the two — the old behaviour — made a cached
+// import read as a source verification that never happened.
+if (!isset($_build_stamp)) {
+    $_build_stamp = build_time('d.m.Y, H:i');     // '' on exports without build_meta
+    $_build_stamp_iso = build_time('Y-m-d\TH:i'); // for <time datetime>
+    $_source_label = source_check_label();        // null = no provenance at all
+    $_build_tooltip = build_tooltip();
 }
-if ($_last_updated) {
-    $_last_updated_date = substr($_last_updated, 0, 10);
-    $_last_updated_fmt = (new DateTime($_last_updated_date))->format('d.m.Y');
-    $_build_hm = build_time('H:i');   // build time-of-day, Europe/Bucharest
-    if ($_build_hm) {
-        $_last_updated_fmt .= ', ' . $_build_hm;
-        $_last_updated_iso = $_last_updated_date . 'T' . $_build_hm;
-    } else {
-        $_last_updated_iso = $_last_updated_date;
-    }
-} else {
-    $_last_updated_fmt = null;
-    $_last_updated_iso = '';
-}
-$_build_tooltip = build_tooltip();
 ?><!doctype html>
 <html lang="ro">
 <head>
@@ -113,12 +97,17 @@ $_build_tooltip = build_tooltip();
       <span class="hidden lg:inline text-xs text-on-bar-muted font-mono uppercase tracking-widest mt-0.5">
         / alpha · WIP
       </span>
-      <?php if ($_last_updated_fmt): ?>
-      <time datetime="<?= e($_last_updated_iso) ?>"
+      <?php if ($_build_stamp): ?>
+      <time datetime="<?= e($_build_stamp_iso) ?>"
             class="hidden xl:inline text-xs text-on-bar-muted font-mono mt-0.5<?= $_build_tooltip ? ' cursor-help' : '' ?>"
             <?= $_build_tooltip ? 'title="' . e($_build_tooltip) . '"' : '' ?>>
-        actualizat <?= $_last_updated_fmt ?>
+        bază generată <?= $_build_stamp ?>
       </time>
+      <?php endif; ?>
+      <?php if ($_source_label): ?>
+      <span class="hidden xl:inline text-xs text-on-bar-muted font-mono mt-0.5">
+        · <?= e($_source_label) ?>
+      </span>
       <?php endif; ?>
     </a>
 

@@ -1,4 +1,5 @@
-import requests, csv, random, time, os, re, sys, unicodedata
+import requests, csv, random, time, os, re, sys, unicodedata, json
+from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from datetime import datetime
 
@@ -267,6 +268,33 @@ def scrape_and_save_page(page_number, existing_data):
     return new_entries, updated_entries, len(cards)
 
 
+def write_scan_stamp(*, pages_scanned, pages_total, early_stopped, cards,
+                     new, updated, outcome):
+    """Record this scan's completeness beside the CSV (FIX-06).
+
+    `index_checked_at` in the export's build_meta comes from here, so a stamp
+    exists only for a run that actually completed its scan — a crash mid-scan
+    leaves the previous stamp in place, and an early-stopped scan records
+    `partial-early-stop`, never "complete".
+    """
+    stamp = {
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "pages_scanned": pages_scanned,
+        "pages_total": pages_total,
+        "early_stopped": early_stopped,
+        "cards": cards,
+        "new": new,
+        "updated": updated,
+        "outcome": outcome,
+    }
+    path = "data/index-scan.json"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(stamp, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
 def scrape_all_pages():
     existing_data = load_existing_data()
     max_pages = get_total_pages()
@@ -275,6 +303,7 @@ def scrape_all_pages():
     total_cards = 0
     skip_count = 0
     seen_any_change = False
+    pages_scanned = 0
 
     for page_number in range(1, max_pages + 1):
         print(f"Scraping page {page_number}/{max_pages}...")
@@ -282,6 +311,7 @@ def scrape_all_pages():
         total_cards += n_cards
         total_new += new_entries
         total_updated += updated_entries
+        pages_scanned += 1
 
         if new_entries or updated_entries:
             save_data(existing_data)
@@ -297,12 +327,21 @@ def scrape_all_pages():
 
         time.sleep(random.uniform(0.5, 1.1))
 
+    early_stopped = pages_scanned < max_pages
     print(f"Scraping complete. Total: {total_new} new, {total_updated} updated")
     if total_cards == 0:
         # The site answered (pagination was discovered) but no card matched: the
         # markup changed. Fail loudly — 2026-09-30 → 10-02 this ran 12 times at exit 0.
+        write_scan_stamp(pages_scanned=pages_scanned, pages_total=max_pages,
+                         early_stopped=early_stopped, cards=total_cards,
+                         new=total_new, updated=total_updated,
+                         outcome="failed-zero-cards")
         sys.exit(f"ERROR: {max_pages} listing pages scanned, 0 job cards matched — "
                  f"the card selector in scrape_and_save_page() is stale.")
+    write_scan_stamp(pages_scanned=pages_scanned, pages_total=max_pages,
+                     early_stopped=early_stopped, cards=total_cards,
+                     new=total_new, updated=total_updated,
+                     outcome="complete" if not early_stopped else "partial-early-stop")
     return existing_data
 
 

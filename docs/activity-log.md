@@ -14,9 +14,13 @@ every unattended run until the next code deploy, and skipped `record-deploy`. A
 data-only push now reports a 404 there as unverifiable, with a pointer to
 `--code-only`; code pushes still require the endpoint.
 
-**Observations from the run:** fetch-detail 6 new + 200 legacy refreshes, 0 failed,
-13.7 min (5,220 legacy caches remain due, 200 per run); parse 7–8 min CPU-bound with
-no output (LATER-05).
+**Observations from the run** (`2026-10-04T20:57:08Z`, manual, `c8a9559`, 44 min,
+all 11 steps ok): schema 320 ok / 5 `OutputTruncated` of 325 at the new 8,000 cap,
+$0.44 including the truncated calls (REV-14 confirmed; REV-17 for the 5);
+schema coverage 99.8%, v3 95.8%; all 8 hard checks passed, one soft warning
+(`intake_fresh`, a weekend artifact — fixed as REV-16). fetch-detail 6 new + 200
+legacy refreshes, 0 failed, 13.7 min (5,220 legacy caches remain due, 200 per run);
+parse 7–8 min CPU-bound with no output (LATER-05).
 
 ---
 

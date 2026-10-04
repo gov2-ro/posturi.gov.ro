@@ -451,23 +451,31 @@ def evaluate(
 
     # Intake freshness — separate from build freshness. A stale build_meta is
     # hard (the export never ran); a fresh build of three-day-old intake is
-    # this one. Weekdays only: weekends and known outages are not failures,
-    # and this is a warning signal among several (scan time, card count, fill
+    # this one. A warning signal among several (scan time, card count, fill
     # rates above), not a gate by itself.
+    #
+    # Age is counted in Bucharest WORKING days elapsed since the newest
+    # publication: the source does not publish at weekends, so Friday's posting
+    # is 1 working day old on Monday, not 3. Calendar days plus a "weekdays
+    # only" switch warned every Monday morning, and mixed the host's UTC date
+    # with Bucharest's weekday (REV-16).
     newest = m.get("newest_published") or ""
     try:
-        newest_age = (date.today() - date.fromisoformat(newest[:10])).days if newest else None
+        newest_day = date.fromisoformat(newest[:10]) if newest else None
     except ValueError:
-        newest_age = None
-    bucharest_now = datetime.now(ZoneInfo("Europe/Bucharest"))
-    weekday = bucharest_now.weekday() < 5
-    if newest_age is None:
+        newest_day = None
+    if newest_day is None:
         soft("intake_fresh", True, "no publication dates in the export — skipped")
     else:
+        today = datetime.now(ZoneInfo("Europe/Bucharest")).date()
+        working_age = sum(
+            1 for i in range(1, min((today - newest_day).days, 400) + 1)
+            if (newest_day + timedelta(days=i)).weekday() < 5
+        )
         soft("intake_fresh",
-             not (weekday and newest_age > intake_max_age_days),
-             f"newest posting published {newest_age} day(s) ago"
-             + (f" (limit {intake_max_age_days:g} on weekdays)" if weekday else " (weekend — no limit)"))
+             working_age <= intake_max_age_days,
+             f"newest posting published {newest_day.isoformat()}, "
+             f"{working_age} working day(s) ago (limit {intake_max_age_days:g})")
 
     # A v2 payload landing under a --prompt-version v3 run leaves every v3 facet
     # empty and nothing else fails.
@@ -649,8 +657,8 @@ def main() -> int:
                     help="Warn when coverage is this many points below the best of "
                          "the last seven healthy runs (default 5).")
     ap.add_argument("--intake-max-age-days", type=float, default=2.0, metavar="D",
-                    help="Warn when the newest published posting is older than this "
-                         "on a Bucharest weekday (default 2).")
+                    help="Warn when the newest published posting is more than this many "
+                         "Bucharest working days old (default 2).")
     args = ap.parse_args()
 
     db_path = Path(args.db)

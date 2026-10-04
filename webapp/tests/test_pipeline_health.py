@@ -341,7 +341,8 @@ class TestFloors:
 
 class TestIntakeFreshness:
     def test_stale_intake_warns_on_a_weekday(self, check, monkeypatch):
-        # Monday 2026-10-05, newest posting from 2026-10-01 — four days old.
+        # Monday 2026-10-05, newest posting from Wednesday 2026-09-30 —
+        # Thursday, Friday and Monday passed without intake: 3 working days.
         fixed_now = datetime(2026, 10, 5, 12, 0)
 
         class FakeDateTime(check.datetime):
@@ -356,7 +357,7 @@ class TestIntakeFreshness:
 
         monkeypatch.setattr(check, "datetime", FakeDateTime)
         monkeypatch.setattr(check, "date", FakeDate)
-        checks = run_evaluate(check, metrics(newest_published="2026-10-01"),
+        checks = run_evaluate(check, metrics(newest_published="2026-09-30"),
                               {"previous": None, "window": []},
                               prompt_version="v3", max_age_hours=6.0)
         assert check_map(checks)["intake_fresh"][1] is False
@@ -400,6 +401,36 @@ class TestIntakeFreshness:
                               {"previous": None, "window": []},
                               prompt_version="v3", max_age_hours=6.0)
         assert check_map(checks)["intake_fresh"][1] is True
+
+
+class TestIntakeWorkingDays:
+    """REV-16: the 2026-10-05 00:41 Bucharest run warned "3 days" for Friday's
+    postings — a calendar-day count across a weekend."""
+
+    def _at(self, check, monkeypatch, now):
+        class FakeDateTime(check.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now.replace(tzinfo=tz) if tz is not None else now
+
+        monkeypatch.setattr(check, "datetime", FakeDateTime)
+
+    def test_friday_posting_is_fresh_just_after_monday_midnight(self, check, monkeypatch):
+        self._at(check, monkeypatch, datetime(2026, 10, 5, 0, 41))
+        checks = run_evaluate(check, metrics(newest_published="2026-10-02"),
+                              {"previous": None, "window": []},
+                              prompt_version="v3", max_age_hours=6.0)
+        ok, msg = check_map(checks)["intake_fresh"][1:]
+        assert ok and "1 working day" in msg
+
+    def test_age_counts_working_days_across_the_weekend(self, check, monkeypatch):
+        # Wednesday 00:30 Bucharest: Monday, Tuesday and Wednesday have passed.
+        self._at(check, monkeypatch, datetime(2026, 10, 7, 0, 30))
+        checks = run_evaluate(check, metrics(newest_published="2026-10-02"),
+                              {"previous": None, "window": []},
+                              prompt_version="v3", max_age_hours=6.0)
+        ok, msg = check_map(checks)["intake_fresh"][1:]
+        assert not ok and "3 working day" in msg
 
 
 class TestFillRates:

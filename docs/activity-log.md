@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-10-04 — GitHub CI switched to manual (CI-01)
+
+**What:** The push of the FIX-07 workflow made GitHub Actions run it on every push.
+Run #7 (`c8a9559`) failed in `python-tests` at the ruff lint step on 15 pre-existing
+findings, so pytest never ran; the PHP and browser jobs passed. Per the user's
+decision CI stays postponed: the trigger is now `workflow_dispatch` only (runnable by
+hand from the Actions tab), and CI-01 in the backlog holds the lint cleanup, the
+trigger policy (tags/releases and/or PRs) and the Node-20 / `ubuntu-latest`
+deprecation notices from the same run.
+
+---
+
 ### 2026-10-04 — REV-05/13/14: why nothing published on 04.10, and the fixes
 
 **Diagnosis (VPS session, read-only):** cron fired both 04.10 slots at `fd1cf97`.

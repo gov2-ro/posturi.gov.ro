@@ -1,10 +1,11 @@
 name: CI
 
+# Manual only for now (CI-01 in docs/backlog.md): the pushed workflow started
+# running on every push and failed on pre-existing ruff findings before the tests
+# ran. Run it from the Actions tab ("Run workflow") until the lint baseline is
+# clean and a trigger policy (releases/tags, PRs) is decided.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   python-tests:

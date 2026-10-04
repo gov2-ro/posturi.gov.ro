@@ -58,14 +58,16 @@ class TestVersionCompatibility:
         assert v4.startswith(v3.rstrip()[: -len(tail)].rstrip())
         assert "Part D" in v4 and v4.rstrip().endswith(tail)
 
-    def test_the_v4_output_budget_is_raised_above_v3(self):
-        """v4 truncated mid-JSON at 2,000 output tokens on long calendars —
-        which surfaces as "Expected dict, got str", not as a clean error."""
+    def test_the_output_budgets_leave_room_for_long_answers(self):
+        """v4 truncated mid-JSON at 2,000 output tokens on long calendars, and
+        v3 did too once deepseek-v4-flash averaged ~1,700 (REV-14). Measured
+        v4 answers peak around 4,000 on multi-role postings."""
         import importlib.util
         spec = importlib.util.spec_from_file_location("llm_schema", REPO_ROOT / "llm-schema.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        assert module.max_output_tokens("v4") > module.max_output_tokens("v3")
+        assert module.max_output_tokens("v4") >= 8000
+        assert module.max_output_tokens("v3") >= 8000
 
 
 class TestCompetitionCalendar:

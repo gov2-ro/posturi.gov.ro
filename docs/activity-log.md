@@ -2,6 +2,37 @@
 
 ## 2026
 
+### 2026-10-04 — REV-05/13/14: why nothing published on 04.10, and the fixes
+
+**Diagnosis (VPS session, read-only):** cron fired both 04.10 slots at `fd1cf97`.
+`schema` failed 321/326 and 313/324 attempts, all `ValueError: Expected dict, got
+str` — truncated JSON at the v3 output cap of 2,000 tokens, which deepseek-v4-flash
+now routinely reaches (successful answers average 1,660–1,780; failing calls take as
+long as a full-length answer). The same ~320 active postings had failed since at
+least 03.10, but the old code exited 0; FIX-04's failure-share gate made the step
+fail. The runner then died in its ERR trap — `set +e` does not disable it — so the
+ABORT/degraded/exit-65 branches were dead code. Migrations 0013–0015 were also still
+unapplied on the VPS, which would have broken the next run on the new code.
+
+**Fixes:** REV-14 — output budget 8,000 for every prompt version; truncation is
+detected from the provider's stop reason (`OutputTruncated`, its own failure class,
+not "repaired"), and the billed tokens of truncated calls are now counted (failed
+calls used to vanish from usage and cost). REV-13 — handled commands use
+`cmd || status=$?`; a `migrate --check` pre-flight exits 78 before any work.
+
+**Validation:** `test_run_pipeline_sh.py` runs the real script with stubbed
+commands (healthy, failed step, degraded opt-in, export-check 65, pending
+migrations) — 4 of 5 fail against the old script. Truncation tests cover the
+DeepSeek stop reason, usage carried on the exception and no repair retry. Full
+suite 572 passed. Cost of the fix: re-attempting ~320 postings at roughly 2,500
+output tokens each is well under a dollar at the recorded deepseek-v4-flash rates.
+
+**Credit:** the root cause, the ERR-trap behaviour (verified with a throwaway bash
+one-liner) and the missing migrations were found by the Sonnet session on the VPS
+over Remote Control; this session confirmed them in code and wrote the fixes.
+
+---
+
 ### 2026-10-04 — REV-12: stop the cron's `--resume` from re-paying for every active posting
 
 **What:** FIX-05 made `--resume` select any production row whose provenance

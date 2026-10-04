@@ -409,3 +409,57 @@ class TestFillRates:
                               {"previous": prev, "window": []},
                               prompt_version="v3", max_age_hours=6.0)
         assert check_map(checks)["body_fill"][1] is False
+
+
+# ------------------------------------------------- REV-14: truncation at the cap
+
+
+class _FakeChoice:
+    def __init__(self, text, finish_reason):
+        self.message = type("M", (), {"content": text})()
+        self.finish_reason = finish_reason
+
+
+class _FakeUsage:
+    prompt_tokens = 8000
+    completion_tokens = 2000
+    prompt_cache_hit_tokens = 7900
+
+
+class _FakeOpenAI:
+    """Stands in for openai.OpenAI; returns one scripted completion."""
+    reply = None
+
+    def __init__(self, *a, **kw):
+        create = lambda **kwargs: _FakeOpenAI.reply  # noqa: E731
+        self.chat = type("C", (), {"completions": type("X", (), {"create": staticmethod(create)})()})()
+
+
+class TestOutputTruncation:
+    def _deepseek(self, llm, monkeypatch, text, finish_reason):
+        import openai
+        _FakeOpenAI.reply = type("R", (), {"choices": [_FakeChoice(text, finish_reason)],
+                                           "usage": _FakeUsage()})()
+        monkeypatch.setattr(openai, "OpenAI", _FakeOpenAI)
+        return llm.make_generator("deepseek", "deepseek-v4-flash", "system", "v3")
+
+    def test_length_stop_raises_truncated_with_usage(self, llm, monkeypatch):
+        generate = self._deepseek(llm, monkeypatch, '{"responsibilities": "- a', "length")
+        with pytest.raises(llm.OutputTruncated) as exc:
+            generate("posting")
+        assert exc.value.usage == (8000, 2000, 7900), "the billed call is still metered"
+        assert "cap" in str(exc.value)
+
+    def test_truncation_is_not_repaired(self, llm):
+        calls = []
+
+        def generate(content):
+            calls.append(content)
+            raise llm.OutputTruncated(8000, 1, 8000)
+
+        with pytest.raises(llm.OutputTruncated):
+            llm.generate_with_retry(generate, "posting", max_attempts=4, base_delay=0)
+        assert len(calls) == 1, "a repair would regenerate the same long answer"
+
+    def test_v3_budget_is_no_longer_2000(self, llm):
+        assert llm.max_output_tokens("v3") >= 8000

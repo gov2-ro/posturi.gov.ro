@@ -75,18 +75,24 @@ def get_prompt(prompt_version="v1"):
     return MODELS_CONFIG.get("prompts", {}).get(prompt_version, "")
 
 
-#: Output-token budget per prompt version. v3 fits comfortably in 2,000; v4 adds
-#: a typed competition calendar plus `note_suplimentare`, and a long posting
-#: truncates mid-JSON — which surfaces as "Expected dict, got str", because a
-#: truncated object does not parse and `parse_json_response` hands back the raw
-#: text. Retrying does not help: the repair regenerates and truncates again.
+#: Output-token budget per prompt version. A long posting truncates mid-JSON at
+#: the cap — detected from the provider's stop reason as OutputTruncated (before
+#: REV-14 it surfaced as "Expected dict, got str", because a truncated object
+#: does not parse). Retrying does not help: the repair regenerates and truncates
+#: again. Only generated tokens are billed, so a generous cap costs nothing on
+#: postings that do not need it.
+#:
+#: v3 used to run on 2,000, which "fit comfortably" until deepseek-v4-flash: on
+#: 2026-10-04 its successful v3 answers averaged 1,660–1,780 output tokens and
+#: 634 of 645 attempts in the two runs failed at the cap — the whole active
+#: residue, every run, at ~19 minutes each.
 #:
 #: Measured on the 20 newest postings: ordinary v4 answers peak at ~3,050 output
 #: tokens even with a 19-event calendar. The cost driver is multi-role postings,
 #: where every entry in `positions[]` repeats education, experience, skills and
 #: credentials — one advertising eight roles blew past 4,000 on its own.
 MAX_OUTPUT_TOKENS = {"v4": 8000}
-DEFAULT_MAX_OUTPUT_TOKENS = 2000
+DEFAULT_MAX_OUTPUT_TOKENS = 8000
 
 
 def max_output_tokens(prompt_version: str) -> int:
@@ -192,6 +198,20 @@ def _is_repairable(exc) -> bool:
     block out with `next(...)`; a reply with no tool block raises it.
     """
     return isinstance(exc, (ValidationError, ValueError, StopIteration))
+
+
+class OutputTruncated(Exception):
+    """The model stopped at the output-token cap; the JSON is incomplete.
+
+    Not repairable (a repair regenerates the same long answer and truncates
+    again) and not transient, so generate_with_retry gives up at once. Carries
+    the usage of the call, which was billed even though nothing was stored.
+    """
+
+    def __init__(self, budget, input_tokens=None, output_tokens=None, cached_tokens=0):
+        super().__init__(f"output truncated at the {budget}-token cap "
+                         f"({output_tokens} output tokens generated)")
+        self.usage = (input_tokens, output_tokens, cached_tokens or 0)
 
 
 class FatalError(Exception):
@@ -412,7 +432,6 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 }
             resp = client.chat.completions.create(**kwargs)
             text = resp.choices[0].message.content
-            schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
             usage = getattr(resp, "usage", None)
             input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
             output_tokens = getattr(usage, "completion_tokens", None) if usage else None
@@ -420,6 +439,9 @@ def make_generator(provider, model, system_prefix, prompt_version):
             details = getattr(usage, "prompt_tokens_details", None) if usage else None
             if details is not None:
                 cached_tokens = getattr(details, "cached_tokens", 0) or 0
+            if getattr(resp.choices[0], "finish_reason", None) == "length":
+                raise OutputTruncated(out_budget, input_tokens, output_tokens, cached_tokens)
+            schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
             return schema, input_tokens, output_tokens, cached_tokens
 
     elif provider == 'anthropic':
@@ -448,6 +470,10 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 kwargs["tools"] = anthropic_tools
                 kwargs["tool_choice"] = {"type": "tool", "name": tool_name}
             msg = client.messages.create(**kwargs)
+            if getattr(msg, "stop_reason", None) == "max_tokens":
+                u = getattr(msg, "usage", None)
+                raise OutputTruncated(out_budget, getattr(u, "input_tokens", None),
+                                      getattr(u, "output_tokens", None))
             if use_schema:
                 tool_block = next(b for b in msg.content if getattr(b, "type", "") == "tool_use")
                 schema = _validate_extraction(tool_block.input, prompt_version)
@@ -489,11 +515,13 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 kwargs["response_format"] = {"type": "json_object"}
             resp = client.chat.completions.create(**kwargs)
             text = resp.choices[0].message.content
-            schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
             usage = getattr(resp, "usage", None)
             input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
             output_tokens = getattr(usage, "completion_tokens", None) if usage else None
             cached_tokens = getattr(usage, "prompt_cache_hit_tokens", 0) if usage else 0
+            if getattr(resp.choices[0], "finish_reason", None) == "length":
+                raise OutputTruncated(out_budget, input_tokens, output_tokens, cached_tokens)
+            schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
             return schema, input_tokens, output_tokens, cached_tokens or 0
 
     else:
@@ -917,6 +945,16 @@ if __name__ == '__main__':
                         summary.failed += 1
                         summary.failure_classes[failure_class(e)] = \
                             summary.failure_classes.get(failure_class(e), 0) + 1
+                        if isinstance(e, OutputTruncated):
+                            # Billed though nothing is stored: keep the run's
+                            # usage and cost honest (they were understated).
+                            t_in, t_out, t_cached = e.usage
+                            summary.input_tokens += t_in or 0
+                            summary.output_tokens += t_out or 0
+                            summary.cached_input_tokens += t_cached or 0
+                            t_cost = compute_cost(provider, model, t_in, t_out, t_cached)
+                            if t_cost:
+                                summary.cost_usd += t_cost
                         tqdm.write(f"  ✗ {slug}: {type(e).__name__}: {e}")
                         continue
 

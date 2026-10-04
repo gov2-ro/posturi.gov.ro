@@ -229,6 +229,8 @@ real run compares its deltas against.
 | `site returned HTTP 5xx after deploy` | the shared host is unhappy with what landed | the previous database is still intact on disk; investigate before re-running |
 | `llm-schema.py` exits 1 | a model failed on more than `--max-failure-share` (default 0.5) of its attempted postings, or was selected work it could not attempt | per-model summaries are `kind: "llm-schema"` records in `data/pipeline-runs.jsonl`; the deploy is blocked unless `POSTURI_ALLOW_DEGRADED_DEPLOY=1` |
 | `llm-schema.py` exits 2 | provider-wide fatal error (HTTP 401/402/403: bad key or no balance) | fix the key or top up; `--resume` re-extracts only what is missing or stale |
+| `ABORT: unapplied migrations` (exit 78) | the checkout was pulled but `migrate` was not run | `.venv/bin/python webapp/manage.py migrate`, then re-run; nothing ran and the site is untouched |
+| `OutputTruncated: output truncated at the N-token cap` | the model's answer hit `max_output_tokens` (llm-schema.py) — the JSON is incomplete | raise the budget for that prompt version; truncated calls are billed and now counted in the run's usage |
 | `ABORT: pipeline steps failed … not deploying` | a pipeline step exited non-zero and `POSTURI_ALLOW_DEGRADED_DEPLOY` is not 1 | read the failed step in the log; the previous database is still live |
 | Healthcheck silent, no failure mail | the timer is not running | `systemctl list-timers 'posturi*'` |
 | `refusing to deploy this export` (exit 65) | a hard check in `ops/check-export.py` failed | read the named check; the previous database is still live, so there is no rush |

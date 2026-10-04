@@ -2,6 +2,31 @@
 
 ## 2026
 
+### 2026-10-04 — OPS-03: legacy-artifact audit and fresh gap measurement
+
+**What:** Checked the root for stale SQLite/sidecars: none remain — the only
+large artifact is `posturi.dump` (122 MB, 10 Sep), which is the documented
+pg_dump transfer/backup format from docs/deploy-vps.md, gitignored, and still
+the restore path for the VPS — nothing reads it automatically and it must not
+be removed. Traced the historical `value too long for character varying(40)`
+for `1-post-muncitor-treapta-i`: the only varchar(40) column in the model is
+`contact_phone`, and the current CSV contains a 41-character phone
+("0268-428841 sau 0268-428843, interior 205") from the structured contact
+row, kept verbatim — exactly the overflow that dropped that posting's detail
+import. Widened `contact_phone` to 200 (migration 0015) instead of truncating:
+source facts are never shortened. Re-measured the gaps on the current full
+corpus (9,756 postings): no expiry 66 (0.7%), no body 16 (0.2%), no
+attachment_text 1,067 (10.9% — the scanned-PDF/extraction-failure split is
+DATA-01's inventory, with 3 invalid + 35 missing cache files from the FIX-08
+audit), inference 100% populated, no schema_json 6,920 (70.9% of the full
+archive; the active slice sits at ~95%), cancelled 80, source provenance 0
+(expected — the FIX-03 refresh has not run in production yet). These replace
+the dated incident counts in the backlog.
+
+**Validation:** full Python suite 547 passed, PHP suites 374 assertions,
+export e2e clean after the migration.
+
+---
 ### 2026-10-04 — FIX-05: version-aware production extraction and the status vocabulary (code readiness)
 
 **What:** Production extraction now carries explicit provenance:

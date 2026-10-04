@@ -110,7 +110,10 @@ class JobPosting(models.Model):
                   "[{url, ext, bytes, kind}]. `kind` is null for an ordinary announcement.",
     )
     nr_posturi = models.IntegerField(null=True, blank=True)
-    contact_phone = models.CharField(max_length=40, blank=True, default="")
+    # 200, not 40: the structured contact row keeps the source text verbatim
+    # ("0268-428841 sau 0268-428843, interior 205"), and the old varchar(40)
+    # silently dropped whole postings from the detail import (OPS-03).
+    contact_phone = models.CharField(max_length=200, blank=True, default="")
     contact_email = models.CharField(max_length=200, blank=True, default="")
     contact_person = models.CharField(max_length=200, blank=True, default="")
     data_limita_depunere = models.DateTimeField(null=True, blank=True)

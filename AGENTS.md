@@ -14,7 +14,7 @@ See README.md for project overview, pipeline, commands, and data structure.
 - Pagination: `nav.pg-arc-pagi` with `a.page-numbers` (was `div.ast-pagination`)
 - Job cards: `article.pg-card` (was `article.box`)
 
-**Two index scripts** — `fetch-index.py` always scans all pages and is preferred. The old early-stop version has been deleted.
+**Two index scripts** — `fetch-index.py` is preferred; the old version has been deleted. It scans all pages, but once a change has been seen it stops after 3 consecutive unchanged pages, and records `complete` or `partial-early-stop` in `data/index-scan.json`.
 
 **`parse-anunturi.py` outputs two files** — `data/anunturi/anunturi.csv` (one row per posting, with structured fields: contact info, competition dates, card fields) and `data/calendar.csv` (flat table: `url, eveniment, data, ora` — all competition timeline events across all postings).
 
@@ -22,7 +22,7 @@ See README.md for project overview, pipeline, commands, and data structure.
 
 **Change tracking** — `compare_and_update()` diffs each scraped listing against the stored row and appends changed field names + date to the `updates` column.
 
-**Extraction prompts live in `models_config.json`** — `prompts.{v1,v2,v3}`, loaded by `get_prompt()` in `llm-schema.py` and sent as the *system* instruction; the posting body + attachment text is the *user* message. Each structured version has a Pydantic model in `schema_models.EXTRACTION_MODELS`; never hard-code a model in `llm-schema.py`. v3 adds EQF/ISCED-F/CEFR/ESCO-backed match keys for CV-to-job matching — see `docs/metadata-schema-v3.md`.
+**Extraction prompts live in `models_config.json`** — `prompts.{v1,v2,v3,v4}` (+ `occupation_v1`), loaded by `get_prompt()` in `llm-schema.py` and sent as the *system* instruction; the posting body + attachment text is the *user* message. Each structured version has a Pydantic model in `schema_models.EXTRACTION_MODELS`; never hard-code a model in `llm-schema.py`. The config default is still v2; `ops/run-pipeline.sh` pins `LLM_PROMPT_VERSION` (v3 currently). v3 adds EQF/ISCED-F/CEFR/ESCO-backed match keys for CV-to-job matching — see `docs/metadata-schema-v3.md`.
 
 **Județe are normalised at import** — the source badge is `"Timiş"` (pre-redesign) or `"TIMIŞOARA, Timiș"` (post-redesign). `webapp/apps/jobs/judete.py` is the only place that interprets it: `normalize_judet()` returns `(county, locality)` against the canonical 42 counties. Never write a raw badge value into `Judet.name` — that is what produced 261 rows and broke the județ facet. Unmatched values land in `JobPosting.judet_raw` and are reported by `judet_sanity_warnings()` on every import; fix by adding to `judete.ALIASES`. See README § Județe.
 
@@ -38,4 +38,4 @@ See README.md for project overview, pipeline, commands, and data structure.
 # AI Context
 
 Generated locally by codesight (`.codesight/` is not in git): read `.codesight/wiki/index.md`
-for orientation, `.codesight/CODESIGHT.md` for the full context map.
+for orientation, `.codesight/CODESIGHT.md` for the full context map. Orientation only; may be stale — source and tests are authoritative.

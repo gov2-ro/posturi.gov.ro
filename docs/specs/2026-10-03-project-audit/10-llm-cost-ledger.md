@@ -1,6 +1,6 @@
 # FIX-10 — Record an append-only LLM usage ledger
 
-Priority: P2. Dependency: FIX-04 run-summary contract.
+Priority: P2. Dependency: FIX-04 run-summary contract (satisfied in code as of 2026-10-04).
 Audit/backlog evidence: `write_variant()` upserts cost and resets `created_at`;
 infer and occupation calls are uncounted.
 

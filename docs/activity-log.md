@@ -2,6 +2,64 @@
 
 ## 2026
 
+### 2026-10-04 — REV-01/02/03/04/07/11: review follow-ups
+
+**What:** Fixed the post-implementation review findings that need no host access.
+REV-01: `db()` now shims an export without `application_status` — a TEMP view
+named `job_postings` shadows the table and computes the status exactly as
+`_application_status()` does, so a code deploy ahead of the VPS export no longer
+fatals list/employers/stats/feeds. REV-02/03/04: employers county filter takes the
+first value of the decoder's array (was a live 500), the three `OPEN_STATUS_SQL`
+quoting bugs are fixed, the status control counts closed/unknown, the landing
+count and sitemap use the status vocabulary, and the JSON feed carries
+`application_status`. REV-07: a confirmed `detail_content_hash` change clears
+`attachment_text` and marks `inferred` with `stale_revision` (infer reselects it);
+calendar events vanish with a removed schedule; the refresh cap goes to open
+competitions newest-first and skips ones expired >30 days; `fetch-anunturi.py`
+exits 1 when >50% of ≥5 attempted fetches fail. REV-11: README, CLAUDE.md,
+AGENTS.md, deploy-vps.md and the spec index brought in line with the code.
+
+**Validation:** Python 556 passed (13 new REV-07 tests); PHP sanitize 155,
+deadline 85, request 178 (+26), new compat_test 47 — wired into ci.yml;
+Playwright 15 passed / 3 skipped with no PHP warnings in the server log.
+
+**Non-obvious decisions:** The status shim is a TEMP view rather than per-query
+fallbacks: one place, works on a read-only file (only the in-memory temp schema
+is written, before `query_only`), base-table indexes still apply, and current
+exports pay one PRAGMA. `inferred` is marked, not wiped, so a `--no-llm` run can
+still carry a paid LLM family forward and the site keeps the last-good values
+until re-inference. A legacy row's first hash is "unknown", never a change —
+otherwise the first production refresh would requeue the whole archive. The
+fetch failure exit makes a mostly-failing source block the deploy, consistent
+with FIX-04; the five-attempt floor keeps one bad page from doing so.
+
+**Deploy order still matters for:** REV-02/03/04 ship with the next
+`deploy-php.sh --code-only`, which REV-01 now makes safe against the current
+live export. The VPS still needs `git pull` + `migrate` before its pipeline
+uses the FIX-03/05/07 changes.
+
+---
+
+### 2026-10-04 — Post-implementation review of FIX-01…08 / OPS-01/03
+
+**What:** Re-verified commits `b3e4790`…`4e9dbc0` against their specs, the code
+and the live host. Suites re-run green: Python 547 passed, PHP 155 + 85 + 152
+assertions (the "374" in earlier entries is stale), Playwright 15 passed / 3
+skipped, `php -l` clean, skins valid. Recorded eleven follow-ups as REV-01…11 in
+the backlog. The material ones: the current PHP tree needs `application_status`,
+which the live (VPS, `2c5e480`) export lacks — served against an old-schema
+export the list/employers/stats/JSON routes fatal, so the VPS must upgrade and
+export before the next code deploy (REV-01); `/angajatori/?judet=…` is a live
+500 since the FIX-07 decoder turned `judet` into an array (REV-02); a quoting
+bug zeroes the active counts on stats/employers (REV-03); and the live data has
+not been republished since 03.10 19:08 (REV-05).
+
+**Non-obvious:** live evidence (`?q[]=` → 400, `/versiuni.json` → 404) shows the
+Immediate-fixes tree is deployed but FIX-03/05/06 are not. No code changed in
+this entry; nothing was deployed.
+
+---
+
 ### 2026-10-04 — OPS-03: legacy-artifact audit and fresh gap measurement
 
 **What:** Checked the root for stale SQLite/sidecars: none remain — the only

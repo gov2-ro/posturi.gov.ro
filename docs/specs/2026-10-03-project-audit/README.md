@@ -1,6 +1,6 @@
 # Audit remediation specifications
 
-Status: proposed implementation work, 2026-10-03. Baseline: `2c5e480`.
+Status: per-FIX status lives in [backlog](../../backlog.md), the source of truth. As of 2026-10-04: FIX-02/03/06/08 done; FIX-01/04/05/07 code done, rollout open; FIX-09..12 not started. Originally proposed 2026-10-03. Baseline: `2c5e480`.
 Evidence: [initial audit](../../audits/2026-10-03-project-audit.md).
 Queue and remaining product work: [backlog](../../backlog.md).
 

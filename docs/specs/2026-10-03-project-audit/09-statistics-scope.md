@@ -1,6 +1,6 @@
 # FIX-09 — Correct statistics scope
 
-Priority: P2. Dependency: FIX-05 status contract. Audit finding: 7.
+Priority: P2. Dependency: FIX-05 status contract (satisfied in code as of 2026-10-04). Audit finding: 7.
 
 ## Problem and scope
 

@@ -297,7 +297,7 @@ Provider, model and prompt version resolve the same way in `llm-schema.py`, `pip
 # .env
 LLM_PROVIDER=gemini            # gemini | openai | anthropic | deepseek
 LLM_MODEL=gemini-2.5-flash     # ignored if it is not a model of the selected provider
-LLM_PROMPT_VERSION=v3          # v1 | v2 | v3
+LLM_PROMPT_VERSION=v3          # v1 | v2 | v3 | v4 (occupation_v1 is the occupation step's prompt)
 ```
 
 A backfill is ~9,600 calls per model, so the runner is built for that:
@@ -308,8 +308,10 @@ python llm-schema.py --prompt-version v3 --workers 8 --resume
 ```
 
 - `--workers N` (default 4) — concurrent LLM calls; database writes stay single-threaded. Measured 5.13 s/post at 4 workers against 15–20 s sequential.
-- `--resume` — skip postings that already have a variant row for this exact provider/model/prompt-version.
+- `--resume` — revision-aware: skips a posting only when its production extraction has this exact provider/model/prompt-version *and* was made from the posting's current content hash. Stale rows and legacy rows with no recorded revision or hash are re-extracted.
 - `--max-attempts N` (default 4) — transient errors (429/5xx/timeout) back off exponentially; invalid output gets one repair attempt that shows the model its own validation error.
+
+Exit status: `0` healthy (an empty selection is a healthy no-op); `1` a model failed on more than `--max-failure-share` (default 0.5) of its attempted postings, or was selected work it could not attempt (every body empty); `2` a provider-wide fatal error (HTTP 401/402/403), after which no new calls are scheduled. Each model's run summary is appended to `data/pipeline-runs.jsonl` as `kind: "llm-schema"`.
 
 Every run also checks that quoted `evidence`/`verbatim` values actually appear in the posting (`grounding.py`) and reports unsupported quotes — a hallucination check with no extra LLM call.
 
@@ -373,6 +375,9 @@ Use the webapp venv because it has `docx2txt`, `python-docx`, and `pypdf`. PDF O
 | `Data Proba Scrisa` | Written test date |
 | `Data Interviu` | Interview date |
 | `Data Rezultate Finale` | Final results date |
+| `Status` | The detail page's own marker: `Live` / `Anulat`; blank = unknown |
+| `Detail Fetched At` | When the detail page was last successfully fetched (from the sidecar); blank on legacy rows = unknown |
+| `Detail Content Hash` | Hash of the fetched page, the revision `llm-schema.py --resume` compares against; blank on legacy rows = unknown |
 
 **`data/calendar.csv`** — flat competition timeline table, one row per event:
 
@@ -428,8 +433,9 @@ npx playwright test --config webapp-php/tests/browser/playwright.config.js
                                 # FIX-07: browser checks at 320/375/1280
 ```
 
-These run in CI (`.github/workflows/ci.yml`) alongside the Django/PostgreSQL
-suite: lint + PHP suites on PHP 8.2, Playwright with pinned Chromium. The
+These run locally. `.github/workflows/ci.yml` exists (lint + PHP suites on PHP 8.2,
+Playwright with pinned Chromium, alongside the Django/PostgreSQL suite) but GitHub
+Actions is not activated — CI was postponed by decision. The
 fixture query decoder is `webapp-php/query.php` — every request passes through
 `validated_query()` at the front controller, and `?q[]=medic` (a 500 before
 FIX-07) is a controlled 400.
@@ -448,6 +454,9 @@ FIX-07) is a controlled 400.
 
 # See what would move, change nothing
 ./deploy-php.sh --dry-run
+
+# Push nothing; compare local vs served code/data markers (needs SITE_URL)
+./deploy-php.sh --verify        # exit 1 when a code or data release is pending
 ```
 
 Set `DEPLOY_HOST`, `DEPLOY_PATH` and `SITE_URL` in `.env` and the arguments become
@@ -461,7 +470,23 @@ The deploy script:
 3. Refuses to ship a database that fails `integrity_check` or has no postings
 4. **Code**: rsyncs `webapp-php/` with `--delete`, minus `assets/` (Tailwind source), `router.php` and `tests/` (dev only) and `*.sqlite*` — excluding the database also protects it from the deletion pass
 5. **Data**: rsyncs `posturi.sqlite` alone, no `--delete` and no `--inplace`, so rsync's write-temp-then-rename swaps it atomically and a request mid-transfer still sees the whole previous database
-6. Checks `SITE_URL` returns HTTP 200
+6. Code deploy only: stamps the current `git rev-parse --short HEAD` into `webapp-php/static/code-version.txt` (gitignored) before the rsync, so the host names the checkout it runs
+7. Checks `SITE_URL` returns HTTP 200, then verifies the served markers on `/versiuni.json` — `code` after a code push, `data.built_at` after a data push — with up to 5 attempts 5 s apart, since the shared host may serve the old file for a moment. A mismatch fails the deploy. All of step 7 is skipped when `SITE_URL` is unset
+
+`/versiuni.json` (`webapp-php/feeds/versiuni.json.php`, `Cache-Control: no-store`) reports
+the deployed code marker and the data provenance (`built_at`, `run_id`, `git_sha`,
+`postings`, `active_only`, `detail_fetched_at_max`, `detail_fetched_rows`,
+`index_checked_at`) as two separate facts; `source_host` is not exposed. `--verify` compares
+the same two markers against this checkout and the local `posturi.sqlite`.
+
+**Order matters across a schema change.** Code and data deploy separately, so new PHP
+code can land on an export written by older pipeline code. `db()` covers the known gap:
+when `job_postings` lacks `application_status` (exports before FIX-05), it shadows the
+table with a TEMP view that computes the status exactly as the export does
+(`shim_legacy_export()` in `webapp-php/db.php`, tested by `tests/compat_test.php`). Any
+*new* column the templates start reading needs the same treatment or a VPS-first
+rollout: upgrade the VPS checkout, migrate, export and `--data-only` first, then
+`--code-only`.
 
 The full archive stays in PostgreSQL; the deployed SQLite only contains currently active postings.
 
@@ -471,12 +496,21 @@ against the file it would replace. `--force` overrides the row floors. This is t
 that was missing when the live site served three active postings for five weeks.
 
 Each export carries a `build_meta` row — when it was built, from which commit and host,
-and what it holds. The site reads it for the provenance block on `/despre/` and for the
+and what it holds. FIX-06 added the provenance fields: `run_id` (the pipeline run, from
+`POSTURI_RUN_ID`), `index_checked_at` / `index_scan_pages` / `index_scan_complete` (from
+`data/index-scan.json`), and `detail_fetched_at_max` / `detail_fetched_rows` (newest
+`Detail Fetched At` and how many rows have one); all are empty/null on legacy builds =
+unknown, never synthesized from build time. The site reads it for the provenance block on `/despre/` and for the
 tooltip behind the "actualizat" stamps; `build_meta()` in `helpers.php` returns null on an
 older export, and every consumer renders without it. Note the two timestamps mean
 different things: the visible stamp is `MAX(last_seen_at)`, when the source was last
 scraped, while `built_at` is when the file was generated. `source_host` is recorded for
 the deploy to verify against, never rendered.
+
+`job_postings.application_status` is the one vocabulary every surface filters on:
+`confirmed_open` (deadline from the concurs or the announcement, still ahead), `unconfirmed`
+(only the listing's expiry date, still ahead), `closed` (any date in the past) and `unknown`
+(no date). Cancelled postings are excluded from the export rather than given a status.
 
 The export also carries `llm_costs` — one row per Bucharest day, provider, model and
 prompt version, summed from `jobs_jobpostingschemavariant` — which feeds the "Costuri
@@ -488,14 +522,16 @@ that predates the table makes the section read "Date indisponibile" instead of f
 ### Continuous deployment
 
 The pipeline runs unattended on a VPS twice a day (11:45 and 18:33 Europe/Bucharest) and
-pushes a fresh database to the shared host. Code deploys stay manual from the development
+pushes a fresh database to the shared host. The repo ships a systemd timer pinned to
+`Europe/Bucharest` (`ops/systemd/posturi-pipeline.timer`, needs systemd >= 240); the live
+box still runs a user crontab until OPS-01 is completed. Code deploys stay manual from the development
 machine, which is why the two rsyncs above are separate — a cron that pushed the whole
 directory would revert templates from the VPS's older checkout.
 
 ```
 Mac (dev) ──git push──> GitHub ──git pull (manual)──> VPS
   │                                                    │
-  │  ./deploy-php.sh --code-only     ops/run-pipeline.sh (systemd timer)
+  │  ./deploy-php.sh --code-only     ops/run-pipeline.sh (timer / cron)
   └──────────────> shared host (PHP + posturi.sqlite) <┘
 ```
 
@@ -503,7 +539,7 @@ Mac (dev) ──git push──> GitHub ──git pull (manual)──> VPS
 |------|------------|
 | `ops/run-pipeline.sh` | the unattended entry point: flock, pipeline, export check, data deploy, healthcheck ping |
 | `ops/check-export.py` | the deploy gate — asserts the SQLite about to ship is fit to ship |
-| `ops/systemd/posturi-pipeline.{service,timer}` | the two daily slots |
+| `ops/systemd/posturi-pipeline.{service,timer}` | the two daily slots (not what the live box runs yet; the units hard-code `User=posturi` and `/srv/posturi`) |
 | `ops/env.sh` | `.env` reader shared by the shell scripts (it is never sourced — it holds API keys) |
 | `ops/logrotate.posturi` | rotation for `logs/pipeline.log`, installed into `/etc/logrotate.d/` |
 | `docs/deploy-vps.md` | provisioning runbook, operating commands, failure table |
@@ -517,6 +553,11 @@ Each run leaves three things behind:
 | `data/pipeline-runs.jsonl` | one `kind: "run"` record (step timings, exit codes, flags) and one `kind: "export-check"` record (33 data metrics, every assertion), joined by `run_id` |
 | `logs/pipeline.log` | the steps' own output, runs delimited by `=== posturi pipeline run <id> … ===` |
 | `HEALTHCHECK_URL` | `/start`, `/fail`, success — the only signal that can report a run which *never happened* |
+
+By default a failed pipeline step blocks the deploy: `ops/run-pipeline.sh` pings `/fail`, exits
+with the pipeline's status and the host keeps serving the previous database. Set
+`POSTURI_ALLOW_DEGRADED_DEPLOY=1` to deploy anyway when the export check passes (the run is
+recorded as degraded).
 
 `ops/check-export.py` runs between the export and the deploy. **Hard checks abort
 before the rsync**, so a corrupt export cannot reach the live site: `integrity_check`,

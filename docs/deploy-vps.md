@@ -29,6 +29,12 @@ problem — the state is.
 > local socket, and is driven by a user crontab rather than a systemd timer. See
 > **§6** for the actual layout, the `~/.ssh/config` block, and the cron lines.
 > Sections 1–5 remain the reference for a clean dedicated-user install.
+>
+> The repo's timer is pinned to `Europe/Bucharest` (`OnCalendar=… Europe/Bucharest`,
+> needs systemd >= 240), so it no longer depends on the host clock. Moving the live box
+> onto it is OPS-01; until then the crontab (`CRON_TZ=Europe/Bucharest`) is what fires.
+> The unit files hard-code `User=posturi` and `/srv/posturi`, which differ from the live
+> layout (OPS-01/REV-09) — edit them before enabling.
 
 ---
 
@@ -207,10 +213,11 @@ real run compares its deltas against.
   every run would pay for LLM extraction on thousands of expired postings.
 - **`--prompt-version v3` is pinned** because `models_config.json` still defaults to v2,
   and a v2 extraction lands with every `v3_*` facet column empty.
-- **`--continue-on-error` is deliberate.** A failed `download` or `infer` step still lets
-  the export and deploy run: the site staying current matters more than the run being
-  clean, and `export-to-sqlite.py`'s floors are what decide whether the data is fit to
-  ship. The run still exits non-zero and pings `/fail`, so you hear about it.
+- **`--continue-on-error` keeps later steps running, but a failed step blocks the
+  deploy.** If `pipeline.py` exits non-zero, `ops/run-pipeline.sh` pings `/fail`, exits
+  with that status and the shared host keeps the previous database. Setting
+  `POSTURI_ALLOW_DEGRADED_DEPLOY=1` (off by default) opts into deploying anyway when
+  `ops/check-export.py` passes; the deployment is then recorded as degraded.
 
 ### When it goes wrong
 
@@ -220,6 +227,9 @@ real run compares its deltas against.
 | `export has N job_postings, down from M` | the scrape or the import lost rows | check the import output; `--force` only once you know the drop is real |
 | `below the --min-rows floor` | near-empty export | same — look upstream before forcing |
 | `site returned HTTP 5xx after deploy` | the shared host is unhappy with what landed | the previous database is still intact on disk; investigate before re-running |
+| `llm-schema.py` exits 1 | a model failed on more than `--max-failure-share` (default 0.5) of its attempted postings, or was selected work it could not attempt | per-model summaries are `kind: "llm-schema"` records in `data/pipeline-runs.jsonl`; the deploy is blocked unless `POSTURI_ALLOW_DEGRADED_DEPLOY=1` |
+| `llm-schema.py` exits 2 | provider-wide fatal error (HTTP 401/402/403: bad key or no balance) | fix the key or top up; `--resume` re-extracts only what is missing or stale |
+| `ABORT: pipeline steps failed … not deploying` | a pipeline step exited non-zero and `POSTURI_ALLOW_DEGRADED_DEPLOY` is not 1 | read the failed step in the log; the previous database is still live |
 | Healthcheck silent, no failure mail | the timer is not running | `systemctl list-timers 'posturi*'` |
 | `refusing to deploy this export` (exit 65) | a hard check in `ops/check-export.py` failed | read the named check; the previous database is still live, so there is no rush |
 | `43 județ rows, expected exactly 42` | a new badge spelling got past `normalize_judet()` | add it to `judete.ALIASES`, re-run `import` and `export-sqlite` |
@@ -233,7 +243,7 @@ about a run that never happened, which is exactly how the site went five weeks s
 
 ## 6. `gov2-1` — the box this actually runs on
 
-**Status (2026-09-10):** provisioned, Postgres restored from a Mac dump,
+**Status (2026-09-10) — a dated snapshot, not the current state:** provisioned, Postgres restored from a Mac dump,
 `ops/run-pipeline.sh` verified end to end (full pipeline + `deploy-php.sh
 --data-only` to `mioritics.ro`, live site HTTP 200), and the crontab installed.
 Observability landed the same day: the run log, `ops/check-export.py` as a deploy
@@ -250,7 +260,7 @@ timer. The live VPS was set up as the plain login user instead. The deltas:
 | `/srv/posturi` | `/home/pax/g2-dev/posturi.gov.ro` |
 | DB role `posturi`, `createdb -O posturi` | `pax` is a Postgres `SUPERUSER` role (`sudo -u postgres psql -c "CREATE ROLE pax LOGIN SUPERUSER"`); DB `posturi` recreated and owned by `pax` |
 | `DATABASE_URL=postgres://posturi@localhost/posturi` | **`postgres://pax@/posturi`** — empty host = local socket = peer auth, no password. `@localhost` forces TCP and dies with `fe_sendauth: no password supplied`. |
-| `systemd` timer (`ops/systemd/`) | user crontab (below). The unit files still hard-code `/srv/posturi` and `User=posturi`; edit both if you ever switch to them. |
+| `systemd` timer (`ops/systemd/`) | user crontab (below) until OPS-01 moves it to the timer. The unit files still hard-code `/srv/posturi` and `User=posturi` (OPS-01/REV-09); edit both if you ever switch to them. |
 | `.venv` via `sudo -u posturi` | `.venv` owned by `pax`, no `sudo` anywhere in the run path |
 
 Rebuild the DB from a Mac dump, as `pax`:

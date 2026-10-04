@@ -6,8 +6,14 @@
 # would fight them. It ships the database only -- see deploy-php.sh for why.
 #
 # Exit codes: 0 fine, 65 the export failed its hard checks and was not deployed,
-# 75 a previous run is still going, anything else a failure. Every non-zero exit has
-# already been reported to $HEALTHCHECK_URL.
+# 75 a previous run is still going, 78 the checkout has unapplied migrations,
+# anything else a failure. Every non-zero exit has already been reported to
+# $HEALTHCHECK_URL.
+#
+# Commands whose failure this script HANDLES are written `cmd || status=$?`. An
+# ERR trap is not disabled by `set +e`: the old `set +e; cmd; status=$?` form let
+# on_error exit straight away, so the ABORT/degraded branches below were dead code
+# and every failed step looked like a crash (REV-13).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -57,19 +63,31 @@ echo "=== posturi pipeline run ${POSTURI_RUN_ID} (${POSTURI_RUN_TRIGGER}) —" \
      "$(date -u +%Y-%m-%dT%H:%M:%SZ) on $(hostname) @ $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo '?') ==="
 ping_health /start
 
+# A `git pull` here is manual and so is `migrate` (docs/deploy-vps.md). Code that
+# expects new columns would otherwise run 20 minutes before the import trips over
+# them; stop first, loudly, without touching the site.
+migrate_status=0
+"$PYTHON" webapp/manage.py migrate --check >/dev/null 2>&1 || migrate_status=$?
+if [ "$migrate_status" -ne 0 ]; then
+    echo "ABORT: unapplied migrations (or manage.py failed, exit ${migrate_status})."
+    echo "       Run: $PYTHON webapp/manage.py migrate   — then re-run this script."
+    "$PYTHON" webapp/manage.py showmigrations jobs 2>&1 | grep -F '[ ]' || true
+    ping_health /fail
+    echo "=== aborted before the pipeline — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+    exit 78
+fi
+
 # --active-only is the cost guard, not --resume: 6,904 postings have no schema_json
 # but only ~15 of them are active, and the rest will never reach the export. Without
 # it every run would pay for LLM extraction on thousands of expired postings.
-set +e
+pipeline_status=0
 "$PYTHON" pipeline.py \
     --continue-on-error \
     --since "$DOWNLOAD_SINCE" \
     --active-only \
     --resume \
     --workers "$WORKERS" \
-    --prompt-version "$PROMPT_VERSION"
-pipeline_status=$?
-set -e
+    --prompt-version "$PROMPT_VERSION" || pipeline_status=$?
 
 if [ "$pipeline_status" -ne 0 ]; then
     # Degraded publication is an EXPLICIT configured policy, off by default:
@@ -94,10 +112,8 @@ fi
 # build_meta that says the export never ran -- and none of them can be a bad day's
 # data. Soft warnings print and are recorded but do not block; add --strict once the
 # thresholds have a few weeks of runs behind them.
-set +e
-"$PYTHON" ops/check-export.py --prompt-version "$PROMPT_VERSION"
-check_status=$?
-set -e
+check_status=0
+"$PYTHON" ops/check-export.py --prompt-version "$PROMPT_VERSION" || check_status=$?
 
 if [ "$check_status" -ne 0 ]; then
     echo "ABORT: the export failed its hard checks and was NOT deployed. The shared"

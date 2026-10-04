@@ -77,6 +77,8 @@ run_suite('valid and legacy query shapes keep working', function () use ($base) 
         '/?judet=cluj'                                   => 'legacy scalar judet',
         '/?status=all'                                   => 'old status=all link',
         '/?status=necunoscut'                            => 'unknown status falls back',
+        '/?status=closed'                                => 'closed status (FIX-05)',
+        '/?status=unknown'                               => 'unknown-deadline status (FIX-05)',
         '/?page=2'                                       => 'page two',
         '/?page=abc'                                     => 'non-numeric page',
         '/?page=99999'                                   => 'huge page clamps',
@@ -224,6 +226,19 @@ run_suite('filtering, facet parity, chips, pagination, sort', function () use ($
         strpos($sorted, 'href="/job/1005-muncitor-necalificat/"') < strpos($sorted, 'href="/job/1002-referent-debutant/"'),
         'earliest known deadline follows the unknown one'
     );
+
+    // FIX-05: the status vocabulary partitions the corpus consistently.
+    [, $closed] = fetch_page($base, '/?status=closed');
+    assert_contains('href="/job/1003-inspector-grad-ii/"', $closed, 'closed shows the past-deadline row');
+    assert_not_contains('href="/job/1001-asistent-medical-generalist/"', $closed, 'closed hides open rows');
+    [, $unknown] = fetch_page($base, '/?status=unknown');
+    assert_contains('href="/job/1005-muncitor-necalificat/"', $unknown, 'unknown shows the no-date row');
+    assert_not_contains('href="/job/1001-asistent-medical-generalist/"', $unknown, 'unknown hides dated rows');
+    // The default active view excludes the closed row and includes the
+    // unknown-deadline one, with its explicit "Termen neprecizat" display.
+    [, $home] = fetch_page($base, '/');
+    assert_not_contains('href="/job/1003-inspector-grad-ii/"', $home, 'default view excludes closed');
+    assert_contains('href="/job/1005-muncitor-necalificat/"', $home, 'default view keeps unknown-deadline rows');
 
     // Search: FTS finds the posting whose body mentions "spital".
     [, $search] = fetch_page($base, '/?q=spital');

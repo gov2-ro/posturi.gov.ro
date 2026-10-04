@@ -279,10 +279,27 @@ def extract_contact(body_text):
 
 # --- Calendar date helpers ---
 
-def _find_calendar_date(calendar_rows, keywords):
+def _find_calendar_date(calendar_rows, keywords, exclude_deadline_rows=False):
+    """First calendar row whose label matches a keyword, or ''.
+
+    `exclude_deadline_rows` (used for the results probe) skips rows that look
+    like submission-deadline rows — "Data finală de depunere" is a deadline,
+    not the date final results are published, and `final` alone used to match
+    it. For the written-test probe, 'scris' must not match 'înscris/înscrisă'
+    ("candidații înscriși"), so it requires a non-'în' prefix.
+    """
     for eveniment, data, ora, _end in calendar_rows:
-        if any(kw.lower() in eveniment.lower() for kw in keywords):
-            return data + (f', ora {ora}' if ora else '')
+        text = eveniment.lower()
+        if exclude_deadline_rows:
+            if any(kw in text for kws in _DEADLINE_KEYWORDS for kw in kws):
+                continue
+        for kw in keywords:
+            kw = kw.lower()
+            if kw == 'scris':
+                if re.search(r'(?<!în)' + re.escape(kw), text):
+                    return data + (f', ora {ora}' if ora else '')
+            elif kw in text:
+                return data + (f', ora {ora}' if ora else '')
     return ''
 
 
@@ -549,7 +566,10 @@ def extract_job_details(file_path):
             data_limita = m.group(1)
     data_scrisa = _find_calendar_date(calendar_rows, ['scrisa', 'scrisă', 'scris'])
     data_interviu = _find_calendar_date(calendar_rows, ['interviu'])
-    data_rezultate = _find_calendar_date(calendar_rows, ['final', 'rezultat final', 'rezultate finale'])
+    # Exclude deadline-shaped rows: "Data finală de depunere" is a deadline,
+    # not the results announcement.
+    data_rezultate = _find_calendar_date(calendar_rows, ['final', 'rezultat final', 'rezultate finale'],
+                                         exclude_deadline_rows=True)
 
     # --- Index dates ---
     src_url = source_url_from_path(file_path)

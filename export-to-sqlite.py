@@ -214,7 +214,14 @@ CREATE TABLE job_postings (
     -- to `expires_at`, so it is correct wherever a deadline is known and no
     -- worse than before where none is.
     apply_deadline          TEXT,
-    deadline_source         TEXT NOT NULL DEFAULT ''
+    deadline_source         TEXT NOT NULL DEFAULT '',
+    -- FIX-05: the one status vocabulary every surface filters on.
+    --   confirmed_open  a known submission date (concurs/anunt) still ahead
+    --   unconfirmed     only the announcement expiry is known; visibly separate
+    --   closed          the application date has passed
+    --   unknown         no date anywhere
+    -- Cancelled postings never reach this table (the export excludes them).
+    application_status      TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -302,6 +309,9 @@ def fmt_date(v) -> str | None:
 
 def export(pg, con: sqlite3.Connection, active_only: bool = False):
     cur = pg.cursor()
+    # Status comparisons use the Bucharest calendar day, like every other
+    # day-boundary in the pipeline.
+    today = datetime.now(BUCHAREST).date().isoformat()
 
     print("Exporting judete...", end=" ", flush=True)
     cur.execute("SELECT id, name, slug FROM jobs_judet ORDER BY id")
@@ -424,6 +434,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             v4["funding_source"], v4["funding_programme"],
             v4["employer_sector"], v4["parent_institution"], v4["application_deadline"],
             deadline["date"], deadline["source"],
+            _application_status(deadline, today),
         ))
         total += 1
         if len(batch) >= 500:
@@ -653,6 +664,26 @@ def _apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
     return {"date": None, "source": ""}
 
 
+def _application_status(deadline: dict, today: str) -> str:
+    """FIX-05: the one status vocabulary every surface filters on.
+
+    Confirmed dates (concurs/anunt) that are still ahead are open; the expiry
+    fallback is UNCONFIRMED — visibly separate from open — and any date in the
+    past is closed. No date anywhere is unknown. Cancellation is handled by
+    exclusion: cancelled postings never reach this table.
+    """
+    d, src = deadline["date"], deadline["source"]
+    if d is None:
+        return "unknown"
+    if d < today:
+        return "closed"
+    if src in ("concurs", "anunt"):
+        return "confirmed_open"
+    if src == "expirare":
+        return "unconfirmed"
+    return "unknown"
+
+
 def _v4_columns(schema_json_text) -> dict:
     """Flatten the prompt-v4 scalars worth faceting or sorting on.
 
@@ -765,7 +796,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         sal_min, sal_max, sal_confidence, sal_variant, sal_json,
         v4_funding_source, v4_funding_programme,
         v4_employer_sector, v4_parent_institution, v4_application_deadline,
-        apply_deadline, deadline_source"""
+        apply_deadline, deadline_source, application_status"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart
     # (they did twice while this was hand-maintained `?` strings).

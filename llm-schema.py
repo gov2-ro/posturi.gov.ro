@@ -508,10 +508,13 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None):
     Returns (sql_fragment, params) — used by both iter_postings and
     count_postings so the progress total always matches what is processed.
 
-    `resume_key` is a (provider, model, prompt_version) triple: when given,
-    postings that already have a variant row for exactly that combination are
-    excluded. Done in SQL rather than by filtering the generator so the count
-    and the iteration cannot drift apart.
+    `resume_key` is a (provider, model, prompt_version) triple. With it, a
+    posting is skipped only when its PRODUCTION extraction is current: the
+    same key, and the source revision it was extracted from still matches the
+    posting's current content hash (FIX-03/FIX-05). Either side empty — legacy
+    provenance or a legacy hash — means "cannot prove current", so the row is
+    selected for upgrade. Without it (a plain run), the old behaviour stands:
+    any non-null schema_json is skipped unless --force.
     """
     conds, params = [], []
     if slug_filter:
@@ -520,24 +523,32 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None):
     if active_only:
         conds.append("expires_at >= CURRENT_DATE")
     if resume_key:
+        provider, model, prompt_version = resume_key
         conds.append(
-            "NOT EXISTS (SELECT 1 FROM jobs_jobpostingschemavariant v "
-            "WHERE v.posting_id = jobs_jobposting.id AND v.provider = %s "
-            "AND v.model = %s AND v.prompt_version = %s)"
+            "NOT (jobs_jobposting.schema_json IS NOT NULL "
+            "AND jobs_jobposting.schema_provider = %s "
+            "AND jobs_jobposting.schema_model = %s "
+            "AND jobs_jobposting.schema_prompt_version = %s "
+            "AND jobs_jobposting.schema_source_revision != '' "
+            "AND jobs_jobposting.detail_content_hash != '' "
+            "AND jobs_jobposting.schema_source_revision "
+            "= jobs_jobposting.detail_content_hash)"
         )
-        params.extend(resume_key)
+        params.extend([provider, model, prompt_version])
     return (" WHERE " + " AND ".join(conds) if conds else ""), params
 
 
 def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
                   active_only=False, resume_key=None):
-    """Yield (posting_id, url, combined_content) rows that need schema generation.
+    """Yield (posting_id, url, content_hash, combined_content) rows needing schema work.
 
     Combines body_markdown (web page text) and attachment_text (extracted from
     attached docx/pdf) so the LLM sees the full picture for each posting.
     When `strip_boilerplate` is True (default) the HG 1.336/2022 generic
     eligibility lines are stripped before yielding — see boilerplate.py.
-    Skips rows where schema_json is already set unless force=True.
+    Skips rows where schema_json is already set unless force=True — EXCEPT
+    under resume_key, where the WHERE clause already encodes revision-aware
+    currency and stale production rows must be yielded, not skipped here.
     """
     where, params = _selection_where(slug_filter, active_only, resume_key)
     with conn.cursor() as cur:
@@ -546,13 +557,14 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
         # happened to scan first, which made a --limit test run un-repeatable
         # and never showed the postings most likely to reveal a prompt problem.
         cur.execute(
-            "SELECT id, url, body_markdown, attachment_text, schema_json "
+            "SELECT id, url, body_markdown, attachment_text, schema_json, "
+            "detail_content_hash "
             "FROM jobs_jobposting" + where +
             " ORDER BY published_at DESC NULLS LAST, id DESC",
             params,
         )
-        for row_id, url, body, attachment, existing_schema in cur:
-            if existing_schema is not None and not force:
+        for row_id, url, body, attachment, existing_schema, content_hash in cur:
+            if existing_schema is not None and not force and resume_key is None:
                 continue
             content = (body or "").strip()
             if attachment and attachment.strip():
@@ -563,50 +575,68 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
                 if len(content) > 100_000:
                     print(f"  ⚠ content truncated ({len(content)} chars) for {url.rstrip('/').split('/')[-1]}")
                     content = content[:100_000]
-                yield row_id, url, content
+                yield row_id, url, content_hash or "", content
 
 
 def count_postings(conn, slug_filter=None, force=False, active_only=False, resume_key=None):
     """Return the number of postings that iter_postings would yield."""
     where, params = _selection_where(slug_filter, active_only, resume_key)
-    if not force:
+    if not force and resume_key is None:
         where += (" AND " if where else " WHERE ") + "schema_json IS NULL"
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM jobs_jobposting" + where, params)
         return cur.fetchone()[0]
 
 
-def write_schema(conn, posting_id, schema):
-    """Write the extracted schema dict to jobs_jobposting.schema_json."""
+def write_schema(conn, posting_id, schema, *, provider, model, prompt_version,
+                 source_revision, extracted_at):
+    """Write the extracted schema AND its production provenance, atomically.
+
+    One UPDATE, one commit: provenance can never disagree with schema_json
+    (a crash between the two would otherwise leave a production row that
+    --resume cannot recognize as current and would re-extract). Compare-only
+    runs never call this — variants alone are not production.
+    """
     with conn.cursor() as cur:
         cur.execute(
-            "UPDATE jobs_jobposting SET schema_json = %s WHERE id = %s",
-            (json.dumps(schema, ensure_ascii=False), posting_id),
+            "UPDATE jobs_jobposting SET schema_json = %s, "
+            "schema_provider = %s, schema_model = %s, schema_prompt_version = %s, "
+            "schema_source_revision = %s, schema_extracted_at = %s "
+            "WHERE id = %s",
+            (json.dumps(schema, ensure_ascii=False), provider, model,
+             prompt_version, source_revision or "", extracted_at, posting_id),
         )
     conn.commit()
 
 
-def write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost_usd, latency_ms, prompt_version=PROMPT_VERSION):
-    """Write variant to jobs_jobpostingschemavariant (upsert on unique constraint)."""
+def write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost_usd, latency_ms, prompt_version=PROMPT_VERSION, source_revision=""):
+    """Write variant to jobs_jobpostingschemavariant (upsert on unique constraint).
+
+    `source_revision` records which source content this variant saw, so a
+    stale compare result can never be mistaken for current evidence (FIX-05).
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO jobs_jobpostingschemavariant
                 (posting_id, provider, model, prompt_version, schema_json,
-                 input_tokens, output_tokens, cost_usd, latency_ms, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                 input_tokens, output_tokens, cost_usd, latency_ms,
+                 source_revision, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (posting_id, provider, model, prompt_version)
             DO UPDATE SET
-                schema_json   = EXCLUDED.schema_json,
-                input_tokens  = EXCLUDED.input_tokens,
-                output_tokens = EXCLUDED.output_tokens,
-                cost_usd      = EXCLUDED.cost_usd,
-                latency_ms    = EXCLUDED.latency_ms,
-                created_at    = NOW()
+                schema_json     = EXCLUDED.schema_json,
+                input_tokens    = EXCLUDED.input_tokens,
+                output_tokens   = EXCLUDED.output_tokens,
+                cost_usd        = EXCLUDED.cost_usd,
+                latency_ms      = EXCLUDED.latency_ms,
+                source_revision = EXCLUDED.source_revision,
+                created_at      = NOW()
             """,
             (posting_id, provider, model, prompt_version,
              json.dumps(schema, ensure_ascii=False),
-             input_tokens, output_tokens, cost_usd, latency_ms),
+             input_tokens, output_tokens, cost_usd, latency_ms,
+             source_revision or ""),
         )
     conn.commit()
 
@@ -818,7 +848,7 @@ if __name__ == '__main__':
 
             def call(row, _generate=generate):
                 """Runs on a worker thread: LLM call + local checks, no database."""
-                posting_id, url, content = row
+                posting_id, url, content_hash, content = row
                 retries = 0
 
                 def note_retry(attempt, exc, delay):
@@ -846,7 +876,7 @@ if __name__ == '__main__':
 
             fatal_error = None
             with tqdm(total=total, unit="post", dynamic_ncols=True) as bar:
-                for (posting_id, url, content), future in imap_unordered(
+                for (posting_id, url, content_hash, content), future in imap_unordered(
                     call, postings, args.workers
                 ):
                     slug = url.rstrip('/').split('/')[-1]
@@ -887,10 +917,15 @@ if __name__ == '__main__':
                         tqdm.write(f"  ⚠ {slug}: unsupported quote — {finding}")
 
                     cost = compute_cost(provider, model, input_tokens, output_tokens, cached_tokens)
-                    write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms, args.prompt_version)
+                    write_variant(conn, posting_id, provider, model, schema, input_tokens, output_tokens, cost, latency_ms, args.prompt_version,
+                                  source_revision=content_hash)
 
                     if not args.compare:
-                        write_schema(conn, posting_id, schema)
+                        write_schema(conn, posting_id, schema,
+                                     provider=provider, model=model,
+                                     prompt_version=args.prompt_version,
+                                     source_revision=content_hash,
+                                     extracted_at=datetime.now(timezone.utc))
 
                     summary.ok += 1
                     summary.input_tokens += input_tokens or 0

@@ -145,6 +145,17 @@ class JobPosting(models.Model):
     )
     inferred = models.JSONField(default=dict, blank=True, help_text="Reserved for v2/v3 derived fields")
     schema_json = models.JSONField(null=True, blank=True, help_text="LLM-extracted structured sections for display (responsibilities, qualifications, skills, etc.)")
+    # ---- Production extraction provenance (FIX-05) ----
+    # Written atomically with schema_json by the production path of
+    # llm-schema.py — never by compare-only runs. `schema_source_revision` is
+    # the detail_content_hash the extraction ran against: a revision change
+    # (FIX-03) makes the production row stale and eligible for re-extraction
+    # even though schema_json is non-null.
+    schema_provider = models.CharField(max_length=50, blank=True, default="")
+    schema_model = models.CharField(max_length=100, blank=True, default="")
+    schema_prompt_version = models.CharField(max_length=20, blank=True, default="")
+    schema_source_revision = models.CharField(max_length=64, blank=True, default="")
+    schema_extracted_at = models.DateTimeField(null=True, blank=True)
 
     # ---- Occupation and estimated pay ----
     occupation = models.ForeignKey(
@@ -317,6 +328,10 @@ class JobPostingSchemaVariant(models.Model):
     output_tokens = models.IntegerField(null=True, blank=True)
     cost_usd = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
     latency_ms = models.IntegerField(null=True, blank=True)
+    #: The posting's detail_content_hash this variant was extracted from (FIX-05).
+    #: A compare-only variant whose revision no longer matches the source is
+    #: stale evidence, never a candidate for promotion.
+    source_revision = models.CharField(max_length=64, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

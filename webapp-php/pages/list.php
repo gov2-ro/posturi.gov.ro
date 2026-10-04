@@ -125,8 +125,7 @@ if ($is_unfiltered) {
 // the facet lists cannot quietly change what the landing offers.
 $shortcuts = [];
 if ($is_unfiltered) {
-    $today = ro_today();
-    $live  = "(apply_deadline IS NULL OR apply_deadline >= '$today')";
+    $live  = "application_status IN (" . OPEN_STATUS_SQL . ")";
 
     foreach (db()->query(
         "SELECT inf_profession_family AS v, COUNT(*) AS c FROM job_postings
@@ -230,12 +229,14 @@ $studies_options   = get_facet('inf_studies_required', 'studies_levels');
     $s = facet_scope('status');
     $where_st = $s['where'] ? 'WHERE ' . implode(' AND ', $s['where']) : '';
     $today = ro_today();
-    $in7   = date('Y-m-d', strtotime('+7 days'));
+    $in7   = (new DateTimeImmutable($today, new DateTimeZone('Europe/Bucharest')))
+        ->modify('+7 days')->format('Y-m-d');
+    $open  = "application_status IN (" . OPEN_STATUS_SQL . ")";
     $st = db()->prepare("SELECT
-            SUM(CASE WHEN j.apply_deadline IS NULL OR j.apply_deadline >= ? THEN 1 ELSE 0 END) AS active,
-            SUM(CASE WHEN j.apply_deadline >= ? AND j.apply_deadline <= ? THEN 1 ELSE 0 END)   AS soon
+            SUM(CASE WHEN j.$open THEN 1 ELSE 0 END) AS active,
+            SUM(CASE WHEN j.$open AND j.apply_deadline >= ? AND j.apply_deadline <= ? THEN 1 ELSE 0 END) AS soon
         FROM job_postings j {$s['join']} $where_st");
-    $st->execute(array_merge([$today, $today, $in7], $s['binds']));
+    $st->execute(array_merge([$today, $in7], $s['binds']));
     $r = $st->fetch() ?: [];
     $status_counts = [
         'active' => (int)($r['active'] ?? 0),

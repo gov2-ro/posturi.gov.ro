@@ -630,10 +630,18 @@ const DEFAULT_STATUS = 'active';
 // so it counted exactly the same rows as "Active" (1,799 of 1,799) and cost a
 // third of the control's width to say nothing. An unknown status in the URL
 // falls back to DEFAULT_STATUS, so old ?status=all links still resolve.
+// FIX-05 added closed/unknown from the export's application_status vocabulary;
+// "active" includes confirmed open, unconfirmed expiry fallbacks and unknown
+// dates — the rows whose display already qualifies the difference.
 const STATUS_LABELS = [
-    'active' => 'Active',
-    'soon'   => 'Expiră în 7 zile',
+    'active'  => 'Active',
+    'soon'    => 'Expiră în 7 zile',
+    'closed'  => 'Închise',
+    'unknown' => 'Termen neprecizat',
 ];
+
+/** The open-application statuses, for every "still active?" count query. */
+const OPEN_STATUS_SQL = "'confirmed_open','unconfirmed','unknown'";
 
 /** slug => name, for turning `judet=cluj` back into "Cluj" on a chip. */
 function judet_names(): array {
@@ -1234,15 +1242,24 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     }
 
     if ($excl !== 'status') {
-        $today = ro_today();
+        // FIX-05: one status vocabulary (export's application_status), shared
+        // by every surface. "Active" = open applications: a confirmed date
+        // ahead, an unconfirmed expiry fallback (visibly qualified in rows),
+        // or no date at all — those are not known-closed. Old ?status=all
+        // links still resolve: 'all' adds no clause.
         if ($status === 'active') {
-            $where[] = "(" . DEADLINE_COL . " IS NULL OR " . DEADLINE_COL . " >= ?)";
-            $binds[] = $today;
+            $where[] = "j.application_status IN (" . OPEN_STATUS_SQL . ")";
         } elseif ($status === 'soon') {
+            $where[] = "j.application_status IN (" . OPEN_STATUS_SQL . ")";
+            $today = ro_today();
             $where[] = "(" . DEADLINE_COL . " >= ? AND " . DEADLINE_COL . " <= ?)";
             $binds[] = $today;
             $binds[] = (new DateTimeImmutable($today, new DateTimeZone('Europe/Bucharest')))
                 ->modify('+7 days')->format('Y-m-d');
+        } elseif ($status === 'closed') {
+            $where[] = "j.application_status = 'closed'";
+        } elseif ($status === 'unknown') {
+            $where[] = "j.application_status = 'unknown'";
         }
         // 'all' adds no clause
     }

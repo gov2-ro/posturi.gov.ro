@@ -16,11 +16,13 @@ $total = (int)db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id
 $stmt2 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ?");
 $stmt2->execute([$eid]); $total = (int)$stmt2->fetchColumn();
 
-$stmt3 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND apply_deadline >= ?");
-$stmt3->execute([$eid, $today]); $active_count = (int)$stmt3->fetchColumn();
+// FIX-05: the shared status vocabulary — open applications vs known-closed.
+$open_sql = "application_status IN (" . OPEN_STATUS_SQL . ")";
+$stmt3 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND $open_sql");
+$stmt3->execute([$eid]); $active_count = (int)$stmt3->fetchColumn();
 
-$stmt4 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND (apply_deadline < ? OR apply_deadline IS NULL)");
-$stmt4->execute([$eid, $today]); $expired_count = (int)$stmt4->fetchColumn();
+$stmt4 = db()->prepare("SELECT COUNT(*) FROM job_postings WHERE employer_id = ? AND application_status = 'closed'");
+$stmt4->execute([$eid]); $expired_count = (int)$stmt4->fetchColumn();
 
 // By judet
 $stmt5 = db()->prepare("SELECT judet_name, judet_slug, COUNT(*) AS cnt FROM job_postings WHERE employer_id = ? AND judet_id IS NOT NULL GROUP BY judet_id ORDER BY cnt DESC");
@@ -33,12 +35,12 @@ $stmt6->execute([$eid]); $top_cat_row = $stmt6->fetch();
 $top_category = $top_cat_row ? $top_cat_row['employer_category'] : null;
 
 // Active postings (50)
-$stmt7 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND apply_deadline >= ? ORDER BY apply_deadline ASC LIMIT 50");
-$stmt7->execute([$eid, $today]); $active_postings = $stmt7->fetchAll();
+$stmt7 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND $open_sql ORDER BY apply_deadline ASC LIMIT 50");
+$stmt7->execute([$eid]); $active_postings = $stmt7->fetchAll();
 
 // Recent expired (25)
-$stmt8 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND (apply_deadline < ? OR apply_deadline IS NULL) ORDER BY published_at DESC LIMIT 25");
-$stmt8->execute([$eid, $today]); $expired_postings = $stmt8->fetchAll();
+$stmt8 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND application_status = 'closed' ORDER BY published_at DESC LIMIT 25");
+$stmt8->execute([$eid]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
 

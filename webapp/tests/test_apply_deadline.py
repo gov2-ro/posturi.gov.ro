@@ -139,11 +139,17 @@ class TestPhpUsesTheDeadline:
         assert "'expires_at'" in src, "kept for API compatibility"
 
     @pytest.mark.parametrize("name", [
-        "pages/employer.php", "pages/employers.php", "pages/stats.php",
-        "pages/sitemap.php",
+        "pages/employer.php", "pages/sitemap.php",
     ])
     def test_every_active_or_countdown_site_uses_the_deadline(self, sources, name):
         assert "apply_deadline" in sources[name]
+
+    @pytest.mark.parametrize("name", ["pages/employers.php", "pages/stats.php"])
+    def test_count_sites_use_the_shared_status_vocabulary(self, sources, name):
+        """FIX-05: these count "open applications" through the shared
+        application_status vocabulary (derived from the deadline at export
+        time), so the count and the browse filter cannot disagree."""
+        assert "OPEN_STATUS_SQL" in sources[name]
 
     def test_the_result_list_resolves_the_deadline_once(self, sources):
         """The list row that used to count from one date and print another now

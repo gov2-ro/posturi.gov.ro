@@ -2,6 +2,49 @@
 
 ## 2026
 
+### 2026-10-04 — FIX-05: version-aware production extraction and the status vocabulary (code readiness)
+
+**What:** Production extraction now carries explicit provenance:
+`llm-schema.py` writes `schema_provider/model/prompt_version/
+source_revision/extracted_at` atomically with `schema_json` (one UPDATE, one
+commit — a crash can never leave an unrecognized production row), variants
+record the `source_revision` they saw, and `--resume` became revision-aware:
+a posting is skipped only when its production result is current (same
+provider/model/prompt AND the extraction's revision still equals the posting's
+current `detail_content_hash`); legacy provenance or a changed source selects
+the row for upgrade even with non-null `schema_json`. Plain runs keep the old
+skip-non-null behavior, so the upgrade cost only happens under the explicit
+`--resume` mode the cron uses. Compare-only runs remain non-mutating.
+Calendar keyword hardening: the written-test probe no longer matches
+"înscriși" (contains "scris"), and the results probe skips deadline-shaped
+rows — "Data finală de depunere" is a deadline, not the results date. The
+export now computes `application_status` (confirmed_open / unconfirmed /
+closed / unknown, Bucharest today) and the whole PHP surface filters on that
+one vocabulary: status filter gains closed/unknown, active = open +
+unconfirmed + unknown, all count queries (landing shortcuts, facet counts,
+employer pages, stats) share `OPEN_STATUS_SQL`, so browse and counts cannot
+disagree. Row display already qualifies unconfirmed/unknown (FIX-02).
+
+**Validation:** 15 new tests (test_production_extraction.py: revision-aware
+selection SQL, atomic provenance write, variant revision, status mapping
+incl. today-is-open, keyword hardening fixtures); two source-string tests
+updated to the shared-vocabulary shape; request suite grows closed/unknown
+partition checks; fixture builder carries per-row statuses. Full suite 547
+passed; Playwright 15/15. Export e2e on the local corpus: 52 closed /
+320 unconfirmed — matches the audit's "almost everything is expiry
+fallbacks" finding.
+
+**Still open (rollout, per spec):** re-sample v4 on current refreshed inputs
+(paid, separately recorded), review the sample, then run the bounded
+backfill — the command shape is `python pipeline.py --steps schema
+--active-only --resume --workers 8 --prompt-version v4`, now safe because
+--resume upgrades stale/legacy rows and never re-pays for current work.
+FIX-05-RUN owns the evidence. An explicit --promote-from-variant path was
+deliberately not built: --resume-based upgrade covers the cron's need, and
+compare variants with matching revisions remain valid promotion candidates
+for a future flag.
+
+---
 ### 2026-10-04 — FIX-06: truthful freshness and deployed-version markers
 
 **What:** The site no longer presents a cached import date as source

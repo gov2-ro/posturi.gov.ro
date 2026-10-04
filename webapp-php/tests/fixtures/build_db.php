@@ -106,7 +106,8 @@ CREATE TABLE job_postings (
     v4_parent_institution   TEXT NOT NULL DEFAULT '',
     v4_application_deadline TEXT,
     apply_deadline          TEXT,
-    deadline_source         TEXT NOT NULL DEFAULT ''
+    deadline_source         TEXT NOT NULL DEFAULT '',
+    application_status      TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE calendar_events (
     id          INTEGER PRIMARY KEY,
@@ -164,7 +165,7 @@ SQL);
         'occ_canonical','occ_cor_code','occ_isco_group','occ_confidence',
         'sal_min','sal_max','sal_confidence','sal_variant','sal_json',
         'v4_funding_source','v4_funding_programme','v4_employer_sector','v4_parent_institution',
-        'v4_application_deadline','apply_deadline','deadline_source'];
+        'v4_application_deadline','apply_deadline','deadline_source','application_status'];
     $ph = implode(', ', array_fill(0, count($columns), '?'));
     $ins_j = $db->prepare('INSERT INTO job_postings (' . implode(', ', $columns) . ') VALUES (' . $ph . ')');
 
@@ -199,6 +200,7 @@ SQL);
         'v3_bibliography' => '[]', 'sal_confidence' => '', 'sal_variant' => '',
         'v4_funding_source' => '', 'v4_funding_programme' => '', 'v4_employer_sector' => '',
         'v4_parent_institution' => '', 'v4_application_deadline' => null, 'deadline_source' => '',
+        'application_status' => 'confirmed_open',
     ];
 
     // --- Deadline matrix (today is fixed at 2026-10-03 via POSTURI_TODAY) ---
@@ -222,6 +224,7 @@ SQL);
         'occ_canonical' => 'Asistent medical', 'occ_cor_code' => '325901', 'occ_isco_group' => '32',
         'occ_confidence' => 'exact', 'sal_min' => 4100, 'sal_max' => 5200,
         'apply_deadline' => '2026-10-16', 'deadline_source' => 'anunt',
+            'application_status' => 'confirmed_open',
     ] + $base);
 
     // 1002: deadline today — "Azi!".
@@ -234,6 +237,7 @@ SQL);
         'body_markdown' => 'Se organizează concurs pentru postul de referent.',
         'occ_canonical' => 'Referent', 'sal_min' => 3300, 'sal_max' => 3300,
         'apply_deadline' => '2026-10-03', 'deadline_source' => 'concurs',
+            'application_status' => 'confirmed_open',
     ] + $base);
 
     // 1003: deadline past — closed.
@@ -246,6 +250,7 @@ SQL);
         'body_markdown' => 'Concurs pentru postul de inspector.',
         'occ_canonical' => 'Inspector', 'sal_min' => 4500, 'sal_max' => 5000,
         'apply_deadline' => '2026-09-30', 'deadline_source' => 'anunt',
+            'application_status' => 'closed',
     ] + $base);
 
     // 1004: expiry fallback — the date must be visibly an estimate.
@@ -258,6 +263,7 @@ SQL);
         'body_markdown' => 'Se organizează concurs pentru postul de îngrijitor.',
         'occ_canonical' => 'Îngrijitor', 'sal_min' => 2800, 'sal_max' => 2800,
         'apply_deadline' => '2026-10-20', 'deadline_source' => 'expirare',
+            'application_status' => 'unconfirmed',
     ] + $base);
 
     // 1005: no dates anywhere — explicit unknown state, no countdown.
@@ -270,6 +276,7 @@ SQL);
         'body_markdown' => 'Concurs pentru muncitor necalificat.',
         'occ_canonical' => 'Muncitor necalificat', 'sal_min' => 2500, 'sal_max' => 2500,
         'apply_deadline' => null, 'deadline_source' => '',
+            'application_status' => 'unknown',
     ] + $base);
 
     // 1006: confirmed deadline equals expiry — the "se încheie" line must not duplicate.
@@ -281,6 +288,7 @@ SQL);
         'body_markdown' => 'Concurs pentru consilier juridic.',
         'occ_canonical' => 'Consilier juridic', 'sal_min' => 5600, 'sal_max' => 7000,
         'apply_deadline' => '2026-10-16', 'deadline_source' => 'concurs',
+            'application_status' => 'confirmed_open',
     ] + $base);
 
     // 1007: hostile Markdown body — the FIX-01 browser fixture renders this.
@@ -296,6 +304,7 @@ SQL);
             . "\n\nUn [link legitim](https://posturi.gov.ro/documente/anunt-1007.pdf).",
         'occ_canonical' => 'Analist', 'sal_min' => 3000, 'sal_max' => 3500,
         'apply_deadline' => '2026-10-25', 'deadline_source' => 'anunt',
+            'application_status' => 'confirmed_open',
     ] + $base);
 
     // 1008: multi-role v3 row with structured sections and a calendar.
@@ -327,6 +336,7 @@ SQL);
         'v3_contract_duration' => 'determinata', 'v3_schedule' => 'norma_intreaga',
         'occ_canonical' => 'Referent', 'sal_min' => 3300, 'sal_max' => 3300,
         'apply_deadline' => '2026-10-21', 'deadline_source' => 'concurs',
+            'application_status' => 'confirmed_open',
     ] + $base);
 
     // A batch of 30 plain rows (published before everything above) so the list

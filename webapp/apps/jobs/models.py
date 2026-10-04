@@ -122,6 +122,19 @@ class JobPosting(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_seen_at = models.DateField(null=True, blank=True, help_text="Set by importer; can detect dropped postings")
+    # ---- Source retrieval provenance (FIX-03) ----
+    # Set ONLY from a real successful detail fetch, never from import/build
+    # time. Legacy postings predating this leave both fields empty — unknown,
+    # not "fetched now".
+    detail_fetched_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the cached detail page was last successfully retrieved from the source.",
+    )
+    detail_content_hash = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="SHA-256 of the extracted detail content — the source revision identity. "
+                  "Enrichment results are only current while they match this hash.",
+    )
     cancelled = models.BooleanField(
         default=False,
         help_text=(

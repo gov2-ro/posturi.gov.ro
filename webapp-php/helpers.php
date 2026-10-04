@@ -150,7 +150,11 @@ function days_until(?string $date_str): ?int {
     try {
         $tz = new DateTimeZone('Europe/Bucharest');
         $d = new DateTimeImmutable(substr($date_str, 0, 10), $tz);
-        $today = new DateTimeImmutable('today', $tz);
+        // ro_today(), not `new DateTimeImmutable('today')`: one source of
+        // "today" for every countdown, sort window and status filter — and the
+        // POSTURI_TODAY test seam. Two day-boundary computations that can
+        // disagree are exactly the bug class FIX-02 exists to remove.
+        $today = new DateTimeImmutable(ro_today(), $tz);
         // $d->diff($today) is the interval *from the deadline back to today*,
         // so invert=1 means the deadline is still ahead of us.
         $diff = $d->diff($today);

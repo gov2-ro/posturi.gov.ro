@@ -2,6 +2,50 @@
 
 ## 2026
 
+### 2026-10-04 — FIX-03: detail refresh, cancellation from the detail page, source provenance
+
+**What:** `fetch-anunturi.py` now refreshes cached detail pages under a
+bounded policy: a cache whose sidecar says the last successful retrieval is
+older than 24h (or has no sidecar — legacy age is unknown, which counts as
+due) is re-fetched, capped at 200 re-fetches per run (`--refresh-hours`,
+`--max-refresh`). Every fetch writes `<slug>.html` and a `<slug>.meta.json`
+sidecar (URL, real fetch time, SHA-256 content hash, parsed status), both
+atomically — a failed or structurally unexpected response (404/410 are
+terminal; a 200 without `pg-wrap`/`main#main` is rejected) leaves the previous
+good cache untouched. The detail page's own `.pg-status` marker (`is-off` →
+Anulat, `is-live` → live, absent/unknown → unknown) is recorded and flows
+through the parser into new `Status`/`Detail Fetched At`/`Detail Content Hash`
+CSV columns. `import_csvs.py` imports those into new `JobPosting` fields
+(migration 0013) and lets the detail status override the stale index
+"Anulat" marker in both directions (withdrawals suppress immediately — the
+export already excludes cancelled rows, so this reaches the live SQLite
+without waiting for LLM work; reinstatements un-hide). Legacy rows keep
+empty provenance = unknown, never synthesized from import time. Summary
+counts: new / refreshed (changed / unchanged / legacy) / fresh / cancelled /
+over-cap / failed.
+
+**Validation:** 19 new tests (webapp/tests/test_detail_refresh.py) with a
+fake HTTP layer and old/new markup fixtures: first fetch, fresh-skip without
+HTTP, due-refresh with unchanged/changed detection, cancellation and live
+markup, malformed-200/404 preserving the previous cache, the refresh cap,
+legacy-cache adoption with a real (not backfilled) timestamp, index-cancelled
+skip, parser status/sidecar/CSV-column checks, and import precedence
+(anulat/live/unknown × index marker) plus provenance round-trip. Full suite:
+528 passed. Export verified end-to-end against local Postgres (new columns
+empty on legacy rows). PHP/browser suites unaffected — and the fixture run
+caught a real latent bug: `days_until()` computed its own `'today'` outside
+`ro_today()`, so the fixed clock and the day-boundary source could disagree;
+now fixed in helpers.php with the test suite pinned to a fixed date.
+
+**Non-obvious decisions:** `_insert_postings` now generates its VALUES
+placeholders from the column list — the hand-maintained `?` string had
+drifted off-by-one twice. Refresh counting separates legacy refreshes
+(previous content unknown) from confirmed changed/unchanged. FIX-03 delivers
+the revision plumbing; revision-aware enrichment selection/promotion is
+FIX-05's. Production fetching and paid refreshes remain separate operational
+steps.
+
+---
 ### 2026-10-03 — Postpone GitHub CI (user decision)
 
 **What:** The CI workflow written for FIX-07 (`.github/workflows/ci.yml`) will

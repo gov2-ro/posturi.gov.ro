@@ -58,6 +58,8 @@ CREATE TABLE job_postings (
     created_at              TEXT,
     updated_at              TEXT,
     last_seen_at            TEXT,
+    detail_fetched_at       TEXT,
+    detail_content_hash     TEXT NOT NULL DEFAULT '',
     other_links             TEXT NOT NULL DEFAULT '[]',
     attachment_meta         TEXT NOT NULL DEFAULT '[]',
     inferred                TEXT NOT NULL DEFAULT '{}',
@@ -145,7 +147,8 @@ SQL);
         'locality','published_at','expires_at','job_level','job_type','employer_category','categorie',
         'announcement_url','body_markdown','nr_posturi','contact_phone','contact_email','contact_person',
         'data_limita_depunere','data_proba_scrisa','data_interviu','data_rezultate_finale',
-        'created_at','updated_at','last_seen_at','other_links','attachment_meta','inferred','schema_json',
+        'created_at','updated_at','last_seen_at','detail_fetched_at','detail_content_hash',
+        'other_links','attachment_meta','inferred','schema_json',
         'inf_profession_family','inf_seniority','inf_anomaly_flags','inf_work_type','inf_remote_eligible',
         'inf_requires_computer','inf_experience_years','inf_studies_required',
         'v3_eqf_level','v3_study_level','v3_isced_fields','v3_study_labels','v3_skills','v3_languages',
@@ -175,7 +178,8 @@ SQL);
     $base = [
         'judet_id' => 1, 'judet_name' => 'Cluj', 'judet_slug' => 'cluj', 'locality' => 'Cluj-Napoca',
         'created_at' => '2026-09-01 10:00:00', 'updated_at' => '2026-10-01 10:00:00',
-        'last_seen_at' => '2026-10-03 09:00:00',
+        'last_seen_at' => '2026-10-03 09:00:00', 'detail_fetched_at' => '2026-10-03 09:00:00',
+        'detail_content_hash' => '',
         // NOT NULL DEFAULT '' columns the INSERT lists explicitly.
         'tip' => '', 'employer_category' => '', 'announcement_url' => '', 'detalii_raw' => '',
         'contact_phone' => '', 'contact_email' => '', 'contact_person' => '',

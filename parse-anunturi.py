@@ -345,6 +345,44 @@ def source_url_from_path(file_path):
     return url_from_slug(slug, _SLUG_INDEX)
 
 
+def _read_sidecar(file_path):
+    """The fetch step's per-cache metadata (fetch-anunturi.py), or None.
+
+    Carries fetched_at/content_hash/status from the *successful* retrieval.
+    Legacy caches predating FIX-03 have no sidecar — their provenance stays
+    unknown, never "fetched now".
+    """
+    meta_path = file_path[:-5] + '.meta.json'  # <slug>.html → <slug>.meta.json
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            import json as _json
+
+            data = _json.load(f)
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _detail_status(soup):
+    """The detail page's own status marker: 'anulat' | 'live' | '' (unknown).
+
+    New site: `.pg-status` with `is-off` (withdrawn — "Anulat") or `is-live`.
+    The sidecar (written from the full page at fetch time) is authoritative;
+    this fallback covers legacy caches whose extraction happened to contain
+    the marker. Unknown markup is unknown — never implicitly live.
+    """
+    el = soup.select_one('.pg-status')
+    if el is None:
+        return ''
+    classes = set(el.get('class') or [])
+    text = el.get_text(' ', strip=True).lower()
+    if 'is-off' in classes or 'anulat' in text:
+        return 'anulat'
+    if 'is-live' in classes:
+        return 'live'
+    return ''
+
+
 def _try_index_lookup(src_url):
     """Try to find index dates with URL fallback (old /anunt/ → new /joburi/)."""
     if src_url in _INDEX_DATES:
@@ -369,6 +407,14 @@ def extract_job_details(file_path):
 
     soup = BeautifulSoup(html_content, 'html.parser')
     is_new = _is_new_html(soup)
+
+    # --- Source retrieval provenance (FIX-03) ---
+    sidecar = _read_sidecar(file_path)
+    detail_fetched_at = (sidecar or {}).get('fetched_at', '') or ''
+    detail_content_hash = (sidecar or {}).get('content_hash', '') or ''
+    # The sidecar saw the full page at fetch time; the cached extraction is
+    # the fallback for legacy files without one.
+    detail_status = (sidecar or {}).get('status', '') or _detail_status(soup)
 
     # --- Job title ---
     job_title = ''
@@ -543,6 +589,9 @@ def extract_job_details(file_path):
         'data_rezultate_finale': data_rezultate,
         'data_publicare': date_posted,
         'data_expirare': valid_through,
+        'detail_status': detail_status,
+        'detail_fetched_at': detail_fetched_at,
+        'detail_content_hash': detail_content_hash,
         '_calendar_rows': calendar_rows,
     }
 
@@ -556,6 +605,7 @@ def save_to_csv(data_list, path):
         'Nr Posturi', 'Contact Telefon', 'Contact Email', 'Contact Persoana',
         'Data Limita Depunere', 'Data Proba Scrisa', 'Data Interviu', 'Data Rezultate Finale',
         'Data Publicare', 'Data Expirare',
+        'Status', 'Detail Fetched At', 'Detail Content Hash',
     ]
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, mode='w', newline='', encoding='utf-8') as f:
@@ -584,6 +634,9 @@ def save_to_csv(data_list, path):
                 'Data Rezultate Finale': d['data_rezultate_finale'],
                 'Data Publicare': d.get('data_publicare', ''),
                 'Data Expirare': d.get('data_expirare', ''),
+                'Status': {'anulat': 'Anulat', 'live': 'Live'}.get(d.get('detail_status'), ''),
+                'Detail Fetched At': d.get('detail_fetched_at', ''),
+                'Detail Content Hash': d.get('detail_content_hash', ''),
             })
 
 

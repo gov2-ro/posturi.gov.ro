@@ -71,9 +71,10 @@ run_suite('posting_deadline resolves one date with provenance', function () {
 run_suite('ro_today is Bucharest on any host timezone', function () {
     $expected = (new DateTimeImmutable('today', new DateTimeZone('Europe/Bucharest')))->format('Y-m-d');
     $php = escapeshellarg(PHP_BINARY);
-    $code = escapeshellarg('require "/dev/stdin"; echo ro_today();');
     foreach (['UTC', 'America/New_York', 'Asia/Tokyo'] as $tz) {
-        $out = shell_exec("TZ=$tz $php -r \"require '" . __DIR__ . "/../helpers.php'; echo ro_today();\" 2>&1");
+        // The subprocess tests the REAL clock: the parent's putenv'd
+        // POSTURI_TODAY is inherited, so it must be cleared in the child.
+        $out = shell_exec("TZ=$tz $php -r \"require '" . __DIR__ . "/../helpers.php'; putenv('POSTURI_TODAY'); echo ro_today();\" 2>&1");
         assert_same($expected, trim((string)$out), "TZ=$tz");
     }
     // And the fixed clock seam feeds the same path.

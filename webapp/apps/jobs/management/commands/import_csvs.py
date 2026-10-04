@@ -15,6 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.utils.text import slugify
 
 from apps.jobs.judete import COUNTIES as CANONICAL_COUNTIES
@@ -412,12 +413,29 @@ class Command(BaseCommand):
                     posting.data_proba_scrisa = parse_date(r.get("Data Proba Scrisa", ""))
                     posting.data_interviu = parse_date(r.get("Data Interviu", ""))
                     posting.data_rezultate_finale = parse_date(r.get("Data Rezultate Finale", ""))
+                    # Source retrieval provenance (FIX-03): populated only from a
+                    # real successful fetch, recorded beside the cache by
+                    # fetch-anunturi.py. Empty on legacy rows = unknown, not now.
+                    detail_hash = r.get("Detail Content Hash", "").strip()
+                    posting.detail_fetched_at = parse_datetime(r.get("Detail Fetched At", ""))
+                    posting.detail_content_hash = detail_hash
+                    # The detail page's own status beats the index marker: a
+                    # revised or reinstated announcement must not stay hidden by
+                    # a stale "Anunț anulat" in the listing, and a withdrawal
+                    # must suppress the posting even when its expiry is in the
+                    # future. Unknown detail status keeps the index value.
+                    status = r.get("Status", "").strip().lower()
+                    if status == "anulat":
+                        posting.cancelled = True
+                    elif status == "live":
+                        posting.cancelled = False
                     posting.save(update_fields=[
                         "job_level", "job_type", "employer_category", "categorie",
                         "announcement_url", "body_markdown", "other_links", "nr_posturi",
                         "contact_phone", "contact_email", "contact_person",
                         "data_limita_depunere", "data_proba_scrisa", "data_interviu",
                         "data_rezultate_finale", "updated_at",
+                        "detail_fetched_at", "detail_content_hash", "cancelled",
                     ])
                     matched += 1
                 except Exception as e:  # pragma: no cover

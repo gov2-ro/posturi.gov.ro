@@ -142,6 +142,11 @@ CREATE TABLE job_postings (
     created_at              TEXT,
     updated_at              TEXT,
     last_seen_at            TEXT,
+    -- Source retrieval provenance (FIX-03): real successful detail-fetch time
+    -- and the content hash that identifies the source revision. Empty on
+    -- legacy rows = unknown, never synthesized from import/build time.
+    detail_fetched_at       TEXT,
+    detail_content_hash     TEXT NOT NULL DEFAULT '',
     other_links             TEXT NOT NULL DEFAULT '[]',
     attachment_meta         TEXT NOT NULL DEFAULT '[]',
     inferred                TEXT NOT NULL DEFAULT '{}',
@@ -327,6 +332,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             jp.data_limita_depunere, jp.data_proba_scrisa,
             jp.data_interviu, jp.data_rezultate_finale,
             jp.created_at, jp.updated_at, jp.last_seen_at,
+            jp.detail_fetched_at, jp.detail_content_hash,
             jp.other_links::text AS other_links,
             jp.attachment_meta::text AS attachment_meta,
             jp.inferred::text AS inferred,
@@ -384,6 +390,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             fmt_date(r["data_limita_depunere"]), fmt_date(r["data_proba_scrisa"]),
             fmt_date(r["data_interviu"]), fmt_date(r["data_rezultate_finale"]),
             fmt_date(r["created_at"]), fmt_date(r["updated_at"]), fmt_date(r["last_seen_at"]),
+            fmt_date(r["detail_fetched_at"]), r["detail_content_hash"] or "",
             r["other_links"] or "[]",
             r["attachment_meta"] or "[]",
             r["inferred"] or "{}",
@@ -684,38 +691,41 @@ def _v3_columns(schema_json_text) -> dict:
 
 
 def _insert_postings(con: sqlite3.Connection, batch: list):
-    con.executemany("""
-        INSERT INTO job_postings(
-            id, url, title,
-            employer_id, employer_name,
-            judet_id, judet_name, judet_slug, locality,
-            detalii_raw, published_at, expires_at, tip,
-            job_level, job_type, employer_category, categorie,
-            announcement_url, body_markdown, nr_posturi,
-            contact_phone, contact_email, contact_person,
-            data_limita_depunere, data_proba_scrisa,
-            data_interviu, data_rezultate_finale,
-            created_at, updated_at, last_seen_at,
-            other_links, attachment_meta, inferred, schema_json,
-            v3_eqf_level, v3_study_level, v3_isced_fields, v3_study_labels,
-            v3_skills, v3_languages, v3_credentials,
-            v3_policy_domains, v3_exam_stages, v3_positions,
-            v3_contract_duration, v3_schedule, v3_hours_per_week,
-            v3_shift_work, v3_remote_mode, v3_seniority_hint, v3_bibliography,
-            inf_profession_family, inf_seniority, inf_anomaly_flags,
-            inf_work_type, inf_remote_eligible, inf_requires_computer,
-            inf_experience_years, inf_studies_required,
-            inf_salary_min, inf_salary_max,
-            occ_canonical, occ_cor_code, occ_isco_group, occ_confidence,
-            sal_min, sal_max, sal_confidence, sal_variant, sal_json,
-            v4_funding_source, v4_funding_programme,
-            v4_employer_sector, v4_parent_institution, v4_application_deadline,
-            apply_deadline, deadline_source
-        ) VALUES (
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
-            ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
-        )
-    """, batch)
+    columns = """id, url, title,
+        employer_id, employer_name,
+        judet_id, judet_name, judet_slug, locality,
+        detalii_raw, published_at, expires_at, tip,
+        job_level, job_type, employer_category, categorie,
+        announcement_url, body_markdown, nr_posturi,
+        contact_phone, contact_email, contact_person,
+        data_limita_depunere, data_proba_scrisa,
+        data_interviu, data_rezultate_finale,
+        created_at, updated_at, last_seen_at,
+        detail_fetched_at, detail_content_hash,
+        other_links, attachment_meta, inferred, schema_json,
+        v3_eqf_level, v3_study_level, v3_isced_fields, v3_study_labels,
+        v3_skills, v3_languages, v3_credentials,
+        v3_policy_domains, v3_exam_stages, v3_positions,
+        v3_contract_duration, v3_schedule, v3_hours_per_week,
+        v3_shift_work, v3_remote_mode, v3_seniority_hint, v3_bibliography,
+        inf_profession_family, inf_seniority, inf_anomaly_flags,
+        inf_work_type, inf_remote_eligible, inf_requires_computer,
+        inf_experience_years, inf_studies_required,
+        inf_salary_min, inf_salary_max,
+        occ_canonical, occ_cor_code, occ_isco_group, occ_confidence,
+        sal_min, sal_max, sal_confidence, sal_variant, sal_json,
+        v4_funding_source, v4_funding_programme,
+        v4_employer_sector, v4_parent_institution, v4_application_deadline,
+        apply_deadline, deadline_source"""
+    # One source of truth for the column list: the placeholders are generated
+    # from it, so the column count and the value count cannot drift apart
+    # (they did twice while this was hand-maintained `?` strings).
+    col_list = [c.strip() for c in columns.split(",") if c.strip()]
+    sql = (
+        "INSERT INTO job_postings(" + ", ".join(col_list) + ") VALUES ("
+        + ",".join("?" for _ in col_list) + ")"
+    )
+    con.executemany(sql, batch)
 
 
 def previous_build(path: str) -> dict | None:

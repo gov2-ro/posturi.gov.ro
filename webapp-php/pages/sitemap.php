@@ -35,14 +35,15 @@ $budget = SITEMAP_MAX_URLS - 4;
 
 // Job pages — freshest first, so a truncated sitemap keeps the useful half.
 $rows = db()->query(
-    "SELECT id, title, updated_at, last_seen_at, expires_at, apply_deadline
+    "SELECT id, title, updated_at, last_seen_at, expires_at, apply_deadline, application_status
      FROM job_postings
      ORDER BY published_at DESC, id DESC
      LIMIT " . (int)$budget
 )->fetchAll();
 
 foreach ($rows as $r) {
-    $expired = ($r['apply_deadline'] ?? $r['expires_at']) && ($r['apply_deadline'] ?? $r['expires_at']) < ro_today();
+    // Same vocabulary as the status filter: 'closed' is the only expired state.
+    $expired = ($r['application_status'] ?? '') === 'closed';
     sm_url(
         $origin . job_url($r),
         $r['updated_at'] ?: $r['last_seen_at'],

@@ -45,6 +45,7 @@ foreach ($rows as $r) {
         // applications close — see deadline_source for where this came from.
         'apply_deadline'   => $r['apply_deadline'] ? substr((string)$r['apply_deadline'], 0, 10) : null,
         'deadline_source'  => $r['deadline_source'] ?: null,
+        'application_status' => $r['application_status'] ?: null,
         'job_level'        => $r['job_level'],
         'job_type'         => $r['job_type'],
         'categorie'        => $r['categorie'],

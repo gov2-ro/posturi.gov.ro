@@ -88,6 +88,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/request_test.php
 
+      - name: Old-export compatibility (REV-01)
+        working-directory: webapp-php
+        run: php tests/compat_test.php
+
   browser-tests:
     # Playwright against the fixture-served app at 320/375/1280, including the
     # no-execution proof for sanitized Markdown.

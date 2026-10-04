@@ -404,6 +404,7 @@ pages, serves the real app on the built-in PHP router with a fixed clock.
 php tests/sanitize_test.php     # FIX-01: Markdown sanitizer payload battery
 php tests/deadline_test.php     # FIX-02: one deadline across list/detail/feeds
 php tests/request_test.php      # FIX-07: request validation, routes, feeds, filters
+php tests/compat_test.php       # REV-01: new code against an older export's schema
 
 npx playwright test --config webapp-php/tests/browser/playwright.config.js
                                 # FIX-07: browser checks at 320/375/1280

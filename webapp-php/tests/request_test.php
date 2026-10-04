@@ -151,7 +151,7 @@ run_suite('feeds parse as their formats and respect filters', function () use ($
     assert_true($xml->getElementsByTagName('entry')->length > 0, 'atom has entries');
 
     // JSON decodes with count/results.
-    [$status, $json_body] = fetch_page($base, '/posturi.json');
+    [$status, $json_body] = fetch_page($base, '/posturi.json?status=all');
     assert_same(200, $status, 'json — 200');
     $json = json_decode($json_body, true);
     assert_true(is_array($json) && isset($json['count'], $json['results']), 'json has count/results');
@@ -249,6 +249,61 @@ run_suite('filtering, facet parity, chips, pagination, sort', function () use ($
     $htmx_body = (string)@file_get_contents($base . '/?judet%5B%5D=cluj', false, $ctx);
     assert_not_contains('<!doctype html>', $htmx_body, 'htmx partial has no full page');
     assert_contains('rezultate', $htmx_body, 'htmx partial carries the count');
+});
+
+run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', function () use ($base, $db_path, $srv) {
+    $pdo = new PDO('sqlite:' . $db_path);
+    $count = fn(string $sql) => (int)$pdo->query($sql)->fetchColumn();
+    $open   = $count("SELECT COUNT(*) FROM job_postings WHERE application_status IN ('confirmed_open','unconfirmed','unknown')");
+    $closed = $count("SELECT COUNT(*) FROM job_postings WHERE application_status = 'closed'");
+    $unk    = $count("SELECT COUNT(*) FROM job_postings WHERE application_status = 'unknown'");
+    $open_emp = $count("SELECT COUNT(DISTINCT employer_id) FROM job_postings WHERE application_status IN ('confirmed_open','unconfirmed','unknown')");
+    assert_true($open > 0 && $closed > 0 && $unk > 0, 'fixture has open, closed and unknown rows');
+
+    // REV-02: county filter on /angajatori/ (array-normalised param).
+    foreach (['/angajatori/?judet=cluj', '/angajatori/?judet%5B%5D=cluj', '/angajatori/?judet=nu-exista'] as $path) {
+        [$status, $body] = fetch_page($base, $path);
+        assert_same(200, $status, "$path — 200");
+        assert_not_contains('Fatal error', $body, "$path — no fatal");
+        assert_not_contains('Warning:', $body, "$path — no warning");
+    }
+    [, $emp] = fetch_page($base, '/angajatori/?judet=cluj');
+    assert_true(preg_match('#<option value="cluj" selected#', $emp) === 1, 'county select keeps the selection');
+    assert_contains('Spitalul Clinic Județean Cluj', $emp, 'filtered list shows a Cluj employer');
+
+    // REV-03: active counts are real, not 0.
+    [, $stats] = fetch_page($base, '/statistici');
+    assert_true(preg_match('#\b' . $open . '\b#', $stats) === 1, "stats shows open count $open");
+    [, $emp_all] = fetch_page($base, '/angajatori/');
+    assert_true(preg_match('#\b' . $open_emp . '\b#', $emp_all) === 1, "employers shows active employers $open_emp");
+    assert_not_contains('OPEN_STATUS_SQL', $emp_all, 'no literal interpolation text');
+
+    // REV-04a: status control carries counts for all four options.
+    [, $home] = fetch_page($base, '/?status=all');
+    foreach (['Închise' => $closed, 'Termen neprecizat' => $unk, 'Active' => $open] as $label => $n) {
+        assert_true(preg_match('#' . preg_quote($label, '#') . '\s*<span[^>]*>' . $n . '</span>#u', $home) === 1,
+                    "status control: $label = $n");
+    }
+    // REV-04b: landing quick stat uses the same vocabulary as the Active count.
+    [, $land] = fetch_page($base, '/');
+    assert_true(preg_match('#\b' . $open . '\b[^<]*(active|anunțuri)#iu', $land) === 1
+                || str_contains($land, (string)$open), 'landing active count present');
+    // REV-04c: sitemap treats only closed rows as expired.
+    [, $sm] = fetch_page($base, '/sitemap.xml');
+    assert_same($closed, substr_count($sm, '<priority>0.2</priority>'), 'sitemap: closed rows are low priority');
+    // REV-04d: JSON feed exposes application_status additively.
+    [, $json] = fetch_page($base, '/posturi.json?status=all');
+    $items = json_decode($json, true)['results'] ?? [];
+    assert_true(count($items) > 0, 'json feed has items');
+    $got = array_count_values(array_column($items, 'application_status'));
+    assert_same($closed, $got['closed'] ?? 0, 'json feed: closed rows carry application_status');
+    assert_true(array_key_exists('apply_deadline', $items[0]), 'json feed keeps existing keys');
+
+    // No PHP warnings reached the server log.
+    $log = (string)@file_get_contents($srv['log']);
+    assert_not_contains('Undefined', $log, 'server log: no undefined key/variable');
+    assert_not_contains('Warning', $log, 'server log: no warnings');
+    assert_not_contains('Fatal', $log, 'server log: no fatals');
 });
 
 stop_fixture_server($srv, $db_path);

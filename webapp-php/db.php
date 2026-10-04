@@ -23,7 +23,49 @@ function db(): PDO {
         // -wal surviving an rsync swap describes a database that is gone, which
         // SQLite reports as "database disk image is malformed". query_only makes the
         // read-only intent something SQLite enforces rather than something we assume.
-        $pdo->exec("PRAGMA query_only=1; PRAGMA cache_size=-8000; PRAGMA temp_store=MEMORY;");
+        $pdo->exec("PRAGMA cache_size=-8000; PRAGMA temp_store=MEMORY;");
+        shim_legacy_export($pdo);
+        $pdo->exec("PRAGMA query_only=1;");
     }
     return $pdo;
+}
+
+/**
+ * REV-01: let new code read an export that predates the columns it filters on.
+ *
+ * Code and data deploy separately (code from the Mac, data from the VPS), so the
+ * code can land on the host before an export that carries its columns — FIX-05's
+ * application_status, read by every count and filter, was a fatal on the live
+ * export. When columns are missing, a TEMP view named job_postings shadows the
+ * table (unqualified names resolve temp before main) and computes them exactly as
+ * export-to-sqlite.py does. Only the in-memory temp schema is written, so this
+ * works on a read-only file, before query_only; indexes on the base table still
+ * apply. Current exports skip it after one PRAGMA.
+ */
+function shim_legacy_export(PDO $pdo): void {
+    $cols = array_flip($pdo->query("SELECT name FROM pragma_table_info('job_postings')")
+        ->fetchAll(PDO::FETCH_COLUMN));
+    if (!$cols || isset($cols['application_status'])) {
+        return;
+    }
+    // Exports older than FIX-02 lack the resolved deadline too: fall back to the
+    // expiry, which is what _apply_deadline() resolves to without a source date.
+    $deadline = isset($cols['apply_deadline']) ? 'apply_deadline' : 'substr(expires_at, 1, 10)';
+    $source   = isset($cols['deadline_source']) ? 'deadline_source'
+              : "CASE WHEN expires_at IS NULL OR expires_at = '' THEN '' ELSE 'expirare' END";
+    $extra = [];
+    if (!isset($cols['apply_deadline']))  $extra[] = "$deadline AS apply_deadline";
+    if (!isset($cols['deadline_source'])) $extra[] = "$source AS deadline_source";
+    // Mirrors _application_status(); the export stamps it with its own day, the
+    // shim with today's — the same Bucharest boundary every other filter uses.
+    $today = function_exists('ro_today')   // Y-m-d, validated by ro_today()
+        ? ro_today()
+        : (new DateTimeImmutable('today', new DateTimeZone('Europe/Bucharest')))->format('Y-m-d');
+    $extra[] = "CASE WHEN $deadline IS NULL OR $deadline = '' THEN 'unknown'
+                     WHEN $deadline < '$today' THEN 'closed'
+                     WHEN $source IN ('concurs', 'anunt') THEN 'confirmed_open'
+                     WHEN $source = 'expirare' THEN 'unconfirmed'
+                     ELSE 'unknown' END AS application_status";
+    $pdo->exec("CREATE TEMP VIEW job_postings AS SELECT *, " . implode(', ', $extra)
+        . " FROM main.job_postings");
 }

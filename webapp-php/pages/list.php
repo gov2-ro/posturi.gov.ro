@@ -111,7 +111,7 @@ if ($is_unfiltered) {
     // that stayed are corpus scale, and they now render as one line of text
     // rather than as four cards above the fold.
     $quick_stats = [
-        'active'    => (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE apply_deadline >= '$today'")->fetchColumn(),
+        'active'    => (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE application_status IN (" . OPEN_STATUS_SQL . ")")->fetchColumn(),
         'employers' => (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn(),
     ];
 }
@@ -234,13 +234,17 @@ $studies_options   = get_facet('inf_studies_required', 'studies_levels');
     $open  = "application_status IN (" . OPEN_STATUS_SQL . ")";
     $st = db()->prepare("SELECT
             SUM(CASE WHEN j.$open THEN 1 ELSE 0 END) AS active,
-            SUM(CASE WHEN j.$open AND j.apply_deadline >= ? AND j.apply_deadline <= ? THEN 1 ELSE 0 END) AS soon
+            SUM(CASE WHEN j.$open AND j.apply_deadline >= ? AND j.apply_deadline <= ? THEN 1 ELSE 0 END) AS soon,
+            SUM(CASE WHEN j.application_status = 'closed' THEN 1 ELSE 0 END) AS closed,
+            SUM(CASE WHEN j.application_status = 'unknown' THEN 1 ELSE 0 END) AS unknown
         FROM job_postings j {$s['join']} $where_st");
     $st->execute(array_merge([$today, $in7], $s['binds']));
     $r = $st->fetch() ?: [];
     $status_counts = [
         'active' => (int)($r['active'] ?? 0),
         'soon'   => (int)($r['soon'] ?? 0),
+        'closed'  => (int)($r['closed'] ?? 0),
+        'unknown' => (int)($r['unknown'] ?? 0),
     ];
 }
 

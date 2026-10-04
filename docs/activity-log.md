@@ -2,6 +2,24 @@
 
 ## 2026
 
+### 2026-10-05 — Site republished; REV-15 deploy-verification deadlock
+
+**What:** After the VPS pulled `c8a9559` and migrated (0013–0015), a manual
+`run-pipeline.sh` ran end to end and pushed the database: the live site shows
+"generată la 05.10.2026, 00:41 · 2.267 anunțuri active", ending the outage that
+began after the 03.10 19:08 export. The run still exited 1: FIX-06's post-push check
+read `data.built_at` from `/versiuni.json`, which the host does not have yet (its PHP
+predates FIX-06), and treated the empty value as a mismatch. That would have failed
+every unattended run until the next code deploy, and skipped `record-deploy`. A
+data-only push now reports a 404 there as unverifiable, with a pointer to
+`--code-only`; code pushes still require the endpoint.
+
+**Observations from the run:** fetch-detail 6 new + 200 legacy refreshes, 0 failed,
+13.7 min (5,220 legacy caches remain due, 200 per run); parse 7–8 min CPU-bound with
+no output (LATER-05).
+
+---
+
 ### 2026-10-04 — GitHub CI switched to manual (CI-01)
 
 **What:** The push of the FIX-07 workflow made GitHub Actions run it on every push.

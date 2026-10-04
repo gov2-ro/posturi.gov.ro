@@ -253,7 +253,19 @@ if [[ $dry_run -eq 0 && -n "$SITE_URL" ]]; then
         verify_marker code "$(code_sha)" "code" || verify_failed=1
     fi
     if [[ $deploy_data -eq 1 ]]; then
-        verify_marker "data.built_at" "$(local_data_built_at)" "data built_at" || verify_failed=1
+        # A data-only push (the VPS cron) can land on a host still running code
+        # from before /versiuni.json existed (FIX-06). That host cannot report
+        # a marker, so a 404 there means "unverifiable", not "mismatch" —
+        # failing would block every unattended run until the next code deploy
+        # (REV-15). A code push ships the endpoint, so it must answer.
+        endpoint=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Cache-Control: no-cache' \
+            --max-time 30 "${SITE_URL%/}/versiuni.json" 2>/dev/null || echo "000")
+        if [[ $deploy_code -eq 0 && "$endpoint" == "404" ]]; then
+            echo "    ⚠ data built_at not verified: the host serves code without /versiuni.json"
+            echo "      (pre-FIX-06). Run ./deploy-php.sh --code-only from the dev machine."
+        else
+            verify_marker "data.built_at" "$(local_data_built_at)" "data built_at" || verify_failed=1
+        fi
     fi
     [[ $verify_failed -eq 0 ]] || die "served version markers do not match this push"
 fi

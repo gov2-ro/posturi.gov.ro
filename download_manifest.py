@@ -13,19 +13,22 @@ New downloads land as ``<key>.<ext>`` where ``key`` is a short hash of the
 normalized URL (scheme/host lowercased, fragment dropped, query kept) and
 ``ext`` comes from the URL path — or, when the path has none, from the sniffed
 format. A ``<key>.json`` manifest records the source URL, content hash, size,
-retrieval time and content type, so cache identity is explicit rather than
-encoded in a filename.
+retrieval time, content type and the stored extension, so cache identity is
+explicit rather than encoded in a filename (resolution reads the extension
+from the manifest — a URL without one cannot reproduce it).
 
 Legacy files (``<basename>`` straight from the URL, no manifest) are still
-resolved for compatibility; ``adopt_legacy_files()`` is the bounded migration
-that validates them, moves the valid ones into the hashed cache and records
-the invalid ones in ``legacy-invalid.json`` — it never deletes anything.
+resolved for compatibility. ``download_file()`` adopts a valid one in place on
+its first hit (``adopt_one()``: deep check, move into the hashed cache, write
+the manifest — no request); only a partial that kept its magic bytes is
+re-fetched. ``adopt_legacy_files()`` is the same migration in bulk, recording
+invalid files in ``legacy-invalid.json`` — neither deletes anything.
 
 Validation
 ----------
 A cache hit is a file that exists *and* passes ``validate_file``: non-empty,
 magic bytes matching one of the supported formats (ZIP/DOCX, OLE2/DOC, PDF)
-and — for DOCX — an intact ZIP container. Downloads get the same checks plus a
+and — on deep checks — an intact DOCX container or a PDF end marker. Downloads get the same checks plus a
 Content-Length comparison where the server sends one, and HTML error pages
 served with HTTP 200 are rejected by sniffing, not by trusting Content-Type.
 
@@ -147,7 +150,9 @@ def validate_file(path: Path, deep: bool = False) -> tuple[bool, str]:
 
     Shallow (the hot path — every cache resolution): non-empty, magic bytes
     match a supported format, HTML error pages are rejected. Deep adds DOCX
-    ZIP-container integrity (reads every member) for audits and repairs.
+    ZIP-container integrity (reads every member) and the PDF end-of-file marker
+    — the two ways an interrupted transfer still passes the magic-byte check —
+    for adoption, audits and repairs.
     """
     try:
         size = path.stat().st_size
@@ -174,6 +179,15 @@ def validate_file(path: Path, deep: bool = False) -> tuple[bool, str]:
             return False, f"corrupt docx: {exc}"
         if bad is not None:
             return False, f"corrupt docx member: {bad}"
+    if kind == "pdf" and deep:
+        try:
+            with open(path, "rb") as fh:
+                fh.seek(max(0, size - 1024))
+                tail = fh.read()
+        except OSError as exc:
+            return False, f"unreadable: {exc}"
+        if b"%%EOF" not in tail.rstrip():
+            return False, "truncated pdf (no %%EOF)"
     return True, kind
 
 
@@ -234,9 +248,12 @@ def resolve_local_path(downloads_dir: Path, url: str) -> Resolved:
     if not url:
         return Resolved(None, "missing", "empty url")
 
-    target = hashed_path(downloads_dir, url)
+    # The manifest names the stored extension: a URL without a supported one
+    # (`/download`, `.aspx`) is stored under its sniffed format, which the URL
+    # alone cannot reproduce.
+    manifest = read_manifest(downloads_dir, url)
+    target = hashed_path(downloads_dir, url, ext=manifest.get("ext") if manifest else None)
     if target.exists():
-        manifest = read_manifest(downloads_dir, url)
         if manifest is not None:
             ok, reason = validate_file(target)
             if ok:
@@ -265,6 +282,30 @@ def resolve_local_path(downloads_dir: Path, url: str) -> Resolved:
 # ─── legacy adoption ─────────────────────────────────────────────────────────
 
 
+def adopt_one(downloads_dir: Path, url: str, source: Path) -> tuple[bool, str]:
+    """Move one manifest-less cache file into the hashed cache, with a manifest.
+
+    `source` is the URL's legacy basename file or a hashed file that predates
+    manifests. It is deep-validated first: an interrupted pre-FIX-08 transfer
+    can keep valid magic bytes, and adopting it would make the partial
+    permanent. Returns (adopted, reason); on failure nothing is moved.
+    """
+    ok, reason = validate_file(source, deep=True)
+    if not ok:
+        return False, reason
+    ext = extension_from_url(url)
+    if ext not in SUPPORTED_FORMATS:      # same naming rule as download_file
+        ext = reason                      # the sniffed kind validate_file returned
+    target = hashed_path(downloads_dir, url, ext=ext)
+    if source != target:
+        if target.exists():
+            return False, "hashed target already exists"
+        os.replace(source, target)
+    sha = hashlib.sha256(target.read_bytes()).hexdigest()
+    write_manifest(downloads_dir, url, target, sha, "")
+    return True, ""
+
+
 def adopt_legacy_files(downloads_dir: Path, urls: list[str]) -> dict:
     """Bounded migration: validate legacy basename files against their URLs.
 
@@ -283,19 +324,14 @@ def adopt_legacy_files(downloads_dir: Path, urls: list[str]) -> dict:
         if hashed_path(downloads_dir, url).exists() and read_manifest(downloads_dir, url) is not None:
             counts["unrelated"] += 1  # a hashed entry already exists; leave the legacy file alone
             continue
-        ok, reason = validate_file(legacy, deep=True)   # full container check for a one-off migration
-        if not ok:
+        adopted, reason = adopt_one(downloads_dir, url, legacy)
+        if adopted:
+            counts["adopted"] += 1
+        elif reason == "hashed target already exists":
+            counts["unrelated"] += 1
+        else:
             counts["invalid"] += 1
             invalid_records[legacy.name] = reason
-            continue
-        target = hashed_path(downloads_dir, url, ext=legacy.suffix.lstrip("."))
-        if target.exists():
-            counts["unrelated"] += 1
-            continue
-        sha = hashlib.sha256(legacy.read_bytes()).hexdigest()
-        os.replace(legacy, target)
-        write_manifest(downloads_dir, url, target, sha, "")
-        counts["adopted"] += 1
 
     if invalid_records:
         report = downloads_dir / "legacy-invalid.json"
@@ -314,7 +350,7 @@ def adopt_legacy_files(downloads_dir: Path, urls: list[str]) -> dict:
 
 @dataclass
 class DownloadResult:
-    status: str                      # downloaded | replaced | cached | cached-legacy | invalid | failed
+    status: str                      # downloaded | replaced | cached | adopted | invalid | failed
     path: Path | None = None
     reason: str = ""
     bytes: int = 0
@@ -340,6 +376,16 @@ def download_file(
     existing = resolve_local_path(downloads_dir, url)
     if existing.status == "cached":
         return DownloadResult("cached", existing.path, bytes=existing.path.stat().st_size)
+    if existing.status == "cached-legacy":
+        # REV-06(a): a valid pre-manifest file is a hit, not a miss. Adopt it in
+        # place — no request — so the first run on this code does not re-fetch
+        # the whole --since window. Only a file that fails the deep check (a
+        # partial that kept its magic bytes) falls through to a fresh download.
+        adopted, reason = adopt_one(downloads_dir, url, existing.path)
+        if adopted:
+            path = resolve_local_path(downloads_dir, url).path
+            return DownloadResult("adopted", path, bytes=path.stat().st_size)
+        existing = Resolved(existing.path, "invalid", f"legacy file invalid: {reason}")
 
     ext = extension_from_url(url)
     target = hashed_path(downloads_dir, url)

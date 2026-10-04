@@ -2,6 +2,36 @@
 
 ## 2026
 
+### 2026-10-04 — REV-06(a): adopt legacy downloads instead of re-fetching them
+
+**What:** `download_file()` treated a valid pre-manifest ("cached-legacy") file
+as a miss, so the first run on the FIX-08 code would re-download every
+attachment in its `--since` window (7 days on the VPS). It now adopts the file
+in place — `adopt_one()` deep-validates it, moves it into the hashed cache and
+writes the manifest, with no request — and returns status `adopted`. Only a
+legacy file that fails the deep check (a partial that kept its magic bytes) is
+re-fetched; the invalid original stays where it was. `adopt_legacy_files()`
+now shares the same helper. Deep validation gained the PDF `%%EOF` check that
+new downloads already had.
+
+**Found on the way:** extensionless or unsupported-extension URLs (`/download`,
+`.aspx`) are stored as `<key>.<sniffed>`, but resolution rebuilt the name from
+the URL alone, so those files were never found: re-downloaded on every run and
+reported missing to extraction. Resolution now takes the extension from the
+manifest.
+
+**Validation:** 6 new tests (adoption without a request then a cached hit,
+truncated PDF / broken DOCX legacy partials re-fetched, extensionless download
+and adoption both resolve); full suite 562 passed. Read-only census of the
+local cache: 9,571 files adopt cleanly, 2 fail the deep check (1 corrupt DOCX,
+1 truncated PDF) and would be re-fetched, 1 was already invalid.
+
+**Rollout note:** the VPS pulled `92a3615`, which has the FIX-08 downloader
+without this fix — its next runs re-download legacy files from the last 7 days
+once (bounded, paced) and extensionless URLs every run until it pulls this.
+
+---
+
 ### 2026-10-04 — REV-01/02/03/04/07/11: review follow-ups
 
 **What:** Fixed the post-implementation review findings that need no host access.

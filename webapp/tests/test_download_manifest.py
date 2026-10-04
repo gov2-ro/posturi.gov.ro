@@ -326,3 +326,61 @@ class TestSummary:
         s.record(DownloadResult("cached"), "u1")
         s.record(DownloadResult("downloaded"), "u2")
         assert not s.unusable()
+
+
+class TestLegacyHitOnDownload:
+    """REV-06(a): the first run on the FIX-08 code must not re-fetch valid
+    legacy files — they are adopted in place, without a request."""
+
+    def test_valid_legacy_file_is_adopted_without_a_request(self, tmp_path):
+        url = "http://x.ro/anunt.docx"
+        body = make_docx()
+        legacy_path(tmp_path, url).write_bytes(body)
+        session = FakeSession(FakeResponse(b"should not be fetched"))
+
+        result = download_file(url, tmp_path, session=session)
+        assert result.status == "adopted" and not session.calls
+        assert result.path == hashed_path(tmp_path, url) and result.path.read_bytes() == body
+        assert not legacy_path(tmp_path, url).exists()
+        assert resolve_local_path(tmp_path, url).status == "cached"
+
+        again = download_file(url, tmp_path, session=session)
+        assert again.status == "cached" and not session.calls
+
+    @pytest.mark.parametrize("partial", [
+        b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n",       # interrupted: magic bytes but no %%EOF
+        make_broken_docx(),                          # interrupted: PK header, no archive
+    ])
+    def test_partial_legacy_file_is_refetched(self, tmp_path, partial):
+        ext = "pdf" if partial.startswith(b"%PDF") else "docx"
+        url = f"http://x.ro/anunt.{ext}"
+        legacy_path(tmp_path, url).write_bytes(partial)
+        good = make_pdf() if ext == "pdf" else make_docx()
+        session = FakeSession(FakeResponse(good))
+
+        result = download_file(url, tmp_path, session=session)
+        assert result.status == "downloaded" and len(session.calls) == 1
+        assert resolve_local_path(tmp_path, url).status == "cached"
+        assert legacy_path(tmp_path, url).exists(), "the invalid legacy file is left in place"
+
+    def test_extensionless_url_resolves_after_download(self, tmp_path):
+        url = "http://x.ro/download?id=7"
+        session = FakeSession(FakeResponse(make_pdf()))
+        assert download_file(url, tmp_path, session=session).status == "downloaded"
+        r = resolve_local_path(tmp_path, url)
+        assert r.status == "cached" and r.path.suffix == ".pdf"
+        assert download_file(url, tmp_path, session=session).status == "cached"
+        assert len(session.calls) == 1, "a cached extensionless URL is not re-fetched"
+
+    def test_extensionless_legacy_file_is_adopted_under_its_sniffed_format(self, tmp_path):
+        url = "http://x.ro/files/anunt"
+        legacy_path(tmp_path, url).write_bytes(make_pdf())
+        result = download_file(url, tmp_path, session=FakeSession(FakeResponse(b"")))
+        assert result.status == "adopted" and result.path.suffix == ".pdf"
+        assert resolve_local_path(tmp_path, url).status == "cached"
+
+    def test_deep_validation_catches_truncated_pdf(self, tmp_path):
+        p = tmp_path / "x.pdf"
+        p.write_bytes(b"%PDF-1.4\nhalf a document")
+        assert validate_file(p)[0] is True            # the hot path cannot tell
+        assert validate_file(p, deep=True) == (False, "truncated pdf (no %%EOF)")

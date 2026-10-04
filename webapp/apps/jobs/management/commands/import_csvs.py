@@ -193,6 +193,31 @@ def unique_slug(name: str, model, taken: set[str], max_len: int = 240) -> str:
     return candidate
 
 
+#: Key set in `JobPosting.inferred` when the source changed under it. The previous
+#: inference stays readable (and its paid LLM family can be carried forward by a
+#: --no-llm run) until infer_postings, which selects marked rows, replaces it.
+STALE_MARKER = "stale_revision"
+
+
+def invalidate_enrichment(posting: JobPosting, prev_hash: str, new_hash: str) -> bool:
+    """REV-07: requeue what was derived from a detail page that changed.
+
+    Only a confirmed change counts — both hashes known and different. A legacy
+    row (no previous hash) or a fetch without one is "unknown", and requeueing
+    those would turn the first production refresh into a full re-run. Schema
+    extraction needs nothing here: `llm-schema.py --resume` already compares its
+    recorded source revision with `detail_content_hash`. Occupation and salary
+    recompute every row on each run. That leaves attachment text (refilled by
+    extract_attachments from the cache, which the download step updated from the
+    new links) and inference.
+    """
+    if not (prev_hash and new_hash and prev_hash != new_hash):
+        return False
+    posting.attachment_text = ""
+    posting.inferred = {**(posting.inferred or {}), STALE_MARKER: new_hash}
+    return True
+
+
 class Command(BaseCommand):
     help = "Import scraper CSVs (index + anunturi + calendar) into the database."
 
@@ -377,9 +402,10 @@ class Command(BaseCommand):
         ))
 
         # ---- Pass 2: detail rows from anunturi.csv (join on Source URL) ----
+        detail_ids: set[int] = set()   # postings this parse observed (Pass 3)
         if anunt_rows:
             self.stdout.write(f"Importing detail rows ({len(anunt_rows)})…")
-            matched = unmatched = d_errors = 0
+            matched = unmatched = d_errors = revised = 0
             postings_by_url = {
                 p.url: p for p in JobPosting.objects.in_bulk(
                     [r["Source URL"].strip() for r in anunt_rows if r.get("Source URL")],
@@ -396,6 +422,7 @@ class Command(BaseCommand):
                     unmatched += 1
                     continue
                 try:
+                    prev_hash = posting.detail_content_hash or ""
                     posting.job_level = r.get("Job Level", "").strip()
                     posting.job_type = r.get("Job Type", "").strip()
                     posting.employer_category = r.get("Employer Category", "").strip()
@@ -429,20 +456,26 @@ class Command(BaseCommand):
                         posting.cancelled = True
                     elif status == "live":
                         posting.cancelled = False
-                    posting.save(update_fields=[
+                    fields = [
                         "job_level", "job_type", "employer_category", "categorie",
                         "announcement_url", "body_markdown", "other_links", "nr_posturi",
                         "contact_phone", "contact_email", "contact_person",
                         "data_limita_depunere", "data_proba_scrisa", "data_interviu",
                         "data_rezultate_finale", "updated_at",
                         "detail_fetched_at", "detail_content_hash", "cancelled",
-                    ])
+                    ]
+                    if invalidate_enrichment(posting, prev_hash, detail_hash):
+                        fields += ["attachment_text", "inferred"]
+                        revised += 1
+                    posting.save(update_fields=fields)
+                    detail_ids.add(posting.pk)
                     matched += 1
                 except Exception as e:  # pragma: no cover
                     self.stderr.write(f"detail row error for {src}: {e}")
                     d_errors += 1
             self.stdout.write(self.style.SUCCESS(
                 f"  Detail: matched={matched} unmatched={unmatched} errors={d_errors}"
+                + (f", {revised} revised at source (attachments + inference requeued)" if revised else "")
             ))
 
         # ---- Pass 3: calendar events ----
@@ -462,6 +495,14 @@ class Command(BaseCommand):
             }
 
             c_created = c_unmatched = c_errors = 0
+            # calendar.csv is rewritten whole by the same parse as anunturi.csv,
+            # so a posting that parse saw with no calendar rows HAS no events now
+            # (a revised announcement dropped its schedule). Without this, its old
+            # events survived because only URLs present in the file were replaced.
+            seen_urls = set(by_url)
+            gone = [pk for pk, u in JobPosting.objects.filter(pk__in=detail_ids)
+                    .values_list("pk", "url") if u not in seen_urls]
+            c_cleared = CalendarEvent.objects.filter(posting_id__in=gone).delete()[0] if gone else 0
             for u, items in by_url.items():
                 posting = postings_by_url.get(u)
                 if posting is None:
@@ -498,6 +539,7 @@ class Command(BaseCommand):
                     c_errors += len(items)
             self.stdout.write(self.style.SUCCESS(
                 f"  Calendar: created={c_created} unmatched={c_unmatched} errors={c_errors}"
+                + (f", cleared {c_cleared} from postings whose schedule disappeared" if c_cleared else "")
             ))
 
         # ---- Pass 4: search_vector ----

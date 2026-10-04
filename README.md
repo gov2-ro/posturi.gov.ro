@@ -131,6 +131,24 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `occupations` | `normalize-titles.py` | `jobs_occupation` + `JobPosting.occupation` |
 | `salary` | `estimate-salaries.py` | `JobPosting.salary_estimate` JSONB |
 
+`fetch-detail` is a bounded refresh, not a one-shot cache: a cached page whose last
+successful retrieval is older than `--refresh-hours` (default 24) is re-fetched, at most
+`--max-refresh` (default 200) per run. Each page gets a `<slug>.meta.json` sidecar beside
+its `.html` (`url`, `fetched_at`, `content_hash`, `bytes`, `status`), written atomically. A cached page with no sidecar
+(pre-FIX-03) counts as due — unknown age is not fresh. Index-cancelled postings are skipped.
+Due pages are ranked before the cap applies — open competitions first, newest first — and
+a competition whose index expiry is more than `--refresh-expired-days` (default 30) past
+is not refreshed at all. The step exits 1 when more than `--max-failure-share` (default
+0.5) of at least five attempted fetches failed, which blocks the deploy like any failed step.
+
+When a refreshed page's `Detail Content Hash` differs from the stored one, `import`
+requeues what was derived from it: `attachment_text` is cleared (the `extract` step
+refills it from the cache) and `inferred` gets a `stale_revision` marker that `infer`
+selects and replaces — the previous values stay visible until then. Schema extraction
+needs no marker (`--resume` compares revisions itself); occupation and salary recompute
+every row each run. A legacy row's first hash is "unknown", not a change. Calendar
+events of a posting whose re-parsed page has no schedule are removed.
+
 `schema` runs **before** `infer`: `infer_postings` reads `schema_json` for the
 announced salary, so the other order leaves `inferred.salary_min` one run stale.
 

@@ -4,7 +4,8 @@ base_url = "https://posturi.gov.ro"
 import csv, os, time, requests, random, re, json, hashlib
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from posting_urls import slug_for_url
 from tqdm import tqdm
@@ -24,6 +25,17 @@ DEFAULT_REFRESH_HOURS = 24
 #: Ceiling on re-fetches per run, so the bounded refresh policy cannot turn
 #: into a full-archive crawl on a day when everything is due at once.
 DEFAULT_MAX_REFRESH = 200
+
+#: Competitions whose index expiry is further back than this are not refreshed:
+#: nothing on the site depends on them any more, and the archive is ~10k rows,
+#: so without the cut they would spend the cap that open postings need.
+DEFAULT_REFRESH_EXPIRED_DAYS = 30
+
+#: Exit nonzero when more than this share of attempted fetches failed (and at
+#: least MIN_ATTEMPTS_FOR_FAILURE were attempted) — the FIX-04 convention, so a
+#: blocked or broken source cannot pass as a healthy run.
+DEFAULT_MAX_FAILURE_SHARE = 0.5
+MIN_ATTEMPTS_FOR_FAILURE = 5
 
 
 def parse_romanian_date(date_string):
@@ -196,6 +208,17 @@ def _meta_age_hours(record):
     return (datetime.now(timezone.utc) - fetched).total_seconds() / 3600
 
 
+def index_expiry(row):
+    """The index card's expiry ("Expiră in  30/12/2026") as a date, or None."""
+    m = re.search(r'(\d{1,2})[./](\d{1,2})[./](\d{4})', row.get('expira_in') or '')
+    if not m:
+        return None
+    try:
+        return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        return None
+
+
 def is_cancelled(row):
     """A withdrawn competition per the INDEX: "Anunț anulat" in the expiry slot.
 
@@ -234,24 +257,31 @@ def _save_detail(directory, slug, content, url, status, fetched_at):
 
 
 def process_csv(csv_path, refresh_hours=DEFAULT_REFRESH_HOURS,
-                max_refresh=DEFAULT_MAX_REFRESH):
+                max_refresh=DEFAULT_MAX_REFRESH,
+                refresh_expired_days=DEFAULT_REFRESH_EXPIRED_DAYS, today=None):
     """Fetch new detail pages and refresh stale ones under a bounded policy.
 
     Returns the summary counts. A cached page is refreshed when its sidecar
     says the last successful retrieval is older than `refresh_hours` — or when
     it has no sidecar at all (legacy cache, age unknown). At most `max_refresh`
-    re-fetches happen per run; the rest wait for the next run.
+    re-fetches happen per run; the rest wait for the next run. Due pages are
+    ranked before the cap applies — open competitions first, newest first — and
+    pages expired more than `refresh_expired_days` ago are not refreshed at all,
+    so the cap goes to the postings a reader can still apply to.
     """
+    today = today or datetime.now(ZoneInfo('Europe/Bucharest')).date()
+    stale_before = today - timedelta(days=refresh_expired_days)
     summary = {
         'fetched_new': 0, 'refreshed': 0, 'changed': 0, 'unchanged': 0,
         'skipped_fresh': 0, 'skipped_cancelled': 0, 'skipped_cap': 0,
         'failed': 0, 'total': 0, 'refresh_attempted': 0, 'legacy': 0,
+        'skipped_expired': 0, 'attempted': 0,
     }
 
     with open(csv_path, 'r', encoding='utf-8') as csvfile:
         rows = list(csv.DictReader(csvfile))
 
-    to_fetch = []
+    to_fetch, due = [], []
     for row in rows:
         summary['total'] += 1
         url = row['url']
@@ -277,23 +307,36 @@ def process_csv(csv_path, refresh_hours=DEFAULT_REFRESH_HOURS,
         if age is not None and age <= refresh_hours:
             summary['skipped_fresh'] += 1
             continue
+        expiry = index_expiry(row)
+        if expiry is not None and expiry < stale_before:
+            summary['skipped_expired'] += 1
+            continue
+        due.append({'row': row, 'slug': slug, 'directory': directory,
+                    'existing_hash': (record or {}).get('content_hash'),
+                    'existing_status': (record or {}).get('status', ''),
+                    'is_new': False,
+                    # Unknown expiry ranks as open: it may well be.
+                    'rank': (expiry is not None and expiry < today, formatted_date)})
+
+    # Open first (False sorts before True), then newest publication first.
+    due.sort(key=lambda d: (d['rank'][0], _neg_date_key(d['rank'][1])))
+    for item in due:
         if summary['refresh_attempted'] >= max_refresh:
             summary['skipped_cap'] += 1
             continue
-        to_fetch.append({'row': row, 'slug': slug, 'directory': directory,
-                         'existing_hash': (record or {}).get('content_hash'),
-                         'existing_status': (record or {}).get('status', ''),
-                         'is_new': False})
+        to_fetch.append(item)
         summary['refresh_attempted'] += 1
 
     print(f"To fetch: {len(to_fetch)} ({summary['skipped_fresh']} fresh, "
           f"{summary['skipped_cancelled']} index-cancelled, "
-          f"{summary['skipped_cap']} over the refresh cap)")
+          f"{summary['skipped_cap']} over the refresh cap, "
+          f"{summary['skipped_expired']} expired >{refresh_expired_days}d)")
 
     for item in tqdm(to_fetch, desc="Processing URLs", unit="URL"):
         url = item['row']['url']
         slug = item['slug']
         directory = item['directory']
+        summary['attempted'] += 1
         try:
             html = fetch_html(url)
             content, ok = extract_main_content(html)
@@ -333,8 +376,22 @@ def process_csv(csv_path, refresh_hours=DEFAULT_REFRESH_HOURS,
           f"{summary['unchanged']} unchanged, {summary['legacy']} legacy), "
           f"{summary['skipped_fresh']} fresh, "
           f"{summary['skipped_cancelled']} index-cancelled, "
-          f"{summary['skipped_cap']} over cap, {summary['failed']} failed")
+          f"{summary['skipped_cap']} over cap, {summary['skipped_expired']} expired, "
+          f"{summary['failed']} failed")
     return summary
+
+
+def _neg_date_key(formatted_date):
+    """Sort key that puts later 'YYYY/MM/DD' strings first."""
+    return tuple(-int(p) for p in re.findall(r'\d+', formatted_date or '')) or (0,)
+
+
+def exit_code(summary, max_failure_share=DEFAULT_MAX_FAILURE_SHARE):
+    """0 healthy (including nothing to do), 1 when fetching mostly failed."""
+    attempted = summary['attempted']
+    if attempted >= MIN_ATTEMPTS_FOR_FAILURE and summary['failed'] / attempted > max_failure_share:
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
@@ -347,7 +404,21 @@ if __name__ == "__main__":
                              f"older than this many hours (default {DEFAULT_REFRESH_HOURS}).")
     parser.add_argument('--max-refresh', type=int, default=DEFAULT_MAX_REFRESH,
                         help=f"At most this many re-fetches per run (default {DEFAULT_MAX_REFRESH}).")
+    parser.add_argument('--refresh-expired-days', type=int, default=DEFAULT_REFRESH_EXPIRED_DAYS,
+                        help=f"Do not refresh competitions whose index expiry is more than "
+                             f"this many days past (default {DEFAULT_REFRESH_EXPIRED_DAYS}).")
+    parser.add_argument('--max-failure-share', type=float, default=DEFAULT_MAX_FAILURE_SHARE,
+                        help=f"Exit 1 when more than this share of attempted fetches failed "
+                             f"(default {DEFAULT_MAX_FAILURE_SHARE}; needs at least "
+                             f"{MIN_ATTEMPTS_FOR_FAILURE} attempts).")
     parser.add_argument('--csv', default=indexcsv, help="Index CSV path.")
     args = parser.parse_args()
 
-    process_csv(args.csv, refresh_hours=args.refresh_hours, max_refresh=args.max_refresh)
+    result = process_csv(args.csv, refresh_hours=args.refresh_hours,
+                         max_refresh=args.max_refresh,
+                         refresh_expired_days=args.refresh_expired_days)
+    code = exit_code(result, args.max_failure_share)
+    if code:
+        print(f"FAILED: {result['failed']} of {result['attempted']} detail fetches failed "
+              f"(> {args.max_failure_share:.0%}).")
+    raise SystemExit(code)

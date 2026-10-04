@@ -771,7 +771,10 @@ class Command(BaseCommand):
                 inferred__profession_family_source="llm",
             )
         elif not opts["force"]:
-            qs = qs.filter(Q(inferred={}) | Q(inferred__isnull=True))
+            # Empty = never inferred; the marker = the source changed since
+            # (import_csvs.invalidate_enrichment, REV-07).
+            qs = qs.filter(Q(inferred={}) | Q(inferred__isnull=True)
+                           | Q(inferred__has_key="stale_revision"))
         if opts["limit"]:
             qs = qs[: opts["limit"]]
 

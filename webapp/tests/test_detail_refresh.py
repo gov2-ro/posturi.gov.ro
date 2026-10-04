@@ -509,3 +509,157 @@ class TestImportProvenance:
         posting.refresh_from_db()
         assert posting.detail_fetched_at is None
         assert posting.detail_content_hash == ""
+
+
+# ------------------------------------------------- REV-07: refresh priorities
+
+
+def _age_all_sidecars(root: Path, hours: float = 30) -> None:
+    for m in root.rglob("*.meta.json"):
+        meta = json.loads(m.read_text())
+        meta["fetched_at"] = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        m.write_text(json.dumps(meta))
+
+
+def dated_row(slug: str, published: str, expires: str) -> dict:
+    r = row(f"https://posturi.gov.ro/joburi/{slug}/", f"Expiră in  {expires}")
+    r["publicat_in"] = f"Data publicării: {published}"
+    return r
+
+
+class TestRefreshPriority:
+    TODAY = datetime(2026, 10, 4).date()
+
+    def test_cap_goes_to_open_competitions_newest_first(self, fetchmod, fetch_env, tmp_path):
+        csvp = tmp_path / "index.csv"
+        write_index(csvp, [
+            dated_row("expired-recent", "20.09.2026", "01/10/2026"),   # closed 3 days ago
+            dated_row("open-older", "15.09.2026", "30/10/2026"),
+            dated_row("open-newer", "01.10.2026", "30/10/2026"),
+        ])
+        fetchmod.process_csv(str(csvp), today=self.TODAY)
+        _age_all_sidecars(tmp_path)
+        fetch_env["calls"].clear()
+
+        summary = fetchmod.process_csv(str(csvp), max_refresh=2, today=self.TODAY)
+        assert fetch_env["calls"] == [
+            "https://posturi.gov.ro/joburi/open-newer/",
+            "https://posturi.gov.ro/joburi/open-older/",
+        ]
+        assert summary["skipped_cap"] == 1
+
+    def test_long_expired_competitions_are_not_refreshed(self, fetchmod, fetch_env, tmp_path):
+        csvp = tmp_path / "index.csv"
+        write_index(csvp, [dated_row("archived", "01.06.2026", "30/06/2026")])
+        fetchmod.process_csv(str(csvp), today=self.TODAY)        # first fetch still happens
+        assert len(fetch_env["calls"]) == 1
+        _age_all_sidecars(tmp_path)
+        fetch_env["calls"].clear()
+
+        summary = fetchmod.process_csv(str(csvp), today=self.TODAY)
+        assert summary["skipped_expired"] == 1 and not fetch_env["calls"]
+        # A wider window brings it back.
+        summary = fetchmod.process_csv(str(csvp), refresh_expired_days=365, today=self.TODAY)
+        assert summary["refreshed"] == 1
+
+    def test_index_expiry_parsing(self, fetchmod):
+        assert str(fetchmod.index_expiry({"expira_in": "Expiră in  30/12/2026"})) == "2026-12-30"
+        assert str(fetchmod.index_expiry({"expira_in": "Expiră la 5.1.2027"})) == "2027-01-05"
+        assert fetchmod.index_expiry({"expira_in": "Anunț anulat"}) is None
+        assert fetchmod.index_expiry({"expira_in": "31/02/2026"}) is None
+
+
+class TestFetchExitCode:
+    def test_mostly_failed_run_exits_nonzero(self, fetchmod, fetch_env, tmp_path, monkeypatch):
+        def failing_get(url, headers=None, timeout=None):
+            fetch_env["calls"].append(url)
+            return FakeResponse("<html><body>maintenance</body></html>")   # no pg-wrap
+        monkeypatch.setattr(fetchmod.requests, "get", failing_get)
+        csvp = tmp_path / "index.csv"
+        write_index(csvp, [row(f"https://posturi.gov.ro/joburi/down-{i}/") for i in range(6)])
+        summary = fetchmod.process_csv(str(csvp))
+        assert summary["attempted"] == 6 and summary["failed"] == 6
+        assert fetchmod.exit_code(summary) == 1
+
+    def test_healthy_small_and_empty_runs_exit_zero(self, fetchmod):
+        base = {"attempted": 0, "failed": 0}
+        assert fetchmod.exit_code(base) == 0                                  # nothing to do
+        assert fetchmod.exit_code({"attempted": 4, "failed": 4}) == 0         # below the floor
+        assert fetchmod.exit_code({"attempted": 10, "failed": 5}) == 0        # exactly half
+        assert fetchmod.exit_code({"attempted": 10, "failed": 6}) == 1
+
+
+# ------------------------------------------- REV-07: revision invalidation
+
+
+class TestRevisionInvalidation:
+    URL = INDEX_ROWS[0]["url"]
+
+    def _import(self, tmp_path, call_command, content_hash, calendar=None):
+        write_csv(tmp_path / "anunturi" / "anunturi.csv",
+                  [anunturi_row(status="Live", fetched_at="2026-10-04T10:00:00+00:00",
+                                content_hash=content_hash)])
+        write_csv(tmp_path / "calendar.csv", calendar or [],
+                  fieldnames=["url", "eveniment", "data", "ora"])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+        return JobPosting.objects.get(url=self.URL)
+
+    def _enrich(self, posting):
+        JobPosting.objects.filter(pk=posting.pk).update(
+            attachment_text="old attachment", inferred={"profession_family": "medical",
+                                                        "profession_family_source": "llm"})
+
+    @pytest.mark.django_db(transaction=True)
+    def test_changed_hash_requeues_attachments_and_inference(self, import_env):
+        tmp_path, call_command = import_env
+        posting = self._import(tmp_path, call_command, "a" * 64)
+        self._enrich(posting)
+
+        posting = self._import(tmp_path, call_command, "b" * 64)
+        assert posting.attachment_text == ""
+        # The previous inference stays readable, marked for re-inference.
+        assert posting.inferred["profession_family"] == "medical"
+        assert posting.inferred["stale_revision"] == "b" * 64
+        from django.db.models import Q
+        assert JobPosting.objects.filter(
+            Q(inferred={}) | Q(inferred__has_key="stale_revision"), pk=posting.pk).exists()
+
+    @pytest.mark.django_db(transaction=True)
+    def test_unchanged_or_unknown_hash_keeps_enrichment(self, import_env):
+        tmp_path, call_command = import_env
+        posting = self._import(tmp_path, call_command, "a" * 64)
+        self._enrich(posting)
+        posting = self._import(tmp_path, call_command, "a" * 64)        # unchanged
+        assert posting.attachment_text == "old attachment"
+        assert "stale_revision" not in posting.inferred
+
+        # Legacy (no previous hash) → first observed hash: unknown, not a change.
+        JobPosting.objects.filter(pk=posting.pk).update(detail_content_hash="")
+        posting = self._import(tmp_path, call_command, "c" * 64)
+        assert posting.attachment_text == "old attachment"
+        assert "stale_revision" not in posting.inferred
+
+    @pytest.mark.django_db(transaction=True)
+    def test_calendar_events_vanish_with_the_schedule(self, import_env):
+        from apps.jobs.models import CalendarEvent
+        tmp_path, call_command = import_env
+        posting = self._import(tmp_path, call_command, "a" * 64, calendar=[
+            {"url": self.URL, "eveniment": "Proba scrisă", "data": "2026-07-10", "ora": "10:00"},
+        ])
+        assert CalendarEvent.objects.filter(posting=posting).count() == 1
+
+        # The revised page has no schedule: the parse wrote no rows for it.
+        posting = self._import(tmp_path, call_command, "b" * 64, calendar=[])
+        assert CalendarEvent.objects.filter(posting=posting).count() == 0
+
+    @pytest.mark.django_db(transaction=True)
+    def test_infer_reselects_marked_rows_and_clears_the_marker(self, import_env):
+        tmp_path, call_command = import_env
+        posting = self._import(tmp_path, call_command, "a" * 64)
+        self._enrich(posting)
+        self._import(tmp_path, call_command, "b" * 64)
+
+        call_command("infer_postings", no_llm=True, verbosity=0)
+        posting = JobPosting.objects.get(url=self.URL)
+        assert "stale_revision" not in posting.inferred
+        assert posting.inferred.get("profession_family")

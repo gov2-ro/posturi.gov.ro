@@ -297,24 +297,31 @@ ssh-keyscan -H mioritics.ro >> ~/.ssh/known_hosts
 ssh mioritics.ro 'echo ok && command -v rsync'
 ```
 
-### Cron (current, until OPS-01)
+### Cron (DST-safe, OPS-01)
 
 `mkdir -p ~/g2-dev/posturi.gov.ro/logs` first, then `crontab -e` as `pax`. **This
-box's cron ignores `CRON_TZ`** (verified 2026-10-05): the slots are written in UTC,
-so 11:45 / 18:33 Bucharest are `45 8` / `33 15` in summer (EEST, UTC+3) and must
-become `45 9` / `33 16` when winter time starts on the last Sunday of October
-(2026-10-25), and back in late March. The timer below removes that chore.
+box's cron ignores `CRON_TZ`** (verified 2026-10-05) and runs in UTC, where 11:45 /
+18:33 Bucharest move by an hour at every DST switch. Each slot is therefore listed at
+both of its UTC hours and guarded by the Bucharest hour, so exactly one fires in
+summer (`45 8` / `33 15`) and in winter (`45 9` / `33 16`) with no edits in October
+or March. `\%` is required: cron treats a bare `%` as a newline.
 
 ```cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=pax@mioritics.ro
 
-# UTC — summer values (EEST). Winter: 45 9 / 33 16.
-45 8 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
-33 15 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+# DST-safe: each slot is listed at both UTC hours; the guard runs only at 11:45 / 18:33 Europe/Bucharest (OPS-01)
+45 8,9 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "11" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+33 15,16 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "18" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
 ```
 
-### Switching to the timer (OPS-01)
+Healthchecks.io: with two runs a day, set the check's **period to 18 h** (grace 1 h).
+A 1-day period never notices a single missed run — the next run pings first.
+
+### Alternative: the systemd timer
+
+Equivalent to the guarded crontab, but needs `sudo` to install. Only switch if you
+want the journal/`Persistent=` catch-up; never run both.
 
 The units pin `Europe/Bucharest` on `OnCalendar` (systemd ≥ 240), run as `pax` in
 the checkout, and append to the same `logs/pipeline.log`, so logrotate and

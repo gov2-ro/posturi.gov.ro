@@ -2,6 +2,50 @@
 
 ## 2026
 
+### 2026-10-06 — Implementation specs for discovery, local preferences and feeds
+
+Added three bounded handoff specs under `docs/specs/2026-10-06-product/`:
+UX-01A groups filters and clarifies status without changing legacy predicates;
+UX-09 defines browser-local save/hide, identity checks, missing-record snapshots
+and a bounded read-only lookup; UX-04-FEEDS preserves existing filtered Atom/iCal
+and adds actual RSS, subscription discovery and encoding regression coverage.
+Specs name source files, fixed behavior, exclusions and fixture-based acceptance
+checks so implementation can be assigned one package at a time. Parent UX-01/04
+remain open beyond these slices. Added explicit later email notifications as
+UX-14 and linked all assignments from the backlog. No application code, deployment
+or paid calls changed; these are specifications, not completed features.
+Validated the specs' relative links and named source paths; `git diff --check`
+passed. The earlier rollout review passed 78 focused tests. Included all four
+new spec/index files with the backlog, product direction and activity entries.
+
+---
+
+### 2026-10-06 — Source-counter follow-up and remaining product direction
+
+Added OPS-05 to verify the official portal's counter unit, status rules and
+refresh timing before considering it as a `/pipeline-check` diagnostic. The
+screenshot discrepancy is evidence to investigate; the precise source-counter
+semantics remain unverified. Reviewed the agreed product direction and active
+backlog: the deadline/security/reliability foundation has largely shipped, while
+UX-01 through UX-13 remain open. Recommended simpler discovery and browser-local
+save/hide as the next user-facing packages, ahead of requirement-dependent
+eligibility matching.
+
+---
+
+### 2026-10-06 — Review of the v4 rollout changes
+
+Reviewed `7a562c8..6accc59` (the two commits after the October 5 11:46 checkpoint),
+with the preceding output-cap and cost-meter changes as context. The runner now
+defaults to v4 consistently for extraction and export checks. No new regression
+found in the reviewed changes: shell syntax check passed and 78 focused runner,
+v4 extraction, cost and pipeline-health tests passed. Production results were
+read from the recorded rollout evidence, not independently rechecked on the VPS.
+Outstanding calendar-stage rejection and balance monitoring are already tracked
+as FIX-05-STAGES and OPS-04.
+
+---
+
 ### 2026-10-05 — FIX-05-RUN: v4 deadlines backfilled and live
 
 **What:** the 20-posting v4 sample (18:41Z, $0.054) extracted a deadline from all

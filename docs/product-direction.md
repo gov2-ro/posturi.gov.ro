@@ -32,6 +32,7 @@ a complementary surface.
 | Improved discovery | Offer new-today and closing-soon sections and profession/category pages. | UX-05 |
 | Candidate matching and ongoing use | Start with a short profile form; follow with CV/Europass input, saved searches, alerts and application tracking. | UX-07 |
 | Sharing and subscriptions | Improve feeds, calendar subscriptions and link previews while preserving useful filtered URLs. | UX-04, FIX-02 |
+| Email notifications (later) | Subscribe to new announcements matching a filtered search; later notify about verified changes to followed competitions. | UX-14, UX-12 |
 | Richer information | Make salary estimates clearer; add trustworthy research statistics, document previews and additional announcement sources. | DATA-06, FIX-09, UX-08, LATER-03 |
 | Presentation options | Add dark mode and English translation alongside the existing visual skins. | UX-06 |
 

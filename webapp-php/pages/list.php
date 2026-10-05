@@ -608,6 +608,64 @@ if (!$is_htmx): ?>
       <?= e(STATUS_HELP) ?>
       <span class="status-soon-note"><?= e(STATUS_HELP_SOON) ?></span>
     </p>
+
+    <?php /* UX-04-FEEDS: the one subscription block. It sits with the result
+       controls but outside #results, so HTMX never rebuilds it; syncFeedLinks()
+       keeps every href in step with the address bar. A native <details>, so it
+       opens and closes with no JavaScript, and the export line below links to
+       the content id inside it (browsers expand a closed <details> for a
+       fragment that targets its content). Hrefs are server-rendered from the same filters (feed_url()), so
+       the links are right without JavaScript too. Saved/hidden announcements
+       are browser-local and are never part of these URLs. */
+       $ics_abs = site_origin() . feed_url('posturi.ics'); ?>
+    <details id="urmareste" class="mt-3 rounded-md border border-line bg-surface">
+      <summary class="cursor-pointer select-none px-3 py-2 text-sm font-medium text-gov hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Urmărește această căutare</summary>
+      <div id="urmareste-linkuri" class="border-t border-line px-3 py-3 text-xs text-ink-muted">
+        <ul class="space-y-1">
+          <?php foreach ([['posturi.rss', 'RSS'], ['posturi.atom', 'Atom'], ['posturi.ics', 'Calendar iCal']] as [$feed_file, $feed_label]): ?>
+          <li class="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <a data-feed="<?= e($feed_file) ?>" href="<?= e(feed_url($feed_file)) ?>" class="py-1 text-sm text-gov hover:underline"><?= e($feed_label) ?></a>
+            <button type="button" data-copy="<?= e($feed_file) ?>" hidden
+                    class="rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink hover:border-gov hover:text-gov focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Copiază linkul <?= e($feed_label) ?></button>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+        <p id="feed-copy-status" role="status" aria-live="polite" class="mt-1 min-h-4 text-ink"></p>
+        <label id="feed-copy-fallback" hidden class="mt-1 block">
+          <span class="block">Copiază manual adresa:</span>
+          <input id="feed-copy-url" type="text" readonly
+                 class="mt-1 w-full rounded border border-line-strong bg-sunken px-2 py-1 font-mono text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+        </label>
+
+        <?php /* Calendar subscription. `posturi.ics` is a live query, not a
+           download — the browser only saves it because of the .ics filename.
+           `?title=` names the calendar in clients that show X-WR-CALNAME (Apple
+           Calendar, Outlook) and won't let you rename a subscription; it goes
+           into the calendar links only, never RSS/Atom/JSON. */ ?>
+        <div class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 border-t border-line pt-3">
+          <span class="font-semibold uppercase tracking-widest">Calendar</span>
+          <a id="gcal-link" data-gcal
+             href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=<?= e(rawurlencode($ics_abs)) ?>"
+             target="_blank" rel="noopener"
+             class="py-1 text-gov hover:underline">Adaugă în Google Calendar</a>
+          <a id="webcal-link" data-webcal
+             href="<?= e(preg_replace('#^https?://#', 'webcal://', $ics_abs)) ?>"
+             class="py-1 text-gov hover:underline">Abonare (Apple / Outlook)</a>
+          <label class="inline-flex items-baseline gap-1.5">
+            <span>Titlu calendar</span>
+            <input id="feed-title" type="text" autocomplete="off"
+                   value="<?= e($_GET['title'] ?? '') ?>" placeholder="posturi.gov2.ro"
+                   class="w-44 rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+          </label>
+        </div>
+
+        <ul id="feed-limits" class="mt-3 list-disc space-y-1 pl-4 leading-snug">
+          <li>RSS/Atom: cele mai noi <?= FEED_ITEM_LIMIT ?> de anunțuri care corespund filtrelor. Calendar: primele <?= FEED_CAL_LIMIT ?> cu dată disponibilă, în ordinea termenului.</li>
+          <li>Cât de des se reîmprospătează o abonare este hotărât de cititorul de fluxuri sau de aplicația de calendar, nu de acest site. Un fișier ICS descărcat sau importat este doar o copie de moment.</li>
+          <li>Fluxurile nu sunt o arhivă completă: într-o căutare cu multe rezultate noi pot lipsi anunțuri apărute între două verificări. Nu trimit notificări imediate.</li>
+        </ul>
+      </div>
+    </details>
     </div>
 
         <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
@@ -650,40 +708,13 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
         <div class="mt-8 border-t border-line pt-4">
           <div class="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-xs text-ink-muted">
             <span class="font-semibold uppercase tracking-widest">Export</span>
-            <a data-feed="posturi.atom" href="<?= e(feed_url('posturi.atom')) ?>" class="py-1 text-gov hover:underline">Atom (RSS)</a>
             <a data-feed="posturi.json" href="<?= e(feed_url('posturi.json')) ?>" class="py-1 text-gov hover:underline">JSON API</a>
-            <a data-feed="posturi.ics"  href="<?= e(feed_url('posturi.ics'))  ?>" class="py-1 text-gov hover:underline">iCal</a>
+            <a href="#urmareste-linkuri" data-open-subscribe class="py-1 text-gov hover:underline">Urmărește această căutare (RSS, Atom, calendar)</a>
             <?php /* Phrased so it holds at every moment, filtered or not. A
                server-rendered "cu filtrele active" / "toate anunțurile" pair
                would be stale the instant someone ticks a facet, since this
                block deliberately sits outside the swapped region. */ ?>
             <span class="basis-full text-ink-faint sm:basis-auto">urmează filtrele active</span>
-          </div>
-
-          <?php /* Calendar subscription. `posturi.ics` is a live query, not a
-             download — the browser only saves it because of the .ics filename.
-             Google fetches the URL on its own and re-polls it, so a subscription
-             stays current. `?title=` names the calendar in clients that show
-             X-WR-CALNAME (Apple Calendar, Outlook) and won't let you rename a
-             subscription. All three hrefs are kept in step with the filters and
-             the title box by syncFeedLinks(). */
-             $ics_abs = site_origin() . feed_url('posturi.ics'); ?>
-          <div class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 text-xs text-ink-muted">
-            <span class="font-semibold uppercase tracking-widest">Calendar</span>
-            <a id="gcal-link" data-gcal
-               href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=<?= e(rawurlencode($ics_abs)) ?>"
-               target="_blank" rel="noopener"
-               class="py-1 text-gov hover:underline">Adaugă în Google Calendar</a>
-            <a id="webcal-link" data-webcal
-               href="<?= e(preg_replace('#^https?://#', 'webcal://', $ics_abs)) ?>"
-               class="py-1 text-gov hover:underline">Abonare (Apple / Outlook)</a>
-            <label class="inline-flex items-baseline gap-1.5">
-              <span>Titlu</span>
-              <input id="feed-title" type="text" autocomplete="off"
-                     value="<?= e($_GET['title'] ?? '') ?>" placeholder="posturi.gov2.ro"
-                     class="w-44 rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-            </label>
-            <span class="basis-full text-ink-faint sm:basis-auto">abonarea rămâne actualizată; titlul denumește calendarul în aplicație</span>
           </div>
         </div>
       </div>
@@ -872,6 +903,11 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
     // The title box is the source of truth for ?title=, not the address bar —
     // a shared link may seed it, but from then on the input drives it.
     params.delete('title');
+    // The filter form serialises an emptied search box as `q=`; an empty value
+    // selects nothing, so keep it out of subscription URLs.
+    Array.from(params.keys()).forEach(function (k) {
+      if (params.getAll(k).every(function (v) { return v === ''; })) params.delete(k);
+    });
     var qs = params.toString();
     feedLinks.forEach(function (a) {
       a.setAttribute('href', '/' + a.dataset.feed + (qs ? '?' + qs : ''));
@@ -892,12 +928,65 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
         'https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=' + encodeURIComponent(icsAbs));
     }
     if (webcalLink) webcalLink.setAttribute('href', icsAbs.replace(/^https?:/, 'webcal:'));
+
+    // Copy buttons need script (the clipboard), so they ship hidden. A copied
+    // address is stale once the filters move: clear the notice and the manual
+    // fallback rather than leave an old URL on screen.
+    document.querySelectorAll('[data-copy]').forEach(function (b) { b.hidden = false; });
+    var fb = document.getElementById('feed-copy-fallback');
+    var st = document.getElementById('feed-copy-status');
+    if (fb) fb.hidden = true;
+    if (st) st.textContent = '';
   }
+
+  // ---- Copy a subscription link ----
+  // The URL is the one in the link's current href (so it carries the encoded
+  // filters exactly as the reader will request them), made absolute. If the
+  // clipboard is unavailable or refuses, the same URL is shown selected.
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest && ev.target.closest('[data-copy]');
+    if (!btn) return;
+    var link = document.querySelector('[data-feed="' + btn.dataset.copy + '"]');
+    if (!link) return;
+    var url = location.origin + link.getAttribute('href');
+    var status = document.getElementById('feed-copy-status');
+    var fb = document.getElementById('feed-copy-fallback');
+    var input = document.getElementById('feed-copy-url');
+    function showUrl() {
+      if (!input || !fb) return;
+      input.value = url;
+      fb.hidden = false;
+      input.focus();
+      input.select();
+      if (status) status.textContent = 'Nu am putut copia automat; adresa este selectată mai jos.';
+    }
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) { showUrl(); return; }
+      navigator.clipboard.writeText(url).then(function () {
+        if (fb) fb.hidden = true;
+        if (status) status.textContent = 'Link copiat: ' + link.textContent.trim() + '.';
+      }, showUrl);
+    } catch (err) { showUrl(); }
+  });
+
+  // The export line links to the subscription block; a closed <details> does
+  // not open itself for every browser's fragment navigation.
+  function openSubscribe() {
+    var d = document.getElementById('urmareste');
+    if (d) d.open = true;
+  }
+  document.addEventListener('click', function (ev) {
+    if (ev.target.closest && ev.target.closest('[data-open-subscribe]')) openSubscribe();
+  });
+  function hashOpens() { return location.hash === '#urmareste' || location.hash === '#urmareste-linkuri'; }
+  window.addEventListener('hashchange', function () { if (hashOpens()) openSubscribe(); });
+  if (hashOpens()) openSubscribe();
 
   // hx-push-url writes the address bar after the swap settles; both events fire
   // for a filter change, and back/forward only fires the popstate one.
   document.body.addEventListener('htmx:pushedIntoHistory', syncFeedLinks);
   window.addEventListener('popstate', syncFeedLinks);
+  document.body.addEventListener('htmx:historyRestore', syncFeedLinks);
   if (titleInput) {
     titleInput.addEventListener('input', syncFeedLinks);
     // Enter in a lone text field would submit the filter form; nothing to submit.

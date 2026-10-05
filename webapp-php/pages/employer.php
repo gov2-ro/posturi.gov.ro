@@ -48,6 +48,7 @@ $page_title = $employer['name'];
 // scope themselves to this profile. Advertise them in <head> for feed readers…
 $feed_qs = '?employer=' . rawurlencode($employer['slug']);
 $head_extra =
+    '<link rel="alternate" type="application/rss+xml" title="' . e($employer['name'] . ' — RSS') . '" href="/posturi.rss' . e($feed_qs) . '">' . "\n  " .
     '<link rel="alternate" type="application/atom+xml" title="' . e($employer['name'] . ' — Atom') . '" href="/posturi.atom' . e($feed_qs) . '">' . "\n  " .
     '<link rel="alternate" type="application/json" title="' . e($employer['name'] . ' — JSON') . '" href="/posturi.json' . e($feed_qs) . '">';
 
@@ -89,9 +90,10 @@ require __DIR__ . '/../inc/header.php';
      profile. iCal carries only postings with a submission deadline. */ ?>
   <div class="mb-8 -mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 text-xs text-ink-muted">
     <span class="font-semibold uppercase tracking-widest">Feed</span>
-    <a href="/posturi.atom<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">Atom (RSS)</a>
-    <a href="/posturi.json<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">JSON</a>
-    <a href="/posturi.ics<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">iCal</a>
+    <a href="/posturi.rss<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">RSS</a>
+    <a href="/posturi.atom<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">Atom</a>
+    <a href="/posturi.ics<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">Calendar iCal</a>
+    <a href="/posturi.json<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">JSON API</a>
   </div>
 
   <div class="flex gap-8 items-start">

@@ -970,12 +970,18 @@ function current_qs(): string {
     return $q ? '?' . $q : '';
 }
 
+/** Subscription caps (UX-04-FEEDS), stated in the list UI and enforced by the feeds: RSS/Atom keep the newest N matches; iCal the earliest N with a date. */
+const FEED_ITEM_LIMIT = 50;
+const FEED_CAL_LIMIT  = 200;
+
 function feed_url(string $filename): string {
     // `page` and `sort` describe how the HTML list is being read, not which
     // postings it holds, and a feed reader has no use for either — a feed URL
     // carrying ?page=3 would silently hand back the third slice.
     $params = $_GET;
     unset($params['page'], $params['sort']);
+    // An emptied search box arrives as `q=`; it selects nothing, so leave it out.
+    $params = array_filter($params, fn($v) => !(is_string($v) && $v === ''));
     // `title` only names the calendar (X-WR-CALNAME); Atom and JSON ignore it,
     // and list.php's syncFeedLinks() strips it from them too.
     if (!str_ends_with($filename, '.ics')) unset($params['title']);

@@ -24,7 +24,7 @@ if ($uri === '/preferinte-posturi.json') { require __DIR__ . '/feeds/preferinte.
 // Every page, filter builder and feed reads the normalized $_GET that this
 // produces; a malformed shape (?q[]=medic) never reaches trim() or SQL.
 [$valid_params, $query_error] = validated_query($_GET);
-$is_feed = in_array($uri, ['/posturi.json', '/posturi.atom', '/posturi.ics'], true);
+$is_feed = in_array($uri, ['/posturi.json', '/posturi.atom', '/posturi.rss', '/posturi.ics'], true);
 
 if ($query_error !== null) {
     http_response_code(400);
@@ -51,6 +51,7 @@ $_GET = $valid_params;
 // Route feeds first (exact match, sets Content-Type before any output)
 if ($uri === '/posturi.json') { require __DIR__ . '/feeds/jobs.json.php';  exit; }
 if ($uri === '/posturi.atom') { require __DIR__ . '/feeds/jobs.atom.php';  exit; }
+if ($uri === '/posturi.rss')  { require __DIR__ . '/feeds/jobs.rss.php';   exit; }
 if ($uri === '/posturi.ics')  { require __DIR__ . '/feeds/jobs.ics.php';   exit; }
 // Version marker endpoint — the deploy verifies against it (FIX-06).
 if ($uri === '/versiuni.json') { require __DIR__ . '/feeds/versiuni.json.php'; exit; }

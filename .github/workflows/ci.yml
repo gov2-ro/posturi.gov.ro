@@ -97,6 +97,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/preferences_test.php
 
+      - name: RSS, Atom and iCal subscriptions (UX-04-FEEDS)
+        working-directory: webapp-php
+        run: php tests/feeds_test.php
+
       - name: Old-export compatibility (REV-01)
         working-directory: webapp-php
         run: php tests/compat_test.php

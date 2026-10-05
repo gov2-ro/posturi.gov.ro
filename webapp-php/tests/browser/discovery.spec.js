@@ -296,6 +296,8 @@ test('feed links follow filters through HTMX, chips, pagination and history', as
   await expectFeedsKeep(page, { judet: ['ilfov'], skill: ['Excel'] });
 
   // The calendar title is a calendar label: only iCal carries it.
+  // UX-04-FEEDS moved the title box into the subscription disclosure.
+  await page.locator('details#urmareste > summary').click();
   await page.locator('#feed-title').fill('Posturile mele');
   expect((await feedParams(page, 'posturi.ics')).get('title')).toBe('Posturile mele');
   expect((await feedParams(page, 'posturi.atom')).has('title')).toBe(false);

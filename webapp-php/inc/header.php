@@ -43,6 +43,7 @@ if (!isset($_build_stamp)) {
   <meta property="og:url" content="<?= e($_canonical) ?>">
   <meta name="twitter:card" content="summary">
 
+  <link rel="alternate" type="application/rss+xml" title="posturi.gov2.ro — RSS" href="/posturi.rss">
   <link rel="alternate" type="application/atom+xml" title="posturi.gov2.ro — Atom" href="/posturi.atom">
   <link rel="alternate" type="application/json" title="posturi.gov2.ro — JSON" href="/posturi.json">
 

@@ -2,6 +2,49 @@
 
 ## 2026
 
+### 2026-10-06 — UX-04-FEEDS: filtered RSS, Atom and iCal subscriptions (code ready, not deployed)
+
+Added `/posturi.rss` (RSS 2.0, `application/rss+xml`; in the front controller's
+machine-readable 400 path) and a shared `webapp-php/feeds/_feed.php`: one
+selection (`feed_rows()`: `build_filters()` + FTS, newest-first, cap 50 for RSS
+and Atom; iCal earliest 200 dated, tie-broken by id), one summary text (place,
+type, category, application status, resolved deadline with the expiry-only
+estimate qualified, official source), XML text that strips characters XML
+forbids, and the iCal helpers. Atom ids and RSS guid (`isPermaLink="false"`) stay
+the official URL, so readers see no new entries; item/alternate links now go to
+the local detail page, with the official URL as Atom `rel="related"` and in the
+summary. Timestamps come only from `published_at`/`updated_at` (date precision,
+midnight Bucharest with a real offset instead of a bare `Z`); the feed-level
+`updated` is the newest row, or the database build time for an empty feed. RSS
+descriptions are escaped as HTML first, so source markup is shown, not run.
+Feed titles say "căutare filtrată" when anything beyond an employer scope is
+active. iCal: TEXT escaping only on TEXT properties, `URL` is a URI (non-ASCII
+percent-encoded, commas/semicolons/existing escapes untouched), lines folded at
+75 octets without splitting UTF-8 (the old `wordwrap()` counted bytes after
+escaping and could cut `ț`), estimated deadlines get "Termen estimat:" in
+SUMMARY as well as DESCRIPTION; UIDs, all-day events and exclusive DTEND
+unchanged. UI: a single "Urmărește această căutare" `<details id="urmareste">`
+beside the status/sort controls (outside `#results`) holds RSS/Atom/Calendar iCal
+links, script-only copy buttons (absolute current URL; a selected readonly
+input if the clipboard fails), the Google/webcal/title UI that was at the page
+foot, and the stated limits (50/200, client-controlled refresh, ICS import is a
+snapshot, not an archive, no immediate notifications). JSON API stays in the
+export line, which also links to the block's content id (a closed `<details>`
+opens for fragment navigation, with a small script fallback). Labels are RSS,
+Atom, Calendar iCal, JSON API (also on employer pages, plus an RSS autodiscovery
+`<link>`). `syncFeedLinks()` and `feed_url()` now also drop empty values such as
+the `q=` an emptied search box sends. No new static script, so no cache-busting
+change; CSS rebuilt, skins check passes.
+
+Decisions: caps and the 400 contract untouched; the feed `<id>`/alternate of the
+feed itself keeps its pre-change value (site or employer page) so existing
+subscriptions are not re-keyed, while the new channel link points at the
+filtered HTML search; the extra rows for cap/hostile-text tests are inserted
+into a copy of the fixture inside `tests/feeds_test.php`, so `build_db.php` and
+the pinned counts in other suites are untouched. Tests: `tests/feeds_test.php`
+(CI step added) and `tests/browser/feeds.spec.js` (320/375/1280). Not committed
+or deployed.
+
 ### 2026-10-06 — UX-09: save and hide announcements without an account (code ready, not deployed)
 
 Browser-local shortlist and reversible hide, built on UX-01A. One shared script

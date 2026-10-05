@@ -35,11 +35,11 @@ $stmt6->execute([$eid]); $top_cat_row = $stmt6->fetch();
 $top_category = $top_cat_row ? $top_cat_row['employer_category'] : null;
 
 // Active postings (50)
-$stmt7 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND $open_sql ORDER BY apply_deadline ASC LIMIT 50");
+$stmt7 = db()->prepare("SELECT id, url, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND $open_sql ORDER BY apply_deadline ASC LIMIT 50");
 $stmt7->execute([$eid]); $active_postings = $stmt7->fetchAll();
 
 // Recent expired (25)
-$stmt8 = db()->prepare("SELECT id, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND application_status = 'closed' ORDER BY published_at DESC LIMIT 25");
+$stmt8 = db()->prepare("SELECT id, url, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND application_status = 'closed' ORDER BY published_at DESC LIMIT 25");
 $stmt8->execute([$eid]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
@@ -117,13 +117,21 @@ require __DIR__ . '/../inc/header.php';
 
     <!-- Listings -->
     <div class="flex-1 min-w-0">
+      <?php if ($active_postings || $expired_postings): ?>
+      <div data-pref-banner hidden class="mb-4 border border-info-line bg-info px-3 py-2 text-xs leading-snug text-info-ink">
+        <p data-pref-banner-page hidden><span data-pref-banner-count></span> pe această pagină.
+          <button type="button" data-pref-toggle-hidden aria-pressed="false"
+                  class="ml-1 min-h-[2rem] px-1 font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"><span data-pref-toggle-label>Arată</span></button></p>
+        <p data-pref-banner-all hidden class="font-medium">Toate anunțurile de pe această pagină sunt ascunse în acest browser.</p>
+      </div>
+      <?php endif; ?>
       <?php if ($active_postings): ?>
       <section class="mb-8">
         <h2 class="font-display text-lg italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Anunțuri active (<?= count($active_postings) ?>)
         </h2>
         <?php foreach ($active_postings as $p): $dl = posting_deadline($p); $days = days_until($dl['date']); $est = $dl['source'] === 'expirare'; $dt = display_title($p); ?>
-        <div class="py-3 border-b border-line last:border-0">
+        <div class="py-3 border-b border-line last:border-0 data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p, $employer['name']) ?> data-pref-hideable>
           <div class="flex items-start justify-between gap-3">
             <div>
               <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a>
@@ -135,6 +143,7 @@ require __DIR__ . '/../inc/header.php';
                 <?php if ($p['job_level']): ?><span>· <?= e($p['job_level']) ?></span><?php endif; ?>
                 <?php if ($p['categorie']): ?><span>· <?= e($p['categorie']) ?></span><?php endif; ?>
               </div>
+              <?= pref_controls($p) ?>
             </div>
             <?php if ($days !== null): ?>
             <div class="shrink-0 text-right">
@@ -159,7 +168,7 @@ require __DIR__ . '/../inc/header.php';
           Anunțuri recente expirate
         </h2>
         <?php foreach ($expired_postings as $p): $dt = display_title($p); ?>
-        <div class="py-3 border-b border-line last:border-0 opacity-70">
+        <div class="py-3 border-b border-line last:border-0 opacity-70"<?= pref_attrs($p, $employer['name']) ?> data-pref-hideable>
           <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a>
           <?php if ($dt['secondary']): ?>
             <div class="text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></div>
@@ -168,6 +177,7 @@ require __DIR__ . '/../inc/header.php';
             <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
             <?php if ($p['expires_at']): ?><span class="font-mono">· Înscrieri închise · anunț expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>
           </div>
+          <?= pref_controls($p) ?>
         </div>
         <?php endforeach; ?>
       </section>

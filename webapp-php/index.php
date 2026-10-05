@@ -15,6 +15,11 @@ if (file_exists(__DIR__ . '/Parsedown.php')) {
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $uri = '/' . trim($uri ?? '/', '/');
 
+// UX-09: read-only POST lookup. Routed before the query-string decoder and any
+// shared HTML so every outcome, errors included, is machine-readable JSON; the
+// query string is ignored entirely.
+if ($uri === '/preferinte-posturi.json') { require __DIR__ . '/feeds/preferinte.json.php'; exit; }
+
 // ---- Request validation: one decoder, one 400 path ----
 // Every page, filter builder and feed reads the normalized $_GET that this
 // produces; a malformed shape (?q[]=medic) never reaches trim() or SQL.
@@ -70,6 +75,8 @@ if ($uri === '/' || $uri === '') {
     require __DIR__ . '/pages/employer.php';
 } elseif ($uri === '/statistici' || $uri === '/statistici/') {
     require __DIR__ . '/pages/stats.php';
+} elseif ($uri === '/salvate' || $uri === '/salvate/') {
+    require __DIR__ . '/pages/saved.php';
 } elseif ($uri === '/despre' || $uri === '/despre/') {
     require __DIR__ . '/pages/about.php';
 } else {

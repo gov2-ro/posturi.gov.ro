@@ -1225,6 +1225,49 @@ function display_title(array $p): array {
     return ['primary' => $canonical, 'secondary' => $raw, 'normalized' => true];
 }
 
+// ---- Browser-local save/hide (UX-09) ----
+
+/** Identity and minimal snapshot of a posting, as data-* attributes (all escaped). */
+function pref_attrs(array $p, ?string $employer = null): string {
+    $dl = posting_deadline($p);
+    $a = [
+        'data-posting'         => '',
+        'data-pref-id'         => (string)(int)$p['id'],
+        'data-pref-url'        => (string)($p['url'] ?? ''),
+        'data-pref-path'       => job_url($p),
+        'data-pref-title'      => display_title($p)['primary'],
+        'data-pref-employer'   => $employer ?? (string)($p['employer_name'] ?? ''),
+        'data-pref-place'      => place_label($p),
+        'data-pref-date'       => (string)($dl['date'] ?? ''),
+        'data-pref-date-source' => (string)($dl['source'] ?? ''),
+    ];
+    $out = '';
+    foreach ($a as $k => $v) $out .= ' ' . $k . ($v === '' && $k === 'data-posting' ? '' : '="' . e($v) . '"');
+    return $out;
+}
+
+/**
+ * Save (and optionally hide) buttons for one posting. Rendered hidden: they
+ * need JavaScript, which un-hides them (no-JS readers see only normal links).
+ * Real buttons, never inside the title link; the title is read out via sr-only
+ * text so several rows are distinguishable.
+ */
+function pref_controls(array $p, bool $with_hide = true): string {
+    $title = e(display_title($p)['primary']);
+    $btn = 'inline-flex min-h-[2.5rem] items-center border border-line bg-surface px-3 py-2 text-xs font-medium '
+         . 'text-ink-muted transition-colors hover:border-gov hover:text-gov focus:outline-none '
+         . 'focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-info-line aria-pressed:bg-gov-light aria-pressed:text-gov';
+    $h = '<div data-pref-controls hidden><div class="mt-2 flex flex-wrap items-center gap-2">'
+       . '<button type="button" data-pref="save" aria-pressed="false" class="' . $btn . '">'
+       . '<span data-pref-label>Salvează</span><span class="sr-only"> anunțul: ' . $title . '</span></button>';
+    if ($with_hide) {
+        $h .= '<button type="button" data-pref="hide" class="' . $btn . '">'
+            . '<span data-pref-label>Ascunde</span><span class="sr-only"> anunțul: ' . $title . '</span></button>'
+            . '<span data-pref-flag hidden class="text-xs text-ink-muted">Ascuns din rezultate</span>';
+    }
+    return $h . '</div></div>';
+}
+
 function site_origin(): string {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     if (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') $scheme = 'https';

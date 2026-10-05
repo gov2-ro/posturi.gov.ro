@@ -93,6 +93,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/discovery_test.php
 
+      - name: Save/hide lookup endpoint and markup (UX-09)
+        working-directory: webapp-php
+        run: php tests/preferences_test.php
+
       - name: Old-export compatibility (REV-01)
         working-directory: webapp-php
         run: php tests/compat_test.php

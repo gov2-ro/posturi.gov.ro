@@ -228,6 +228,7 @@ require __DIR__ . '/../inc/header.php';
       <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener"
          class="text-xs text-gov hover:underline font-mono sm:ml-auto">anunțul original ↗</a>
     </div>
+    <div<?= pref_attrs($p) ?>><?= pref_controls($p, false) ?></div>
 
     <!-- Badges -->
     <div class="mt-3 flex flex-wrap gap-2">

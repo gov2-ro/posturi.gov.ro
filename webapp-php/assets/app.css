@@ -74,6 +74,10 @@
     --radius-pill: 9999px;
   }
 
+  /* UX-09: the hidden attribute must win over utility display classes
+     (inline-flex buttons toggled by saved.js). */
+  [hidden] { display: none !important; }
+
   body {
     background-color: rgb(var(--c-page));
     color: rgb(var(--c-ink));

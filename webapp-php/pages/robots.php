@@ -13,6 +13,9 @@ Allow: /
 # canonical link on each page points crawlers back at the unfiltered list.
 Disallow: /*?
 
+# Browser-local lists: the page is the same for everyone and holds no content.
+Disallow: /salvate/
+
 Sitemap: {$origin}/sitemap.xml
 
 TXT;

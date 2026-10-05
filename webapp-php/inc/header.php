@@ -59,6 +59,9 @@ if (!isset($_build_stamp)) {
   <?= pg_skin_boot() ?>
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/prefs.js?v=<?= @filemtime(__DIR__ . '/../static/prefs.js') ?: '1' ?>" defer></script>
+  <?php /* UX-09: one shared script for browser-local save/hide, loaded once here
+     rather than copied into the list and detail inline scripts. */ ?>
+  <script src="/static/saved.js?v=<?= @filemtime(__DIR__ . '/../static/saved.js') ?: '1' ?>" defer></script>
   <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">
@@ -126,10 +129,19 @@ if (!isset($_build_stamp)) {
     <?php /* Statistici and Angajatori moved to /despre/ — they are things you
        read once, not places you navigate between, and the masthead is worth
        more as one unambiguous way back to the listing. */ ?>
-    <nav aria-label="Navigare principală" class="shrink-0 flex items-center text-sm text-on-bar-muted">
+    <nav aria-label="Navigare principală" class="shrink-0 flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
+      <?php /* UX-09: the count is the browser-local number of saved items; it
+         stays hidden until saved.js has read the state. */ ?>
+      <a href="/salvate/" class="py-2 hover:text-on-bar transition-colors">Salvate<span data-saved-count hidden class="ml-1 font-mono text-xs"></span></a>
       <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>
     </nav>
   </div>
 </header>
+<?php /* Storage problems (unavailable, corrupt, unknown version, nothing persisted)
+   are announced here by saved.js; empty and hidden otherwise. */ ?>
+<div data-pref-status hidden role="status" class="border-b border-note-line bg-note px-4 py-2 text-center text-xs leading-snug text-note-ink"></div>
+<noscript>
+  <p class="border-b border-line bg-sunken px-4 py-2 text-center text-xs text-ink-muted">Salvarea și ascunderea anunțurilor se păstrează în browser și necesită JavaScript. Legăturile către anunțuri funcționează normal.</p>
+</noscript>
 
 <main id="main" class="flex-1">

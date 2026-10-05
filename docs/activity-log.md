@@ -2,6 +2,41 @@
 
 ## 2026
 
+### 2026-10-06 — UX-09: save and hide announcements without an account (code ready, not deployed)
+
+Browser-local shortlist and reversible hide, built on UX-01A. One shared script
+(`static/saved.js`, loaded by `inc/header.php`) owns a single localStorage key,
+`posturi.preferences.v1` (`{version, records}` keyed by official source URL;
+numeric id is only a lookup hint). Server markup gets identity `data-pref-*`
+attributes and hidden-until-JS Salvează/Ascunde buttons (`pref_attrs()` /
+`pref_controls()` in `helpers.php`) on list, employer and detail pages; the
+nav links to the new `/salvate/` page (`pages/saved.php`: Salvate / Ascunse
+views, local batches of 25, clear/restore-all with in-page confirm, noscript
+text). `/preferinte-posturi.json` (`feeds/preferinte.json.php`) is a read-only
+POST lookup of public data for up to 500 distinct ids (405+Allow, 415, 413 over
+16 KiB, 400 for malformed/nested/non-integer; no default active predicate, no
+cap, no-store, no CORS), routed before the query decoder so errors stay JSON.
+Server feeds, counts and filters never see local state; hidden rows are only
+hidden after rendering, with a banner and "Arată" toggle.
+
+Non-obvious decisions: ID lookups are accepted only when the returned source
+URL equals the record key (otherwise the cached snapshot stays, labelled "Nu
+mai este disponibil în baza curentă", never "expirat"); invalid stored entries
+are ignored but written back untouched; corrupt/unknown-version storage is never
+overwritten (session-only until an explicit confirmed reset); writes are
+verified by read-back; mutations re-read storage first (other-tab edits kept;
+simultaneous writes last-write-wins). Duplicate ids in a lookup collapse (cap
+applies to distinct ids). `[hidden]{display:none !important}` added to app.css
+because button utilities overrode the attribute. Controls sit after the deadline
+column in list rows so `deadline_test.php`'s 3000-byte row window still holds.
+Tests: `tests/preferences_test.php` (endpoint, markup, escaping, rebuilt-dataset
+cases; CI step added) and `tests/browser/saved.spec.js` (storage unavailable /
+quota / silent write loss / corrupt / version / invalid entries, 26 and 500
+records, failed lookup + retry, identity cases, hostile snapshots, HTMX
+swaps + history, other-tab edits, keyboard, no-JS; 320/375/1280). CSS rebuilt
+(`tailwind.config.js` also scans `saved.js`); skins check passes. Not committed
+or deployed.
+
 ### 2026-10-06 — UX-01A: grouped filters and clear application status (code ready, not deployed)
 
 Regrouped the PHP sidebar (`partials/facets.php`): only Județ and Domeniu

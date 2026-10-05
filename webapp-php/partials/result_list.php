@@ -66,6 +66,15 @@ $chips = $active_chips ?? [];
 
 <!-- Results list -->
 <?php if ($postings): ?>
+  <?php /* UX-09: filled by static/saved.js from browser-local state. The server
+     result and facet counts never change with it; this only says so. */ ?>
+  <div data-pref-banner hidden class="mb-3 border border-info-line bg-info px-3 py-2 text-xs leading-snug text-info-ink">
+    <p data-pref-banner-page hidden><span data-pref-banner-count></span> pe această pagină.
+      <button type="button" data-pref-toggle-hidden aria-pressed="false"
+              class="ml-1 min-h-[2rem] px-1 font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"><span data-pref-toggle-label>Arată</span></button></p>
+    <p data-pref-banner-all hidden class="font-medium">Toate anunțurile de pe această pagină sunt ascunse în acest browser. Paginarea rămâne disponibilă, iar rezultatele căutării de pe server nu s-au schimbat.</p>
+    <p>Numărul rezultatelor include anunțurile ascunse în acest browser.</p>
+  </div>
   <ul class="divide-y divide-line border-t border-line">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
@@ -75,7 +84,7 @@ $chips = $active_chips ?? [];
         $days = days_until($dl['date']);
         $est  = $dl['source'] === 'expirare';
     ?>
-    <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken">
+    <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <?php $dt = display_title($p); ?>
@@ -164,6 +173,9 @@ $chips = $active_chips ?? [];
           <?php endif; ?>
         </div>
       </div>
+      <?php /* After the deadline column, not inside the content column: keeps the
+         date within a few hundred bytes of the title for anything that reads rows. */ ?>
+      <?= pref_controls($p) ?>
     </li>
     <?php endforeach; ?>
   </ul>

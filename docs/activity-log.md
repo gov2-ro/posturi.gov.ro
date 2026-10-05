@@ -2,6 +2,43 @@
 
 ## 2026
 
+### 2026-10-05 — FIX-05-RUN: v4 deadlines backfilled and live
+
+**What:** the 20-posting v4 sample (18:41Z, $0.054) extracted a deadline from all
+20 newest active postings; each was checked against its source sentence with the
+new `check-v4-sample.py --evidence`, all correct, peak 6,300 output tokens. The
+backfill then ran on the VPS under `.pipeline.lock` from the runbook in the FIX-05
+spec (rollback CSV + pre-v4 SQLite first). It stopped at 1,475/2,396 on DeepSeek
+`402 Insufficient Balance` (exit 2, nothing deployed — the fatal path worked),
+resumed after pax topped up with step 0 skipped so the rollback copies stayed
+pre-v4, and deployed as `v4-backfill-resume-2026-10-05T20:39:47Z` (check-export
+31/31). Total 2,383 ok / 20 failed, $5.86 at list price ($0.0024/posting; estimate
+was $6–9).
+
+**Result on the live feed:** newest 200 active — before 194 `expirare` / 6 `anunt`,
+after 193 `concurs` / 7 `expirare`. Of 2,293 exported postings, 1,095 are
+confirmed open, 87 unconfirmed, 1,111 closed: almost half of what the site listed
+as active by announcement expiry had already stopped taking applications. The
+default Active view went from 2,022 to 1,182.
+
+**Non-obvious:** the export lost 100 rows (2,393 → 2,293) because it ran after
+midnight Bucharest and those postings expired on 05.10 — not a v4 effect. The 20
+failures are all an unlisted calendar stage (FIX-05-STAGES, decision pending). The
+v4 pin (`43ca34e`) had to reach the VPS before the next scheduled run: a
+v3-pinned `--resume` treats every v4 row as provably stale (provenance carries the
+prompt version) and would have re-extracted and downgraded all of them, at peak
+price. The VPS session's progress watcher reported 0 failures until it noticed
+tqdm's carriage returns hid the ✗ lines — worth remembering when grepping these
+logs.
+
+**Closed out at 21:38Z:** the VPS pulled the v4 pin (`43ca34e`) and the crontab's
+morning slot moved to 13:15 Bucharest (`15 10,11`, guard `= "13"`). A read-only
+count shows the next scheduled `--resume` selects 5 of 2,396 active rows — the
+v3-provenance stage failures — plus new or changed postings, so the scheduled runs
+keep v4 current without re-paying for the backfill.
+
+---
+
 ### 2026-10-05 — FIX-05-RUN prep: cost meter, morning slot, output cap, runbook
 
 **What:** while the 20-posting v4 sample waits on the VPS session, everything the

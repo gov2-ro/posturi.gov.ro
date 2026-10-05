@@ -297,7 +297,7 @@ Provider, model and prompt version resolve the same way in `llm-schema.py`, `pip
 # .env
 LLM_PROVIDER=gemini            # gemini | openai | anthropic | deepseek
 LLM_MODEL=gemini-2.5-flash     # ignored if it is not a model of the selected provider
-LLM_PROMPT_VERSION=v3          # v1 | v2 | v3 | v4 (occupation_v1 is the occupation step's prompt)
+LLM_PROMPT_VERSION=v4          # v1 | v2 | v3 | v4 (occupation_v1 is the occupation step's prompt)
 ```
 
 A backfill is ~9,600 calls per model, so the runner is built for that:

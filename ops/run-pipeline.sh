@@ -35,8 +35,11 @@ PYTHON="${PYTHON:-$ROOT/.venv/bin/python}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-$(env_value HEALTHCHECK_URL)}"
 # Pinned, not left to models_config.json, whose default is still v2. The deployed
 # schema has v3_* columns and the site's facets read them; a v2 extraction would
-# import as a posting with every v3 facet empty.
-PROMPT_VERSION="${LLM_PROMPT_VERSION:-v3}"
+# import as a posting with every v3 facet empty. v4 since 2026-10-05 (FIX-05-RUN):
+# it is v3 plus the competition calendar, whose `application_deadline` is what
+# separates confirmed-open postings from expiry-only ones. Going back to v3 would
+# make --resume re-pay for every active posting (provenance carries the version).
+PROMPT_VERSION="${LLM_PROMPT_VERSION:-v4}"
 WORKERS="${SCHEMA_WORKERS:-4}"
 DOWNLOAD_SINCE="${DOWNLOAD_SINCE:-7}"
 

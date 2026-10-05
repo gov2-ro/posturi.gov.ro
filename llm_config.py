@@ -9,7 +9,7 @@ precedence rule used by every entry point:
 Environment variables (see `.env.example`):
     LLM_PROVIDER    gemini | openai | anthropic | deepseek
     LLM_MODEL       model id, overriding the provider's default model
-    LLM_PROMPT_VERSION  v1 | v2 | v3
+    LLM_PROMPT_VERSION  v1 | v2 | v3 | v4
 
 An env var set to the empty string (`LLM_PROVIDER=` in .env, which is how the
 example file ships) counts as unset — otherwise a blank line in .env would

@@ -205,14 +205,17 @@ real run compares its deltas against.
 ### What a run does
 
 `pipeline.py --continue-on-error --since 7 --active-only --resume --workers 4
---prompt-version v3`, then `ops/check-export.py`, then — only if the check passes —
+--prompt-version v4`, then `ops/check-export.py`, then — only if the check passes —
 `./deploy-php.sh --data-only --no-export`.
 
 - **`--active-only` is the cost guard.** 6,904 postings have no `schema_json` but only
   about 15 of them are active; the rest will never reach the export. Without this flag
   every run would pay for LLM extraction on thousands of expired postings.
-- **`--prompt-version v3` is pinned** because `models_config.json` still defaults to v2,
-  and a v2 extraction lands with every `v3_*` facet column empty.
+- **`--prompt-version v4` is pinned** (v3 until the 2026-10-05 FIX-05-RUN backfill)
+  because `models_config.json` still defaults to v2, and a v2 extraction lands with
+  every `v3_*` facet column empty. v4 is v3 plus the competition calendar that sets
+  `application_deadline`. Changing the pin makes `--resume` re-extract every active
+  posting, so it is a reviewed, paid step, not a config tweak.
 - **`--continue-on-error` keeps later steps running, but a failed step blocks the
   deploy.** If `pipeline.py` exits non-zero, `ops/run-pipeline.sh` pings `/fail`, exits
   with that status and the shared host keeps the previous database. Setting

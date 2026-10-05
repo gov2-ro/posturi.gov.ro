@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-10-05 — FIX-05-RUN prep: cost meter, morning slot, output cap, runbook
+
+**What:** while the 20-posting v4 sample waits on the VPS session, everything the
+backfill depends on was readied without paid calls. COST-01: `models_config.json`
+carries DeepSeek's current list prices and a 2× peak tier, so recorded costs stop
+understating (pushed `e06eab8`). The morning slot moves 11:45 → 13:15 Bucharest
+(10:15Z / 11:15Z, outside the 06–10 UTC peak); the healthcheck period goes 18 h →
+20 h with it, since the overnight gap becomes 18h42m (pax set it already); docs and
+the timer unit are updated (`4b06492`), the VPS crontab changes after the backfill.
+The output cap is 16,000 for every prompt version (REV-17). The runbook, with a
+rollback snapshot, is in the FIX-05 spec.
+
+**Checked, not assumed:** v4 reclassification cannot trip the deploy gates — the
+`active` metric, `no_collapse` and the row floors all count by `expires_at`. After
+the backfill `occupations` makes no new calls (keyed on the title) and `salary`
+recomputes from `schema_json`, but `infer` only touches new/stale rows, so the
+runbook adds a no-LLM `infer_postings --conditions-only` pass.
+
+---
+
 ### 2026-10-05 — FIX-05-RUN step 1: v4 backfill cost estimate; DeepSeek prices are stale
 
 **Baseline (live `/posturi.json`, data run `2026-10-04T20:57:08Z`):** the newest 200

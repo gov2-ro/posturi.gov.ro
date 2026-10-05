@@ -66,8 +66,8 @@ class TestVersionCompatibility:
         spec = importlib.util.spec_from_file_location("llm_schema", REPO_ROOT / "llm-schema.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        assert module.max_output_tokens("v4") >= 8000
-        assert module.max_output_tokens("v3") >= 8000
+        assert module.max_output_tokens("v4") >= 16000
+        assert module.max_output_tokens("v3") >= 16000
 
 
 class TestCompetitionCalendar:

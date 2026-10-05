@@ -91,8 +91,15 @@ def get_prompt(prompt_version="v1"):
 #: tokens even with a 19-event calendar. The cost driver is multi-role postings,
 #: where every entry in `positions[]` repeats education, experience, skills and
 #: credentials — one advertising eight roles blew past 4,000 on its own.
-MAX_OUTPUT_TOKENS = {"v4": 8000}
-DEFAULT_MAX_OUTPUT_TOKENS = 8000
+#:
+#: 16,000 since 2026-10-05: at 8,000 five v3 postings truncated on every run
+#: (REV-17) and the September v4 sample peaked at 7,551, so a corpus-wide v4
+#: backfill would have paid for answers it then threw away. DeepSeek documents a
+#: 384K output maximum. A runaway answer at the cap costs about a cent; an
+#: Anthropic model would need a lower cap (3.5 Haiku stops at 8,192), but none
+#: is enabled.
+MAX_OUTPUT_TOKENS: dict[str, int] = {}
+DEFAULT_MAX_OUTPUT_TOKENS = 16000
 
 
 def max_output_tokens(prompt_version: str) -> int:

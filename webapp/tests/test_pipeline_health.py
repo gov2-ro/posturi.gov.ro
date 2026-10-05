@@ -534,4 +534,4 @@ class TestOutputTruncation:
         assert len(calls) == 1, "a repair would regenerate the same long answer"
 
     def test_v3_budget_is_no_longer_2000(self, llm):
-        assert llm.max_output_tokens("v3") >= 8000
+        assert llm.max_output_tokens("v3") >= 16000

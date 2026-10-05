@@ -2,6 +2,36 @@
 
 ## 2026
 
+### 2026-10-06 — UX-01A: grouped filters and clear application status (code ready, not deployed)
+
+Regrouped the PHP sidebar (`partials/facets.php`): only Județ and Domeniu
+profesional start open; Studii, Experiență și cerințe, Contract și program and
+Mai multe filtre are parent disclosures (with nested "Clasificări din sursă și
+text" and "Diagnostic date"). Any selection opens every ancestor
+(`data-selected`), orphan selections render as pinned checkboxes even when the
+group has no options, and legacy `computer` / `has_salary` / `employer` /
+`employer_id` params now survive form serialisation (hidden input or removable
+checkbox, plus an employer chip). Status tabs read Active / Termen în 7 zile /
+Înscrieri închise / Termen neprecizat with persistent explanatory copy (7-day
+sentence toggled by CSS `:has`, because the control is outside the swapped
+region); counts say "anunț găsit / anunțuri găsite"; expiry-fallback dates show
+"Expirarea anunțului; înscriere neconfirmată" in list, detail and employer
+pages. Enum options/chips use Romanian labels (unmapped values kept verbatim).
+No predicate, export or prompt changes; URL values unchanged.
+
+Non-obvious decisions: facet open/closed preferences are now recorded from
+summary clicks, not `toggle` events (those also fire for server-rendered open
+groups and were storing every default/bookmark-opened group as a preference);
+feed links are looked up live in `syncFeedLinks()` (survives history body
+restore) and `feed_url()` drops `title` for non-iCal feeds to match the JS;
+`status=all` is not a tab, so the first form change normalises it to `active`
+(pre-existing behaviour). Salary facet stays gated on >= 100 estimated rows.
+Tests: `tests/discovery_test.php` (old-URL ID sets captured at 6accc59, wording,
+ancestors, feeds), `tests/browser/discovery.spec.js` (320/375/1280); fixture
+extended by UPDATEs in `build_db.php`; `old_urls.php`; CI step added. Existing
+tests' wording expectations updated. CSS rebuilt; skins check passes. Not
+committed or deployed.
+
 ### 2026-10-06 — Implementation specs for discovery, local preferences and feeds
 
 Added three bounded handoff specs under `docs/specs/2026-10-06-product/`:

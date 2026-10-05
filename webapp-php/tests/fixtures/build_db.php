@@ -355,6 +355,45 @@ SQL);
         ] + $base);
     }
 
+    // UX-01A facet variety. Applied as UPDATEs so the row count, ids and
+    // deadline matrix above (which other tests pin) are untouched; it gives every
+    // facet group at least one value and a spread of exact/array/legacy values.
+    // 'zz_nou' is deliberately an unmapped vocabulary value: it must stay visible.
+    $db->exec("
+        UPDATE job_postings SET inf_profession_family='sănătate', v3_eqf_level=4,
+            v3_isced_fields='[\"09_sanatate_asistenta_sociala\"]', v3_skills='[\"Excel\"]',
+            v3_languages='[\"en:B1\"]', v3_contract_duration='nedeterminata', v3_schedule='norma_intreaga',
+            v4_funding_source='buget_local', v4_employer_sector='sanatate', inf_requires_computer=1,
+            employer_category='Funcție contractuală'
+          WHERE id=1001;
+        UPDATE job_postings SET inf_profession_family='administrație', inf_seniority='debutant',
+            inf_studies_required='licenta', inf_experience_years=2, v3_eqf_level=6,
+            v3_isced_fields='[\"04_afaceri_administratie_drept\"]', v3_skills='[\"Excel\",\"Contabilitate\"]',
+            v3_contract_duration='determinata', v3_schedule='norma_partiala', v4_funding_source='fonduri_europene',
+            v4_employer_sector='administratie_locala', inf_remote_eligible=1, employer_category='Funcție publică'
+          WHERE id=1002;
+        UPDATE job_postings SET inf_profession_family='administrație', inf_seniority='inferior_necunoscut',
+            inf_studies_required='liceala', v3_eqf_level=4, employer_category='Funcție contractuală'
+          WHERE id=1003;
+        UPDATE job_postings SET inf_profession_family='social', inf_work_type='schimburi', v3_shift_work=1,
+            v3_eqf_level=2, v3_schedule='schimburi', v3_contract_duration='zz_nou', inf_requires_computer=0,
+            employer_category='Funcție contractuală'
+          WHERE id=1004;
+        UPDATE job_postings SET inf_profession_family='tehnic', inf_anomaly_flags='[\"missing_contact\"]',
+            inf_experience_years=6, inf_seniority='conducere_superioara', job_level='conducere',
+            employer_category='Funcție contractuală'
+          WHERE id=1005;
+        UPDATE job_postings SET inf_profession_family='juridic', inf_seniority='consilier',
+            inf_studies_required='master', inf_experience_years=4, v3_eqf_level=7, v3_skills='[\"Contabilitate\"]',
+            v3_languages='[\"fr:B2\"]', v3_credentials='[\"autorizatie\"]', v3_policy_domains='[\"drept_justitie\"]',
+            v3_exam_stages='[\"interviu\"]', inf_requires_computer=1, v4_funding_source='buget_stat',
+            v4_employer_sector='justitie', employer_category='Funcție publică'
+          WHERE id=1006;
+        UPDATE job_postings SET inf_profession_family='tehnic' WHERE id IN (1007, 1008);
+        UPDATE job_postings SET v3_isced_fields='[\"04_afaceri_administratie_drept\"]',
+            v3_study_level='liceala', inf_studies_required='liceala' WHERE id=1008;
+    ");
+
     $db->exec("INSERT INTO calendar_events VALUES
         (1, 1001, 'Depunere dosare', '2026-10-16', NULL),
         (2, 1001, 'Probă scrisă', '2026-10-28', '10:00'),

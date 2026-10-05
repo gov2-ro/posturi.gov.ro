@@ -248,7 +248,7 @@ run_suite('filtering, facet parity, chips, pagination, sort', function () use ($
     $ctx = stream_context_create(['http' => ['ignore_errors' => true, 'header' => "HX-Request: true\r\n"]]);
     $htmx_body = (string)@file_get_contents($base . '/?judet%5B%5D=cluj', false, $ctx);
     assert_not_contains('<!doctype html>', $htmx_body, 'htmx partial has no full page');
-    assert_contains('rezultate', $htmx_body, 'htmx partial carries the count');
+    assert_contains('anunț', $htmx_body, 'htmx partial carries the count');
 });
 
 run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', function () use ($base, $db_path, $srv) {
@@ -280,7 +280,7 @@ run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', fu
 
     // REV-04a: status control carries counts for all four options.
     [, $home] = fetch_page($base, '/?status=all');
-    foreach (['Închise' => $closed, 'Termen neprecizat' => $unk, 'Active' => $open] as $label => $n) {
+    foreach (['Înscrieri închise' => $closed, 'Termen neprecizat' => $unk, 'Active' => $open] as $label => $n) {
         assert_true(preg_match('#' . preg_quote($label, '#') . '\s*<span[^>]*>' . $n . '</span>#u', $home) === 1,
                     "status control: $label = $n");
     }

@@ -289,7 +289,7 @@ require __DIR__ . '/../inc/header.php';
             <!-- The expiry fallback must read as uncertainty, not as the
                  confirmed submission date the heading above implies. -->
             <div class="mt-1 rounded border border-note-line bg-note px-2 py-1 text-xs text-note-ink">
-              Data expirării; termenul de înscriere nu este confirmat.
+              <?= e(DEADLINE_FALLBACK_NOTE) ?>.
             </div>
           <?php endif; ?>
           <?php

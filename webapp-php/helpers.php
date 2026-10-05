@@ -462,6 +462,23 @@ const STUDIES_LABELS = [
     'generala'    => 'Generală',
 ];
 
+/** Legacy source/inferred classification labels. The live source already sends
+ *  Romanian phrases ("Funcții de execuție"); these cover the snake/ASCII spellings
+ *  older exports and fixtures carry. Unfamiliar values are shown as-is. */
+const JOB_LEVEL_LABELS = [
+    'executie'  => 'Funcții de execuție',
+    'conducere' => 'Funcții de conducere',
+];
+
+function job_level_label(string $v): string { return JOB_LEVEL_LABELS[$v] ?? $v; }
+
+/** Profession family as a visible label: first letter upper-cased, underscores
+ *  read as spaces. The value itself (and the URL) is untouched. */
+function family_label(string $v): string {
+    $v = str_replace('_', ' ', $v);
+    return mb_strtoupper(mb_substr($v, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($v, 1, null, 'UTF-8');
+}
+
 // ---- Contract terms (prompt v3, exported from 2026-09-13) ----
 
 /** Fixed-term vs open-ended. Finer than the scraped `job_type`, which only ever
@@ -637,10 +654,17 @@ const DEFAULT_STATUS = 'active';
 // dates — the rows whose display already qualifies the difference.
 const STATUS_LABELS = [
     'active'  => 'Active',
-    'soon'    => 'Expiră în 7 zile',
-    'closed'  => 'Închise',
+    'soon'    => 'Termen în 7 zile',
+    'closed'  => 'Înscrieri închise',
     'unknown' => 'Termen neprecizat',
 ];
+
+/** Persistent copy under the status control (UX-01A): "Active" is not "confirmed open". */
+const STATUS_HELP = 'Active include anunțuri cu înscrieri deschise și anunțuri al căror termen nu este confirmat. Verifică termenul în anunțul oficial.';
+const STATUS_HELP_SOON = 'Include și date estimate din expirarea anunțului.';
+
+/** Shown beside every date that is the announcement expiry, not a confirmed submission deadline. */
+const DEADLINE_FALLBACK_NOTE = 'Expirarea anunțului; înscriere neconfirmată';
 
 /** The open-application statuses, for every "still active?" count query. */
 const OPEN_STATUS_SQL = "'confirmed_open','unconfirmed','unknown'";
@@ -952,6 +976,9 @@ function feed_url(string $filename): string {
     // carrying ?page=3 would silently hand back the third slice.
     $params = $_GET;
     unset($params['page'], $params['sort']);
+    // `title` only names the calendar (X-WR-CALNAME); Atom and JSON ignore it,
+    // and list.php's syncFeedLinks() strips it from them too.
+    if (!str_ends_with($filename, '.ics')) unset($params['title']);
     $qs = http_build_query($params);
     return '/' . $filename . ($qs ? '?' . $qs : '');
 }
@@ -978,7 +1005,7 @@ function feed_employer(array $p): ?array {
 const FILTER_CHIP_GROUPS = [
     'q'              => 'Caută',
     'status'         => 'Stare',
-    'family'         => 'Domeniu',
+    'family'         => 'Domeniu profesional',
     'judet'          => 'Județ',
     'level'          => '',
     'type'           => 'Tip',
@@ -986,18 +1013,18 @@ const FILTER_CHIP_GROUPS = [
     'seniority'      => 'Grad',
     'work_type'      => 'Normă',
     'exp_level'      => 'Experiență',
-    'studies_level'  => 'Studii',
+    'studies_level'  => 'Studii din text',
     'remote'         => '',
     'computer'       => 'Calculator',
     'salary_bucket'  => 'Salariu',
     'employer_cat'   => 'Angajator',
     'schema'         => 'Descriere',
-    'isced'          => 'Domeniu studii',
-    'eqf'            => 'Nivel studii',
+    'isced'          => 'Domeniu de studii',
+    'eqf'            => 'Nivel de studii (EQF)',
     'skill'          => 'Competență',
     'lang'           => 'Limbă',
     'credential'     => 'Document',
-    'domain'         => 'Domeniu activitate',
+    'domain'         => 'Domeniu de activitate',
     'stage'          => 'Etapă',
     'anomaly'        => 'Anomalie',
     'expires_after'  => 'Termen de la',
@@ -1009,6 +1036,8 @@ const FILTER_CHIP_GROUPS = [
     'duration'       => 'Contract',
     'schedule'       => 'Program',
     'shift'          => '',
+    'employer'       => 'Doar angajatorul',
+    'employer_id'    => 'Doar angajatorul',
 ];
 
 /**
@@ -1063,6 +1092,13 @@ function facet_mode_field(string $param): string {
     return $param . '_mode';
 }
 
+/** Name behind an `?employer=<slug>` / `?employer_id=<n>` scope, for its chip. */
+function employer_scope_label(string $key, string $value): string {
+    $st = db()->prepare($key === 'employer' ? 'SELECT name FROM employers WHERE slug = ?' : 'SELECT name FROM employers WHERE id = ?');
+    $st->execute([$value]);
+    return (string)($st->fetchColumn() ?: $value);
+}
+
 function filter_value_label(string $key, string $value): string {
     return match ($key) {
         'judet'                            => judet_names()[$value] ?? $value,
@@ -1088,7 +1124,10 @@ function filter_value_label(string $key, string $value): string {
         'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
         'has_salary'                       => 'Cu salariu estimat',
         'expires_after', 'expires_before'  => fmt_date($value),
-        'family', 'seniority'              => ucfirst(str_replace('_', ' ', $value)),
+        'family'                           => family_label($value),
+        'seniority'                        => seniority_label($value),
+        'level'                            => job_level_label($value),
+        'employer', 'employer_id'          => employer_scope_label($key, $value),
         default                            => $value,
     };
 }

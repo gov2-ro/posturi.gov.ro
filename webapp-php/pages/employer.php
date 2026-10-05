@@ -141,10 +141,11 @@ require __DIR__ . '/../inc/header.php';
               <span class="text-xs font-mono <?= $days <= 3 ? 'text-alert-ink font-semibold' : ($days <= 7 ? 'text-note-ink' : 'text-ink-muted') ?>">
                 <?= $est ? '≈' : '' ?><?= $days ?>z
               </span>
-              <div class="text-xs text-ink-faint font-mono"><?= fmt_date($dl['date']) ?><?= $est ? ' (estimat)' : '' ?></div>
+              <div class="text-xs text-ink-muted font-mono"><?= fmt_date($dl['date']) ?></div>
+              <?php if ($est): ?><div class="deadline-fallback max-w-[9.5rem] text-[11px] italic leading-snug text-ink-muted"><?= e(DEADLINE_FALLBACK_NOTE) ?></div><?php endif; ?>
             </div>
             <?php else: ?>
-            <div class="shrink-0 text-right text-xs font-mono text-ink-faint">Termen neprecizat</div>
+            <div class="shrink-0 text-right text-xs font-mono text-ink-muted">Termen neprecizat</div>
             <?php endif; ?>
           </div>
         </div>
@@ -165,7 +166,7 @@ require __DIR__ . '/../inc/header.php';
           <?php endif; ?>
           <div class="mt-0.5 flex flex-wrap gap-x-2 text-xs text-ink-muted">
             <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
-            <?php if ($p['expires_at']): ?><span class="font-mono">· expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>
+            <?php if ($p['expires_at']): ?><span class="font-mono">· Înscrieri închise · anunț expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>
           </div>
         </div>
         <?php endforeach; ?>

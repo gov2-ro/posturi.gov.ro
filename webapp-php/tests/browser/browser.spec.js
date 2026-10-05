@@ -86,7 +86,7 @@ test.describe('mobile drawer', () => {
     await page.locator('details[data-facet="judet"]').click(); // facets are <details>
     await page.locator('input[name="judet[]"][value="cluj"]').check();
     await expect(page).toHaveURL(/judet%5B%5D=cluj/);
-    await expect(page.locator('#results')).toContainText('posturi găsite');
+    await expect(page.locator('#results')).toContainText('anunțuri găsite');
     const rows = page.locator('#results li');
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
@@ -102,7 +102,7 @@ test.describe('mobile drawer', () => {
     // Browser back returns to the unfiltered URL and list.
     await page.goBack();
     await expect(page).not.toHaveURL(/judet%5B%5D=cluj/);
-    await expect(page.locator('#results')).toContainText('posturi găsite');
+    await expect(page.locator('#results')).toContainText('anunțuri găsite');
     await expect(page.locator('#results a[href="/job/1002-referent-debutant/"]')).toBeVisible();
   });
 });

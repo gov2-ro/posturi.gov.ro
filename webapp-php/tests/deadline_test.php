@@ -120,12 +120,12 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
     $list_all = $get('/?status=all');
     assert_not_contains('Fatal error', $list_all, 'status=all renders');
     $row1003 = $row($list_all, 'href="/job/1003-inspector-grad-ii/"');
-    assert_contains('Expirat', $row1003, '1003 past deadline');
+    assert_contains('Înscrieri închise', $row1003, '1003 confirmed past deadline');
 
     // 1004: expiry fallback is visibly an estimate, never a confirmed deadline.
     $row1004 = $row($list, 'href="/job/1004-ingrijitor-scoala/"');
     assert_contains('17 zile', $row1004, '1004 countdown');
-    assert_contains('estimat', $row1004, '1004 visible qualification');
+    assert_contains('Expirarea anunțului; înscriere neconfirmată', $row1004, '1004 visible qualification');
     assert_contains('datetime="2026-10-20"', $row1004, '1004 machine date');
 
     // 1005: no dates → explicit unknown, no countdown.
@@ -135,7 +135,7 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
     // Detail page for the fallback row: the visible (not tooltip-only) warning.
     $detail1004 = $get('/job/1004/');
     assert_not_contains('Fatal error', $detail1004, 'detail renders');
-    assert_contains('Data expirării; termenul de înscriere nu este confirmat.', $detail1004, 'detail warning');
+    assert_contains('Expirarea anunțului; înscriere neconfirmată.', $detail1004, 'detail warning');
     assert_not_contains('Înscrieri până la 20.10.2026', $detail1004, 'fallback never reads as confirmed');
 
     // Detail for 1001: exact source time survives into validThrough (Bucharest

@@ -224,6 +224,14 @@ $seniority_options = get_facet('inf_seniority',       'seniorities');
 $work_type_options = get_facet('inf_work_type',        'work_types');
 $studies_options   = get_facet('inf_studies_required', 'studies_levels');
 
+// Romanian labels for the enum-valued facets (values and URLs are untouched; an
+// unfamiliar value keeps its raw spelling so it stays visible, not guessed at).
+foreach ($family_options    as &$o) { $o['label'] = family_label((string)$o['val']); } unset($o);
+foreach ($level_options     as &$o) { $o['label'] = job_level_label((string)$o['val']); } unset($o);
+foreach ($seniority_options as &$o) { $o['label'] = seniority_label((string)$o['val']); } unset($o);
+foreach ($work_type_options as &$o) { $o['label'] = WORK_TYPE_LABELS[$o['val']] ?? $o['val']; } unset($o);
+foreach ($studies_options   as &$o) { $o['label'] = STUDIES_LABELS[$o['val']] ?? $o['val']; } unset($o);
+
 // Status counts — one pass instead of three
 {
     $s = facet_scope('status');
@@ -462,6 +470,14 @@ if (!$is_htmx): ?>
         hx-indicator="#results"
         onsubmit="return false;">
 
+    <?php /* Scope params with no sidebar control. Without these an HTMX filter
+       change would serialise the form without them and silently widen the list
+       (and the feed links, which follow the address bar). Removed by their chip. */ ?>
+    <?php foreach (['employer', 'employer_id'] as $scope_param):
+        if (trim((string)($_GET[$scope_param] ?? '')) === '') continue; ?>
+      <input type="hidden" name="<?= e($scope_param) ?>" value="<?= e((string)$_GET[$scope_param]) ?>">
+    <?php endforeach; ?>
+
     <!-- Backdrop for the mobile drawer. Outside the columns: it is fixed, and
          keeping it out of the sticky wrapper avoids any stacking-context doubt. -->
     <div id="facet-backdrop" hidden
@@ -530,7 +546,7 @@ if (!$is_htmx): ?>
         <div class="sticky bottom-0 -mx-4 mt-4 border-t border-line bg-page px-4 py-3 lg:hidden">
           <button type="button" id="drawer-apply"
                   class="w-full rounded-md bg-gov px-4 py-2.5 text-sm font-medium text-on-gov focus:outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2">
-            Arată <span id="drawer-count"><?= $total_count ?></span> rezultate
+            Arată <span id="drawer-count"><?= $total_count ?></span> anunțuri
           </button>
         </div>
       </aside>
@@ -562,13 +578,13 @@ if (!$is_htmx): ?>
     <?php endif; ?>
 
     <!-- STATUS + SORT -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-      <div role="group" aria-label="Stare anunț"
-           class="inline-flex rounded-md border border-line-strong bg-surface overflow-hidden">
+    <div class="status-block mb-5">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div role="group" aria-label="Stare anunț" class="flex flex-wrap gap-1.5">
         <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
-        <label class="relative border-r border-line-strong last:border-r-0">
+        <label class="relative">
           <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status === $sval) ?>>
-          <span class="block cursor-pointer px-3 py-1.5 text-xs sm:text-sm text-ink-muted transition-colors hover:text-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-inset peer-focus-visible:ring-focus">
+          <span class="block cursor-pointer rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-muted transition-colors hover:text-gov sm:text-sm peer-checked:border-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-focus">
             <?= e($slabel) ?>
             <span class="ml-1 font-mono text-xs opacity-70"><?= $status_counts[$sval] ?></span>
           </span>
@@ -585,9 +601,16 @@ if (!$is_htmx): ?>
         </select>
       </div>
     </div>
+    <?php /* Persistent, not a tooltip: "Active" means "not known to be closed". The
+       7-day line is shown by CSS while that tab is checked (the control sits
+       outside the swapped region, so server-side state would go stale). */ ?>
+    <p id="status-help" class="mt-2 text-xs leading-snug text-ink-muted">
+      <?= e(STATUS_HELP) ?>
+      <span class="status-soon-note"><?= e(STATUS_HELP_SOON) ?></span>
+    </p>
+    </div>
 
-
-        <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> rezultate</p>
+        <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
         <div id="results">
 <?php endif; // !$is_htmx ?>
 
@@ -714,35 +737,33 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   function applyFacetState() {
     document.querySelectorAll('.facet-group').forEach(function (el) {
       var key = el.dataset.facet;
-      // A facet holding an active selection is rendered open and stays open.
+      // A group — or a parent of a group — holding an active selection is
+      // rendered open (server sets data-selected) and stays open. Parent
+      // groups introduced by UX-01A have keys no old preference can mention.
       if (!el.open && state[key] === true) el.open = true;
-      else if (el.open && state[key] === false && !el.querySelector(':checked')) el.open = false;
+      else if (el.open && state[key] === false && !el.dataset.selected) el.open = false;
     });
   }
   applyFacetState();
 
-  // Only a toggle the *reader* caused may be recorded. Inserting a
-  // `<details open>` fires `toggle` exactly like a click does, and the sidebar
-  // swap inserts ten of them — every group the server renders open (Domeniu,
-  // Județ, Nivel, Tip, Competențe…). Those events land between htmx:afterSwap
-  // and htmx:afterSettle, so before this flag existed each filter change
-  // rewrote state[key] = true for all of them, wiping a collapsed preference a
-  // moment before applyFacetState() was supposed to honour it: a facet the
-  // reader had closed sprang back open on the next click and stayed open.
-  // Cleared in a task queued from the settle handler, so the toggles that
-  // applyFacetState()'s own writes queue are ignored too.
-  var swapping = false;
-  document.body.addEventListener('htmx:beforeSwap', function () { swapping = true; });
-
-  // `toggle` does not bubble, so this listens in the capture phase — which also
-  // keeps it working across sidebar swaps, unlike a listener per <details>.
-  document.addEventListener('toggle', function (ev) {
-    var el = ev.target;
-    if (swapping) return;
-    if (!el.dataset || !el.classList.contains('facet-group')) return;
-    state[el.dataset.facet] = el.open;
-    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
-  }, true);
+  // Only a toggle the *reader* caused may be recorded, and the reader's act is
+  // a click or keypress on a <summary>. The `toggle` event cannot tell: it also
+  // fires for every `<details open>` the server renders — on page load and on
+  // each sidebar swap — which used to write state[key] = true for every group
+  // that merely happened to be open (default-open ones, and any group a
+  // bookmarked selection had opened). Recording from the summary click instead
+  // keeps those out of the stored preferences. Space/Enter on a focused
+  // summary dispatch a click too. The state is read one task later, after the
+  // browser has flipped `open`.
+  document.addEventListener('click', function (ev) {
+    var sum = ev.target.closest && ev.target.closest('summary');
+    var el = sum && sum.parentNode;
+    if (!el || !el.classList || !el.classList.contains('facet-group')) return;
+    setTimeout(function () {
+      state[el.dataset.facet] = el.open;
+      try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
+    }, 0);
+  });
 
   // ---- Live facet counts ----
   // Every HTMX response carries a fresh #facet-list as an out-of-band swap, so
@@ -770,11 +791,6 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 
   document.body.addEventListener('htmx:afterSettle', function () {
     applyFacetState();
-    // Queued, not immediate: the `toggle` events applyFacetState()'s own writes
-    // produce are delivered as tasks, so they must still see swapping === true.
-    // Before the early return below, or a settle with nothing pending would
-    // leave the flag stuck on and stop recording the reader's clicks entirely.
-    setTimeout(function () { swapping = false; }, 0);
 
     var list = document.getElementById('facet-list');
     if (!list || !pending) return;
@@ -812,7 +828,9 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 
     ev.preventDefault();
     fields.forEach(function (el) {
-      if (el.type === 'checkbox' || el.type === 'radio') {
+      if (el.type === 'hidden') {
+        el.parentNode.removeChild(el);   // scope param: drop it from the form
+      } else if (el.type === 'checkbox' || el.type === 'radio') {
         if (el.value === value) el.checked = false;
       } else {
         el.value = '';
@@ -839,12 +857,15 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   // stays valid for the life of the page. Moving the block inside #results
   // would break that, and would rebuild it on every page of pagination for
   // something that only changes when the filters do.
-  var feedLinks   = document.querySelectorAll('[data-feed]');
-  var gcalLink    = document.querySelector('[data-gcal]');
-  var webcalLink  = document.querySelector('[data-webcal]');
   var titleInput  = document.getElementById('feed-title');
 
   function syncFeedLinks() {
+    // Looked up on every call: a history restore replaces the body, and a
+    // NodeList collected at init would then point at detached links.
+    var feedLinks   = document.querySelectorAll('[data-feed]');
+    var gcalLink    = document.querySelector('[data-gcal]');
+    var webcalLink  = document.querySelector('[data-webcal]');
+    titleInput = document.getElementById('feed-title') || titleInput;
     var params = new URLSearchParams(location.search);
     params.delete('page');
     params.delete('sort');

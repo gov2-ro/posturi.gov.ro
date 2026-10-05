@@ -89,6 +89,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/request_test.php
 
+      - name: Discovery filters and status wording (UX-01A)
+        working-directory: webapp-php
+        run: php tests/discovery_test.php
+
       - name: Old-export compatibility (REV-01)
         working-directory: webapp-php
         run: php tests/compat_test.php

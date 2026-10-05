@@ -9,7 +9,7 @@ $chips = $active_chips ?? [];
 
 <?php if (!empty($is_htmx)): ?>
   <!-- Out-of-band updates for the chrome that lives outside #results -->
-  <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only" hx-swap-oob="true"><?= $total_count ?> rezultate</p>
+  <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only" hx-swap-oob="true"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
   <span id="filter-count" hx-swap-oob="true"
         class="<?= $chips ? '' : 'hidden ' ?>inline-flex min-w-[1.25rem] justify-center rounded-full bg-gov px-1.5 py-0.5 text-xs font-mono text-on-gov"><?= count($chips) ?></span>
   <span id="drawer-count" hx-swap-oob="true"><?= $total_count ?></span>
@@ -20,7 +20,7 @@ $chips = $active_chips ?? [];
   <div class="text-sm text-ink-muted">
     <?php if ($total_count): ?>
       <span class="font-mono font-medium text-ink"><?= $total_count ?></span>
-      <?= $total_count === 1 ? 'post găsit' : 'posturi găsite' ?>
+      <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?>
     <?php else: ?>
       Niciun rezultat
     <?php endif; ?>
@@ -140,10 +140,10 @@ $chips = $active_chips ?? [];
         </div>
 
         <!-- Deadline badge -->
-        <div class="min-w-[80px] shrink-0 text-right">
+        <div class="min-w-[80px] max-w-[9.5rem] shrink-0 text-right">
           <?php if ($days !== null): ?>
             <?php if ($days < 0): ?>
-              <span class="font-mono text-xs text-ink-muted"><?= $est ? 'Termen estimat depășit' : 'Expirat' ?></span>
+              <span class="font-mono text-xs text-ink-muted"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?></span>
             <?php elseif ($days === 0): ?>
               <span class="font-mono text-xs font-semibold text-alert-ink"><?= $est ? 'Azi (estimat)' : 'Azi!' ?></span>
             <?php elseif ($days <= 3): ?>
@@ -157,10 +157,10 @@ $chips = $active_chips ?? [];
             <?php if ($est): ?>
               <!-- Visible, not tooltip-only: this date is the announcement
                    expiry, not a confirmed application deadline. -->
-              <span class="mt-0.5 block text-[10px] italic text-ink-faint" title="Data expirării; termenul de înscriere nu este confirmat">estimat</span>
+              <span class="deadline-fallback mt-0.5 block text-[11px] italic leading-snug text-ink-muted" title="Data expirării anunțului; termenul de înscriere nu este confirmat"><?= e(DEADLINE_FALLBACK_NOTE) ?></span>
             <?php endif; ?>
           <?php else: ?>
-            <span class="font-mono text-xs text-ink-faint">Termen neprecizat</span>
+            <span class="font-mono text-xs text-ink-muted">Termen neprecizat</span>
           <?php endif; ?>
         </div>
       </div>

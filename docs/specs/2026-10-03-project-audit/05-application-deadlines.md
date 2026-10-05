@@ -67,3 +67,51 @@ estimate, rollback to a previous export/config and criteria for promotion. Keep
 code readiness and production completion as separate checkboxes. Completion of
 production rollout requires evidence that the deployed export contains the new
 version and agreed status behavior; merely running `--compare` is insufficient.
+
+## FIX-05-RUN runbook (prepared 2026-10-05)
+
+Run on gov2-1 from `/home/pax/g2-dev/posturi.gov.ro`, only after the 20-posting
+sample (`ops/check-v4-sample.py --since … --evidence`) has been reviewed. Start
+off-peak for DeepSeek (not 01–04 or 06–10 UTC on weekdays) and in a gap between
+scheduled runs: the whole block holds `.pipeline.lock`, so a slot that fires
+meanwhile exits 75 and is skipped. About 2–2.5 h at 4 workers.
+
+```bash
+export POSTURI_RUN_ID="v4-backfill-$(date -u +%Y-%m-%dT%H:%M:%SZ)" POSTURI_RUN_TRIGGER=manual
+flock -n -E 75 .pipeline.lock bash -euo pipefail -c '
+  PY=.venv/bin/python
+  # 0. Rollback material: the extraction being replaced, and the live export.
+  psql "$(grep ^DATABASE_URL= .env | cut -d= -f2-)" -c "\copy (SELECT id, schema_json, schema_provider, schema_model, schema_prompt_version, schema_source_revision, schema_extracted_at FROM jobs_jobposting WHERE expires_at >= CURRENT_DATE) TO data/schema-pre-v4.csv CSV HEADER"
+  cp webapp-php/posturi.sqlite data/posturi.pre-v4.sqlite
+  # 1. The paid step; restartable (--resume skips rows already current at v4).
+  $PY llm-schema.py --active-only --resume --upgrade-legacy --prompt-version v4 --workers 4
+  # 2. infer reprocesses only new/stale rows, so refresh the salary range it
+  #    lifts from schema_json (pure Python, no LLM, every posting).
+  $PY webapp/manage.py infer_postings --conditions-only
+  # 3. The tail as the scheduled run does it. occupations is keyed on the title,
+  #    so no new LLM calls are expected; salary recomputes from schema_json.
+  $PY pipeline.py --steps infer,occupations,salary,export-sqlite --active-only --prompt-version v4
+  # 4. Gate, deploy, record — the order ops/run-pipeline.sh uses.
+  $PY ops/check-export.py --prompt-version v4
+  ./deploy-php.sh --data-only --no-export
+  $PY ops/record-deploy.py
+'
+```
+
+**Gates are not at risk from reclassification.** `check-export`'s `active`,
+`no_collapse` and the export's row floors all count by `expires_at`; v4 changes
+`application_status` (unconfirmed → confirmed_open / closed), not which rows are
+exported. Expect the status control's "Active" to fall sharply — the local
+September sample put 17 of 19 v4 deadlines before the expiry date, by 18 days
+on average. That fall is the point of the rollout, not a regression.
+
+**Afterwards:** pin `LLM_PROMPT_VERSION` to v4 in `ops/run-pipeline.sh` (code
+deploy + VPS pull), then compare the newest-200 `deadline_source` mix on
+`/posturi.json` with the baseline (194 `expirare` / 6 `anunt` / 0 `concurs`).
+
+**Rollback.** Site: `cp data/posturi.pre-v4.sqlite webapp-php/posturi.sqlite &&
+./deploy-php.sh --data-only --no-export`. Database: restore the seven columns
+from `data/schema-pre-v4.csv` (a temp table + `UPDATE … FROM`); the v3 answers
+also survive as `jobs_jobpostingschemavariant` rows with `prompt_version = 'v3'`,
+since variants are keyed per prompt version. Then re-run step 2–4 and keep the
+pin at v3.

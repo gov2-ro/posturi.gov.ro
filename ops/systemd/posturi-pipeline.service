@@ -9,7 +9,7 @@
 #   sudo systemctl daemon-reload
 #   crontab -l | grep -v 'posturi.gov.ro/ops/run-pipeline.sh' | crontab -   # drop the 2 cron lines
 #   sudo systemctl enable --now posturi-pipeline.timer
-#   systemctl list-timers posturi-pipeline.timer        # next: 11:45 or 18:33 Bucharest
+#   systemctl list-timers posturi-pipeline.timer        # next: 13:15 or 18:33 Bucharest
 #
 # Output is appended to logs/pipeline.log, exactly where the cron redirect put it,
 # so logrotate (ops/logrotate.posturi) and /pipeline-check keep working — and pax

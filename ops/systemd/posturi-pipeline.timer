@@ -2,15 +2,17 @@
 #
 # OPS-01: the timezone is pinned ON THE TIMER, not left to the host clock
 # (systemd >= 240). The slot must not drift across the DST switch on
-# 2026-10-25, nor when a VPS happens to sit on UTC — 11:45/18:33 Bucharest
-# stay 11:45/18:33 Bucharest in summer AND winter. The export's
+# 2026-10-25, nor when a VPS happens to sit on UTC — 13:15/18:33 Bucharest
+# stay 13:15/18:33 Bucharest in summer AND winter. The export's
 # expires_at >= CURRENT_DATE boundary and the service's TZ=Europe/Bucharest
 # both read the same zone.
 [Unit]
 Description=Run the posturi.gov.ro pipeline twice a day
 
 [Timer]
-OnCalendar=*-*-* 11:45:00 Europe/Bucharest
+# 13:15, not 11:45: 10:15/11:15 UTC is outside DeepSeek's 06-10 UTC weekday
+# peak, which doubles the price (COST-01).
+OnCalendar=*-*-* 13:15:00 Europe/Bucharest
 OnCalendar=*-*-* 18:33:00 Europe/Bucharest
 
 # Catch up a slot missed while the box was down, rather than waiting for the next

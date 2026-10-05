@@ -44,7 +44,7 @@ never run — say that, and stop rather than guessing from the logfile.
 
 ### 2. Did the runs happen?
 
-The slots are **11:45 and 18:33 Europe/Bucharest**, daily (`crontab -l`, or
+The slots are **13:15 and 18:33 Europe/Bucharest** (11:45 before 2026-10-05), daily (`crontab -l`, or
 `systemctl list-timers 'posturi*'` on a systemd install).
 
 - Count the `trigger: "cron"` records over the last 7 days against the number of

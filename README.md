@@ -522,7 +522,7 @@ that predates the table makes the section read "Date indisponibile" instead of f
 
 ### Continuous deployment
 
-The pipeline runs unattended on a VPS twice a day (11:45 and 18:33 Europe/Bucharest) and
+The pipeline runs unattended on a VPS twice a day (13:15 and 18:33 Europe/Bucharest) and
 pushes a fresh database to the shared host. The repo ships a systemd timer pinned to
 `Europe/Bucharest` (`ops/systemd/posturi-pipeline.timer`, needs systemd >= 240); the live
 box still runs a user crontab until OPS-01 is completed. Code deploys stay manual from the development

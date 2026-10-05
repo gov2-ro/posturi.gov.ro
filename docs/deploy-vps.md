@@ -142,7 +142,7 @@ sudo systemctl enable --now posturi-pipeline.timer
 systemctl list-timers 'posturi*'
 ```
 
-Slots are 11:45 and 18:33 local. `Persistent=true` catches up a slot missed while the
+Slots are 13:15 and 18:33 local (13:15, not 11:45, since 2026-10-05: it keeps the morning run out of DeepSeek's 06–10 UTC weekday peak, which doubles the price — COST-01). `Persistent=true` catches up a slot missed while the
 box was down — the export is what drops expired postings off the site, so a skipped day
 leaves stale jobs published.
 
@@ -300,22 +300,22 @@ ssh mioritics.ro 'echo ok && command -v rsync'
 ### Cron (DST-safe, OPS-01)
 
 `mkdir -p ~/g2-dev/posturi.gov.ro/logs` first, then `crontab -e` as `pax`. **This
-box's cron ignores `CRON_TZ`** (verified 2026-10-05) and runs in UTC, where 11:45 /
+box's cron ignores `CRON_TZ`** (verified 2026-10-05) and runs in UTC, where 13:15 /
 18:33 Bucharest move by an hour at every DST switch. Each slot is therefore listed at
 both of its UTC hours and guarded by the Bucharest hour, so exactly one fires in
-summer (`45 8` / `33 15`) and in winter (`45 9` / `33 16`) with no edits in October
+summer (`15 10` / `33 15`) and in winter (`15 11` / `33 16`) with no edits in October
 or March. `\%` is required: cron treats a bare `%` as a newline.
 
 ```cron
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=pax@mioritics.ro
 
-# DST-safe: each slot is listed at both UTC hours; the guard runs only at 11:45 / 18:33 Europe/Bucharest (OPS-01)
-45 8,9 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "11" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+# DST-safe: each slot is listed at both UTC hours; the guard runs only at 13:15 / 18:33 Europe/Bucharest (OPS-01, COST-01)
+15 10,11 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "13" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
 33 15,16 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "18" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
 ```
 
-Healthchecks.io: with two runs a day, set the check's **period to 18 h** (grace 1 h).
+Healthchecks.io: with two runs a day, set the check's **period to 20 h** (grace 1 h): the overnight gap is 18h42m (below).
 A 1-day period never notices a single missed run — the next run pings first.
 
 ### Alternative: the systemd timer
@@ -336,7 +336,7 @@ crontab -l > ~/crontab.bak.$(date +%F)                                    # keep
 crontab -l | grep -v 'posturi.gov.ro/ops/run-pipeline.sh' | crontab -    # drop the 2 posturi lines only
 crontab -l | grep -c 'posturi.gov.ro/ops/run-pipeline.sh'                # expect 0
 sudo systemctl enable --now posturi-pipeline.timer
-systemctl list-timers posturi-pipeline.timer                             # NEXT = 11:45 or 18:33 Bucharest
+systemctl list-timers posturi-pipeline.timer                             # NEXT = 13:15 or 18:33 Bucharest
 ```
 
 Do not `systemctl start` the service right after — the next slot will run it; a
@@ -380,19 +380,19 @@ line per run.
 bare on success. **It is currently empty in `.env`, so none of that happens.** Fix:
 
 ```bash
-# healthchecks.io → new check → Period 1 day, Grace 2 hours.
+# healthchecks.io → new check → Period 20 hours, Grace 1 hour.
 echo 'HEALTHCHECK_URL=https://hc-ping.com/<uuid>' >> .env
 ./ops/run-pipeline.sh    # or wait for a slot; the check should go green
 ```
 
 **The period is set by the overnight gap, not by the slot interval.** The two
-slots are 6h48m apart (11:45 → 18:33) but **17h12m** apart the other way
-(18:33 → 11:45). healthchecks measures from the last *success* ping, which lands
-at the end of a run, so anything under ~18h raises a false alarm every morning.
-One day is the honest setting: it will not report a single missed slot, only a
-missed day — which is the right trade, because the two slots run the same thing
-and the next one catches up on its own. Genuine failures do not wait for the
-period: `/fail` alerts immediately.
+slots are 5h18m apart (13:15 → 18:33) but **18h42m** apart the other way
+(18:33 → 13:15). healthchecks measures from the last *success* ping, which lands
+at the end of a run, so anything under ~20h raises a false alarm every morning.
+20 h (grace 1 h) is the shortest honest setting. It reports any single missed
+slot before the next one would mask it (2026-10-04 showed a 1-day period never
+does), without alarming on the normal overnight gap. Genuine failures do not wait
+for the period: `/fail` alerts immediately.
 
 If the slots are ever moved closer together, recompute the largest gap before
 shortening the period.

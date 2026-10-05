@@ -115,12 +115,30 @@ def get_enabled_models():
 PROMPT_VERSION = resolve_prompt_version()
 
 
-def compute_cost(provider, model, input_tokens, output_tokens, cached_input_tokens=0):
+def is_peak(peak_config, at):
+    """True when `at` (UTC) falls in the model's peak window.
+
+    `peak_config` is the optional `peak` block of a model: `weekdays` (Monday=0)
+    and `hours_utc`, a list of half-open [start, end) hour ranges.
+    """
+    if not peak_config:
+        return False
+    at = at.astimezone(timezone.utc) if at.tzinfo else at.replace(tzinfo=timezone.utc)
+    if at.weekday() not in peak_config.get("weekdays", range(7)):
+        return False
+    return any(start <= at.hour < end for start, end in peak_config.get("hours_utc", []))
+
+
+def compute_cost(provider, model, input_tokens, output_tokens, cached_input_tokens=0, *, at=None):
     """Calculate cost in USD based on model pricing from config.
 
     `cached_input_tokens` are billed at the model's `cache_input_cost_per_million`
     rate when defined; the remaining (input_tokens - cached_input_tokens) are
     billed at the standard `input_cost_per_million`.
+
+    A model with a `peak` block has every rate multiplied by `peak.multiplier`
+    when `at` (a datetime, default now in UTC; naive values are taken as UTC)
+    falls inside a peak window. Price a call at the time it completed.
     """
     if not input_tokens or output_tokens is None:
         return None
@@ -129,6 +147,11 @@ def compute_cost(provider, model, input_tokens, output_tokens, cached_input_toke
         in_rate = Decimal(str(model_config["input_cost_per_million"]))
         out_rate = Decimal(str(model_config["output_cost_per_million"]))
         cache_rate = Decimal(str(model_config.get("cache_input_cost_per_million", model_config["input_cost_per_million"])))
+
+        peak = model_config.get("peak")
+        if peak and is_peak(peak, at if at is not None else datetime.now(timezone.utc)):
+            mult = Decimal(str(peak.get("multiplier", 1)))
+            in_rate, out_rate, cache_rate = in_rate * mult, out_rate * mult, cache_rate * mult
 
         cached = max(0, cached_input_tokens or 0)
         uncached = max(0, input_tokens - cached)

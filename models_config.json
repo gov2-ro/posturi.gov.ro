@@ -83,9 +83,15 @@
         "deepseek-v4-flash": {
           "display_name": "DeepSeek-V4-Flash",
           "enabled": true,
-          "input_cost_per_million": 0.14,
-          "output_cost_per_million": 0.28,
-          "cache_input_cost_per_million": 0.028
+          "input_cost_per_million": 0.15,
+          "output_cost_per_million": 0.60,
+          "cache_input_cost_per_million": 0.003,
+          "peak": {
+            "multiplier": 2.0,
+            "weekdays": [0, 1, 2, 3, 4],
+            "hours_utc": [[1, 4], [6, 10]]
+          },
+          "notes": "Rates are DeepSeek's OFF-PEAK list prices (pricing page read 2026-10-05); the `peak` tier multiplies all three rates (Mon-Fri, UTC hours as half-open [start, end) ranges; Chinese public holidays are ignored). `deepseek-v4-flash` is a retired legacy name still accepted by the API: requests are served by DeepSeek-V4.1-Flash and billed at Flash prices. Do NOT rename this model id: production provenance rows are keyed on it, and a rename would make --resume treat every row as stale and re-pay for all of them. Max output is 384K tokens."
         }
       }
     }

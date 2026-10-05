@@ -2,6 +2,24 @@
 
 ## 2026
 
+### 2026-10-05 — OPS-01: DST-safe cron without sudo; alerting verified
+
+**What:** The VPS session (with pax's approval there) replaced the two UTC cron
+lines with guarded pairs — `45 8,9` and `33 15,16`, each running only when
+`TZ=Europe/Bucharest date +%H` is 11 / 18 — so the slots stay at 11:45 / 18:33
+Bucharest across the 2026-10-25 switch and every later one, with logging unchanged.
+Verified: only those lines changed (backup kept), and the guard fires at 08:45/15:33Z
+on 10-05 and 09:45/16:33Z on 10-26 only. The systemd units (rewritten for the live
+layout) remain the sudo-requiring alternative. Alerting (OPS-02) was confirmed from
+Healthchecks.io: the check went down at 2026-10-04 09:31Z with the first `/fail`;
+its 1-day period is to be shortened to 18 h so a single missed run alerts.
+
+**Non-obvious:** the box's `crontab FILE` truncates long paths, so the VPS session
+installed with `crontab - < file`. It also noticed an unrelated project's job failing
+on a missing `httpx` in its venv — reported to pax, untouched.
+
+---
+
 ### 2026-10-05 — REV-08: a residue of failing postings no longer blocks quiet runs
 
 **What:** `--resume` reselects every active posting without a schema, so the five

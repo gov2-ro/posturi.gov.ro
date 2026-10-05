@@ -2,6 +2,29 @@
 
 ## 2026
 
+### 2026-10-05 — FIX-05-RUN step 1: v4 backfill cost estimate; DeepSeek prices are stale
+
+**Baseline (live `/posturi.json`, data run `2026-10-04T20:57:08Z`):** the newest 200
+active postings are 194 `expirare` / 6 `anunt` / 0 `concurs` — 97% show only the
+announcement's expiry. 2,267 rows exported: 1,896 active, 371 closed (181 of the
+closed slice already carry a `concurs` date from earlier v4 work).
+
+**Estimate:** from that run's record (325 v3 calls: 13.5k input tokens each, 97%
+cache hits; 3.4k output) and the September local v3/v4 pairs (v4 input ×1.23,
+output +1.1k to ×1.9), v4 should cost $0.0028–0.0039 per posting at DeepSeek's
+current list price: ~$6–9 for the ≤ 2,270 active postings off-peak, ~$13–18 at
+peak. The 20-posting sample replaces these ratios with measured v4 numbers.
+
+**Non-obvious:** DeepSeek's pricing page now serves `deepseek-v4-flash` (a retired
+name) with V4.1-Flash at $0.15 / $0.003 cached / $0.60 output per M off-peak, double
+at 01–04 and 06–10 UTC on weekdays. `models_config.json` still prices it at $0.14 /
+$0.028 / $0.28, so recorded costs understate list price ~1.5× off-peak, ~3× at peak —
+and the 08:45Z slot runs in peak hours (COST-01). The page also gives a 384K max
+output, which unblocks REV-17. The VPS session could not run the Postgres reads
+(its classifier denies "production reads"), so the exact selection count is pending.
+
+---
+
 ### 2026-10-05 — OPS-01: DST-safe cron without sudo; alerting verified
 
 **What:** The VPS session (with pax's approval there) replaced the two UTC cron

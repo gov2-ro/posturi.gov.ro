@@ -2,6 +2,23 @@
 
 ## 2026
 
+### 2026-10-05 — Code deploy verified live; tooltip wording
+
+**What:** After the user pushed, deployed `--code-only` and pulled on the VPS, the
+live host serves code `2e2c00a` with data from run `2026-10-04T20:57:08Z`
+(`/versiuni.json`). Checked from the dev machine: `/angajatori/?judet=cluj` 200 with
+Cluj employers (was a 500), `?q[]=medic` 400, no PHP warnings on /, /statistici/,
+/angajatori/, /despre/; stats and employers active counts non-zero (1,896 active of
+2,267; 1,118 employers with active postings); status control shows Active 1,896 ·
+7 zile 453 · Închise 371 · Termen neprecizat 0; header shows "bază generată" and
+"sursă verificată" separately. Ticked FIX-01 and REV-02/03/04.
+
+**Fixed (ships with the next code deploy):** the build tooltip called every exported
+row "anunțuri active" (2.267) while the page counts 1.896 open ones; it now says
+"anunțuri în bază".
+
+---
+
 ### 2026-10-05 — Site republished; REV-15 deploy-verification deadlock
 
 **What:** After the VPS pulled `c8a9559` and migrated (0013–0015), a manual

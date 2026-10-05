@@ -266,7 +266,9 @@ function build_tooltip(): string {
     $meta = build_meta();
     $parts = ["Bază de date generată la {$when}"];
     if (!empty($meta['job_postings'])) {
-        $parts[] = number_format((int) $meta['job_postings'], 0, ',', '.') . ' anunțuri active';
+        // Every row of the export: the "active" count is the open-status subset
+        // (FIX-05), which the page itself shows — 2.267 vs 1.896 on 05.10.
+        $parts[] = number_format((int) $meta['job_postings'], 0, ',', '.') . ' anunțuri în bază';
     }
     if (!empty($meta['git_sha'])) {
         $parts[] = 'date @ ' . $meta['git_sha'];

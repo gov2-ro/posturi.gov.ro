@@ -2,6 +2,25 @@
 
 ## 2026
 
+### 2026-10-05 — REV-08: a residue of failing postings no longer blocks quiet runs
+
+**What:** `--resume` reselects every active posting without a schema, so the five
+postings that still exceed the 8,000-token cap (REV-17) are attempted on every run.
+FIX-04's gate failed a run when more than half its attempts failed — on a weekend
+(no new postings) that is 5 of 5, which would have blocked every Saturday/Sunday
+deploy and left expired postings listed; a quiet weekday evening with < 5 new
+postings would too. `evaluate_exit` now separates per-posting content failures
+(`OutputTruncated`, `ValidationError`, `ValueError`, `non_dict`) from systemic ones
+(HTTP, timeouts, unclassified): systemic failures gate on any sample, content
+failures only once a run attempted ≥ 20 postings. The empty-content rule (selected
+but nothing attemptable) likewise needs ≥ 20 postings.
+
+**Why this keeps the gate's value:** the 04.10 outage (321 of 326 failing) and a
+broken prompt on a normal weekday (≥ 20 new postings) still fail; tests pin both,
+plus the weekend residue, a quiet evening and mixed residue + transient errors.
+
+---
+
 ### 2026-10-05 — Code deploy verified live; tooltip wording
 
 **What:** After the user pushed, deployed `--code-only` and pulled on the VPS, the

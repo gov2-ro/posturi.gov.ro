@@ -135,10 +135,51 @@ class TestEvaluateExit:
         assert llm.evaluate_exit([s], 0.5) == 0
 
     def test_selected_but_unattemptable_is_one(self, llm):
-        """Every selected posting had an empty body+attachment: a data problem,
+        """Many selected postings with an empty body+attachment: a data problem,
         not a healthy no-op."""
-        s = llm.RunSummary("p", "m", "v3", selected=10, attempted=0, skipped=10)
+        s = llm.RunSummary("p", "m", "v3", selected=25, attempted=0, skipped=25)
         assert llm.evaluate_exit([s], 0.5) == 1
+
+    def test_a_few_empty_postings_alone_do_not_block(self, llm):
+        """REV-08: two genuinely empty active postings, nothing else to do."""
+        s = llm.RunSummary("p", "m", "v3", selected=2, attempted=0, skipped=2)
+        assert llm.evaluate_exit([s], 0.5) == 0
+
+
+class TestContentResidueGate:
+    """REV-08/17: postings whose own content fails (truncation, invalid output)
+    are reselected every run. On a quiet run they must not block the deploy;
+    on a normal-size run a systemic content failure still must."""
+
+    def _s(self, llm, attempted, ok, classes):
+        failed = sum(classes.values())
+        assert ok + failed == attempted
+        return llm.RunSummary("p", "m", "v3", selected=attempted, attempted=attempted,
+                              ok=ok, failed=failed, failure_classes=classes)
+
+    def test_weekend_residue_alone_passes(self, llm):
+        s = self._s(llm, 5, 0, {"OutputTruncated": 5})
+        assert llm.evaluate_exit([s], 0.5) == 0
+
+    def test_quiet_evening_residue_passes(self, llm):
+        s = self._s(llm, 8, 3, {"OutputTruncated": 5})
+        assert llm.evaluate_exit([s], 0.5) == 0
+
+    def test_the_0410_truncation_outage_still_fails(self, llm):
+        s = self._s(llm, 326, 5, {"ValueError": 321})
+        assert llm.evaluate_exit([s], 0.5) == 1
+
+    def test_broken_prompt_on_a_normal_weekday_fails(self, llm):
+        s = self._s(llm, 30, 2, {"ValidationError": 28})
+        assert llm.evaluate_exit([s], 0.5) == 1
+
+    def test_systemic_failures_count_on_any_sample(self, llm):
+        s = self._s(llm, 4, 1, {"HTTP_500": 3})
+        assert llm.evaluate_exit([s], 0.5) == 1
+
+    def test_residue_plus_a_few_systemic_is_judged_on_systemic(self, llm):
+        s = self._s(llm, 9, 2, {"OutputTruncated": 5, "HTTP_503": 2})
+        assert llm.evaluate_exit([s], 0.5) == 0
 
     def test_comparison_models_aggregate_to_the_worst(self, llm):
         good = llm.RunSummary("p", "a", "v3", selected=10, attempted=10, ok=10)

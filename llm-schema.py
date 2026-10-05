@@ -750,13 +750,32 @@ class RunSummary:
         }
 
 
-def evaluate_exit(summaries: list, max_failure_share: float) -> int:
+#: Failure classes that belong to ONE posting's content, not to the provider:
+#: the answer was cut off at the cap, or came back but failed parsing/validation.
+#: The same postings fail the same way every run (--resume reselects rows with
+#: no schema), so on a quiet run — a weekend has no new postings — a residue of
+#: five turned "5 of 5 failed" into a blocked deploy (REV-08/17). They count
+#: toward the failure share only once a run attempted CONTENT_GATE_MIN_SAMPLE
+#: postings: a broken prompt or a model change still trips the gate on any
+#: normal weekday (the 04.10 truncation outage was 321 of 326), the residue
+#: alone never does. Anything else — HTTP errors, timeouts, connection
+#: failures, an unclassified exception — is systemic and always counts.
+CONTENT_FAILURE_CLASSES = frozenset({
+    "OutputTruncated", "ValidationError", "ValueError", "StopIteration", "non_dict",
+})
+CONTENT_GATE_MIN_SAMPLE = 20
+
+
+def evaluate_exit(summaries: list, max_failure_share: float,
+                  min_sample: int = CONTENT_GATE_MIN_SAMPLE) -> int:
     """Exit code for a run, from its per-model summaries.
 
-    0 — every model did healthy work (including a legitimately empty
-        selection, which the summary reports explicitly as `zero_work`);
-    1 — a model failed on more than `max_failure_share` of its attempted
-        postings, or was selected work it could not even attempt;
+    0 — healthy work, including a legitimately empty selection (`zero_work`)
+        and a small residue of postings whose own content keeps failing;
+    1 — systemic failures (provider/transport, or unclassified) exceed
+        `max_failure_share` of the attempted postings; or, on a sample of at
+        least `min_sample` postings, all failures together do; or at least
+        `min_sample` selected postings had no usable content at all;
     2 — a provider-wide fatal error (402 / invalid auth): the run stopped
         scheduling new calls.
     """
@@ -764,12 +783,19 @@ def evaluate_exit(summaries: list, max_failure_share: float) -> int:
     for s in summaries:
         if s.fatal:
             code = max(code, 2)
-        elif s.attempted > 0:
-            if s.failed / s.attempted > max_failure_share:
+            continue
+        content = sum(n for cls, n in (s.failure_classes or {}).items()
+                      if cls in CONTENT_FAILURE_CLASSES)
+        systemic = max(s.failed - content, 0)
+        if s.attempted > 0:
+            if systemic / s.attempted > max_failure_share:
                 code = max(code, 1)
-        elif s.skipped > 0:
-            # Selected but nothing attemptable: every posting had an empty
-            # body+attachment. That is a data problem, not a healthy no-op.
+            elif s.attempted >= min_sample and s.failed / s.attempted > max_failure_share:
+                code = max(code, 1)
+        elif s.skipped >= min_sample:
+            # Selected work, none of it callable: every posting had an empty
+            # body+attachment — a data problem (extraction or import broke), not
+            # a healthy no-op. A couple of genuinely empty postings is not that.
             code = max(code, 1)
     return code
 

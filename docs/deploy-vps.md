@@ -262,7 +262,7 @@ timer. The live VPS was set up as the plain login user instead. The deltas:
 | `/srv/posturi` | `/home/pax/g2-dev/posturi.gov.ro` |
 | DB role `posturi`, `createdb -O posturi` | `pax` is a Postgres `SUPERUSER` role (`sudo -u postgres psql -c "CREATE ROLE pax LOGIN SUPERUSER"`); DB `posturi` recreated and owned by `pax` |
 | `DATABASE_URL=postgres://posturi@localhost/posturi` | **`postgres://pax@/posturi`** — empty host = local socket = peer auth, no password. `@localhost` forces TCP and dies with `fe_sendauth: no password supplied`. |
-| `systemd` timer (`ops/systemd/`) | user crontab (below) until OPS-01 moves it to the timer. The unit files still hard-code `/srv/posturi` and `User=posturi` (OPS-01/REV-09); edit both if you ever switch to them. |
+| `systemd` timer (`ops/systemd/`) | user crontab (below) until OPS-01 moves it to the timer. The unit files in the repo are now written for **this** box (`User=pax`, `/home/pax/g2-dev/posturi.gov.ro`, output appended to `logs/pipeline.log`); see *Switching to the timer* below. |
 | `.venv` via `sudo -u posturi` | `.venv` owned by `pax`, no `sudo` anywhere in the run path |
 
 Rebuild the DB from a Mac dump, as `pax`:
@@ -297,18 +297,45 @@ ssh-keyscan -H mioritics.ro >> ~/.ssh/known_hosts
 ssh mioritics.ro 'echo ok && command -v rsync'
 ```
 
-### Cron
+### Cron (current, until OPS-01)
 
-`mkdir -p ~/g2-dev/posturi.gov.ro/logs` first, then `crontab -e` as `pax`:
+`mkdir -p ~/g2-dev/posturi.gov.ro/logs` first, then `crontab -e` as `pax`. **This
+box's cron ignores `CRON_TZ`** (verified 2026-10-05): the slots are written in UTC,
+so 11:45 / 18:33 Bucharest are `45 8` / `33 15` in summer (EEST, UTC+3) and must
+become `45 9` / `33 16` when winter time starts on the last Sunday of October
+(2026-10-25), and back in late March. The timer below removes that chore.
 
 ```cron
-CRON_TZ=Europe/Bucharest
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=pax@mioritics.ro
 
-45 11 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
-33 18 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+# UTC — summer values (EEST). Winter: 45 9 / 33 16.
+45 8 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+33 15 * * * /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
 ```
+
+### Switching to the timer (OPS-01)
+
+The units pin `Europe/Bucharest` on `OnCalendar` (systemd ≥ 240), run as `pax` in
+the checkout, and append to the same `logs/pipeline.log`, so logrotate and
+`/pipeline-check` are unaffected (`pax` cannot read a system unit's journal). Do the
+switch in one sitting, between slots, so cron and the timer never both own a slot:
+
+```bash
+cd ~/g2-dev/posturi.gov.ro && git pull
+sudo cp ops/systemd/posturi-pipeline.service ops/systemd/posturi-pipeline.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+crontab -l > ~/crontab.bak.$(date +%F)                                    # keep a copy
+crontab -l | grep -v 'posturi.gov.ro/ops/run-pipeline.sh' | crontab -    # drop the 2 posturi lines only
+crontab -l | grep -c 'posturi.gov.ro/ops/run-pipeline.sh'                # expect 0
+sudo systemctl enable --now posturi-pipeline.timer
+systemctl list-timers posturi-pipeline.timer                             # NEXT = 11:45 or 18:33 Bucharest
+```
+
+Do not `systemctl start` the service right after — the next slot will run it; a
+hand-run is `ops/run-pipeline.sh` as before (flock keeps it from overlapping).
+Rollback: `sudo systemctl disable --now posturi-pipeline.timer` and
+`crontab ~/crontab.bak.<date>`.
 
 `run-pipeline.sh` `cd`s to the repo itself, re-execs under `flock` (the two slots and
 any hand-run cannot overlap), and reads `.env` through `ops/env.sh`. Exit codes: `0`

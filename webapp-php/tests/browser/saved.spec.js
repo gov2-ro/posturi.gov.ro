@@ -60,10 +60,10 @@ test('save on the list survives reload; detail and /salvate/ agree; unsave in an
   const save = saveBtn(page, 1001);
   await expect(save).toBeVisible();
   await expect(save).toHaveAttribute('aria-pressed', 'false');
-  await expect(save).toContainText('Salvează');
+  await expect(save).toHaveAttribute('aria-label', 'Salvează anunțul: Asistent medical');
   await save.click();
   await expect(save).toHaveAttribute('aria-pressed', 'true');
-  await expect(save).toContainText('Salvat');
+  await expect(save).toHaveAttribute('aria-label', 'Elimină din salvate: Asistent medical');
   await expect(page.locator('[data-saved-count]')).toHaveText('(1)');
   // First save explains where the data lives.
   await expect(page.locator('#pref-notice')).toBeVisible();
@@ -83,7 +83,7 @@ test('save on the list survives reload; detail and /salvate/ agree; unsave in an
 
   await page.goto('/job/1001-asistent-medical-generalist/');
   await expect(page.locator('[data-pref="save"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-pref="hide"]')).toHaveCount(0);
+  await expect(page.locator('[data-pref="hide"]')).toHaveAttribute('aria-pressed', 'false');
   await noOverflow(page, 'detail');
   await shot(page, testInfo, 'detail');
 
@@ -155,7 +155,8 @@ test('hide, undo, show hidden, restore, and hiding a saved item keeps it saved',
   await page.locator('[data-pref-toggle-hidden]').click();
   await expect(row(page, 1002)).toBeVisible();
   await expect(row(page, 1002)).toContainText('Ascuns din rezultate');
-  await expect(hideBtn(page, 1002)).toContainText('Restabilește');
+  await expect(hideBtn(page, 1002)).toHaveAttribute('aria-label', 'Restabilește anunțul: Titlu 1002'.replace('Titlu 1002', await row(page, 1002).getAttribute('data-pref-title')));
+  await expect(hideBtn(page, 1002)).toHaveAttribute('aria-pressed', 'true');
   await expect(saveBtn(page, 1002)).toHaveAttribute('aria-pressed', 'true');   // hiding did not unsave
   let r = (await stored(page)).records['https://posturi.gov.ro/anunt/fixture-1002'];
   expect(r.savedAt).toBeTruthy(); expect(r.hiddenAt).toBeTruthy();

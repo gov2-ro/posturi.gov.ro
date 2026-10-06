@@ -242,7 +242,17 @@
   }
   var SNAP_FIELDS = ['path', 'title', 'employer', 'place', 'date', 'dateSource'];
 
-  function setLabel(btn, text) {
+  /** Text buttons (/salvate/) carry a visible [data-pref-label]; icon buttons carry
+   *  none, so the label goes to aria-label + title ("<action>: <posting title>"). */
+  function setLabel(btn, text, tip) {
+    if (btn.classList.contains('pref-btn')) {
+      var el = btn.closest('[data-posting]');
+      var t = el && el.dataset.prefTitle;
+      var name = (tip || text) + (t ? ': ' + t : '');
+      if (btn.getAttribute('aria-label') !== name) btn.setAttribute('aria-label', name);
+      if (btn.getAttribute('title') !== (tip || text)) btn.setAttribute('title', tip || text);
+      return;
+    }
     var l = qs('[data-pref-label]', btn);
     if (l && l.textContent !== text) l.textContent = text;
   }
@@ -256,14 +266,16 @@
       var rec = url ? S.recs[url] : undefined;
       var saved = !!(rec && rec.savedAt), hid = !!(rec && rec.hiddenAt);
       var sb = qs('[data-pref="save"]', el);
-      if (sb) { sb.setAttribute('aria-pressed', saved ? 'true' : 'false'); setLabel(sb, saved ? 'Salvat' : 'Salvează'); }
+      if (sb) { sb.setAttribute('aria-pressed', saved ? 'true' : 'false'); setLabel(sb, saved ? 'Salvat' : 'Salvează', saved ? 'Elimină din salvate' : 'Salvează anunțul'); }
+      // Hide state is shown on every posting (the detail page has one too); only
+      // rows in a list (data-pref-hideable) actually disappear.
+      var hbtn = qs('[data-pref="hide"]', el);
+      if (hbtn) { hbtn.setAttribute('aria-pressed', hid ? 'true' : 'false'); setLabel(hbtn, hid ? 'Restabilește' : 'Ascunde', hid ? 'Restabilește anunțul' : 'Ascunde anunțul'); }
+      var flag = qs('[data-pref-flag]', el);
+      if (flag) flag.hidden = !hid;
       if (el.hasAttribute('data-pref-hideable')) {
         el.setAttribute('data-pref-hidden', hid ? 'true' : 'false');
         el.hidden = hid && !showHidden;
-        var flag = qs('[data-pref-flag]', el);
-        if (flag) flag.hidden = !hid;
-        var hb = qs('[data-pref="hide"]', el);
-        if (hb) setLabel(hb, hid ? 'Restabilește' : 'Ascunde');
       }
       if (rec) {
         var snap = snapshotOf(el);
@@ -381,7 +393,12 @@
     } else {
       text = r.after ? 'Anunț salvat: ' + title + '.' : 'Anunț eliminat din salvate: ' + title + '.';
     }
-    if (gone) {
+    // A hide on the detail page removes nothing from view, so say what happened
+    // (and offer the undo) the way a disappearing row would.
+    var detailHide = kind === 'hide' && !el.hasAttribute('data-pref-hideable');
+    if (detailHide) {
+      showNotice({ text: text, undo: undo, storage: r.first });
+    } else if (gone) {
       showNotice({ text: text, undo: undo, storage: r.first, focus: true });
     } else if (r.first) {
       showNotice({ text: text, undo: undo, storage: true });

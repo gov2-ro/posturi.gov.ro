@@ -1253,25 +1253,34 @@ function pref_attrs(array $p, ?string $employer = null): string {
 }
 
 /**
- * Save (and optionally hide) buttons for one posting. Rendered hidden: they
- * need JavaScript, which un-hides them (no-JS readers see only normal links).
- * Real buttons, never inside the title link; the title is read out via sr-only
- * text so several rows are distinguishable.
+ * Save and hide icon buttons for one posting, meant to sit inline right after
+ * the title (outside the title link). Rendered hidden: they need JavaScript,
+ * which un-hides them (no-JS readers see only normal links). Real buttons;
+ * the accessible name carries the title so several rows are distinguishable,
+ * and saved.js rewrites it (and aria-pressed) to match the stored state.
+ * The glyphs are one shared SVG sprite (inc/header.php), so a row stays lean.
+ * 20px glyph inside a 32px hit area; the negative block margin keeps that
+ * hit area from stretching the title's line box.
  */
 function pref_controls(array $p, bool $with_hide = true): string {
     $title = e(display_title($p)['primary']);
-    $btn = 'inline-flex min-h-[2.5rem] items-center border border-line bg-surface px-3 py-2 text-xs font-medium '
-         . 'text-ink-muted transition-colors hover:border-gov hover:text-gov focus:outline-none '
-         . 'focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-info-line aria-pressed:bg-gov-light aria-pressed:text-gov';
-    $h = '<div data-pref-controls hidden><div class="mt-2 flex flex-wrap items-center gap-2">'
-       . '<button type="button" data-pref="save" aria-pressed="false" class="' . $btn . '">'
-       . '<span data-pref-label>Salvează</span><span class="sr-only"> anunțul: ' . $title . '</span></button>';
+    // Classes live in assets/app.css (.pref-btn / .pref-ico): 4 buttons' worth of
+    // utilities per row would crowd the deadline out of deadline_test's window.
+    $icon = static fn(string $id): string =>
+        '<svg class="pref-ico" aria-hidden="true"><use href="#' . $id . '"/></svg>';
+    $h = '<span data-pref-controls hidden class="pref-group">'
+       . '<button type="button" data-pref="save" aria-pressed="false" aria-label="Salvează anunțul: ' . $title
+       . '" class="pref-btn pref-save">' . $icon('i-bookmark') . '</button>';
     if ($with_hide) {
-        $h .= '<button type="button" data-pref="hide" class="' . $btn . '">'
-            . '<span data-pref-label>Ascunde</span><span class="sr-only"> anunțul: ' . $title . '</span></button>'
-            . '<span data-pref-flag hidden class="text-xs text-ink-muted">Ascuns din rezultate</span>';
+        $h .= '<button type="button" data-pref="hide" aria-pressed="false" aria-label="Ascunde anunțul: ' . $title
+            . '" class="pref-btn pref-hide">' . $icon('i-close') . '</button>';
     }
-    return $h . '</div></div>';
+    return $h . '</span>';
+}
+
+/** "Hidden" marker for a posting; saved.js shows it while the posting is hidden. */
+function pref_flag(): string {
+    return '<span data-pref-flag hidden class="pref-flag">Ascuns din rezultate</span>';
 }
 
 function site_origin(): string {

@@ -483,7 +483,7 @@ if (!$is_htmx): ?>
     <div id="facet-backdrop" hidden
          class="fixed inset-0 z-30 bg-ink/40 lg:hidden"></div>
 
-    <div class="lg:flex lg:gap-6 lg:items-start">
+    <div class="pg-layout lg:flex lg:gap-6 lg:items-start">
 
       <!-- LEFT COLUMN — search above the facets.
            The filter is the main exploration tool, so on desktop it owns a
@@ -492,9 +492,9 @@ if (!$is_htmx): ?>
            top and the facets become the slide-over drawer, which is why the
            search input lives here rather than inside <aside> — one input, one
            name, reachable at every width. -->
-      <div class="lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)] lg:w-64 lg:shrink-0 lg:flex-col">
+      <div class="pg-side lg:sticky lg:top-4 lg:flex lg:max-h-[calc(100vh-2rem)] lg:w-64 lg:shrink-0 lg:flex-col">
 
-    <div class="flex gap-2 mb-3">
+    <div class="pg-search flex gap-2 mb-3">
       <div class="relative flex-1 min-w-0">
         <label for="q" class="sr-only">Caută posturi după titlu, angajator sau conținut</label>
         <input type="search" id="q" name="q" value="<?= e($q) ?>"
@@ -554,7 +554,7 @@ if (!$is_htmx): ?>
       </div><!-- /left column -->
 
       <!-- RIGHT COLUMN — shortcuts, controls, results -->
-      <div class="min-w-0 lg:flex-1">
+      <div class="pg-main min-w-0 lg:flex-1">
 
     <?php if ($shortcuts): ?>
     <div class="mb-5 border-b border-line pb-4">
@@ -592,7 +592,15 @@ if (!$is_htmx): ?>
         <?php endforeach; ?>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
+        <?php /* Compact view: horizontal filters + card grid, lg and up. Shown
+           by the script below (it does nothing without JavaScript), and the
+           choice is kept per browser in localStorage `posturi.layout`. */ ?>
+        <button type="button" id="layout-toggle" hidden aria-pressed="false"
+                class="hidden items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink-muted transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-gov aria-pressed:bg-gov-light aria-pressed:text-gov lg:inline-flex">
+          <svg class="h-4 w-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          Vizualizare compactă
+        </button>
         <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
         <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
           <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
@@ -796,6 +804,105 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
     }, 0);
   });
 
+  // ---- Compact view (lg and up): horizontal filters + card grid ----
+  // The layout itself is CSS over this same markup (html[data-layout="compact"],
+  // set before paint by inc/header.php), so swaps and history need nothing from
+  // here. This only owns the toggle and the dropdown behaviour of the top-level
+  // groups. In compact mode a group's panel is driven by [data-pg-open], NOT by
+  // the native `open` attribute: the stored list-mode preferences (STORE) are
+  // neither read nor written, and every panel starts closed.
+  var LAYOUT_KEY = 'posturi.layout';
+  var root = document.documentElement;
+  var layoutBtn = document.getElementById('layout-toggle');
+  var lgQuery = window.matchMedia('(min-width: 1024px)');
+  var openKey = null;
+
+  function compactOn() { return root.dataset.layout === 'compact' && lgQuery.matches; }
+  function topGroups() { return Array.prototype.slice.call(document.querySelectorAll('#facet-list > .facet-group')); }
+  function topSummary(el) { return el.querySelector(':scope > summary'); }
+
+  function placePanel(el) {
+    var body = el.querySelector(':scope > .facet-body');
+    if (!body) return;
+    el.classList.remove('pg-pop-right');
+    var r = body.getBoundingClientRect();
+    if (r.right > document.documentElement.clientWidth - 8) el.classList.add('pg-pop-right');
+  }
+
+  /** Sync [data-pg-open] and aria-expanded to openKey (no-op outside compact). */
+  function syncPanels() {
+    topGroups().forEach(function (el) {
+      var on = compactOn() && openKey !== null && el.dataset.facet === openKey;
+      el.toggleAttribute('data-pg-open', on);
+      // A closed <details> does not render its content at all, so an opened
+      // panel needs the native attribute too. Only panels this code forced open
+      // are closed again by it, and nothing here records into STORE (that is
+      // written by the summary click handler, which a compact click never reaches).
+      if (on && !el.open) { el.open = true; el.setAttribute('data-pg-forced', ''); }
+      else if (!on && el.hasAttribute('data-pg-forced')) { el.open = false; el.removeAttribute('data-pg-forced'); }
+      var sum = topSummary(el);
+      if (sum) {
+        if (compactOn()) sum.setAttribute('aria-expanded', on ? 'true' : 'false');
+        else sum.removeAttribute('aria-expanded');
+      }
+      if (on) placePanel(el);
+    });
+  }
+
+  function closePanels(returnFocus) {
+    var key = openKey;
+    openKey = null;
+    syncPanels();
+    if (returnFocus && key !== null) {
+      var el = topGroups().filter(function (g) { return g.dataset.facet === key; })[0];
+      var sum = el && topSummary(el);
+      if (sum) sum.focus();
+    }
+  }
+
+  function setLayout(mode, persist) {
+    if (mode === 'compact') root.dataset.layout = 'compact'; else delete root.dataset.layout;
+    if (persist) { try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* private mode */ } }
+    if (layoutBtn) layoutBtn.setAttribute('aria-pressed', mode === 'compact' ? 'true' : 'false');
+    openKey = null;
+    syncPanels();
+  }
+
+  if (layoutBtn) {
+    layoutBtn.hidden = false;
+    layoutBtn.setAttribute('aria-pressed', root.dataset.layout === 'compact' ? 'true' : 'false');
+    layoutBtn.addEventListener('click', function () {
+      setLayout(root.dataset.layout === 'compact' ? 'list' : 'compact', true);
+    });
+  }
+  syncPanels();
+  lgQuery.addEventListener('change', function () { openKey = null; syncPanels(); });
+
+  // Capture phase and stopPropagation: the persisted-state recorder below must
+  // not see a click that only toggled a compact panel.
+  document.addEventListener('click', function (ev) {
+    if (!compactOn()) return;
+    var t = ev.target;
+    var sum = t.closest && t.closest('#facet-list > .facet-group > summary');
+    if (sum) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      var key = sum.parentNode.dataset.facet;
+      openKey = openKey === key ? null : key;
+      syncPanels();
+      return;
+    }
+    if (openKey !== null && !(t.closest && t.closest('#facet-list > .facet-group[data-pg-open]'))) closePanels(false);
+  }, true);
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && compactOn() && openKey !== null) { ev.preventDefault(); closePanels(true); }
+  });
+
+  // An HTMX swap replaces #facet-list: put the open panel back.
+  document.body.addEventListener('htmx:afterSwap', syncPanels);
+  document.body.addEventListener('htmx:afterSettle', syncPanels);
+
   // ---- Live facet counts ----
   // Every HTMX response carries a fresh #facet-list as an out-of-band swap, so
   // the counts next to each checkbox narrow with the results instead of going
@@ -815,7 +922,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       panel:  panel.scrollTop,
       groups: {}
     };
-    list.querySelectorAll('.facet-group > .facet-options').forEach(function (d) {
+    list.querySelectorAll('.facet-group > .facet-body > .facet-options').forEach(function (d) {
       if (d.scrollTop) pending.groups[d.parentElement.dataset.facet] = d.scrollTop;
     });
   });
@@ -828,7 +935,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 
     panel.scrollTop = pending.panel;
     Object.keys(pending.groups).forEach(function (key) {
-      var d = list.querySelector('.facet-group[data-facet="' + key + '"] > .facet-options');
+      var d = list.querySelector('.facet-group[data-facet="' + key + '"] > .facet-body > .facet-options');
       if (d) d.scrollTop = pending.groups[key];
     });
 

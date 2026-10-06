@@ -111,6 +111,20 @@
   .status-soon-note { display: none; }
   .status-block:has(input[name="status"][value="soon"]:checked) .status-soon-note { display: inline; }
 
+  /* Save / hide icon buttons (helpers.php pref_controls): inline after the
+     title, 20px glyph in a 32px hit area; the negative block margin keeps the
+     hit area from stretching the title's line box. */
+  .pref-group { @apply ml-1 whitespace-nowrap align-middle text-sm font-normal not-italic; }
+  .pref-btn {
+    @apply -my-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded align-middle text-ink-muted
+           transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+  }
+  .pref-ico { @apply h-5 w-5 fill-none stroke-current; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .pref-btn[aria-pressed="true"] .pref-ico { @apply fill-current; }
+  .pref-save[aria-pressed="true"] { @apply text-gov; }
+  .pref-hide[aria-pressed="true"] { @apply bg-note text-note-ink; }
+  .pref-flag { @apply mt-1 block text-xs text-ink-muted; }
+
   /* htmx loading indicator */
   #results.htmx-request { opacity: 0.5; transition: opacity 200ms ease; }
 
@@ -170,4 +184,80 @@
     text-align: left;
   }
   .prose-body th { background: rgb(var(--c-sunken)); font-weight: 600; }
+}
+
+/* ── Compact view (lg and up) ─────────────────────────────────────────────────
+ * One toggle (#layout-toggle, state in localStorage `posturi.layout`, applied to
+ * <html data-layout> before paint) turns the sidebar into a row of dropdown
+ * facet groups above the results and the result rows into a card grid. It is
+ * only a stylesheet over the same server markup, so filters, HTMX swaps, OOB
+ * facet updates, feeds and history are unaffected, and without JavaScript the
+ * attribute is never set. Unlayered on purpose: these rules have to outrank the
+ * lg: utilities on the same elements. Colours and radii are tokens only.
+ */
+@media (min-width: 1024px) {
+  html[data-layout="compact"] .pg-layout { display: block; }
+
+  /* Filter bar: search first, then the groups, wrapping. */
+  html[data-layout="compact"] .pg-side {
+    position: relative; z-index: 20;
+    display: flex; flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem;
+    width: auto; max-height: none; margin-bottom: 1rem;
+  }
+  html[data-layout="compact"] .pg-search { flex: 0 1 18rem; margin-bottom: 0; }
+  html[data-layout="compact"] #facet-panel {
+    flex: 1 1 0; min-width: 0; overflow: visible; display: block; padding: 0;
+  }
+  html[data-layout="compact"] #facet-list { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem; }
+
+  /* Each top-level group is a pill; its body becomes the dropdown. */
+  html[data-layout="compact"] #facet-list > .facet-group {
+    position: relative; margin: 0; padding: 0;
+    border: 1px solid rgb(var(--c-line-strong)); border-radius: var(--radius-md);
+    background: rgb(var(--c-surface));
+  }
+  html[data-layout="compact"] #facet-list > .facet-group[data-selected] { border-color: rgb(var(--c-gov)); }
+  html[data-layout="compact"] #facet-list > .facet-group > summary { padding: 0.5rem 0.75rem; gap: 0.5rem; }
+  html[data-layout="compact"] #facet-list > .facet-group[open] > summary .facet-caret { transform: none; }
+  html[data-layout="compact"] #facet-list > .facet-group[data-pg-open] > summary .facet-caret { transform: rotate(180deg); }
+  html[data-layout="compact"] #facet-list > .facet-group[data-pg-open] { border-color: rgb(var(--c-gov)); }
+  html[data-layout="compact"] #facet-list > .facet-group > .facet-body { display: none; }
+  html[data-layout="compact"] #facet-list > .facet-group[data-pg-open] > .facet-body {
+    display: block; position: absolute; z-index: 30; top: calc(100% + 0.25rem); left: 0;
+    width: 20rem; max-width: calc(100vw - 2rem); max-height: min(28rem, 70vh); overflow-y: auto;
+    padding: 0.5rem 0.75rem; background: rgb(var(--c-surface));
+    border: 1px solid rgb(var(--c-line-strong)); border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgb(var(--c-ink) / 0.18);
+  }
+  html[data-layout="compact"] #facet-list > .facet-group.pg-pop-right > .facet-body { left: auto; right: 0; }
+
+  /* Results: full width, cards. */
+  html[data-layout="compact"] .pg-main { width: 100%; }
+  html[data-layout="compact"] ul.pg-results {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; border-top: 0;
+  }
+  html[data-layout="compact"] ul.pg-results > li.pg-row {
+    display: flex; flex-direction: column; margin: 0; padding: 0.75rem 0.875rem;
+    border: 1px solid rgb(var(--c-line)); border-radius: var(--radius-lg);
+    background: rgb(var(--c-surface));
+  }
+  html[data-layout="compact"] ul.pg-results > li.pg-row:hover { border-color: rgb(var(--c-gov)); background: rgb(var(--c-surface)); }
+  html[data-layout="compact"] .pg-row > div:first-child { flex: 1; flex-direction: column; align-items: stretch; justify-content: space-between; gap: 0.5rem; }
+  html[data-layout="compact"] .pg-row h2 { font-size: 1rem; }
+  html[data-layout="compact"] .pg-sub,
+  html[data-layout="compact"] .pg-auto,
+  html[data-layout="compact"] .pg-pub { display: none; }
+  html[data-layout="compact"] .pg-meta { margin-top: 0.25rem; }
+  html[data-layout="compact"] .pg-badges { flex-wrap: nowrap; overflow: hidden; margin-top: 0.4rem; }
+  html[data-layout="compact"] .pg-badges > * { flex: none; white-space: nowrap; }
+  html[data-layout="compact"] .pg-deadline {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.5rem;
+    max-width: none; min-width: 0; text-align: left;
+    padding-top: 0.5rem; border-top: 1px solid rgb(var(--c-line) / 0.6);
+  }
+  html[data-layout="compact"] .pg-deadline time { margin-top: 0; }
+  html[data-layout="compact"] .pg-deadline .deadline-fallback { flex-basis: 100%; max-width: none; }
+}
+@media (min-width: 1280px) {
+  html[data-layout="compact"] ul.pg-results { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

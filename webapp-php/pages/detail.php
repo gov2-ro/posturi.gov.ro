@@ -203,14 +203,20 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- Title block -->
   <?php $dt = display_title($p); ?>
-  <div class="border-b border-line pb-5 mb-6">
-    <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink leading-tight">
+  <div class="border-b border-line pb-5 mb-6"<?= pref_attrs($p) ?>>
+    <?php /* The icon buttons sit right after the heading, inside the same block
+       that carries the posting identity. Hiding here only marks the posting
+       hidden in this browser (reversible); the page itself stays. */ ?>
+    <div class="leading-tight">
+    <h1 class="inline font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink">
       <?= e($dt['primary']) ?>
       <?php if ($dt['normalized']): ?>
         <abbr title="Titlu normalizat automat pe ocupațiile COR — poate fi incomplet sau greșit."
               class="ml-1 cursor-help font-mono text-[10px] font-normal uppercase not-italic tracking-wider text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">normalizat</abbr>
       <?php endif; ?>
-    </h1>
+    </h1><?= pref_controls($p) ?>
+    </div>
+    <?= pref_flag() ?>
     <?php if ($dt['secondary']): ?>
       <p class="mt-0.5 text-sm not-italic text-ink-muted"><?= e($dt['secondary']) ?></p>
     <?php endif; ?>
@@ -228,7 +234,6 @@ require __DIR__ . '/../inc/header.php';
       <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener"
          class="text-xs text-gov hover:underline font-mono sm:ml-auto">anunțul original ↗</a>
     </div>
-    <div<?= pref_attrs($p) ?>><?= pref_controls($p, false) ?></div>
 
     <!-- Badges -->
     <div class="mt-3 flex flex-wrap gap-2">

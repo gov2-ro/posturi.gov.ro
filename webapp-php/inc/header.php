@@ -58,6 +58,9 @@ if (!isset($_build_stamp)) {
   <link rel="stylesheet" href="/static/app.css?v=<?= @filemtime(__DIR__ . '/../static/app.css') ?: '1' ?>">
   <?= pg_skin_links() ?>
   <?= pg_skin_boot() ?>
+  <?php /* Compact-list preference, applied before first paint (no flash). The
+     list page's script owns the toggle; the CSS only acts on the list at lg+. */ ?>
+  <script>try{if(localStorage.getItem('posturi.layout')==='compact')document.documentElement.dataset.layout='compact'}catch(e){}</script>
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/prefs.js?v=<?= @filemtime(__DIR__ . '/../static/prefs.js') ?: '1' ?>" defer></script>
   <?php /* UX-09: one shared script for browser-local save/hide, loaded once here
@@ -66,6 +69,11 @@ if (!isset($_build_stamp)) {
   <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">
+<?php /* Glyph sprite for the save/hide icon buttons (helpers.php pref_controls). */ ?>
+<svg width="0" height="0" class="absolute" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</defs></svg>
 
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gov focus:px-4 focus:py-2 focus:text-on-gov">
   Sari la conținut

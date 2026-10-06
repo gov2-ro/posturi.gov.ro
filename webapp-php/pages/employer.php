@@ -136,7 +136,7 @@ require __DIR__ . '/../inc/header.php';
         <div class="py-3 border-b border-line last:border-0 data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p, $employer['name']) ?> data-pref-hideable>
           <div class="flex items-start justify-between gap-3">
             <div>
-              <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a>
+              <div class="leading-snug"><a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a><?= pref_controls($p) ?></div>
               <?php if ($dt['secondary']): ?>
                 <div class="text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></div>
               <?php endif; ?>
@@ -145,7 +145,7 @@ require __DIR__ . '/../inc/header.php';
                 <?php if ($p['job_level']): ?><span>· <?= e($p['job_level']) ?></span><?php endif; ?>
                 <?php if ($p['categorie']): ?><span>· <?= e($p['categorie']) ?></span><?php endif; ?>
               </div>
-              <?= pref_controls($p) ?>
+              <?= pref_flag() ?>
             </div>
             <?php if ($days !== null): ?>
             <div class="shrink-0 text-right">
@@ -171,7 +171,7 @@ require __DIR__ . '/../inc/header.php';
         </h2>
         <?php foreach ($expired_postings as $p): $dt = display_title($p); ?>
         <div class="py-3 border-b border-line last:border-0 opacity-70"<?= pref_attrs($p, $employer['name']) ?> data-pref-hideable>
-          <a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a>
+          <div class="leading-snug"><a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a><?= pref_controls($p) ?></div>
           <?php if ($dt['secondary']): ?>
             <div class="text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></div>
           <?php endif; ?>
@@ -179,7 +179,7 @@ require __DIR__ . '/../inc/header.php';
             <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
             <?php if ($p['expires_at']): ?><span class="font-mono">· Înscrieri închise · anunț expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>
           </div>
-          <?= pref_controls($p) ?>
+          <?= pref_flag() ?>
         </div>
         <?php endforeach; ?>
       </section>

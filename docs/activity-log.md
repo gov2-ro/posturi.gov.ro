@@ -2,6 +2,15 @@
 
 ## 2026
 
+### 2026-10-06 — Icon save/hide buttons and compact view (code ready, not deployed)
+
+Follow-up to UX-09 after the text buttons proved too big in rows.
+
+- **Icon buttons.** `pref_controls()` now renders two icon buttons (bookmark, ×) right after the title — outside the title link, same line, wrapping with it — in list rows, employer rows and the detail page. One shared SVG sprite in `inc/header.php`, classes in `assets/app.css` (`.pref-btn`, `.pref-ico`; tokens only), 20px glyph in a 32px hit area. Names/tooltips are `aria-label`/`title` ("Salvează anunțul: <titlu>", "Elimină din salvate: …", "Ascunde/Restabilește anunțul: …") written by `saved.js` `setLabel()`; both buttons carry `aria-pressed`. The title attribute is JS-only on purpose: row markup has to stay lean for `deadline_test.php`'s 3000-byte window (the controls now sit before the deadline column, so the "Ascuns din rezultate" flag moved to the row end via `pref_flag()` and two HTML comments became PHP comments). The detail page now has a hide button too: hiding there only marks the posting hidden (pressed state, flag, notice with Undo, live-region message); the page stays. `/salvate/` keeps its text buttons.
+- **Compact view (lg+).** One toggle, "Vizualizare compactă" (`#layout-toggle`, `localStorage posturi.layout`, applied to `<html data-layout>` by a tiny head script, so no flash). It is CSS over the same server markup (`html[data-layout="compact"]` in `app.css`, unlayered so it outranks the `lg:` utilities): the sidebar becomes a wrapping row of pill groups under the search, and results become a 2/3-column card grid with the secondary lines hidden. Mobile and no-JS are unchanged. Top-level facet groups got a `.facet-body` wrapper so their content can be lifted into a dropdown; list.php's scroll-restore selectors follow.
+- **Dropdown behaviour.** In compact mode a panel is driven by `data-pg-open` (one at a time, Escape/outside click close, focus back to the summary, flips right if it would overflow), re-applied after each HTMX swap so multi-select keeps working. The click is intercepted in the capture phase so `posturi.facets` is never read or written by it. Non-obvious: a closed `<details>` does not render its content at all (Playwright caught this), so the code also sets `open` on the details it opens and closes only those it forced.
+- Tests: `preferences_test.php` and `saved.spec.js` updated for the icon buttons (by role/aria, not text); new `tests/browser/compact.spec.js`.
+
 ### 2026-10-06 — UX-04-FEEDS: filtered RSS, Atom and iCal subscriptions (code ready, not deployed)
 
 Added `/posturi.rss` (RSS 2.0, `application/rss+xml`; in the front controller's

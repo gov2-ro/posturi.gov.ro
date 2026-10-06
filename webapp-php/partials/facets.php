@@ -60,6 +60,9 @@
                 <span><?= e($label) ?><?php if ($selected): ?> <span class="font-mono text-gov normal-case tracking-normal">(<?= count($selected) ?>)</span><?php endif; ?></span>
                 <span aria-hidden="true" class="facet-caret text-ink-muted transition-transform">▾</span>
               </summary>
+              <?php /* .facet-body: everything under the summary, so the compact
+                 layout can lift it into one dropdown panel (assets/app.css). */ ?>
+              <div class="facet-body">
               <?php if ($help !== ''): ?>
                 <p class="facet-help mb-1.5 text-[11px] leading-snug text-ink-muted"><?= e($help) ?></p>
               <?php endif; ?>
@@ -106,6 +109,7 @@
                   </label>
                 <?php endforeach; ?>
               </div>
+              </div>
             </details>
             <?php
         }
@@ -138,10 +142,12 @@
                 <span><?= e($label) ?></span>
                 <span aria-hidden="true" class="facet-caret transition-transform">▾</span>
               </summary>
+              <div class="facet-body">
               <?php if ($note !== ''): ?>
                 <p class="facet-help mb-1.5 text-[11px] leading-snug text-ink-muted"><?= e($note) ?></p>
               <?php endif; ?>
               <div class="pt-1"><?= $html ?></div>
+              </div>
             </details>
             <?php
         }

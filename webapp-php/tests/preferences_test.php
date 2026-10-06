@@ -183,7 +183,12 @@ run_suite('markup: identity attributes and real buttons on list, employer and de
     assert_same(0, $x->query('//h2//button')->length, 'no button inside a title link/heading');
     assert_same(0, $x->query('//a//button')->length, 'no button nested in a link');
     assert_same(1, $x->query('.//a[@href="/job/1001-asistent-medical-generalist/"]', $li)->length, 'normal job link preserved (no-JS)');
-    assert_same(1, $x->query('.//div[@data-pref-controls][@hidden]', $li)->length, 'controls start hidden until JS runs');
+    assert_same(1, $x->query('.//*[@data-pref-controls][@hidden]', $li)->length, 'controls start hidden until JS runs');
+    assert_same(1, $x->query('.//button[@data-pref="save"][@aria-label="Salvează anunțul: Asistent medical"]', $li)->length, 'save icon button named with the posting title');
+    assert_same(1, $x->query('.//button[@data-pref="hide"][@aria-pressed="false"][@aria-label="Ascunde anunțul: Asistent medical"]', $li)->length, 'hide icon button named with the posting title');
+    assert_same(0, $x->query('.//button[@data-pref]//text()[normalize-space()]', $li)->length, 'icon buttons carry no visible text');
+    assert_same(1, $x->query('.//button[@data-pref="save"]//*[local-name()="use"][@href="#i-bookmark"]', $li)->length, 'bookmark glyph from the shared sprite');
+    assert_same(1, substr_count($list, 'id="i-bookmark"'), 'sprite defined once per page');
     assert_same(1, $x->query('//*[@data-pref-banner]')->length, 'one banner placeholder in the results');
     assert_contains('Numărul rezultatelor include anunțurile ascunse în acest browser.', $list, 'results-count help copy');
     assert_contains('Salvate', $x->query('//nav[@aria-label="Navigare principală"]//a[@href="/salvate/"]')->item(0)->textContent ?? '', 'shared nav links to /salvate/');
@@ -206,7 +211,9 @@ run_suite('markup: identity attributes and real buttons on list, employer and de
     $det = http($base, '/job/1001-asistent-medical-generalist/')[2];
     $xd = xpath_for($det);
     assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]//button[@data-pref="save"]')->length, 'detail save button');
-    assert_same(0, $xd->query('//*[@data-posting][@data-pref-id="1001"]//button[@data-pref="hide"]')->length, 'detail has no hide button');
+    assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]//button[@data-pref="hide"]')->length, 'detail hide icon button');
+    assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]/div/h1/following-sibling::*[@data-pref-controls]')->length, 'detail icons sit right after the h1');
+    assert_same(0, $xd->query('//h1//button')->length, 'no button inside the heading');
     assert_same('https://posturi.gov.ro/anunt/fixture-1001', $xd->query('//*[@data-posting]')->item(0)->getAttribute('data-pref-url'), 'detail identity');
 });
 

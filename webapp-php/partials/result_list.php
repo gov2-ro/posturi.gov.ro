@@ -75,7 +75,7 @@ $chips = $active_chips ?? [];
     <p data-pref-banner-all hidden class="font-medium">Toate anunțurile de pe această pagină sunt ascunse în acest browser. Paginarea rămâne disponibilă, iar rezultatele căutării de pe server nu s-au schimbat.</p>
     <p>Numărul rezultatelor include anunțurile ascunse în acest browser.</p>
   </div>
-  <ul class="divide-y divide-line border-t border-line">
+  <ul class="pg-results divide-y divide-line border-t border-line">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
         // Countdown and printed date come from ONE value — this is the fix for
@@ -84,19 +84,20 @@ $chips = $active_chips ?? [];
         $days = days_until($dl['date']);
         $est  = $dl['source'] === 'expirare';
     ?>
-    <li class="group -mx-1 px-1 py-4 transition-colors hover:bg-sunken data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
+    <li class="pg-row group -mx-1 px-1 py-4 transition-colors hover:bg-sunken data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <?php $dt = display_title($p); ?>
-          <h2 class="font-display text-lg font-semibold italic leading-snug text-ink">
-            <a href="<?= e(job_url($p)) ?>" class="inline-block py-0.5 transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-              <?= e($dt['primary']) ?>
-            </a>
-          </h2>
+          <?php /* Title and the two icon buttons share one line (the buttons wrap
+             with the title's last word). The <h2> is inline so they can; the
+             buttons stay outside it and outside the link. */ ?>
+          <div class="pg-title leading-snug">
+            <h2 class="font-display inline text-lg font-semibold italic text-ink"><a href="<?= e(job_url($p)) ?>" class="transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"><?= e($dt['primary']) ?></a></h2><?= pref_controls($p) ?>
+          </div>
           <?php if ($dt['secondary']): ?>
-            <p class="truncate text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></p>
+            <p class="pg-sub truncate text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></p>
           <?php endif; ?>
-          <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+          <div class="pg-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
             <a href="/angajator/<?= e($p['employer_slug_display'] ?? $p['employer_slug'] ?? '') ?>/"
                class="max-w-xs truncate py-1 font-medium text-ink-muted hover:text-gov hover:underline">
               <?= e($p['employer_name']) ?>
@@ -106,13 +107,13 @@ $chips = $active_chips ?? [];
               <span><?= e($place) ?></span>
             <?php endif; ?>
             <?php if ($p['published_at']): ?>
-              <span aria-hidden="true" class="text-ink-muted">·</span>
-              <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>" class="font-mono"><?= fmt_date($p['published_at']) ?></time>
+              <span aria-hidden="true" class="pg-pub text-ink-muted">·</span>
+              <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>" class="pg-pub font-mono"><?= fmt_date($p['published_at']) ?></time>
             <?php endif; ?>
           </div>
 
-          <!-- Badges -->
-          <div class="mt-2 flex flex-wrap gap-1.5">
+          <?php /* Badges */ ?>
+          <div class="pg-badges mt-2 flex flex-wrap gap-1.5">
             <?php if ($p['job_level']): ?>
               <span class="px-1.5 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'border border-info-line bg-info text-info-ink' : 'border border-neutral-line bg-neutral text-neutral-ink' ?>">
                 <?= e($p['job_level']) ?>
@@ -133,11 +134,11 @@ $chips = $active_chips ?? [];
             <?php endif; ?>
           </div>
 
-          <!-- Derived attributes. Visually separated from the badges above,
-               which come straight from the source; these are inferred. -->
+          <?php /* Derived attributes. Visually separated from the badges above,
+               which come straight from the source; these are inferred. */ ?>
           <?php $meta = inferred_meta($p); ?>
           <?php if ($meta): ?>
-          <div class="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
+          <div class="pg-auto mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
             <abbr title="Atribute deduse automat din textul anunțului — pot fi incomplete sau greșite. Vezi metodologia."
                   class="cursor-help font-mono text-[10px] uppercase tracking-wider text-ink-muted no-underline decoration-dotted underline-offset-2 [text-decoration:underline]">auto</abbr>
             <?php foreach ($meta as $k => $item): ?>
@@ -148,8 +149,8 @@ $chips = $active_chips ?? [];
           <?php endif; ?>
         </div>
 
-        <!-- Deadline badge -->
-        <div class="min-w-[80px] max-w-[9.5rem] shrink-0 text-right">
+        <?php /* Deadline badge */ ?>
+        <div class="pg-deadline min-w-[80px] max-w-[9.5rem] shrink-0 text-right">
           <?php if ($days !== null): ?>
             <?php if ($days < 0): ?>
               <span class="font-mono text-xs text-ink-muted"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?></span>
@@ -173,9 +174,7 @@ $chips = $active_chips ?? [];
           <?php endif; ?>
         </div>
       </div>
-      <?php /* After the deadline column, not inside the content column: keeps the
-         date within a few hundred bytes of the title for anything that reads rows. */ ?>
-      <?= pref_controls($p) ?>
+      <?= pref_flag() ?>
     </li>
     <?php endforeach; ?>
   </ul>

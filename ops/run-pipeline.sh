@@ -6,6 +6,7 @@
 # would fight them. It ships the database only -- see deploy-php.sh for why.
 #
 # Exit codes: 0 fine, 65 the export failed its hard checks and was not deployed,
+# 69 the LLM account balance is too low to start (ops/check-llm-balance.py),
 # 75 a previous run is still going, 78 the checkout has unapplied migrations,
 # anything else a failure. Every non-zero exit has already been reported to
 # $HEALTHCHECK_URL.
@@ -78,6 +79,28 @@ if [ "$migrate_status" -ne 0 ]; then
     ping_health /fail
     echo "=== aborted before the pipeline — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     exit 78
+fi
+
+# Out of credit is the one failure that is certain before anything runs: DeepSeek
+# answers 402 part-way through the schema step, llm-schema.py exits 2, nothing
+# deploys, and the only signal is a failure half an hour in (2026-10-05). Ask first.
+# A check that itself breaks must not block the run, so only its own "too low" exit
+# (69) stops us; any other status is reported and ignored. Providers without a
+# balance endpoint are skipped inside the script. Opt out: POSTURI_SKIP_BALANCE_CHECK=1.
+if [ "${POSTURI_SKIP_BALANCE_CHECK:-0}" != "1" ]; then
+    balance_status=0
+    "$PYTHON" ops/check-llm-balance.py || balance_status=$?
+    if [ "$balance_status" -eq 69 ]; then
+        echo "ABORT: the LLM account balance is too low to start a run. Nothing was"
+        echo "       fetched or extracted; the shared host keeps serving the previous"
+        echo "       database. Top up, then re-run this script."
+        ping_health /fail
+        echo "=== aborted before the pipeline — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+        exit 69
+    elif [ "$balance_status" -ne 0 ]; then
+        echo "WARNING: the balance check failed (exit ${balance_status}) — continuing"
+        echo "         without it; the API will still refuse if the account is empty."
+    fi
 fi
 
 # --active-only is the cost guard, not --resume: 6,904 postings have no schema_json

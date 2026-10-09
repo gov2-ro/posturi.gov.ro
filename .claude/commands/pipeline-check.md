@@ -29,7 +29,7 @@ Work out the context first, because it changes what you can check:
 
 ### 1. Read the run log
 
-`data/pipeline-runs.jsonl` — one JSON object per line, two kinds, joined by
+`data/pipeline-runs.jsonl` — one JSON object per line, several kinds, joined by
 `run_id`:
 
 - `kind: "run"` — written by `pipeline.py`: `trigger` (cron / manual), `git_sha`,
@@ -38,6 +38,11 @@ Work out the context first, because it changes what you can check:
 - `kind: "export-check"` — written by `ops/check-export.py`: `status`
   (ok / warn / fail), the full `metrics` dict, and every `check` with its
   `level` (hard / soft) and message.
+
+- `kind: "llm-balance"` — written by `ops/check-llm-balance.py` at the top of each
+  run: `outcome` (ok / warn / abort / unavailable / skipped), `balance` (USD),
+  `provider`, the `min` / `warn` thresholds. An `abort` means `run-pipeline.sh`
+  exited 69 and nothing ran; a `warn` means a top-up is due.
 
 Read the last ~10 of each. If the file does not exist, the instrumentation has
 never run — say that, and stop rather than guessing from the logfile.

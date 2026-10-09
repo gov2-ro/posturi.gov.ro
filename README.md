@@ -551,7 +551,7 @@ Each run leaves three things behind:
 
 | Where | What |
 |---|---|
-| `data/pipeline-runs.jsonl` | one `kind: "run"` record (step timings, exit codes, flags) and one `kind: "export-check"` record (33 data metrics, every assertion), joined by `run_id` |
+| `data/pipeline-runs.jsonl` | one `kind: "run"` record (step timings, exit codes, flags) and one `kind: "export-check"` record (33 data metrics, every assertion), joined by `run_id`; plus `kind: "llm-balance"` (the pre-flight balance and its outcome) |
 | `logs/pipeline.log` | the steps' own output, runs delimited by `=== posturi pipeline run <id> … ===` |
 | `HEALTHCHECK_URL` | `/start`, `/fail`, success — the only signal that can report a run which *never happened* |
 
@@ -559,6 +559,16 @@ By default a failed pipeline step blocks the deploy: `ops/run-pipeline.sh` pings
 with the pipeline's status and the host keeps serving the previous database. Set
 `POSTURI_ALLOW_DEGRADED_DEPLOY=1` to deploy anyway when the export check passes (the run is
 recorded as degraded).
+
+`ops/check-llm-balance.py` runs first, before anything is fetched or paid for: it reads
+the DeepSeek balance (`GET /user/balance`, free) and **exits 69 below `LLM_BALANCE_MIN`**
+(default `0.50` USD, or when the account reports `is_available: false`), which
+`ops/run-pipeline.sh` turns into a `/fail` ping and an immediate stop. Below
+`LLM_BALANCE_WARN` (default `3.00`) it only warns. A check that cannot reach the API,
+or a provider other than DeepSeek, prints a line and exits 0 — it never blocks a run.
+`POSTURI_SKIP_BALANCE_CHECK=1` bypasses it; `--need USD` is for a manual backfill of known
+cost. Exit codes of `ops/run-pipeline.sh`: `0` fine, `65` export failed its hard checks,
+`69` balance too low, `75` another run holds the lock, `78` unapplied migrations.
 
 `ops/check-export.py` runs between the export and the deploy. **Hard checks abort
 before the rsync**, so a corrupt export cannot reach the live site: `integrity_check`,

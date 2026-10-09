@@ -160,7 +160,8 @@ leaves stale jobs published.
 | Update the VPS's own checkout | `sudo -u posturi git pull && .venv/bin/python webapp/manage.py migrate` |
 
 Exit codes from `ops/run-pipeline.sh`: `0` fine, `65` the export failed its hard
-checks and was **not** deployed, `75` a previous run still holds the lock, anything
+checks and was **not** deployed, `69` the LLM account balance is too low to start (nothing
+ran), `75` a previous run still holds the lock, `78` unapplied migrations, anything
 else a failure. Every non-zero exit has already been reported to `HEALTHCHECK_URL`.
 
 ### Observability
@@ -169,7 +170,7 @@ Three artefacts, in increasing order of how often you need them:
 
 | Where | What it holds |
 |---|---|
-| `data/pipeline-runs.jsonl` | one record per run (`kind: "run"`) plus one per export check (`kind: "export-check"`), joined by `run_id`. Step timings, exit codes, and 33 data metrics with run-over-run deltas. |
+| `data/pipeline-runs.jsonl` | one record per run (`kind: "run"`) plus one per export check (`kind: "export-check"`), joined by `run_id`. Step timings, exit codes, and 33 data metrics with run-over-run deltas. Also `kind: "llm-balance"` (the pre-flight balance and its outcome), `"llm-schema"` and `"deploy"`. |
 | `logs/pipeline.log` | everything the steps printed. Runs are delimited by `=== posturi pipeline run <id> (<trigger>) — … ===`; grep the run id. Rotate it with `ops/logrotate.posturi`. |
 | `HEALTHCHECK_URL` | the dead-man's switch. `/start` at the top of a run, `/fail` on any failure, a bare ping on success. **This is the only signal that can report a run which never happened** — a failure alert cannot. |
 
@@ -204,8 +205,8 @@ real run compares its deltas against.
 
 ### What a run does
 
-`pipeline.py --continue-on-error --since 7 --active-only --resume --workers 4
---prompt-version v4`, then `ops/check-export.py`, then — only if the check passes —
+`ops/check-llm-balance.py`, then `pipeline.py --continue-on-error --since 7 --active-only
+--resume --workers 4 --prompt-version v4`, then `ops/check-export.py`, then — only if the check passes —
 `./deploy-php.sh --data-only --no-export`.
 
 - **`--active-only` is the cost guard.** 6,904 postings have no `schema_json` but only
@@ -216,6 +217,18 @@ real run compares its deltas against.
   every `v3_*` facet column empty. v4 is v3 plus the competition calendar that sets
   `application_deadline`. Changing the pin makes `--resume` re-extract every active
   posting, so it is a reviewed, paid step, not a config tweak.
+- **The balance check runs first.** `ops/check-llm-balance.py` asks DeepSeek for the
+  account balance (`GET /user/balance`, free) before anything is fetched or paid for.
+  Below `LLM_BALANCE_MIN` (default `0.50` USD) or with `is_available: false` it exits
+  69 and `ops/run-pipeline.sh` pings `/fail` and stops — the 2026-10-05 backfill instead
+  died on a `402` half an hour in. Below `LLM_BALANCE_WARN` (default `3.00`) it only
+  prints `WARNING: … top up soon` and the run continues. Anything that is not a verdict
+  on the balance (network error, bad response, no key, a provider other than DeepSeek)
+  prints a line and exits 0: a broken check never blocks a run. The provider is the one
+  the schema step uses (`LLM_PROVIDER`, then `models_config.json`). Every observation is
+  a `kind: "llm-balance"` record in `data/pipeline-runs.jsonl`. Set
+  `POSTURI_SKIP_BALANCE_CHECK=1` to bypass it. Before a manual backfill of known cost:
+  `.venv/bin/python ops/check-llm-balance.py --need 8 --no-record`.
 - **`--continue-on-error` keeps later steps running, but a failed step blocks the
   deploy.** If `pipeline.py` exits non-zero, `ops/run-pipeline.sh` pings `/fail`, exits
   with that status and the shared host keeps the previous database. Setting
@@ -232,6 +245,7 @@ real run compares its deltas against.
 | `site returned HTTP 5xx after deploy` | the shared host is unhappy with what landed | the previous database is still intact on disk; investigate before re-running |
 | `llm-schema.py` exits 1 | systemic failures (HTTP/timeouts/unclassified) exceeded `--max-failure-share` (default 0.5) of attempted postings; or, on a run of ≥ 20 attempts, all failures did (a broken prompt/model); or ≥ 20 selected postings had no content. A residue of per-posting `OutputTruncated`/validation failures alone never blocks | per-model summaries are `kind: "llm-schema"` records in `data/pipeline-runs.jsonl`; the deploy is blocked unless `POSTURI_ALLOW_DEGRADED_DEPLOY=1` |
 | `llm-schema.py` exits 2 | provider-wide fatal error (HTTP 401/402/403: bad key or no balance) | fix the key or top up; `--resume` re-extracts only what is missing or stale |
+| `ABORT: DeepSeek balance $X is below …` (exit 69) | the pre-flight `ops/check-llm-balance.py` found less than `LLM_BALANCE_MIN` (or `--need`), or `is_available: false` | top up at platform.deepseek.com/top_up and re-run; nothing was fetched or paid for. `WARNING: balance check unavailable` is only a note — the check could not reach the API and the run went ahead |
 | `ABORT: unapplied migrations` (exit 78) | the checkout was pulled but `migrate` was not run | `.venv/bin/python webapp/manage.py migrate`, then re-run; nothing ran and the site is untouched |
 | `OutputTruncated: output truncated at the N-token cap` | the model's answer hit `max_output_tokens` (llm-schema.py) — the JSON is incomplete | raise the budget for that prompt version; truncated calls are billed and now counted in the run's usage |
 | `ABORT: pipeline steps failed … not deploying` | a pipeline step exited non-zero and `POSTURI_ALLOW_DEGRADED_DEPLOY` is not 1 | read the failed step in the log; the previous database is still live |

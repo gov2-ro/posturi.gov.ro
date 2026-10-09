@@ -105,7 +105,7 @@ class TestPhpUsesTheDeadline:
         names = ["helpers.php", "pages/list.php", "pages/detail.php",
                  "pages/employer.php", "pages/employers.php", "pages/stats.php",
                  "pages/sitemap.php", "partials/result_list.php",
-                 "feeds/jobs.ics.php", "feeds/jobs.atom.php", "feeds/jobs.json.php"]
+                 "feeds/_feed.php", "feeds/jobs.ics.php", "feeds/jobs.atom.php", "feeds/jobs.json.php"]
         return {n: (PHP_DIR / n).read_text(encoding="utf-8") for n in names}
 
     def test_the_deadline_column_is_named_once(self, sources):
@@ -125,8 +125,10 @@ class TestPhpUsesTheDeadline:
         than no reminder. The date comes from the shared resolver
         (posting_deadline), never from expires_at directly."""
         src = sources["feeds/jobs.ics.php"]
-        assert "j.apply_deadline IS NOT NULL" in src
-        assert "ORDER BY j.apply_deadline ASC" in src
+        # The selection is shared with the other feeds (UX-04-FEEDS): iCal asks
+        # feed_rows() for dated rows only, earliest deadline first.
+        assert "feed_rows('j.apply_deadline ASC, j.id ASC', FEED_CAL_LIMIT, true)" in src
+        assert 'if ($dated_only) $w[] = "j.apply_deadline IS NOT NULL";' in sources["feeds/_feed.php"]
         assert "posting_deadline($r)" in src
         assert "$dl['date']" in src
         assert "expires_at" not in src  # no direct expiry reads

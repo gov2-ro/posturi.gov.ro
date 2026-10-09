@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-10-10 — OPS-04: DeepSeek balance pre-flight
+
+On 2026-10-05 a backfill stopped on `402 Insufficient Balance` after 1,475 of 2,396 postings, and a scheduled run would have failed the same way partway through. The runner now asks first.
+
+- **`ops/check-llm-balance.py`** calls `GET https://api.deepseek.com/user/balance`, which is free, with a 10 s timeout. It resolves the provider with the same `llm_config.resolve_provider()` that `pipeline.py` uses. Possible verdicts: `ok`, `warn` below `LLM_BALANCE_WARN` (default $3, about a week of runs), `abort` (exit 69) below `LLM_BALANCE_MIN` (default $0.50), below `--need` or with `is_available: false`, and `unavailable` or `skipped`. The last two exit 0 on purpose: a broken check must not block the pipeline, and the API still refuses loudly if the account really is empty. `--need <usd>` is for manual backfills, to check the balance against their estimate.
+- **Runner.** The check runs after the migrate check and before `pipeline.py`. Only exit 69 stops the run (ABORT, `/fail` ping, nothing fetched or deployed); any other non-zero status warns and continues. The header's exit-code list now includes 69.
+- **Trend.** One `kind: "llm-balance"` line per check goes into `data/pipeline-runs.jsonl`, so `/pipeline-check` can show the balance over time. The only reader of that file, `check-export.load_baselines`, selects only `deploy` and `export-check` records; tests pin this, including a record with deliberately colliding keys.
+- **Tests and docs.** There are 54 unit tests (HTTP mocked) and 6 `test_run_pipeline_sh.py` cases. One case checks that a 69 exit pings `/fail` and never starts `pipeline.py`, export or deploy. Docs updated: README, `docs/deploy-vps.md`, `.env.example` and the `/pipeline-check` command.
+- **Stale test.** `test_apply_deadline.py::test_the_ical_reminder_lands_on_the_deadline` had failed since UX-04-FEEDS (`f8ce944`) moved the iCal selection into `feeds/_feed.php`. It now checks the `feed_rows(..., true)` call and the `apply_deadline IS NOT NULL` clause where they live. The Python suite has 661 passing.
+- A live read found **$1.40**, below the warn level. The VPS must `git pull` before the check runs there. Its first run should log a balance line; `skipped` would mean `LLM_PROVIDER` does not resolve to deepseek on that host.
+- The implementation was delegated to a Sonnet agent; the main session made the design decisions, reviewed the runner diff and reran the suite.
+
+### 2026-10-10 — PHP-COMPAT-01: old exports no longer break on later columns
+
+Served against the stale bundled `webapp-php/posturi.sqlite` (exported 2026-09-09), `/` and `/?funding=…` failed with `no such column: v4_funding_source`. Since REV-01, `shim_legacy_export()` has created a TEMP view for exports that lack `application_status`. It returned early whenever that column existed, though, so an export with status but no `v4_*` columns slipped through. The bundled file also lacked other later columns that PHP queries.
+
+- **Shim.** Each column is now checked on its own, and the view is built only when something is missing. The `application_status` CASE is unchanged. A `$blank` map adds `v3_contract_duration`, `v3_schedule`, `v3_shift_work`, `occ_canonical`, `sal_min` and the five `v4_*` columns. Each gets the default the export writes before its extraction has run: `''` for `NOT NULL DEFAULT ''` and NULL for nullable columns. Facets and filters therefore see "no value", not an error. A current export still skips the view after one PRAGMA.
+- **Coverage check.** I compared the full `job_postings` schema in `export-to-sqlite.py` against the bundled file and searched PHP for every missing column. Each one is either shimmed now, read off a fetched row with `??` (`sal_json`, the `build_meta` provenance), or never referenced. `llm_costs` is absent from old exports, but `stats.php` already wraps that query in try/catch.
+- **Tests.** `compat_test.php` grew from 71 to 211 assertions. There are two new fixtures, `nov4` (status but no `v4_*`) and `oldest` (2026-09-09-shaped), and 21 routes run against each legacy shape, including the funding, sector, occupation, duration, schedule, salary and shift filters. A current export is asserted to get no view. The new cases fail against the old `db.php`. All 7 PHP suites pass. Playwright was not run, because no markup changed.
+- The PHP work was delegated to a Sonnet agent; the main session reviewed the diff, independently cross-checked missing columns against PHP references, re-ran all suites and smoke-tested the bundled export.
+- Also checked: `/versiuni.json` serves code `9bdbfc8`, so UX-01A, UX-09 and UX-04-FEEDS are live. The 2026-10-06 entries below still say "not deployed" because they were true when written. Only `8b44300` (icon buttons, compact view) is still to deploy.
+
 ### 2026-10-06 — Icon save/hide buttons and compact view (code ready, not deployed)
 
 Follow-up to UX-09 after the text buttons proved too big in rows.

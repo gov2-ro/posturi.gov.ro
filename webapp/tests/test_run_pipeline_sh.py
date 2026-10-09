@@ -24,6 +24,7 @@ STUB_PYTHON = r"""#!/usr/bin/env bash
 echo "$*" >> "$STUB_LOG"
 case "$1" in
   webapp/manage.py) exit "${STUB_MIGRATE:-0}" ;;
+  ops/check-llm-balance.py) exit "${STUB_BALANCE:-0}" ;;
   pipeline.py)      exit "${STUB_PIPELINE:-0}" ;;
   ops/check-export.py) exit "${STUB_CHECK:-0}" ;;
   ops/record-deploy.py) exit 0 ;;
@@ -100,3 +101,58 @@ def test_pending_migrations_stop_before_the_pipeline(root):
     assert code == 78
     assert not any(c.startswith("pipeline.py") for c in calls)
     assert "unapplied migrations" in out
+
+
+def test_low_balance_aborts_before_the_pipeline_with_exit_69(root):
+    # Healthcheck is a curl to a URL; stub curl on PATH to see the /fail ping.
+    bin_dir = root / "bin"
+    bin_dir.mkdir()
+    curl = bin_dir / "curl"
+    curl.write_text('#!/usr/bin/env bash\necho "curl $*" >> "$STUB_LOG"\n')
+    curl.chmod(0o755)
+    code, out, calls = run(root, STUB_BALANCE=69, HEALTHCHECK_URL="http://hc.invalid/x",
+                           PATH=f"{bin_dir}:{os.environ['PATH']}")
+    assert code == 69
+    assert "ABORT: the LLM account balance is too low" in out
+    assert "FAILED (exit" not in out, "the handled branch, not the crash handler"
+    assert "=== aborted before the pipeline" in out
+    assert any(c.endswith("/x/fail") for c in calls if c.startswith("curl")), calls
+    assert not any(c.startswith("pipeline.py") for c in calls), "nothing was spent"
+    assert not any(c.startswith("ops/check-export.py") for c in calls)
+    assert not deployed(calls)
+
+
+def test_balance_check_runs_after_migrations_and_before_the_pipeline(root):
+    code, out, calls = run(root)
+    assert code == 0
+    order = [c.split()[0] for c in calls]
+    assert order.index("webapp/manage.py") < order.index("ops/check-llm-balance.py") \
+        < order.index("pipeline.py")
+
+
+def test_pending_migrations_stop_before_the_balance_check(root):
+    code, out, calls = run(root, STUB_MIGRATE=1)
+    assert code == 78
+    assert not any(c.startswith("ops/check-llm-balance.py") for c in calls)
+
+
+def test_a_crashing_balance_check_does_not_block_the_run(root):
+    # The script exits 0 for warnings and "unavailable"; a crash (any other
+    # non-zero status) must be reported and ignored, never mistaken for 69.
+    code, out, calls = run(root, STUB_BALANCE=1)
+    assert code == 0 and deployed(calls)
+    assert "WARNING: the balance check failed (exit 1)" in out
+    assert "FAILED (exit" not in out
+    assert any(c.startswith("pipeline.py") for c in calls)
+
+
+def test_balance_exit_0_covers_ok_warn_and_unavailable_and_continues(root):
+    code, out, calls = run(root, STUB_BALANCE=0)
+    assert code == 0 and deployed(calls)
+    assert "ABORT" not in out and "balance check failed" not in out
+
+
+def test_skip_env_bypasses_the_balance_check(root):
+    code, out, calls = run(root, STUB_BALANCE=69, POSTURI_SKIP_BALANCE_CHECK=1)
+    assert code == 0 and deployed(calls)
+    assert not any(c.startswith("ops/check-llm-balance.py") for c in calls)

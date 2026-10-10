@@ -130,6 +130,7 @@ python pipeline.py --continue-on-error                 # log failures, keep goin
 | `infer` | `manage.py infer_postings` | `JobPosting.inferred` JSONB |
 | `occupations` | `normalize-titles.py` | `jobs_occupation` + `JobPosting.occupation` |
 | `salary` | `estimate-salaries.py` | `JobPosting.salary_estimate` JSONB |
+| `observe` | `manage.py observe_postings` | `jobs_postingobservation` — immutable history of deadline, cancellation and role facts (UX-12). **Optional**: a failure warns and the run goes on to export; `POSTURI_SKIP_OBSERVE=1` skips it |
 
 `fetch-detail` is a bounded refresh, not a one-shot cache: a cached page whose last
 successful retrieval is older than `--refresh-hours` (default 24) is re-fetched, at most
@@ -311,6 +312,10 @@ python llm-schema.py --prompt-version v3 --workers 8 --resume
 - `--resume` — re-pays only for provably stale extractions: no schema yet; a recorded source revision that differs from the posting's current content hash (both known); or recorded provenance with a different provider/model/prompt-version. Unknown is not stale — rows extracted before migration 0014 (no provenance) and rows whose page has not been hashed yet are skipped, so the unattended run never turns into a backfill. A confirmed source change still re-extracts a legacy row: import stamps its pre-change hash.
 - `--upgrade-legacy` — with `--resume`, also re-extracts production rows that have no provenance. This is the reviewed, paid FIX-05-RUN backfill (`python llm-schema.py --active-only --resume --upgrade-legacy --prompt-version v4 --workers 8`); never put it in the cron.
 - `--max-attempts N` (default 4) — transient errors (429/5xx/timeout) back off exponentially; invalid output gets one repair attempt that shows the model its own validation error.
+- `--urls-file PATH` — retry exactly the affected postings: one full URL or slug per line (blank and `#` lines ignored). Matching is **exact** — a URL is compared whole, a slug against the URL's last path segment — so `…-10` never selects `…-100` the way the substring `--slug` does. It is ANDed with `--force`, `--resume`, `--compare`, `--active-only` and `--prompt-version`; entries that match no posting, or that another selector leaves out (already extracted without `--force`, expired under `--active-only`), are reported rather than dropped. A file with no entries is refused, never widened to the whole corpus.
+- `--dry-run` — compute the selection exactly as the real run would (same `WHERE`, same order), print the selected count, the active-corpus size (`expires_at >= today`) and the first 20 slugs — and say so when the selection covers the entire active corpus — then exit 0. No API call, no database write, no run-log or failure-log record. Use it before any `--resume`/`--urls-file` run after a prompt or policy revision: `python llm-schema.py --urls-file ids.txt --force --prompt-version v4 --dry-run`.
+- `--failure-log PATH` (default `data/schema-failures.jsonl`) / `--no-failure-log` — one JSON line per posting that fails for good, `kind: "llm-schema-failure"`: `run_id` (the run summary's), `posting_id`, `url`, `slug`, `provider`, `model`, `prompt_version`, `source_revision`, `compare`, `error_class`, `message`, and `attempts` — one entry per failed attempt **including the first, repaired one**, each with `error_class` and, for a validation error, `errors: [{loc, type, input}]` (the rejected raw value, e.g. an unlisted `competition_calendar.events.N.stage`). A failed posting keeps its previous `schema_json` and provenance. A posting that was rejected with a validation error, repaired and then **succeeded** gets the same record with `kind: "llm-schema-repaired"` (`attempts` = the failed attempts only; its database writes are unchanged), so the evidence shows how often the model emits a bad value overall, not only when it cost a posting. Like `--run-log` the path is relative to the working directory, and a write error never fails a run; dry runs never write it.
+- `ops/stage-failures.py PATH…` — read-only summary of the rejected `competition_calendar.events.N.stage` values: each distinct raw value with its count, postings, first/last seen and which attempt, from `schema-failures.jsonl` and/or raw pipeline logs (`logs/pipeline.log`, `.gz` accepted; the console only prints the final attempt). FAILED and REPAIRED columns keep the two outcomes apart (repaired postings exist only in the jsonl). `--json` for machine output.
 
 Exit status: `0` healthy (an empty selection is a healthy no-op); `1` systemic failures (HTTP errors, timeouts, anything unclassified) exceed `--max-failure-share` (default 0.5) of the attempted postings — or, once a run attempted at least 20 postings, all failures together do, or at least 20 selected postings had no usable content. Per-posting content failures (`OutputTruncated`, validation/parse errors) are reselected every run, so a small residue of them on a quiet run (a weekend has no new postings) never blocks the deploy, while a broken prompt or model change on a normal run still does; `2` a provider-wide fatal error (HTTP 401/402/403), after which no new calls are scheduled. Each model's run summary is appended to `data/pipeline-runs.jsonl` as `kind: "llm-schema"`.
 
@@ -429,6 +434,7 @@ php tests/sanitize_test.php     # FIX-01: Markdown sanitizer payload battery
 php tests/deadline_test.php     # FIX-02: one deadline across list/detail/feeds
 php tests/request_test.php      # FIX-07: request validation, routes, feeds, filters
 php tests/compat_test.php       # REV-01: new code against an older export's schema
+php tests/roles_test.php        # DATA-04: role-scoped requirement search, facets and detail
 
 npx playwright test --config webapp-php/tests/browser/playwright.config.js
                                 # FIX-07: browser checks at 320/375/1280
@@ -519,6 +525,43 @@ inferență" section of `/statistici`. It is not cut down by `--active-only`, an
 the `schema` extraction step only: `infer` and `occupations` record no tokens or cost. A
 variant is upserted, so a re-extracted posting's cost moves to its newest day. An export
 that predates the table makes the section read "Date indisponibile" instead of failing.
+
+`posting_roles` (DATA-04) is the role read model: one row per advertised role, so a
+requirement search can demand that *one* role satisfies every condition. A posting whose
+extraction lists `positions[]` gets one `decomposed = 1` row per entry (values from that
+entry only, `NULL` = unknown, nothing inherited from the posting); every other posting gets
+one implicit `decomposed = 0` row that copies its flat search columns. The rules and the
+column meanings are in `posting_roles.py` (pure, no Django/psycopg); `role_key` is scoped to
+one source revision and is not stable across revisions. EQF, study level, experience,
+field of study, skill and credential filters (and their facet counts) read this table;
+everything else still reads `job_postings`. The export also gained
+`job_postings.schema_source_revision` / `schema_prompt_version` (extraction provenance).
+`verify()` refuses a build where a posting has no role row. An export that predates the
+table is served through a TEMP view of implicit rows (`shim_posting_roles()` in
+`webapp-php/db.php`), which makes the filters behave exactly as the posting-level ones
+did. Design and rollback: `docs/specs/2026-10-10-follow-ups/02-role-requirements.md`.
+
+`requirement_evidence` (UX-13) holds, per extracted education / experience / skill / credential
+fact of each role, the quote the extraction kept and whether it can be *located* in the posting
+text the export holds (`evidence.py`, pure): `verified` (found in the page or the attachments
+after folding case, diacritics, punctuation and whitespace), `unverified` (a quote that was not
+found, or is too short to mean anything) or `absent` (no quote; says nothing about whether the
+requirement exists). The page shows a native `<details>` beside each fact; no page numbers are
+ever produced. `attachment_text` is read to run the check and is not exported. An export that
+predates the table shows no disclosures (`shim_requirement_evidence()`). The export prints
+coverage with denominators. Contract, limits and rollback:
+`docs/specs/2026-10-10-follow-ups/03-requirement-evidence.md`.
+
+`observe` (UX-12, capture only) records what a reader may have saved a job for, because
+nothing else keeps an old value. `manage.py observe_postings` computes each posting's
+tracked facts (`posting_facts.py`: resolved deadline and its source, cancellation, expiry,
+per-role requirements with their evidence sentences) and inserts an immutable
+`PostingObservation` row only when the source revision, the extraction revision or the facts
+differ from the URL's latest observation (the first row is a baseline, not a change). It
+skips postings that were never successfully retrieved, so a failed fetch records nothing.
+`--dry-run` counts by class; `--retain-days N` prunes all but the newest row per URL (default:
+keep everything). No change events are derived and nothing is exported yet. Design, volume
+estimate, rollout and rollback: `docs/specs/2026-10-10-follow-ups/06-saved-job-changes.md`.
 
 ### Continuous deployment
 

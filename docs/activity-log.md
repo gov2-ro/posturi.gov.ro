@@ -2,6 +2,74 @@
 
 ## 2026
 
+### 2026-10-10 — First slices of the October 10 follow-up packages
+
+Implemented the policy-independent parts of all six packages in
+`docs/specs/2026-10-10-follow-ups/`; each spec now ends with "Implementation notes".
+Nothing was committed, deployed, migrated on the VPS, backfilled or sent to a model.
+
+- **FIX-05-STAGES:** per-posting failure diagnostics (`data/schema-failures.jsonl`,
+  including repaired-then-successful postings and each attempt's raw rejected
+  value), exact `--urls-file` retries, `--dry-run` selection counts and
+  `ops/stage-failures.py`. The stage policy itself is untouched: the rejected values
+  exist only in the VPS log, so the decision still needs that evidence.
+- **DATA-04:** `posting_roles` export table and same-role search predicates
+  (one `EXISTS`; counts count announcements once). Undecomposed postings get one
+  implicit row copying today's flat columns, and old exports get the same rows from a
+  temp view, so their results do not change. Roles never inherit posting-level
+  requirements; that is the spec's rule, at a small recall cost recorded in the backlog.
+- **UX-13:** strict evidence location (`evidence.py`) at export time against the
+  exact exported text, `requirement_evidence` table, `<details>` disclosures.
+  Lenient `grounding.py` stays a hallucination screen; "verified" means a whole-word
+  match after a documented normalisation. Fixed a pre-existing unvalidated attachment
+  href found by the hostile fixture.
+- **UX-12:** capture first, because no old values were recoverable anywhere:
+  `PostingObservation` + `observe_postings` + an optional `observe` pipeline step
+  (`OPTIONAL_STEPS`, `warned_steps`). `facts_hash` ignores revision-scoped role keys
+  and evidence prose so a new revision alone is not a change.
+- **UX-10:** "Pot aplica?" panel, browser-only comparison, strict verified-evidence
+  policy, no verdict. Shipped behind `ELIGIBILITY_PANEL_ENABLED = false` because the
+  spec requires rule review before release.
+- **UX-11:** browser-local checklist (`posturi.checklist.v1`) with revision-scoped
+  ids and fingerprint-proved carry-over.
+
+Also: `test_check_llm_balance.py` no longer writes the real `data/pipeline-runs.jsonl`;
+`/pipeline-check` documents `warned_steps`. Validation: 11 PHP suites, `php -l`,
+Python (1,009), full Playwright suite and `check-skins` all green locally. Metrics
+were taken on the stale local data (2026-09-09 export, September Postgres copy) and
+are illustrative; current-export numbers are a rollout step.
+
+### 2026-10-10 — Refresh specifications and define next application-companion packages
+
+Updated FIX-04/05/06/07/08/10 with October 4–10 findings: small content-failure
+residues versus systemic failures, completed v4 rollout and conservative resume,
+per-column legacy-export compatibility, remaining marker verification, manual CI,
+attachment validation/revalidation, and reuse of the implemented balance check.
+Updated October 6 product specs with live status, icon controls, compact mode and
+mobile polish, retaining real-client/browser acceptance gaps.
+
+Added six focused follow-up specs for FIX-05-STAGES, DATA-04 and UX-13/10/11/12.
+Stage fallback remains a recorded decision before implementation; role identity,
+verified evidence, local candidate/progress state and durable change history are
+explicit contracts. No model calls, backfills, host changes or deployment occurred.
+Linked assignments from the backlog and reconciled already implemented horizontal
+filters/card mode, stale CI status and the already moved morning slot. Other
+packages remain backlog-level scope; specifications do not close implementation.
+Validated relative documentation links and whitespace. Existing local UI changes
+and earlier activity/backlog edits were preserved.
+
+### 2026-10-10 — Mobile result controls and view labels
+
+Moved the native subscription disclosure below the result list to reduce the first mobile viewport's controls. Search, application status, filters, and the compact sort/view row remain accessible above results. The desktop switch now names its current Listă/Grilă view and includes that visible name plus the destination in its accessible label, while retaining `posturi.layout` storage and behavior.
+
+The first successful save already opens a visible notice immediately after the action, with browser-local storage and data-clearing details, and announces the save in the live region. Kept that tested interaction instead of adding another prompt. Updated the backlog entries and compact browser expectations. Luna implemented this follow-up; the main agent reviewed it and visually checked 320, 390 and 1280px widths with no overflow. PHP lint, skin validation and the full browser suite pass (137 passed, 10 intentionally skipped). Changes remain local.
+
+### 2026-10-10 — Interface polish: readable mobile results and calmer surfaces
+
+Reviewed the PHP interface in Chromium at 320, 390 and 1280 pixels. On phones, the right-hand deadline column squeezed long job titles into narrow lines. Deadlines now sit below the job information at widths below 640px, with their estimated-date qualification still visible. Result rows use subtle surface backgrounds, token-based borders and corners, with no shadows or palette changes. Badges have consistent corners; save/hide controls gain hover feedback and 44px phone hit areas. Pagination wraps and uses 44px targets. Shared keyboard focus outlines and a gentler results-loading transition improve interaction feedback and retain reduced-motion support.
+
+Rebuilt the committed stylesheet. PHP template lint and the skin palette checker pass. The full browser suite passed (137 passed, 10 intentionally skipped). Visual inspection used the bundled September export for realistic long titles and the deterministic browser fixture for current schema behavior; the old export's counts are not a statement about live availability. Broader first-search simplification and saved-list orientation are recorded in the backlog.
+
 ### 2026-10-10 — OPS-04: DeepSeek balance pre-flight
 
 On 2026-10-05 a backfill stopped on `402 Insufficient Balance` after 1,475 of 2,396 postings, and a scheduled run would have failed the same way partway through. The runner now asks first.

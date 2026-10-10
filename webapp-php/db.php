@@ -88,13 +88,79 @@ function shim_legacy_export(PDO $pdo): void {
         'v4_employer_sector'   => "''",
         'v4_parent_institution' => "''",
         'v4_application_deadline' => 'NULL',
+        // Extraction provenance (DATA-04). Only the export carries it; PHP reads it
+        // off a fetched row with `??` today, but later per-role history will not.
+        'schema_source_revision' => "''",
+        'schema_prompt_version'  => "''",
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";
     }
-    if (!$extra) {
+    if ($extra) {
+        $pdo->exec("CREATE TEMP VIEW job_postings AS SELECT *, " . implode(', ', $extra)
+            . " FROM main.job_postings");
+    }
+    shim_posting_roles($pdo, $cols);
+    shim_requirement_evidence($pdo);
+}
+
+/**
+ * DATA-04: an export that predates `posting_roles` behaves exactly as it did.
+ *
+ * The role-scoped filters (EQF, study level, experience, field, skill,
+ * credential) match through `posting_roles`. Without the table, a TEMP view with
+ * that name gives every posting its one implicit role — ordinal 0, undecomposed,
+ * the posting's own flat columns — which is precisely what a current export writes
+ * for a posting with no positions. A role-scoped search then reduces to the old
+ * posting-level predicate, row for row. It reads `job_postings` unqualified on
+ * purpose: when shim_legacy_export() made a temp view of that name, this one must
+ * see its blanks too, and temp resolves before main.
+ *
+ * Columns the export is too old to have read as NULL, so a very old file degrades
+ * to "no value" instead of a "no such column" fatal.
+ *
+ * @param array<string,int> $cols  job_postings column names, as keys
+ */
+function shim_posting_roles(PDO $pdo, array $cols): void {
+    $has = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'posting_roles'")
+        ->fetchColumn();
+    if ($has) {
         return;
     }
-    $pdo->exec("CREATE TEMP VIEW job_postings AS SELECT *, " . implode(', ', $extra)
-        . " FROM main.job_postings");
+    $c = static fn(string $name): string => isset($cols[$name]) ? $name : 'NULL';
+    $pdo->exec("CREATE TEMP VIEW posting_roles AS SELECT
+            id AS posting_id, 0 AS ordinal, 'legacy:-:0' AS role_key, 0 AS decomposed,
+            NULL AS title, NULL AS vacancy_count,
+            {$c('inf_studies_required')} AS study_level,
+            {$c('v3_eqf_level')} AS eqf_level,
+            {$c('v3_isced_fields')} AS isced_fields,
+            {$c('inf_experience_years')} AS exp_years,
+            NULL AS exp_in_specialty, NULL AS exp_none_required,
+            {$c('v3_skills')} AS skills,
+            {$c('v3_credentials')} AS credentials,
+            NULL AS seniority_hint, NULL AS source_revision, 0 AS role_format
+        FROM job_postings");
+}
+
+/**
+ * UX-13: an export that predates `requirement_evidence` shows no evidence.
+ *
+ * The detail page reads the table unconditionally. Without it, an EMPTY temp view of
+ * the same name (same columns, no rows) answers the query, so the page renders exactly
+ * as it did: no disclosures, no error. Nothing is invented for old exports - an absent
+ * table is "we have not checked", which the page shows as nothing at all, never as
+ * "no quote" (that is a per-fact statement only a current export can make).
+ */
+function shim_requirement_evidence(PDO $pdo): void {
+    $has = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'requirement_evidence'")
+        ->fetchColumn();
+    if ($has) {
+        return;
+    }
+    $pdo->exec("CREATE TEMP VIEW requirement_evidence AS SELECT
+            0 AS posting_id, '' AS role_key, 0 AS ordinal, '' AS fact_kind, 0 AS fact_index,
+            '' AS fact_label, '' AS basis, NULL AS quote, '' AS status, NULL AS reason,
+            NULL AS part, NULL AS section, NULL AS occurrences, NULL AS source_revision,
+            NULL AS extraction_revision, '' AS text_hash, '' AS normalization
+        WHERE 0");
 }

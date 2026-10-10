@@ -18,6 +18,10 @@ Output: posturi.sqlite with tables:
   employers      — canonical employer names
   judete         — county names
   calendar_events — competition timeline
+  posting_roles  — one row per advertised role (DATA-04): role-scoped requirements, so a
+                   search can require that one role satisfies every requirement filter
+  requirement_evidence — one row per extracted requirement fact per role (UX-13): the quote the
+                   extraction kept, and whether it could be located in the posting text
   job_postings_fts — FTS5 virtual table (rowid = job_posting id)
   llm_costs       — daily LLM extraction spend, for /statistici (not sliced by --active-only)
   build_meta      — one row: when this file was built, from which commit and host
@@ -37,6 +41,15 @@ from urllib.parse import urlparse
 
 import psycopg
 from psycopg.rows import dict_row
+
+# Repo-root helper modules (estimate-salaries.py does the same): the export is run
+# as a script, and the tests load it by path, so put the root on sys.path ourselves.
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import evidence  # noqa: E402  (pure quote locator: where an extracted requirement comes from)
+import posting_roles  # noqa: E402  (pure role read model, shared with later history work)
 
 
 def _load_env() -> None:
@@ -93,6 +106,8 @@ PRAGMA foreign_keys=ON;
 
 DROP TABLE IF EXISTS build_meta;
 DROP TABLE IF EXISTS llm_costs;
+DROP TABLE IF EXISTS requirement_evidence;
+DROP TABLE IF EXISTS posting_roles;
 DROP TABLE IF EXISTS calendar_events;
 DROP TABLE IF EXISTS job_postings_fts;
 DROP TABLE IF EXISTS job_postings;
@@ -151,6 +166,11 @@ CREATE TABLE job_postings (
     attachment_meta         TEXT NOT NULL DEFAULT '[]',
     inferred                TEXT NOT NULL DEFAULT '{}',
     schema_json             TEXT,
+    -- Extraction provenance (DATA-04, for later per-role history): the model
+    -- prompt version and the source revision (detail_content_hash) the stored
+    -- schema_json was extracted from. Empty on legacy rows = unknown.
+    schema_source_revision  TEXT NOT NULL DEFAULT '',
+    schema_prompt_version   TEXT NOT NULL DEFAULT '',
     -- extracted inferred fields for fast filtering
     inf_profession_family   TEXT,
     inf_seniority           TEXT,
@@ -250,6 +270,74 @@ CREATE TABLE calendar_events (
 CREATE INDEX idx_ce_posting ON calendar_events(posting_id);
 CREATE INDEX idx_ce_data    ON calendar_events(data);
 
+-- DATA-04 role read model (posting_roles.py defines every column's meaning).
+-- One row per advertised role: a posting whose extraction lists positions[] gets
+-- one `decomposed = 1` row per entry (ordinal 1..N, values from that entry only,
+-- NULL = unknown, never inherited from the posting); every other posting gets
+-- exactly one implicit `decomposed = 0` row (ordinal 0) that copies the posting's
+-- flat search columns. The PHP requirement filters (EQF, study level, experience,
+-- field, skill, credential) are satisfied by ONE row of this table, which is what
+-- stops "university + no experience" matching a posting whose university role
+-- needs five years. `role_key` is revision-scoped and NOT stable across source
+-- revisions; (posting_id, role_key) identifies a role within one build only.
+CREATE TABLE posting_roles (
+    posting_id        INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+    ordinal           INTEGER NOT NULL,
+    role_key          TEXT NOT NULL,
+    decomposed        INTEGER NOT NULL,
+    title             TEXT,
+    vacancy_count     INTEGER,
+    study_level       TEXT,
+    eqf_level         INTEGER,
+    isced_fields      TEXT,
+    exp_years         REAL,
+    exp_in_specialty  INTEGER,
+    exp_none_required INTEGER,
+    skills            TEXT,
+    credentials       TEXT,
+    seniority_hint    TEXT,
+    source_revision   TEXT,
+    role_format       INTEGER NOT NULL,
+    PRIMARY KEY (posting_id, ordinal)
+);
+CREATE INDEX idx_pr_eqf     ON posting_roles(eqf_level);
+CREATE INDEX idx_pr_study   ON posting_roles(study_level);
+
+-- UX-13 source evidence (evidence.py defines every column's meaning). One row per
+-- extracted requirement fact of one role: the education block, the experience block,
+-- each skill, each credential (role ordinals as in posting_roles; a decomposed
+-- posting has rows for its roles only, never for the posting-level blocks).
+-- `quote` is the model's own text, NOT the source; `status` says whether it could be
+-- located in the posting text now held: verified | unverified | absent (absent says
+-- nothing about whether the requirement exists). `part` is `anunt` (the page) or `anexe`
+-- (attachments, concatenated: no document and no page number can be derived). `section`
+-- is the nearest markdown heading above the match, page text only. `text_hash` is the
+-- sha256 of the exact texts the check ran against; `source_revision` is the page hash
+-- now held, `extraction_revision` the one the extraction ran against. Additive: PHP
+-- reads an export without this table as "no evidence".
+CREATE TABLE requirement_evidence (
+    posting_id          INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+    role_key            TEXT NOT NULL,
+    ordinal             INTEGER NOT NULL,
+    fact_kind           TEXT NOT NULL,
+    fact_index          INTEGER NOT NULL,
+    fact_label          TEXT NOT NULL,
+    basis               TEXT NOT NULL,
+    quote               TEXT,
+    status              TEXT NOT NULL,
+    reason              TEXT,
+    part                TEXT,
+    section             TEXT,
+    occurrences         INTEGER,
+    source_revision     TEXT,
+    extraction_revision TEXT,
+    text_hash           TEXT NOT NULL,
+    normalization       TEXT NOT NULL,
+    -- The detail page's lookup is `WHERE posting_id = ? ORDER BY ordinal, fact_kind,
+    -- fact_index`: this key's prefix serves it, so no separate posting_id index.
+    PRIMARY KEY (posting_id, ordinal, fact_kind, fact_index)
+);
+
 -- Daily LLM extraction spend, one row per (day, provider, model, prompt version).
 -- Aggregated at export time because the shared host has no Postgres. `day` is the
 -- Bucharest calendar day of the call. It reflects each posting's *current* extraction:
@@ -347,6 +435,10 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             jp.detalii_raw, jp.published_at, jp.expires_at, jp.tip,
             jp.job_level, jp.job_type, jp.employer_category, jp.categorie,
             jp.announcement_url, jp.body_markdown, jp.nr_posturi,
+            -- Read only to locate evidence quotes (UX-13); never written to job_postings.
+            -- A posting with no extraction has no quotes, so its attachments (most of the
+            -- bytes) are not even fetched.
+            CASE WHEN jp.schema_json IS NOT NULL THEN jp.attachment_text END AS attachment_text,
             jp.contact_phone, jp.contact_email, jp.contact_person,
             jp.data_limita_depunere, jp.data_proba_scrisa,
             jp.data_interviu, jp.data_rezultate_finale,
@@ -356,6 +448,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             jp.attachment_meta::text AS attachment_meta,
             jp.inferred::text AS inferred,
             jp.schema_json::text AS schema_json,
+            jp.schema_source_revision, jp.schema_prompt_version,
             jp.salary_estimate::text AS salary_estimate,
             COALESCE(o.canonical, '')        AS occ_canonical,
             COALESCE(o.cor_code, '')         AS occ_cor_code,
@@ -370,7 +463,10 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     """)
 
     batch = []
+    role_batch = []
+    evidence_batch = []
     total = 0
+    decomposed_postings = 0
     for r in cur:
         inferred = {}
         try:
@@ -393,6 +489,36 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         else:
             req_comp = None
 
+        # DATA-04: the role rows. The posting-level search values are the ones this
+        # very loop writes to job_postings, so an undecomposed posting's implicit
+        # role cannot drift from its flat columns.
+        try:
+            schema = json.loads(r["schema_json"]) if r["schema_json"] else None
+        except (json.JSONDecodeError, TypeError):
+            schema = None
+        roles = posting_roles.role_rows({
+            "schema_source_revision": r["schema_source_revision"],
+            "inf_studies_required": inferred.get("studies_required"),
+            "inf_experience_years": inferred.get("experience_years"),
+            "v3_eqf_level": v3["eqf_level"],
+            "v3_isced_fields": v3["isced_fields"],
+            "v3_skills": v3["skills"],
+            "v3_credentials": v3["credentials"],
+            "v3_seniority_hint": v3["seniority_hint"],
+        }, schema)
+        decomposed_postings += 1 if roles[0]["decomposed"] else 0
+        for role in roles:
+            role_batch.append((r["id"],) + tuple(role[c] for c in posting_roles.ROLE_COLUMNS))
+
+        # UX-13: where each extracted requirement's quote sits in the text we hold. The
+        # attachments are only an input to the check (the key is absent on a fake cursor).
+        for ev in evidence.evidence_rows({
+            "id": r["id"],
+            "detail_content_hash": r["detail_content_hash"],
+            "schema_source_revision": r["schema_source_revision"],
+        }, schema, roles, r["body_markdown"], r.get("attachment_text")):
+            evidence_batch.append(tuple(ev[c] for c in evidence.ROW_COLUMNS))
+
         batch.append((
             r["id"], r["url"], r["title"] or "",
             r["employer_id"], r["employer_name"],
@@ -414,6 +540,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             r["attachment_meta"] or "[]",
             r["inferred"] or "{}",
             r["schema_json"],
+            r["schema_source_revision"] or "", r["schema_prompt_version"] or "",
             v3["eqf_level"], v3["study_level"], v3["isced_fields"], v3["study_labels"],
             v3["skills"], v3["languages"], v3["credentials"],
             v3["policy_domains"], v3["exam_stages"], v3["positions"],
@@ -439,12 +566,28 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         total += 1
         if len(batch) >= 500:
             _insert_postings(con, batch)
-            batch = []
+            _insert_roles(con, role_batch)
+            _insert_evidence(con, evidence_batch)
+            batch, role_batch, evidence_batch = [], [], []
             print(".", end="", flush=True)
 
     if batch:
         _insert_postings(con, batch)
+        _insert_roles(con, role_batch)
+        _insert_evidence(con, evidence_batch)
     print(f" {total} rows")
+    # Coverage, not a target: how many postings carry a real per-role decomposition.
+    roles_total = con.execute("SELECT COUNT(*) FROM posting_roles").fetchone()[0]
+    print(f"  posting_roles: {roles_total} rows; {decomposed_postings} of {total} postings "
+          f"decomposed into roles, {total - decomposed_postings} carry one implicit row")
+    # Coverage of the source-evidence check, with denominators (UX-13). "absent" is a missing
+    # quote, not a missing requirement; "unverified" is a quote that could not be located.
+    counts = [tuple(c) for c in con.execute(
+        "SELECT fact_kind, status, reason, COUNT(*) FROM requirement_evidence "
+        "GROUP BY fact_kind, status, reason")]
+    print(f"  requirement_evidence: {sum(c[3] for c in counts)} rows")
+    for line in evidence.coverage_lines(counts):
+        print(line)
 
     print("Exporting calendar_events...", end=" ", flush=True)
     ce_filter = (
@@ -783,6 +926,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         created_at, updated_at, last_seen_at,
         detail_fetched_at, detail_content_hash,
         other_links, attachment_meta, inferred, schema_json,
+        schema_source_revision, schema_prompt_version,
         v3_eqf_level, v3_study_level, v3_isced_fields, v3_study_labels,
         v3_skills, v3_languages, v3_credentials,
         v3_policy_domains, v3_exam_stages, v3_positions,
@@ -806,6 +950,23 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         + ",".join("?" for _ in col_list) + ")"
     )
     con.executemany(sql, batch)
+
+
+def _insert_roles(con: sqlite3.Connection, batch: list):
+    cols = ("posting_id",) + posting_roles.ROLE_COLUMNS
+    con.executemany(
+        "INSERT INTO posting_roles(" + ", ".join(cols) + ") VALUES ("
+        + ",".join("?" for _ in cols) + ")",
+        batch,
+    )
+
+
+def _insert_evidence(con: sqlite3.Connection, batch: list):
+    con.executemany(
+        "INSERT INTO requirement_evidence(" + ", ".join(evidence.ROW_COLUMNS) + ") VALUES ("
+        + ",".join("?" for _ in evidence.ROW_COLUMNS) + ")",
+        batch,
+    )
 
 
 def previous_build(path: str) -> dict | None:
@@ -873,6 +1034,43 @@ def verify(path: str, *, min_rows: int, previous: dict | None, active_only: bool
                 file=sys.stderr,
             )
 
+        # DATA-04: every posting has at least its implicit role row. The PHP
+        # requirement filters match through posting_roles, so a posting missing
+        # from it would silently vanish from every filtered search.
+        try:
+            no_role = con.execute(
+                "SELECT COUNT(*) FROM job_postings j WHERE NOT EXISTS "
+                "(SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id)"
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            no_role = 0     # no posting_roles table at all: a minimal test schema
+        if no_role:
+            raise SystemExit(
+                f"ERROR: {no_role} job_postings have no posting_roles row. Filtered "
+                f"searches would drop them. Not promoting."
+            )
+
+        # UX-13: evidence rows hang off real postings and carry a status the page
+        # understands. Both are guaranteed by construction; this is the cheap tripwire
+        # for a future change that breaks either (a bad row would render a wrong label).
+        try:
+            orphans = con.execute(
+                "SELECT COUNT(*) FROM requirement_evidence e WHERE NOT EXISTS "
+                "(SELECT 1 FROM job_postings j WHERE j.id = e.posting_id)"
+            ).fetchone()[0]
+            bad_status = con.execute(
+                "SELECT COUNT(*) FROM requirement_evidence "
+                "WHERE status NOT IN ('verified', 'unverified', 'absent') "
+                "   OR (status = 'verified' AND (quote IS NULL OR part IS NULL))"
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            orphans = bad_status = 0    # no requirement_evidence table: a minimal test schema
+        if orphans or bad_status:
+            raise SystemExit(
+                f"ERROR: requirement_evidence has {orphans} rows for postings that are not "
+                f"exported and {bad_status} rows with an invalid status. Not promoting."
+            )
+
         # Only compare against a baseline built the same way; an --active-only run
         # is legitimately a fifth the size of a full one.
         if previous and previous["active_only"] in (None, int(active_only)):
@@ -925,6 +1123,10 @@ def main():
         create_schema(con)
         with con:
             export(pg, con, active_only=args.active_only)
+        # Statistics for the correlated EXISTS on posting_roles: PRAGMA optimize does not
+        # reliably analyze a table no query has touched yet, and without rows in
+        # sqlite_stat1 the planner picks the wrong index (see build_filters()).
+        con.execute("ANALYZE posting_roles;")
         con.execute("PRAGMA optimize;")
         con.commit()
         con.execute("VACUUM;")          # compacts the FTS index; smaller rsync delta

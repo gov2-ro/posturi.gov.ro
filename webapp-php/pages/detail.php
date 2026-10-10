@@ -33,6 +33,12 @@ $ev_stmt = db()->prepare("SELECT * FROM calendar_events WHERE posting_id = ? ORD
 $ev_stmt->execute([$id]);
 $events = $ev_stmt->fetchAll();
 
+// UX-13: where each structured requirement's quote sits in the source (empty on an
+// export that predates the table). Rendered only from this table, never from schema_json.
+$evidence = load_requirement_evidence(db(), (int)$p['id']);
+$evidence_url = (string)($p['url'] ?? '');
+$evidence_doc = (string)($p['announcement_url'] ?? '');
+
 // Render body
 $body_html = '';
 if ($p['body_markdown']) {
@@ -655,6 +661,20 @@ require __DIR__ . '/../inc/header.php';
           <?php if (($edu['fields_of_study'] ?? []) && count($edu['fields_of_study']) > 1): ?>
             <p class="mt-1 text-xs text-ink-muted">Oricare dintre aceste domenii este acceptat.</p>
           <?php endif; ?>
+          <?= evidence_fact_list(evidence_items($v3, $evidence, 0, ['education']), $evidence_url, $evidence_doc, false) ?>
+        </div>
+        <?php endif; ?>
+
+        <?php /* Experience was not shown in this block before; it is now, for a posting that is not
+           split into roles, so that its source has a fact to sit beside. A decomposed posting shows
+           each role's own experience below, and the posting-level one is not a role's. */ ?>
+        <?php $flat_has_roles = (bool)array_filter((array)($v3['positions'] ?? []), 'is_array'); ?>
+        <?php $flat_exp = $flat_has_roles ? '' : role_experience_label(is_array($v3['experience'] ?? null) ? $v3['experience'] : null); ?>
+        <?php if ($flat_exp !== ''): ?>
+        <div class="mb-3" data-flat-experience>
+          <div class="mb-1 text-xs font-semibold uppercase tracking-widest text-ink-muted">Experiență</div>
+          <div class="text-sm text-ink"><?= e(ucfirst(preg_replace('/^Experiență:\s*/u', '', $flat_exp) ?? $flat_exp)) ?></div>
+          <?= evidence_fact_list(evidence_items($v3, $evidence, 0, ['experience']), $evidence_url, $evidence_doc, false) ?>
         </div>
         <?php endif; ?>
 
@@ -662,15 +682,18 @@ require __DIR__ . '/../inc/header.php';
         <div class="mb-3">
           <div class="mb-1 text-xs font-semibold uppercase tracking-widest text-ink-muted">Competențe</div>
           <div class="flex flex-wrap gap-1.5">
-            <?php foreach ($v3['skill_list'] as $k): ?>
+            <?php foreach ($v3['skill_list'] as $ki => $k): ?>
+              <?php /* The disclosure below carries the quote with its verification state, so the bare
+                 hover text (an unlabelled model quote) stays only where no evidence row exists. */ ?>
               <a href="/?skill%5B%5D=<?= urlencode((string)($k['label'] ?? '')) ?>"
-                 title="<?= e((string)($k['evidence'] ?? '')) ?>"
+                 <?php if (!isset($evidence[0]['skill'][$ki])): ?>title="<?= e((string)($k['evidence'] ?? '')) ?>"<?php endif; ?>
                  class="rounded-full border px-2.5 py-0.5 text-xs hover:border-gov hover:text-gov <?= ($k['required'] ?? true) ? 'border-line bg-surface text-ink' : 'border-dashed border-line bg-transparent text-ink-muted' ?>">
                 <?= e((string)($k['label'] ?? '')) ?><?php if ($pr = $k['proficiency'] ?? null): ?> <span class="font-mono opacity-70"><?= e($pr) ?></span><?php endif; ?>
               </a>
             <?php endforeach; ?>
           </div>
           <?php foreach ($v3['skill_list'] as $k) { if (!($k['required'] ?? true)) { echo '<p class="mt-1 text-xs text-ink-muted">Cele punctate sunt un avantaj, nu o condiție.</p>'; break; } } ?>
+          <?= evidence_fact_list(evidence_items($v3, $evidence, 0, ['skill']), $evidence_url, $evidence_doc) ?>
         </div>
         <?php endif; ?>
 
@@ -700,18 +723,26 @@ require __DIR__ . '/../inc/header.php';
               </li>
             <?php endforeach; ?>
           </ul>
+          <?= evidence_fact_list(evidence_items($v3, $evidence, 0, ['credential']), $evidence_url, $evidence_doc) ?>
         </div>
         <?php endif; ?>
 
         <?php if (!empty($v3['positions'])): ?>
+        <?php $n_roles = count($v3['positions']); ?>
         <div class="mb-3">
+          <?php /* One entry is one role: say so, with no count and no "several roles"
+             warning (it used to read "Posturi scoase la concurs (1)" under a sentence
+             about "mai multe roluri"). Two or more keep the explanation, because each
+             role there has its own requirements and the facts above are not role facts. */ ?>
           <div class="mb-1 text-xs font-semibold uppercase tracking-widest text-ink-muted">
-            Posturi scoase la concurs (<?= count($v3['positions']) ?>)
+            <?= $n_roles === 1 ? 'Post scos la concurs' : 'Posturi scoase la concurs (' . $n_roles . ')' ?>
           </div>
+          <?php if ($n_roles > 1): ?>
           <p class="mb-2 text-xs text-ink-muted">Anunțul cuprinde mai multe roluri, fiecare cu cerințele lui.</p>
+          <?php endif; ?>
           <div class="space-y-2">
-            <?php foreach ($v3['positions'] as $pos): ?>
-            <div class="rounded border border-line bg-surface/60 px-3 py-2">
+            <?php foreach ($v3['positions'] as $pos_i => $pos): ?>
+            <div class="rounded border border-line bg-surface/60 px-3 py-2" data-role>
               <div class="text-sm font-medium text-ink">
                 <?php if ($n = $pos['count'] ?? null): ?><span class="font-mono text-gov"><?= (int)$n ?>×</span> <?php endif; ?>
                 <?= e((string)($pos['title'] ?? '')) ?>
@@ -720,13 +751,19 @@ require __DIR__ . '/../inc/header.php';
                 <?php $pe = $pos['education'] ?? null; if ($pe && ($pe['minimum_level'] ?? null)): ?>
                   <span>Studii: <?= e(STUDIES_LABELS[$pe['minimum_level']] ?? $pe['minimum_level']) ?></span>
                 <?php endif; ?>
-                <?php $px = $pos['experience'] ?? null; if ($px && ($px['years_minimum'] ?? null)): ?>
-                  <span>Experiență: min. <?= e(years_label((int)$px['years_minimum'])) ?></span>
+                <?php /* Unknown experience renders nothing — never "fără experiență". */ ?>
+                <?php if (($exp_text = role_experience_label(is_array($pos['experience'] ?? null) ? $pos['experience'] : null)) !== ''): ?>
+                  <span data-role-experience><?= e($exp_text) ?></span>
                 <?php endif; ?>
                 <?php if (!empty($pos['skill_list'])): ?>
                   <span>Competențe: <?= e(implode(', ', array_slice(array_column($pos['skill_list'], 'label'), 0, 4))) ?></span>
                 <?php endif; ?>
+                <?php if (!empty($pos['credentials'])): ?>
+                  <span data-role-credentials>Documente: <?= e(implode(', ', array_slice(array_filter(array_column($pos['credentials'], 'label'), fn($l) => is_string($l) && $l !== ''), 0, 4))) ?></span>
+                <?php endif; ?>
               </div>
+              <?php /* Evidence of THIS role only: ordinal = array position + 1, as posting_roles numbers it. */ ?>
+              <?= is_array($pos) ? evidence_fact_list(evidence_items($pos, $evidence, (int)$pos_i + 1, ['education', 'experience', 'skill', 'credential']), $evidence_url, $evidence_doc) : '' ?>
             </div>
             <?php endforeach; ?>
           </div>

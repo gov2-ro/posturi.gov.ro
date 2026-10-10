@@ -105,6 +105,14 @@ jobs:
         working-directory: webapp-php
         run: php tests/compat_test.php
 
+      - name: Role-scoped requirements and search (DATA-04)
+        working-directory: webapp-php
+        run: php tests/roles_test.php
+
+      - name: Source evidence beside requirements (UX-13)
+        working-directory: webapp-php
+        run: php tests/evidence_test.php
+
   browser-tests:
     # Playwright against the fixture-served app at 320/375/1280, including the
     # no-execution proof for sanitized Markdown.

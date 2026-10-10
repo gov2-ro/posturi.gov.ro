@@ -160,13 +160,55 @@ if ($is_unfiltered) {
 function facet_scope(string $excl_key): array {
     global $q;
     $ff = build_filters($_GET, true, $excl_key);
-    $scope = ['join' => '', 'where' => $ff['where'], 'binds' => $ff['binds']];
+    // `where`/`binds` apply every group to `j` (role groups through one EXISTS).
+    // `posting_*` and `role_*` are the same selection split for the role-scoped
+    // facets below, which count over a join of j and r instead.
+    $scope = ['join' => '', 'where' => $ff['where'], 'binds' => $ff['binds'],
+              'posting_where' => $ff['posting_where'], 'posting_binds' => $ff['posting_binds'],
+              'role_where' => $ff['role_where'], 'role_binds' => $ff['role_binds']];
     if ($ff['fts'] && ($m = fts_query($q)) !== '') {
-        $scope['join']    = "JOIN job_postings_fts fts ON fts.rowid = j.id";
-        $scope['where'][] = "job_postings_fts MATCH ?";
-        $scope['binds'][] = $m;
+        $scope['join']            = "JOIN job_postings_fts fts ON fts.rowid = j.id";
+        $scope['where'][]         = "job_postings_fts MATCH ?";
+        $scope['binds'][]         = $m;
+        $scope['posting_where'][] = "job_postings_fts MATCH ?";
+        $scope['posting_binds'][] = $m;
     }
     return $scope;
+}
+
+/**
+ * Run a query over (announcement x role) for a role-scoped facet.
+ *
+ * Why a join and not facet_counts(): a role facet's count has to answer "how many
+ * announcements would the list return if this value were added", and the list
+ * requires ONE role to satisfy every role-scoped group. So the value being counted
+ * is read off the same role row `r` that the other role groups are applied to
+ * (their conditions come from the scope's `role_where`, this facet's own group
+ * already excluded by facet_scope()), the announcement-level conditions stay on `j`,
+ * and callers count DISTINCT j.id so an announcement with two matching roles counts
+ * once. Posting-level binds come first, role binds second, `$extra_binds` last,
+ * the order the clauses are written in.
+ */
+function role_scope_query(array $scope, string $select, array $extra_where = [],
+                          array $extra_binds = [], string $tail = ''): PDOStatement {
+    $w = array_merge($scope['posting_where'], $scope['role_where'], $extra_where);
+    $b = array_merge($scope['posting_binds'], $scope['role_binds'], $extra_binds);
+    $where = $w ? 'WHERE ' . implode(' AND ', $w) : '';
+    $st = db()->prepare("SELECT $select
+        FROM job_postings j JOIN posting_roles r ON r.posting_id = j.id {$scope['join']}
+        $where $tail");
+    $st->execute($b);
+    return $st;
+}
+
+/** Single-valued role facet (EQF, study level): [{val, cnt}], announcements counted once. */
+function role_value_facet(string $role_col, string $excl_key, string $order = 'cnt DESC'): array {
+    $s = facet_scope($excl_key);
+    return role_scope_query(
+        $s, "r.$role_col AS val, COUNT(DISTINCT j.id) AS cnt",
+        ["r.$role_col IS NOT NULL", "r.$role_col != ''"], [],
+        "GROUP BY r.$role_col ORDER BY $order"
+    )->fetchAll();
 }
 
 /** COUNT(*) over a facet scope with extra clauses appended. */
@@ -222,7 +264,8 @@ $family_options = [];
 
 $seniority_options = get_facet('inf_seniority',       'seniorities');
 $work_type_options = get_facet('inf_work_type',        'work_types');
-$studies_options   = get_facet('inf_studies_required', 'studies_levels');
+// Minimum study level is a role fact (DATA-04): counted over posting_roles.
+$studies_options   = role_value_facet('study_level', 'studies_levels');
 
 // Romanian labels for the enum-valued facets (values and URLs are untouched; an
 // unfamiliar value keeps its raw spelling so it stays visible, not guessed at).
@@ -294,6 +337,37 @@ function v3_facet(string $column, string $excl_key, callable $label, int $limit 
     return $out;
 }
 
+/**
+ * Facet options for a role-scoped JSON-array column (`posting_roles.<col>`).
+ *
+ * Same scope rules as v3_facet() — an OR group drops its own selection, an AND
+ * group counts the residual with it applied — but evaluated per role: the rows
+ * are (announcement, role) pairs for roles that satisfy the other role groups
+ * (and, for an AND group, this group's own selection), values are unioned per
+ * announcement, and each value counts the DISTINCT announcements carrying it. The
+ * count next to a value is therefore the size of the list that adding it would
+ * give, whichever of an announcement's roles it comes from.
+ */
+function role_array_facet(string $role_col, string $excl_key, callable $label, int $limit = 30): array {
+    $s = facet_scope(facet_mode($excl_key) === 'all' ? '' : $excl_key);
+    $st = role_scope_query($s, "j.id AS id, r.$role_col AS vals",
+                           ["r.$role_col IS NOT NULL", "r.$role_col != '[]'"]);
+    $postings = [];   // value => [announcement id => true]
+    foreach ($st->fetchAll() as $row) {
+        foreach ((array)(json_decode($row['vals'] ?: '[]', true) ?: []) as $v) {
+            if ($v === '' || $v === null) continue;
+            $postings[(string)$v][$row['id']] = true;
+        }
+    }
+    $counts = array_map('count', $postings);
+    arsort($counts);
+    $out = [];
+    foreach (array_slice($counts, 0, $limit, true) as $val => $cnt) {
+        $out[] = ['val' => (string)$val, 'label' => $label((string)$val), 'cnt' => $cnt];
+    }
+    return $out;
+}
+
 // Anomalii is the same JSON-array shape, and until 2026-09-09 it was the one
 // group rendered with no counts at all — every flag looked clickable, including
 // the ones that would empty the list. Counted like the rest, the values that
@@ -301,28 +375,24 @@ function v3_facet(string $column, string $excl_key, callable $label, int $limit 
 $anomaly_options = v3_facet('inf_anomaly_flags', 'anomaly',
                             fn ($v) => ANOMALY_LABELS[$v] ?? $v);
 
-$isced_options  = v3_facet('v3_isced_fields',   'isced',      'isced_label');
-$skill_options  = v3_facet('v3_skills',         'skill',      fn($v) => $v, 40);
+// Field of study, skills and credentials are role facts (DATA-04): counted per
+// role, announcements counted once. Language, domain and exam stage describe the
+// competition and stay posting-level.
+$isced_options  = role_array_facet('isced_fields', 'isced',      'isced_label');
+$skill_options  = role_array_facet('skills',       'skill',      fn($v) => $v, 40);
 $lang_options   = v3_facet('v3_languages',      'lang',       'language_token_label');
-$cred_options   = v3_facet('v3_credentials',    'credential', 'credential_kind_label');
+$cred_options   = role_array_facet('credentials',  'credential', 'credential_kind_label');
 $domain_options = v3_facet('v3_policy_domains', 'domain',     'policy_domain_label');
 $stage_options  = v3_facet('v3_exam_stages',    'stage',      'exam_stage_label');
 
 // Minimum study level a posting requires, as EQF. Counts are per exact level
-// and so is the filter — see the `eqf` block in build_filters().
+// and so is the filter — see the `eqf` block in build_filters(). Counted over
+// roles: a posting whose roles need EQF 6 and EQF 4 shows under both, once each.
 $eqf_options = [];
-{
-    $s = facet_scope('eqf');
-    $where = $s['where'] ? 'WHERE ' . implode(' AND ', $s['where']) . ' AND j.v3_eqf_level IS NOT NULL'
-                        : 'WHERE j.v3_eqf_level IS NOT NULL';
-    $st = db()->prepare("SELECT j.v3_eqf_level AS val, COUNT(*) AS cnt
-        FROM job_postings j {$s['join']} $where GROUP BY j.v3_eqf_level ORDER BY j.v3_eqf_level");
-    $st->execute($s['binds']);
-    foreach ($st->fetchAll() as $r) {
-        $eqf_options[] = ['val' => (string)$r['val'],
-                          'label' => EQF_LABELS[(int)$r['val']] ?? ('EQF ' . $r['val']),
-                          'cnt' => (int)$r['cnt']];
-    }
+foreach (role_value_facet('eqf_level', 'eqf', 'r.eqf_level') as $r) {
+    $eqf_options[] = ['val' => (string)$r['val'],
+                      'label' => EQF_LABELS[(int)$r['val']] ?? ('EQF ' . $r['val']),
+                      'cnt' => (int)$r['cnt']];
 }
 
 // Structured-description counts (LLM schema present vs raw body)
@@ -341,18 +411,15 @@ $schema_options = [];
     $remote_count = scope_count($s, ["j.inf_remote_eligible = 1"]);
 }
 
-// Experience buckets
+// Experience buckets. A role fact (DATA-04): each bucket counts the announcements
+// that have a role in it which also satisfies the other role groups, built from
+// the same exp_bucket_condition() the filter uses.
 $exp_options = [];
 {
     $s = facet_scope('exp_levels');
     foreach (EXP_BUCKETS as $bk) {
-        if ($bk['min'] == 0 && $bk['max'] !== null) {
-            $cnt = scope_count($s, ["(j.inf_experience_years IS NULL OR j.inf_experience_years < ?)"], [$bk['max']]);
-        } elseif ($bk['max'] === null) {
-            $cnt = scope_count($s, ["j.inf_experience_years >= ?"], [$bk['min']]);
-        } else {
-            $cnt = scope_count($s, ["(j.inf_experience_years >= ? AND j.inf_experience_years < ?)"], [$bk['min'], $bk['max']]);
-        }
+        [$cond, $cbinds] = exp_bucket_condition($bk);
+        $cnt = (int)role_scope_query($s, 'COUNT(DISTINCT j.id)', [$cond], $cbinds)->fetchColumn();
         if ($cnt) $exp_options[] = ['val' => $bk['key'], 'cnt' => $cnt, 'label' => $bk['label']];
     }
 }

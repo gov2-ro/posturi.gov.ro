@@ -196,6 +196,227 @@ function years_label(int $n): string {
     return ($mod === 0 || $mod >= 20) ? "$n de ani" : "$n ani";
 }
 
+/**
+ * Romanian label for a (possibly fractional) year count: 0.5 → "6 luni",
+ * 1.5 → "1,5 ani", 3 → "3 ani". years_label() takes an int, and `(int)0.5` is 0 —
+ * "Min. 0 ani" for a role that asks six months.
+ */
+function experience_years_label(float $years): string {
+    if ($years > 0 && $years < 1) {
+        $months = max(1, (int)round($years * 12));
+        return $months === 1 ? '1 lună' : "$months luni";
+    }
+    if ($years == floor($years)) return years_label((int)$years);
+    return rtrim(rtrim(number_format($years, 1, ',', ''), '0'), ',') . ' ani';
+}
+
+/**
+ * The experience line of one role (a `positions[].experience` block), or '' when
+ * the role states nothing. Absent is unknown, so it renders nothing; "Fără
+ * experiență" appears only when the extraction says none is required or the minimum
+ * is explicitly zero. A positive minimum wins over a stray none_required flag.
+ *
+ * @param array<string,mixed>|null $exp
+ */
+function role_experience_label(?array $exp): string {
+    if (!$exp) return '';
+    $years = isset($exp['years_minimum']) && is_numeric($exp['years_minimum']) ? (float)$exp['years_minimum'] : null;
+    if ($years !== null && $years > 0) {
+        return 'Experiență: min. ' . experience_years_label($years)
+             . (($exp['in_specialty'] ?? null) === true ? ', în specialitate' : '');
+    }
+    if (($exp['none_required'] ?? null) === true || $years === 0.0) {
+        return 'Fără experiență';
+    }
+    return '';
+}
+
+// ---- Source evidence (UX-13) ----
+//
+// `requirement_evidence` (export-to-sqlite.py, evidence.py) holds, per extracted
+// requirement fact of one role, the quote the extraction kept and whether it could be
+// LOCATED in the posting text the export holds. Three states, three labels:
+//   verified    the quote occurs in the page or the attachments (after folding case,
+//               diacritics, punctuation and whitespace): shown as a quotation, with where.
+//   unverified  a quote exists but was not found (or is too short to mean anything): shown
+//               as unverified model output, never as a quotation.
+//   absent      no quote: says nothing about whether the requirement exists.
+// An official link is a convenience, not proof of verification, and is worded that way.
+
+/**
+ * The evidence rows of one posting, indexed [ordinal][fact_kind][fact_index] => row.
+ * Empty on any failure: the page must render without evidence (an export that predates
+ * the table is answered by an empty temp view, see shim_requirement_evidence()).
+ *
+ * @return array<int,array<string,array<int,array<string,mixed>>>>
+ */
+function load_requirement_evidence(PDO $pdo, int $posting_id): array {
+    try {
+        $st = $pdo->prepare('SELECT ordinal, fact_kind, fact_index, fact_label, basis, quote, status, reason,
+                                    part, section, occurrences
+                             FROM requirement_evidence WHERE posting_id = ?
+                             ORDER BY ordinal, fact_kind, fact_index');
+        $st->execute([$posting_id]);
+        $rows = $st->fetchAll();
+    } catch (PDOException $e) {
+        return [];
+    }
+    $out = [];
+    foreach ($rows as $r) {
+        $out[(int)$r['ordinal']][(string)$r['fact_kind']][(int)$r['fact_index']] = $r;
+    }
+    return $out;
+}
+
+/** An absolute http(s) URL safe to put in an href, or null. Anything else (javascript:, data:, relative, spaces) is dropped. */
+function evidence_safe_url(?string $url): ?string {
+    $url = trim((string)$url, " \t\n\r");   // not NUL or other control bytes: those are rejected below
+    if ($url === '' || preg_match('/[\x00-\x20\x7f"\'<>\\\\`]/', $url) || !preg_match('#^https?://#i', $url)) {
+        return null;
+    }
+    $host = parse_url($url, PHP_URL_HOST);
+    return is_string($host) && $host !== '' ? $url : null;
+}
+
+/**
+ * One native `<details>` disclosure for one evidence row, or '' when there is no row.
+ * Keyboard accessible and working with no JavaScript; the fact it belongs to stays
+ * visible outside it. Every piece of source or model text goes through e(); nothing
+ * from the source is ever emitted as markup. A "verified" row without a quote or a
+ * known part is malformed and renders nothing rather than claim verification.
+ *
+ * @param array<string,mixed>|null $row
+ */
+function evidence_disclosure(?array $row, string $official_url, ?string $announcement_url, string $fact_label = '', string $id = ''): string {
+    if (!$row) return '';
+    $status = (string)($row['status'] ?? '');
+    $quote  = trim((string)($row['quote'] ?? ''));
+    $reason = (string)($row['reason'] ?? '');
+    $part   = (string)($row['part'] ?? '');
+    if (!in_array($status, ['verified', 'unverified', 'absent'], true)) return '';
+    if ($status === 'verified' && ($quote === '' || !in_array($part, ['anunt', 'anexe'], true))) return '';
+
+    $official = evidence_safe_url($official_url);
+    $document = $status === 'verified' && $part === 'anexe' ? evidence_safe_url($announcement_url) : null;
+    $links = '';
+    if ($official) {
+        $links .= '<a href="' . e($official) . '" target="_blank" rel="noopener noreferrer" class="text-gov hover:underline">Anunțul oficial</a>';
+    }
+    if ($document && $document !== $official) {
+        $links .= ($links !== '' ? ' · ' : '')
+            . '<a href="' . e($document) . '" target="_blank" rel="noopener noreferrer" class="text-gov hover:underline">Documentul anunțului</a>';
+    }
+    $links = $links !== '' ? '<p class="mt-1 text-xs">' . $links . '</p>' : '';
+
+    if ($status === 'verified') {
+        $summary = 'Sursa';
+        $summary_class = 'text-gov';
+        $box = 'border-info-line bg-info text-info-ink';
+        $where = $part === 'anunt'
+            ? 'textul anunțului' . (($sec = trim((string)($row['section'] ?? ''))) !== '' ? ' — secțiunea «' . $sec . '»' : '')
+            : 'documentele atașate (documentul exact nu este identificat)';
+        $n = (int)($row['occurrences'] ?? 0);
+        $body = '<blockquote class="whitespace-pre-line border-l-2 border-info-line pl-2 text-sm text-ink">' . e($quote) . '</blockquote>'
+            . '<p class="mt-1 text-xs">Găsit în: ' . e($where) . ($n > 1 ? ' · apare de ' . $n . ' ori' : '') . '</p>'
+            . '<p class="mt-1 text-xs opacity-80">Potrivire după ignorarea diacriticelor, a majusculelor, a punctuației și a spațiilor.</p>'
+            . $links;
+    } elseif ($status === 'unverified') {
+        $summary = 'Sursă neverificată';
+        $summary_class = 'text-note-ink';
+        $box = 'border-note-line bg-note text-note-ink';
+        $why = match ($reason) {
+            'too_short'      => 'Citatul este prea scurt pentru a fi verificat.',
+            'no_source_text' => 'Textul sursă nu este disponibil pentru verificare.',
+            'stale_revision' => 'Textul citat de extragerea automată nu a fost regăsit în sursa curentă. '
+                              . 'Extragerea a fost făcută pe o versiune mai veche a anunțului.',
+            default          => 'Textul citat de extragerea automată nu a fost regăsit în sursa curentă.',
+        };
+        $body = '<p class="text-xs">' . e($why) . '</p>'
+            . ($quote !== '' ? '<p class="mt-1 text-xs">Text extras automat (neverificat): ' . e($quote) . '</p>' : '')
+            . $links;
+    } else {
+        $summary = 'Fără citat';
+        $summary_class = 'text-ink-muted';
+        $box = 'border-neutral-line bg-neutral text-neutral-ink';
+        $body = '<p class="text-xs">Nu avem un citat din sursă pentru această cerință. '
+              . 'Lipsa unui citat nu înseamnă că cerința nu există — verificați anunțul oficial.</p>'
+            . $links;
+    }
+
+    $aria = $fact_label !== '' ? ' aria-label="' . e($summary . ': ' . $fact_label) . '"' : '';
+    // Closed it sits beside its fact; open, it takes a full row so the box starts at the left edge.
+    // `$id` (optional, UX-10) is the anchor the "Pot aplica?" panel links to; it adds an attribute only.
+    return '<details class="min-w-0 max-w-full open:basis-full" data-evidence="' . $status . '"' . ($id !== '' ? ' id="' . e($id) . '"' : '') . '>'
+        . '<summary' . $aria . ' class="cursor-pointer list-none rounded text-xs font-semibold underline decoration-dotted underline-offset-2 marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ' . $summary_class . '">'
+        . $summary . ' <span aria-hidden="true">▾</span></summary>'
+        . '<div class="mt-1 max-w-prose rounded border px-2.5 py-2 ' . $box . '">' . $body . '</div>'
+        . '</details>';
+}
+
+/**
+ * Stable DOM id of one evidence row's disclosure, `ev-<ordinal>-<kind>-<index>`, or ''
+ * when the row does not carry its key (the id is unique per posting page: one row per key).
+ *
+ * @param array<string,mixed>|null $row
+ */
+function evidence_anchor_id(?array $row): string {
+    if (!$row || !isset($row['ordinal'], $row['fact_kind'], $row['fact_index'])) return '';
+    $kind = preg_replace('/[^a-z]/', '', strtolower((string)$row['fact_kind'])) ?? '';
+    return $kind === '' ? '' : 'ev-' . (int)$row['ordinal'] . '-' . $kind . '-' . (int)$row['fact_index'];
+}
+
+/**
+ * A short list of facts, each with its evidence disclosure beside it. Items without a
+ * row are skipped; '' when nothing is left. `$labels = false` omits the visible fact label
+ * where the surrounding section already shows the one fact it belongs to (the summary's
+ * aria-label still names it).
+ *
+ * @param list<array{kind:string,label:string,row:?array<string,mixed>}> $items
+ */
+function evidence_fact_list(array $items, string $official_url, ?string $announcement_url, bool $labels = true): string {
+    $lis = '';
+    foreach ($items as $it) {
+        $d = evidence_disclosure($it['row'] ?? null, $official_url, $announcement_url, (string)$it['label'], evidence_anchor_id($it['row'] ?? null));
+        if ($d === '') continue;
+        $lis .= '<li class="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs" data-evidence-kind="' . e($it['kind']) . '">'
+            . ($labels ? '<span class="text-ink-muted">' . e($it['label']) . '</span>' : '') . $d . '</li>';
+    }
+    return $lis === '' ? '' : '<ul class="mt-1.5 space-y-1" data-evidence-list>' . $lis . '</ul>';
+}
+
+/**
+ * The evidence items of one role (or of the flat posting, ordinal 0) for the given
+ * fact kinds. `$box` is the dict the facts were read from: a positions[] entry, or the
+ * flat schema. A decomposed posting has rows for its roles only, so asking for ordinal 0
+ * on one returns nothing: the flat block must never show a role's evidence.
+ *
+ * @param array<string,mixed> $box
+ * @param array<int,array<string,array<int,array<string,mixed>>>> $evidence
+ * @param list<string> $kinds
+ * @return list<array{kind:string,label:string,row:array<string,mixed>}>
+ */
+function evidence_items(array $box, array $evidence, int $ordinal, array $kinds): array {
+    $by = $evidence[$ordinal] ?? [];
+    $items = [];
+    if (in_array('education', $kinds, true) && ($row = $by['education'][0] ?? null)) {
+        $lvl = is_array($box['education'] ?? null) ? (string)($box['education']['minimum_level'] ?? '') : '';
+        $items[] = ['kind' => 'education', 'row' => $row,
+            'label' => 'Studii: ' . ($lvl !== '' ? (STUDIES_LABELS[$lvl] ?? $lvl) : (string)$row['fact_label'])];
+    }
+    if (in_array('experience', $kinds, true) && ($row = $by['experience'][0] ?? null)) {
+        $label = role_experience_label(is_array($box['experience'] ?? null) ? $box['experience'] : null);
+        $items[] = ['kind' => 'experience', 'row' => $row,
+            'label' => $label !== '' ? $label : 'Experiență: ' . (string)$row['fact_label']];
+    }
+    foreach (['skill', 'credential'] as $kind) {
+        if (!in_array($kind, $kinds, true)) continue;
+        foreach ($by[$kind] ?? [] as $row) {
+            $items[] = ['kind' => $kind, 'row' => $row, 'label' => (string)$row['fact_label']];
+        }
+    }
+    return $items;
+}
+
 function fmt_date(?string $iso, string $fmt = 'd.m.Y'): string {
     if (!$iso) return '';
     try {
@@ -733,8 +954,10 @@ function attachment_list(array $p): array {
 
     $out = [];
     foreach ($meta as $a) {
-        $url = (string)($a['url'] ?? '');
-        if ($url === '') continue;
+        // Attachment links come from third-party pages: only absolute http(s) URLs
+        // are rendered, so a `javascript:` or relative href never reaches an <a>.
+        $url = evidence_safe_url((string)($a['url'] ?? ''));
+        if ($url === null) continue;
         $kind = (string)($a['kind'] ?? '');
         $role = (string)($a['role'] ?? 'other');
         $ext  = strtoupper((string)($a['ext'] ?? ''));
@@ -1307,12 +1530,64 @@ function selected_if(bool $cond): string {
 // ---- Filter application ----
 
 /**
+ * SQL condition and binds for one EXP_BUCKETS bucket over an experience column.
+ *
+ * The one definition of what a bucket means. build_filters() ORs the selected
+ * buckets with it and pages/list.php counts each bucket with it, so the number
+ * next to a checkbox and the rows that checkbox returns cannot drift apart (they
+ * were two hand-copied SQL blocks before DATA-04). The lowest bucket also takes
+ * NULL — "no experience stated" — which is what the sidebar's explanation says.
+ *
+ * `CAST(? AS REAL)`: PDO binds every value as text; a bare column keeps REAL
+ * affinity and converts it, but this runs against a view on old exports where
+ * that affinity is not guaranteed, and a REAL compared with a TEXT is always
+ * "less than" it.
+ *
+ * @return array{0: string, 1: array}  [sql, binds]
+ */
+function exp_bucket_condition(array $bucket, string $col = 'r.exp_years'): array {
+    if ($bucket['min'] == 0 && $bucket['max'] !== null) {
+        return ["($col IS NULL OR $col < CAST(? AS REAL))", [$bucket['max']]];
+    }
+    if ($bucket['max'] === null) {
+        return ["$col >= CAST(? AS REAL)", [$bucket['min']]];
+    }
+    return ["($col >= CAST(? AS REAL) AND $col < CAST(? AS REAL))", [$bucket['min'], $bucket['max']]];
+}
+
+/**
+ * Role-scoped filter groups (DATA-04): param => column of `posting_roles` (alias r).
+ * Only the JSON-array groups are listed; EQF, study level and experience have their
+ * own typed conditions in build_filters(). Language, domain, exam stage and the
+ * rest are posting-level facts in the extraction schema and stay on `j`.
+ */
+const ROLE_ARRAY_GROUPS = [
+    'isced'      => 'isced_fields',
+    'skill'      => 'skills',
+    'credential' => 'credentials',
+];
+
+/**
  * Build WHERE clause fragments and bindings from GET params.
- * Returns ['where' => string[], 'binds' => array, 'fts' => bool]
+ *
+ * Returns ['where' => string[], 'binds' => array, 'fts' => bool] plus the same
+ * selection split in two for callers that count role-scoped facets:
+ *
+ *   posting_where / posting_binds  every announcement-level condition (alias j)
+ *   role_where / role_binds        the role-scoped groups (alias r) — EQF, study
+ *                                  level, experience, field, skill, credential
+ *
+ * `where` is posting_where plus ONE clause, `EXISTS (SELECT 1 FROM posting_roles r
+ * WHERE r.posting_id = j.id AND <every role condition>)`, so all role-scoped
+ * groups must be satisfied by the same role (OR inside a group, AND across them)
+ * and an announcement is returned once however many of its roles match. The
+ * EXISTS clause comes last in `where` and its binds last in `binds`.
  */
 function build_filters(array $p, bool $exclude_key = false, string $excl = ''): array {
     $where = [];
     $binds = [];
+    $rwhere = [];   // role-scoped conditions, alias r — see the EXISTS below
+    $rbinds = [];
     $fts = false;
 
     $q         = trim($p['q'] ?? '');
@@ -1440,25 +1715,17 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         foreach ($exp_levels as $bk) {
             foreach (EXP_BUCKETS as $bucket) {
                 if ($bucket['key'] !== $bk) continue;
-                if ($bucket['min'] == 0 && $bucket['max'] !== null) {
-                    $exp_clauses[] = "(j.inf_experience_years IS NULL OR j.inf_experience_years < ?)";
-                    $binds[] = $bucket['max'];
-                } elseif ($bucket['max'] === null) {
-                    $exp_clauses[] = "j.inf_experience_years >= ?";
-                    $binds[] = $bucket['min'];
-                } else {
-                    $exp_clauses[] = "(j.inf_experience_years >= ? AND j.inf_experience_years < ?)";
-                    $binds[] = $bucket['min'];
-                    $binds[] = $bucket['max'];
-                }
+                [$c, $cb] = exp_bucket_condition($bucket);
+                $exp_clauses[] = $c;
+                array_push($rbinds, ...$cb);
             }
         }
-        if ($exp_clauses) $where[] = '(' . implode(' OR ', $exp_clauses) . ')';
+        if ($exp_clauses) $rwhere[] = '(' . implode(' OR ', $exp_clauses) . ')';
     }
     if ($studies && $excl !== 'studies_levels') {
         $ph = implode(',', array_fill(0, count($studies), '?'));
-        $where[] = "j.inf_studies_required IN ($ph)";
-        array_push($binds, ...$studies);
+        $rwhere[] = "+r.study_level IN ($ph)";   // unary +: see the EXISTS note at the end
+        array_push($rbinds, ...$studies);
     }
     // ---- JSON-array filters ----
     // Each column is probed with LIKE '%"value"%'. The v3_* ones are no-ops
@@ -1484,16 +1751,26 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     ] as $param => $column) {
         $values = array_filter((array)($p[$param] ?? []), fn ($v) => (string)$v !== '');
         if (!$values || $excl === $param) continue;
+        // Field, skill and credential are facts about a role: probe the role row.
+        $on_role = isset(ROLE_ARRAY_GROUPS[$param]);
+        $target  = $on_role ? 'r.' . ROLE_ARRAY_GROUPS[$param] : "j.$column";
         $probes = [];
+        $pb = [];
         foreach ($values as $value) {
             // ESCAPE is required: these vocabularies are full of underscores
             // ("09_sanatate_asistenta_sociala"), and `_` is a LIKE wildcard.
             // Escaping without declaring the escape character matched nothing.
-            $probes[] = "j.$column LIKE ? ESCAPE '\\'";
-            $binds[]  = '%"' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value) . '"%';
+            $probes[] = "$target LIKE ? ESCAPE '\\'";
+            $pb[]     = '%"' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value) . '"%';
         }
         $glue = facet_mode($param, $p) === 'all' ? ' AND ' : ' OR ';
-        $where[] = '(' . implode($glue, $probes) . ')';
+        if ($on_role) {
+            $rwhere[] = '(' . implode($glue, $probes) . ')';
+            array_push($rbinds, ...$pb);
+        } else {
+            $where[] = '(' . implode($glue, $probes) . ')';
+            array_push($binds, ...$pb);
+        }
     }
     // Exact level, like every other facet in the sidebar. This used to be
     // `v3_eqf_level <= ?` ("a candidate above the minimum still qualifies"),
@@ -1505,9 +1782,11 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         fn ($v) => isset(EQF_LABELS[$v])
     ));
     if ($eqf && $excl !== 'eqf') {
-        $ph = implode(',', array_fill(0, count($eqf), '?'));
-        $where[] = "j.v3_eqf_level IN ($ph)";
-        array_push($binds, ...$eqf);
+        // CAST: the unary + below strips the column's INTEGER affinity, and PDO binds
+        // text — an unaffinitied INTEGER never equals the TEXT '6' (it matched nothing).
+        $ph = implode(',', array_fill(0, count($eqf), 'CAST(? AS INTEGER)'));
+        $rwhere[] = "+r.eqf_level IN ($ph)";   // unary +: see the EXISTS note at the end
+        array_push($rbinds, ...$eqf);
     }
 
     // Whether the posting has LLM-extracted Schema.org sections, or only the
@@ -1569,7 +1848,32 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         array_push($binds, ...array_values($values));
     }
 
-    return ['where' => $where, 'binds' => $binds, 'fts' => $fts];
+    // One clause for every role-scoped group: they must all hold for the SAME
+    // role. Role rows exist for every posting (an undecomposed one has a single
+    // implicit row mirroring its flat columns), so a posting with no role-scoped
+    // selection is untouched and one with such a selection behaves as before
+    // unless its extraction lists several roles.
+    //
+    // The unary `+` on the EQF and study-level columns above (EQF binds are CAST
+    // because `+` also drops the column's integer affinity) keeps SQLite from
+    // choosing idx_pr_eqf / idx_pr_study for the correlated subquery. Without
+    // sqlite_stat1 rows for posting_roles (a fresh file, a view-less old export)
+    // the planner guesses those equality indexes are the most selective and
+    // rescans every EQF-6 role once per posting — 250 ms per query on 1,848
+    // postings, against 1 ms probing by posting_id (the primary key's prefix).
+    $posting_where = $where;
+    $posting_binds = $binds;
+    if ($rwhere) {
+        $where[] = 'EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND '
+                 . implode(' AND ', $rwhere) . ')';
+        array_push($binds, ...$rbinds);
+    }
+
+    return [
+        'where' => $where, 'binds' => $binds, 'fts' => $fts,
+        'posting_where' => $posting_where, 'posting_binds' => $posting_binds,
+        'role_where' => $rwhere, 'role_binds' => $rbinds,
+    ];
 }
 
 /**

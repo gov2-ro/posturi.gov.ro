@@ -14,6 +14,15 @@
  * no v4_* columns ("v3-era"), and one that also lacks the other columns PHP
  * queries (occupation, salary, contract facets) — the 2026-09-09 bundle.
  *
+ * DATA-04 adds the exports that predate `posting_roles`: a current export with
+ * only that table missing, and the oldest shape without it, where the stand-in
+ * view has to read through the job_postings view. Their requirement filters must
+ * return exactly what the posting-level predicates return.
+ *
+ * UX-13 adds the exports that predate `requirement_evidence`: a current export with only
+ * that table missing, and the oldest shape missing it too. The detail page reads the table
+ * unconditionally, so an empty temp view of the same name must answer it.
+ *
  * Usage: php tests/compat_test.php
  */
 
@@ -29,7 +38,7 @@ putenv('POSTURI_TODAY=' . COMPAT_TODAY);
 $tmp = sys_get_temp_dir() . '/posturi-compat-' . getmypid();
 $current = "$tmp-current.sqlite";
 $legacy  = "$tmp-legacy.sqlite";
-build_fixture_db($current);
+build_fixture_db($current, true);
 copy($current, $legacy);
 
 // The live export at 2c5e480 lacked these; older ones lack more (see the shim).
@@ -77,6 +86,31 @@ foreach ($strip as $file => $cols) {
         $sdb->exec("ALTER TABLE job_postings DROP COLUMN $col");
     }
     $sdb = null;
+}
+
+// DATA-04: exports from before posting_roles existed. `noroles` has every other
+// column; `oldest-noroles` is the oldest shape with the table gone as well.
+$noroles = "$tmp-noroles.sqlite";
+copy($current, $noroles);
+$oldest_noroles = "$tmp-oldest-noroles.sqlite";
+copy($oldest, $oldest_noroles);
+foreach ([$noroles, $oldest_noroles] as $file) {
+    $rdb = new PDO("sqlite:$file", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $rdb->exec('DROP TABLE posting_roles');
+    $rdb = null;
+}
+
+// UX-13: exports from before requirement_evidence existed. `noevidence` has every other
+// table; `oldest-noevidence` is the oldest shape with posting_roles and the evidence table
+// gone as well (three stacked stand-ins).
+$noevidence = "$tmp-noevidence.sqlite";
+copy($current, $noevidence);
+$oldest_noevidence = "$tmp-oldest-noevidence.sqlite";
+copy($oldest_noroles, $oldest_noevidence);
+foreach ([$noevidence, $oldest_noevidence] as $file) {
+    $edb = new PDO("sqlite:$file", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $edb->exec('DROP TABLE requirement_evidence');
+    $edb = null;
 }
 
 run_suite('shim reproduces the exported status vocabulary row for row', function () use ($current, $legacy) {
@@ -138,6 +172,70 @@ run_suite('shim covers each missing column on its own', function () use ($curren
     assert_same(0, $views($cur), 'current export is not wrapped in a view');
 });
 
+run_suite('a missing posting_roles table is stood in for by one implicit role per posting', function () use ($current, $noroles, $oldest_noroles) {
+    $open = fn(string $f) => new PDO("sqlite:$f", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $views = fn(PDO $p) => $p->query("SELECT name FROM sqlite_temp_master WHERE type = 'view' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
+
+    $cur = $open($current);
+    shim_legacy_export($cur);
+    assert_same([], $views($cur), 'a current export, table present, is not shimmed at all');
+
+    $pdo = $open($noroles);
+    shim_legacy_export($pdo);
+    assert_same(['posting_roles'], $views($pdo), 'only the missing table is stood in for');
+    $n = (int)$pdo->query('SELECT COUNT(*) FROM job_postings')->fetchColumn();
+    assert_same($n, (int)$pdo->query('SELECT COUNT(*) FROM posting_roles')->fetchColumn(), 'one row per posting');
+    assert_same($n, (int)$pdo->query('SELECT COUNT(DISTINCT posting_id) FROM posting_roles WHERE decomposed = 0 AND ordinal = 0')->fetchColumn(), 'each is the implicit role');
+    $bad = (int)$pdo->query('SELECT COUNT(*) FROM posting_roles r JOIN job_postings j ON j.id = r.posting_id
+        WHERE r.study_level IS NOT j.inf_studies_required OR r.eqf_level IS NOT j.v3_eqf_level
+           OR r.isced_fields IS NOT j.v3_isced_fields OR r.exp_years IS NOT j.inf_experience_years
+           OR r.skills IS NOT j.v3_skills OR r.credentials IS NOT j.v3_credentials')->fetchColumn();
+    assert_same(0, $bad, 'the implicit role mirrors the flat search columns exactly');
+
+    // Reading through the job_postings view of the oldest shape.
+    $old = $open($oldest_noroles);
+    shim_legacy_export($old);
+    assert_same(['job_postings', 'posting_roles'], $views($old), 'oldest shape: both stand-ins');
+    $on = (int)$old->query('SELECT COUNT(*) FROM job_postings')->fetchColumn();
+    assert_same($on, (int)$old->query('SELECT COUNT(*) FROM posting_roles')->fetchColumn(), 'oldest shape: one row per posting');
+    $old->query("SELECT COUNT(*) FROM job_postings j WHERE EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND r.eqf_level IN (4) AND r.exp_years < CAST(1 AS REAL))")->fetchAll();
+    assert_true(true, 'the role predicate resolves over the stacked views');
+});
+
+run_suite('a missing requirement_evidence table is stood in for by an empty view with the table\'s columns', function () use ($current, $noevidence, $oldest_noevidence) {
+    $open = fn(string $f) => new PDO("sqlite:$f", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $views = fn(PDO $p) => $p->query("SELECT name FROM sqlite_temp_master WHERE type = 'view' ORDER BY name")->fetchAll(PDO::FETCH_COLUMN);
+    $cols = fn(PDO $p) => $p->query("SELECT name FROM pragma_table_info('requirement_evidence') ORDER BY cid")->fetchAll(PDO::FETCH_COLUMN);
+
+    $cur = $open($current);
+    shim_legacy_export($cur);
+    assert_same([], $views($cur), 'a current export, table present, is not shimmed at all');
+    $want = $cols($cur);
+    assert_true(count($want) >= 15, 'the table has its columns');
+
+    foreach (['an export with every column but no evidence table' => [$noevidence, ['requirement_evidence']],
+              'the oldest shape, no roles and no evidence'        => [$oldest_noevidence, ['job_postings', 'posting_roles', 'requirement_evidence']]] as $label => [$file, $expect]) {
+        $pdo = $open($file);
+        shim_legacy_export($pdo);
+        assert_same($expect, $views($pdo), "$label: the missing tables are stood in for");
+        assert_same($want, $cols($pdo), "$label: the view has the table's columns");
+        assert_same(0, (int)$pdo->query('SELECT COUNT(*) FROM requirement_evidence')->fetchColumn(), "$label: no rows");
+        $pdo->query('SELECT ordinal, fact_kind, fact_index, quote, status, reason, part, section, occurrences
+                     FROM requirement_evidence WHERE posting_id = 1009 ORDER BY ordinal, fact_kind, fact_index')->fetchAll();
+        assert_same([], load_requirement_evidence($pdo, 1009), "$label: the page's loader returns nothing");
+    }
+
+    // The stand-in is a TEMP view, so it works on a read-only file too (a host whose document root is not writable).
+    chmod($noevidence, 0444);
+    $ro = $open($noevidence);
+    $ro->exec('PRAGMA temp_store=MEMORY');
+    shim_legacy_export($ro);
+    $ro->exec('PRAGMA query_only=1');
+    assert_same([], load_requirement_evidence($ro, 1009), 'read-only file: the empty view answers');
+    $ro = null;
+    chmod($noevidence, 0644);
+});
+
 run_suite('shim works on a read-only file', function () use ($legacy) {
     chmod($legacy, 0444);   // as on a host whose document root is not writable
     $ro = new PDO("sqlite:$legacy", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -154,6 +252,12 @@ $paths = ['/', '/?status=closed', '/?status=unknown', '/?status=soon', '/?q=medi
           '/?funding=fonduri_europene', '/?funding=buget_local', '/?sector=sanatate',
           '/?occupation=Referent', '/?duration=determinata', '/?schedule=norma_intreaga',
           '/?has_salary=1', '/?shift=1',
+          '/?eqf%5B%5D=4', '/?eqf%5B%5D=6&exp_level%5B%5D=fara', '/?studies_level%5B%5D=licenta',
+          '/?exp_level%5B%5D=5plus', '/?skill%5B%5D=Excel', '/?credential%5B%5D=autorizatie',
+          '/?isced%5B%5D=04_afaceri_administratie_drept', '/?q=expert&eqf%5B%5D=6',
+          job_url(['id' => 1008, 'title' => 'Mai multe posturi scoase la concurs']),
+          job_url(['id' => 1009, 'title' => 'Expert contabil și referent (două roluri)']),
+          job_url(['id' => 1011, 'title' => 'Șofer autospecială']),
           '/angajatori/', '/statistici/', '/despre/', '/sitemap.xml',
           '/posturi.json', '/posturi.atom', '/posturi.ics', '/versiuni.json'];
 
@@ -162,9 +266,34 @@ $shapes = [
     'a legacy export'                           => $legacy,
     'an export with application_status, no v4_*' => $nov4,
     'the oldest export (no status, v3/v4 or salary columns)' => $oldest,
+    'an export with every column but no posting_roles'       => $noroles,
+    'the oldest export without posting_roles'                => $oldest_noroles,
+    'an export with every column but no requirement_evidence' => $noevidence,
+    'the oldest export without roles or requirement_evidence' => $oldest_noevidence,
+];
+// Requirement filters on an export without posting_roles = the posting-level predicates.
+$flat_cases = [
+    'eqf%5B%5D=4'                                    => 'v3_eqf_level IN (4)',
+    'studies_level%5B%5D=licenta'                    => "inf_studies_required IN ('licenta')",
+    'exp_level%5B%5D=fara'                           => '(inf_experience_years IS NULL OR inf_experience_years < 1)',
+    'eqf%5B%5D=6&exp_level%5B%5D=fara'               => 'v3_eqf_level IN (6) AND (inf_experience_years IS NULL OR inf_experience_years < 1)',
+    'skill%5B%5D=Contabilitate&credential%5B%5D=autorizatie'
+        => "v3_skills LIKE '%\"Contabilitate\"%' AND v3_credentials LIKE '%\"autorizatie\"%'",
 ];
 foreach ($shapes as $label => $file) {
     $srv = start_fixture_server($file, COMPAT_TODAY);
+    if (in_array($file, [$noroles, $oldest_noroles], true)) {
+        run_suite("requirement filters equal the posting-level predicates against $label", function () use ($srv, $file, $flat_cases) {
+            $pdo = new PDO("sqlite:$file", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+            foreach ($flat_cases as $qs => $flat) {
+                $want = array_map('intval', $pdo->query("SELECT id FROM job_postings WHERE $flat ORDER BY id")->fetchAll(PDO::FETCH_COLUMN));
+                $json = json_decode((string)@file_get_contents($srv['base'] . '/posturi.json?status=all&' . $qs), true);
+                $got = array_map(fn($r) => (int)$r['id'], $json['results'] ?? []);
+                sort($got);
+                assert_same($want, $got, "$qs");
+            }
+        });
+    }
     run_suite("every route renders against $label", function () use ($srv, $paths) {
         $ctx = stream_context_create(['http' => ['ignore_errors' => true, 'follow_location' => 0]]);
         foreach ($paths as $p) {

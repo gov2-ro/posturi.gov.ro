@@ -1,6 +1,6 @@
 # UX-09 — Save and hide announcements without an account
 
-Status: ready for implementation. Baseline: `6accc59`; preferably implement
+Status: implemented; see October 10 baseline below. Baseline: `6accc59`; preferably implement
 after UX-01A. No pipeline/export changes, account service or paid calls.
 
 ## Outcome and entry points
@@ -139,3 +139,17 @@ Keep changes confined to public PHP/static code and fixtures. No schema migratio
 is expected. Record implementation and checks under UX-09; keep live rollout
 separate. Later features: export/import preferences, cross-device sync, account
 storage, saved-search subscriptions, change alerts and email delivery.
+
+## October 10 implemented baseline
+
+UX-09 is recorded live at `9bdbfc8`. Subsequent icon/compact-view and mobile polish
+require their own deployment evidence. This addendum supersedes text-button-only
+instructions: list/employer/detail actions may use icons with explicit accessible
+names, pressed state and mobile hit areas; `/salvate/` retains text controls.
+Detail-page hiding marks the page hidden without navigating away; provide Undo
+and announce the result. The existing first successful save shows browser-local
+storage disclosure; do not add another first-visit modal. Preserve the existing
+identity/storage contract for future checklists and change notices.
+Manual Safari/Firefox, assistive-technology announcements and 500-record
+performance remain acceptance gaps until actually exercised. Export/import,
+accounts and sync are separate later features.

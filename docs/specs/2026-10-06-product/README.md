@@ -1,6 +1,8 @@
 # Next user-facing packages
 
-Status: specified, not implemented. Prepared 2026-10-06 against `6accc59`.
+Status: implemented and recorded live 2026-10-10 at code `9bdbfc8`.
+Originally prepared 2026-10-06 against `6accc59`. Later compact-view and
+October 10 polish changes still require their own rollout evidence.
 The [backlog](../../backlog.md) is authoritative for completion.
 
 | Order | Package | Assignment |
@@ -52,5 +54,7 @@ Suggested handoff prompt:
 Replace the filename to assign the next package.
 
 These assignments intentionally do not complete every UX-01/UX-04 aspiration.
-Horizontal filters, card/table modes, locality search, account features and
-email notifications remain later work with their own acceptance designs.
+Desktop horizontal dropdown filters and a card grid were added in the compact-view
+follow-up. Table mode, locality search, account features and email notifications
+remain later work with their own acceptance designs. See the
+[October 10 follow-ups](../2026-10-10-follow-ups/README.md).

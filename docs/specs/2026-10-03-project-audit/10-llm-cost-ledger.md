@@ -55,3 +55,20 @@ export readers functional. Document the unavoidable gap if a process dies after
 provider acceptance but before durable local recording; do not claim the ledger
 is a provider invoice. Completion includes per-step accounting and truthful
 public totals, not just a new schema table.
+
+## October 10 integration baseline
+
+OPS-04 already implements the DeepSeek balance pre-flight in
+`ops/check-llm-balance.py`, including warn/abort/unavailable/skipped observations
+and runner exit 69. Reuse it; do not build another balance checker. Its JSONL
+balance observations are account state, not call spend, and never contribute to
+export coverage baselines or public cost totals. Host rollout still needs evidence.
+
+Capture the pricing tier actually applicable at each call (including configured
+peak/off-peak intervals and timezone), model identity, rate/config revision and
+cache semantics. Reconcile estimated spend without rewriting historical rates.
+REV-14 meters truncations, but the ledger must cover every failed API attempt,
+validation failure and repair, including failures with null usage. Keep model
+success, validation outcome and production promotion distinct. Include tests
+across pricing-window and Bucharest-day boundaries. Do not assume the October 5
+price observations remain current for future paid comparisons.

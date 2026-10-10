@@ -62,3 +62,33 @@ Run threshold checks against copied historical JSONL records, report false
 positives, then document approved values and the recovery procedure. Verify one
 future unattended success and one controlled failure without touching real
 provider balances. Do not close the operations item from unit tests alone.
+
+## October 10 implementation baseline and remaining acceptance
+
+This section supersedes the original all-failure rule where they conflict.
+REV-08 separates systemic failures from posting-content failures: systemic errors
+count at any sample size; content failures (including truncation, validation and
+parse errors) gate only at 20 or more attempted postings. An empty-content
+selection likewise blocks only at 20 or more selected postings. Provider-wide
+fatal errors still stop immediately. Preserve successful partial results and
+explicit zero-work reporting. Test 5/5 content failures as a warning, 20/20 as a
+failure, and a small systemic-failure batch as a failure.
+
+Small recurring residues must remain observable: report affected posting IDs,
+failure classes, consecutive failed observations and last successful extraction,
+without storing source text in run logs. Define a bounded diagnostic history and
+repeat-warning policy; do not introduce an automatic paid retry/backfill loop.
+FIX-05-STAGES is the known recurring residue, not proof the whole provider failed.
+
+OPS-FLOORS proposes a soft schema floor of 95%, based on dated post-recovery
+coverage of 99.8–100%. Calibrate against copied JSONL before enabling it; keep
+v3-only floors disabled when v4 is pinned. Do not enable global strict mode merely
+to enforce one floor. Freshness uses Bucharest working days; all date comparisons
+must use the same timezone, including runs around UTC midnight.
+
+Runner checks must preserve handled nonzero statuses despite the ERR trap,
+check pending migrations before work, and retain OPS-04 balance pre-flight exit
+69 behavior. Balance records are excluded from healthy export/deploy baselines.
+Operational acceptance still requires recorded unattended success, a controlled
+failure, calibrated thresholds, and documented backups/restore and log retention.
+Manual and cron triggers must be distinguishable (OPS-TRIGGER).

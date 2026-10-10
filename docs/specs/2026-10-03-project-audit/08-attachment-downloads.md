@@ -45,3 +45,30 @@ Inventory existing files and report validation reasons before repairing them.
 Ship lookup compatibility first; use a bounded legacy repair with metrics. Keep
 the mapping and old valid assets until migration is verified. Operational repair
 is distinct from code/test completion and must record its request volume.
+
+## October 10 residual assignment — REV-06
+
+Legacy valid-file adoption and manifest-based sniffed-extension lookup are
+implemented. Preserve both: a valid legacy hit is deeply checked, adopted and
+recorded without a network request. Do not repeat the legacy repair wholesale.
+
+Remaining acceptance:
+
+- An invalid manifest/cache entry never supplies an extractable path. Extraction
+  and quality review distinguish invalid, missing and unsupported files with
+  reachable per-reason reporting.
+- Normal cache-hit validation checks actual container integrity, not only magic
+  bytes. A generic PK ZIP is not DOCX: verify required Word entries and readable
+  ZIP members. Cover truncated PDFs/DOCX, corrupt ZIP members and HTML responses.
+  Preserve bounded size/time checks; PDF EOF alone is not full parse validity.
+- Specify bounded revalidation of unchanged URLs using conditional retrieval
+  when supported and a configurable due interval otherwise. Keep last-known-good
+  bytes on failed replacement and record stale/revalidation failure separately.
+- Changed bytes at an unchanged URL change the attachment revision and invalidate
+  dependent text/schema/inference/occupation/salary only where inputs changed.
+  Avoid making every scheduled cache hit a network request.
+
+Mock 304, changed 200, server without validators, failed replacement, and unchanged
+bytes. Prove atomic replacement and revision-driven reselection, including
+attachments whose source-page hash did not change. Report a bounded rollout
+inventory and request volume before any host repair or paid enrichment.

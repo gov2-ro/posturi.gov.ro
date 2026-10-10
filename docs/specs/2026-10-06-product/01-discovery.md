@@ -135,3 +135,15 @@ the URL contract inside this task.
 Mark UX-01A complete when these criteria pass. Parent UX-01 stays open for true
 field consolidation, shortcut evaluation and remaining inference explanations.
 The horizontal filter switch and compact/table listing modes remain separate.
+
+## October 10 implemented baseline
+
+UX-01A is recorded live at `9bdbfc8`; do not repeat the initial implementation.
+The desktop compact follow-up provides horizontal dropdown facets and a card
+grid over shared markup, preserving filter URLs and facet storage. Its view
+switch now visibly names Listă/Grilă. Mobile deadlines sit below job information;
+subscription controls now sit below results. Preserve 320/390/1280px usability,
+44px mobile action targets, keyboard focus and reduced-motion behavior.
+UX-01B still owns the legacy `status=all` chip/current-tab and raw card labels.
+Broader field consolidation and a genuine table view remain open. Real
+Safari/Firefox coverage remains separately evidenced, not implied by Chromium.

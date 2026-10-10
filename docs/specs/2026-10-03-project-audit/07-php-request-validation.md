@@ -52,3 +52,18 @@ production access and are actually wired to pull requests.
 Document query compatibility and test-fixture generation. Publish the runnable
 test commands and green CI evidence; “22 PHP files lint” is necessary but does
 not complete this package. No production fixture database is deployed.
+
+## October 10 remaining scope — CI-01 and REV-10
+
+Central request validation and fixture coverage are implemented; the old
+`q[]=medic` 500 is historical. CI is intentionally manual (`workflow_dispatch`)
+following the user's postponement. Do not reactivate push/PR triggers as a side
+effect of lint cleanup. FIX-07 remains open for active CI; CI-01 owns that shared
+remaining scope rather than a second implementation.
+
+Clear the recorded ruff baseline with reviewed fixes and prove the Django suite
+runs on the GitHub runner. Inspect action/runtime support before choosing updated
+majors; document the runner OS decision. Trigger choice remains a separate user
+preference. Add a badge only when it accurately represents the chosen workflow.
+Unknown parameters, including `?x[]=1`, should be ignored; known parameters with
+invalid shapes retain controlled errors. Cover both in HTML and feed routes.

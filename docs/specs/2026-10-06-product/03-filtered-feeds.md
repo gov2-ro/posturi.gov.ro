@@ -99,3 +99,14 @@ history/catch-up feeds need a retention design (UX-03/UX-04). Open Graph cards
 remain UX-04. Email notifications are UX-14, a separate later package requiring
 confirmed subscriptions, unsubscribe/retention rules, delivery infrastructure,
 deduplication and reliable change evidence for saved-job alerts.
+
+## October 10 implemented baseline
+
+UX-04-FEEDS is recorded live at `9bdbfc8`. Shared feed selection, RSS, local-detail
+links plus official provenance, UTF-8-safe iCal folding and URI encoding are
+implemented; retain their regression coverage. The subscription disclosure now
+sits below results to simplify the first mobile viewport. Preserve filtered links
+through HTMX/history and accessible fragment expansion at this placement.
+Real feed-reader/calendar-client imports and Safari/Firefox disclosure behavior
+remain unverified. Archive/pagination API design and Open Graph imagery remain
+separate UX-04 work; this package did not complete the entire parent item.

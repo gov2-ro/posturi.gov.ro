@@ -55,3 +55,23 @@ Ship PHP readers compatible with both export versions, then metadata producers.
 Keep legacy fields during the transition. Document verification command and
 cache behavior. A fresh code marker does not prove source freshness; a fresh
 data marker does not prove code release parity. Record those separately.
+
+## October 10 compatibility and verification follow-ups
+
+PHP-COMPAT-01 established that checking only `application_status` is insufficient.
+Validate each queried column independently: cover an oldest export, an export
+with status but no v4 fields, and a current export. Missing fields get the same
+empty/null defaults as an unextracted current export; never invent facts. Keep
+existing TEMP-view compatibility and prove the current schema gets no shim.
+A future export-column change must add old-export route coverage.
+
+Remaining verification work: require an explicit verification outcome when
+`SITE_URL` is absent instead of silently treating deploy as verified; match the
+expected data `run_id` as well as build identity. Tests must reject equal build
+times with different run IDs. Distinguish uploaded, served-and-verified and
+unverifiable outcomes in deployment records and healthy-baseline selection.
+
+REV-15's data-only 404 exception was a transition aid for a host lacking the
+version endpoint, not positive verification. The endpoint was recorded live on
+October 5. Retain an explicit upgrade diagnostic or retire the exception with
+compatibility tests; never record its outcome as served-marker success.

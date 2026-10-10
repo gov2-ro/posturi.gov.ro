@@ -115,3 +115,23 @@ from `data/schema-pre-v4.csv` (a temp table + `UPDATE … FROM`); the v3 answers
 also survive as `jobs_jobpostingschemavariant` rows with `prompt_version = 'v3'`,
 since variants are keyed per prompt version. Then re-run step 2–4 and keep the
 pin at v3.
+
+## October 10 baseline and residual scope
+
+The October 5 v4 backfill and scheduled v4 pin are complete, as recorded in the
+activity log. The runbook above is historical rollout material, not an instruction
+to repeat the corpus backfill. Recorded live newest-200 results changed from
+194 expiry fallbacks / 6 scraped dates to 193 competition dates / 7 expiry
+fallbacks; these are dated observations, not future acceptance thresholds.
+
+Keep conservative resume semantics: re-pay for provable staleness, while legacy
+provenance upgrades require explicit `--upgrade-legacy`. First-time source hashes
+are not evidence of a changed source. A requested model or prompt change can
+select every active posting; always report selection and estimated cost first.
+The recorded default output cap is 16,000; detect truncation explicitly, preserve
+old production results on failure, and meter the failed attempt.
+
+Unknown calendar stages remain a separate bounded assignment:
+[FIX-05-STAGES](../2026-10-10-follow-ups/01-calendar-stages.md).
+Changing the enum/fallback policy must preserve dates, verbatim evidence and
+strict handling of unrelated invalid fields. No global backfill is required.

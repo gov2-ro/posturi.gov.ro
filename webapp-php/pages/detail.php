@@ -858,6 +858,9 @@ require __DIR__ . '/../inc/header.php';
       </section>
       <?php endif; ?>
 
+      <?php /* UX-11: browser-local preparation checklist (documents, stages). */ ?>
+      <?php require __DIR__ . '/../partials/checklist.php'; ?>
+
       <p class="mt-8 border-t border-line pt-4 text-xs text-ink-muted">
         Datele sunt preluate automat de pe posturi.gov.ro.
         <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener" class="text-gov hover:underline">Verifică anunțul original ↗</a>

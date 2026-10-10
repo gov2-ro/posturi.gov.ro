@@ -788,6 +788,9 @@ require __DIR__ . '/../inc/header.php';
       </section>
       <?php endif; ?>
 
+      <?php /* UX-10: "Pot aplica?" preparation panel (emits nothing when no role states a comparable requirement). */ ?>
+      <?php require __DIR__ . '/../partials/eligibility_panel.php'; ?>
+
       <!-- Structured schema sections OR body fallback -->
       <?php if ($schema_sections): ?>
         <?php

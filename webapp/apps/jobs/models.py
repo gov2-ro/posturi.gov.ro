@@ -1,6 +1,7 @@
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
 from django.db import IntegrityError, models, transaction
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -350,3 +351,78 @@ class JobPostingSchemaVariant(models.Model):
 
     def __str__(self):
         return f"{self.provider}/{self.model}@{self.prompt_version} — posting {self.posting_id}"
+
+
+class PostingObservation(models.Model):
+    """One immutable record of a posting's tracked facts at a successful observation (UX-12).
+
+    Written by `manage.py observe_postings`, only when something differs from the
+    latest observation of the same URL. Nothing here is ever updated: a later run
+    that finds a difference inserts another row. The row is the *evidence* for a
+    future "this changed from X to Y" notice; change events are derived from pairs
+    of rows by the read slice, not stored here.
+
+    Keyed on the source `url`, not on `posting`: the URL is the identity a reader's
+    saved job carries (UX-09), and the FK is only a convenience that survives
+    nothing (SET_NULL when the posting row is deleted).
+
+    Not a unique constraint on the revision columns: a deadline that moves and then
+    moves back, with no new source revision, is two real observations with the same
+    key columns. De-duplication is "latest observation of this URL is equal", done
+    in the command inside one advisory-locked transaction.
+    """
+
+    url = models.TextField(help_text="Source posting URL — the identity of the announcement.")
+    posting = models.ForeignKey(
+        JobPosting, null=True, blank=True, on_delete=models.SET_NULL, related_name="observations",
+    )
+    observed_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the observe step recorded this row. Not when the source changed.",
+    )
+    retrieved_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="JobPosting.detail_fetched_at: the last SUCCESSFUL retrieval of the detail page "
+                  "this observation rests on. Index-level facts (cancelled, expires_at) come from "
+                  "the listing, which is refreshed independently.",
+    )
+    source_revision = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="JobPosting.detail_content_hash — the source revision identity. '' = unknown.",
+    )
+    # Copied provenance of the extraction the facts were read from. Distinct from
+    # `source_revision`: re-running a model over unchanged bytes changes these and
+    # not that, which is how a model-only correction is told from a source change.
+    extraction_provider = models.CharField(max_length=50, blank=True, default="")
+    extraction_model = models.CharField(max_length=100, blank=True, default="")
+    extraction_prompt_version = models.CharField(max_length=20, blank=True, default="")
+    extraction_source_revision = models.CharField(max_length=64, blank=True, default="")
+    extraction_extracted_at = models.DateTimeField(null=True, blank=True)
+    facts = models.JSONField(
+        help_text="posting_facts.tracked_facts(): deadline, cancellation, expiry, per-role "
+                  "requirements and the evidence sentences. Shape pinned by `facts_format`.",
+    )
+    facts_hash = models.CharField(
+        max_length=64,
+        help_text="posting_facts.facts_hash(facts): sha256 over the facts without evidence prose "
+                  "and revision-scoped role keys.",
+    )
+    facts_format = models.PositiveSmallIntegerField(default=1)
+    valid = models.BooleanField(
+        default=True,
+        help_text="False when no valid current extraction backed this observation: `facts` then "
+                  "holds only non-extraction facts and the requirement part is unavailable "
+                  "(never 'no roles', never 'unchanged').",
+    )
+
+    class Meta:
+        ordering = ["-observed_at", "-id"]
+        verbose_name = "Observație anunț"
+        verbose_name_plural = "Observații anunțuri"
+        indexes = [
+            # Serves `WHERE url = …` and "latest observation per URL" alike.
+            models.Index(fields=["url", "-observed_at"], name="obs_url_observed_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.url} @ {self.observed_at:%Y-%m-%d %H:%M}"

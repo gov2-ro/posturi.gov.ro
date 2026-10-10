@@ -34,7 +34,8 @@ Work out the context first, because it changes what you can check:
 
 - `kind: "run"` — written by `pipeline.py`: `trigger` (cron / manual), `git_sha`,
   `started_at` / `finished_at` / `duration_s`, `flags`, and a `steps` array of
-  `{step, ok, exit, duration_s}`. `failed_steps` and `aborted_at` summarise it.
+  `{step, ok, exit, duration_s}` (plus `optional: true` on optional steps such as
+  `observe`). `failed_steps`, `warned_steps` and `aborted_at` summarise it.
 - `kind: "export-check"` — written by `ops/check-export.py`: `status`
   (ok / warn / fail), the full `metrics` dict, and every `check` with its
   `level` (hard / soft) and message.
@@ -70,6 +71,10 @@ Per run: `exit`, `failed_steps`, `aborted_at`, and the export-check `status`.
 - **`failed_steps` recurring across runs** is the signal that matters — one bad
   night is the network, the same step failing four runs running is a bug. Name
   the step and the exit code.
+- **`warned_steps` non-empty** means an optional step (today only `observe`,
+  UX-12 history capture) failed: the run still exported and deployed, but that
+  run's observations are missing. Recurring warnings mean history has a gap —
+  report them like a recurring failure, at lower severity.
 - **`aborted_at` set** means `--continue-on-error` was off; the steps after it
   never ran.
 - **Step durations trending up** — compare `duration_s` per step against the

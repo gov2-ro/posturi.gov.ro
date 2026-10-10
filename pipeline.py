@@ -9,6 +9,8 @@ Steps (in order):
   extract       manage.py extract_attachments  — extract text from downloaded files
   infer         manage.py infer_postings       — run metadata inference (dict + optional LLM)
   schema        llm-schema.py                  — extract structured display sections → schema_json
+  observe       manage.py observe_postings     — record tracked posting facts (UX-12). OPTIONAL:
+                a failure warns and the run continues; POSTURI_SKIP_OBSERVE=1 skips it
   export-sqlite export-to-sqlite.py            — PostgreSQL → active-only posturi.sqlite
 
 Usage:
@@ -75,6 +77,10 @@ ALL_STEPS = [
     # `occupations` and `salary` rerun, not the 9,600-posting extraction.
     "occupations",
     "salary",
+    # After every step that writes what it records (import: cancelled/expiry/hash;
+    # schema: extraction; infer: the implicit role's requirements) and before the
+    # export, so a run's observation describes the data that run publishes.
+    "observe",
     "export-sqlite",
 ]
 
@@ -94,7 +100,23 @@ _MANAGE_STEPS = {
     "import":  "import_csvs",
     "extract": "extract_attachments",
     "infer":   "infer_postings",
+    "observe": "observe_postings",
 }
+
+#: Steps whose failure is a WARNING: it is printed, recorded (`optional: true` on
+#: the step record, listed in the run's `warned_steps`) and the run carries on to
+#: export and deploy. Not in `failed_steps`, no effect on the exit code. History
+#: capture is additive; losing one run's observations must never withhold the
+#: site's data. Every other step is required: a failure aborts the run (or, under
+#: --continue-on-error, fails it and so withholds the deploy).
+OPTIONAL_STEPS = frozenset({"observe"})
+
+#: Per-step opt-out, `=1` skips the step. Same convention as
+#: POSTURI_SKIP_BALANCE_CHECK in ops/run-pipeline.sh.
+SKIP_ENV_VARS = {"observe": "POSTURI_SKIP_OBSERVE"}
+
+#: Manage steps that accept `--force` (observe_postings has no such flag).
+_FORCEABLE_MANAGE_STEPS = frozenset({"import", "extract", "infer"})
 
 
 def _load_env() -> None:
@@ -208,7 +230,7 @@ def _build_cmd(
     manage_cmd = _MANAGE_STEPS[step]
     cmd: list[str | Path] = [VENV_PYTHON, WEBAPP_DIR / "manage.py", manage_cmd]
 
-    if force:
+    if force and step in _FORCEABLE_MANAGE_STEPS:
         cmd.append("--force")
 
     if step == "infer":
@@ -379,6 +401,12 @@ def main() -> None:
             parser.error(f"Unknown step(s) in --skip: {', '.join(unknown_skip)}")
         selected = [s for s in selected if s not in skipped]
 
+    for step in list(selected):
+        var = SKIP_ENV_VARS.get(step)
+        if var and os.environ.get(var) == "1":
+            print(f"Skipping {step}: {var}=1")
+            selected.remove(step)
+
     if not selected:
         print("No steps to run (all selected steps were skipped).")
         return
@@ -410,6 +438,7 @@ def main() -> None:
     t_total = time.monotonic()
     steps: list[dict] = []
     failures: list[str] = []
+    warned: list[str] = []
     aborted_at: str | None = None
     exit_code = 0
 
@@ -427,7 +456,14 @@ def main() -> None:
             prompt_version=args.prompt_version,
         )
         rec = _run_step(step, cmd)
+        if step in OPTIONAL_STEPS:
+            rec["optional"] = True
         steps.append(rec)
+        if not rec["ok"] and step in OPTIONAL_STEPS:
+            warned.append(step)
+            print(f"  WARNING: optional step {step} failed (exit {rec['exit']}) — "
+                  f"continuing; the run is not marked failed.", file=sys.stderr)
+            continue
         if not rec["ok"]:
             failures.append(step)
             if not args.continue_on_error:
@@ -453,6 +489,7 @@ def main() -> None:
             "steps_selected": selected,
             "steps": steps,
             "failed_steps": failures,
+            "warned_steps": warned,
             "aborted_at": aborted_at,
             "exit": exit_code,
             "flags": {
@@ -470,6 +507,8 @@ def main() -> None:
         })
 
     print(f"\n{'=' * 60}")
+    if warned:
+        print(f"  Warning: optional step(s) failed: {', '.join(warned)} (run not failed)")
     if failures:
         print(f"  Pipeline finished with {len(failures)} failure(s): {', '.join(failures)}")
         if aborted_at:

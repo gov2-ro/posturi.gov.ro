@@ -29,6 +29,16 @@ Usage:
     python llm-schema.py --prompt-version v2                # use prompt v2 with default provider
     python llm-schema.py --compare --prompt-version v2      # compare all providers with prompt v2
     python llm-schema.py --compare --model-filter "gpt-.*" --prompt-version v2  # GPT with prompt v2
+
+    # Affected-ID retry and preview (FIX-05-STAGES):
+    python llm-schema.py --urls-file ids.txt --force --prompt-version v4 --dry-run   # what would run?
+    python llm-schema.py --urls-file ids.txt --force --prompt-version v4 --workers 4 # exact URLs/slugs only
+    python llm-schema.py --active-only --resume --dry-run   # count only: no API calls, no writes
+
+Per-posting failures are appended to data/schema-failures.jsonl (--failure-log,
+--no-failure-log): both attempts' rejected values, so a policy decision can read
+the evidence. So are postings that were repaired and then succeeded
+(kind "llm-schema-repaired"). `ops/stage-failures.py` summarises both.
 """
 
 import argparse
@@ -37,12 +47,14 @@ import os
 import random
 import re
 import sys
+import threading
 import time
 import itertools
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 import psycopg
 from pydantic import ValidationError
 from tqdm import tqdm
@@ -560,8 +572,54 @@ def make_generator(provider, model, system_prefix, prompt_version):
     return generate
 
 
+def slug_of(url: str) -> str:
+    """The last path segment of a posting URL — what the logs and --urls-file call its slug."""
+    return url.rstrip("/").split("/")[-1]
+
+
+class UrlEntry(NamedTuple):
+    """One line of a --urls-file: a full posting URL or a bare slug."""
+    raw: str        # the line as written (stripped) — what is echoed back in reports
+    value: str      # the URL without its trailing slash, or the slug
+    is_url: bool
+
+
+def parse_url_entries(text: str) -> list[UrlEntry]:
+    """Parse the contents of a --urls-file: one URL or slug per line.
+
+    Blank lines and lines starting with `#` are ignored; duplicates collapse.
+    An entry starting with http:// or https:// is a URL and matches by equality
+    (a trailing slash does not matter); anything else is a slug and matches only
+    a posting whose LAST path segment is exactly that. A bare `...-10` therefore
+    never selects `...-100`, which is what the substring `--slug` would do.
+    """
+    entries, seen = [], set()
+    for line in text.splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith("#"):
+            continue
+        is_url = raw.lower().startswith(("http://", "https://"))
+        entry = UrlEntry(raw, raw.rstrip("/"), is_url)
+        if (entry.is_url, entry.value) not in seen:
+            seen.add((entry.is_url, entry.value))
+            entries.append(entry)
+    return entries
+
+
+def _entries_hit(entries, urls) -> set:
+    """The entries that name at least one of `urls` — the Python twin of the SQL condition."""
+    by_url = {e.value: e for e in entries if e.is_url}
+    by_slug = {e.value: e for e in entries if not e.is_url}
+    hit = set()
+    for url in urls:
+        for entry in (by_url.get(url.rstrip("/")), by_slug.get(slug_of(url))):
+            if entry is not None:
+                hit.add(entry)
+    return hit
+
+
 def _selection_where(slug_filter=None, active_only=False, resume_key=None,
-                     upgrade_legacy=False):
+                     upgrade_legacy=False, url_entries=None):
     """Build the shared WHERE clause for posting selection.
 
     Returns (sql_fragment, params) — used by both iter_postings and
@@ -583,11 +641,27 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None,
     the pre-change hash as its revision (import_csvs.invalidate_enrichment).
     Without `resume_key` (a plain run) any non-null schema_json is skipped
     unless --force.
+
+    `url_entries` (--urls-file) restricts the selection to EXACT matches — a full
+    URL, or a slug equal to the URL's last path segment — and is ANDed with every
+    other selector. An empty list selects nothing: a file that parsed to no
+    entries must never widen into the whole corpus.
     """
     conds, params = [], []
     if slug_filter:
         conds.append("url LIKE %s")
         params.append(f"%{slug_filter}%")
+    if url_entries is not None:
+        urls = sorted({e.value for e in url_entries if e.is_url})
+        slugs = sorted({e.value for e in url_entries if not e.is_url})
+        parts = []
+        if urls:
+            parts.append("RTRIM(url, '/') = ANY(%s)")
+            params.append(urls)
+        if slugs:
+            parts.append("SUBSTRING(RTRIM(url, '/') FROM '[^/]*$') = ANY(%s)")
+            params.append(slugs)
+        conds.append("(" + " OR ".join(parts) + ")" if parts else "FALSE")
     if active_only:
         conds.append("expires_at >= CURRENT_DATE")
     if resume_key:
@@ -606,8 +680,15 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None,
     return (" WHERE " + " AND ".join(conds) if conds else ""), params
 
 
+#: Newest first, so `--limit N` means "the N most recent postings" and is
+#: reproducible. Shared by the run and the --dry-run preview so both list the
+#: same postings in the same order.
+_SELECTION_ORDER = " ORDER BY published_at DESC NULLS LAST, id DESC"
+
+
 def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
-                  active_only=False, resume_key=None, upgrade_legacy=False):
+                  active_only=False, resume_key=None, upgrade_legacy=False,
+                  url_entries=None):
     """Yield (posting_id, url, content_hash, combined_content) rows needing schema work.
 
     Combines body_markdown (web page text) and attachment_text (extracted from
@@ -618,17 +699,17 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
     under resume_key, where the WHERE clause already encodes revision-aware
     currency and stale production rows must be yielded, not skipped here.
     """
-    where, params = _selection_where(slug_filter, active_only, resume_key, upgrade_legacy)
+    where, params = _selection_where(slug_filter, active_only, resume_key, upgrade_legacy,
+                                     url_entries)
     with conn.cursor() as cur:
-        # Newest first, so `--limit N` means "the N most recent postings" and is
-        # reproducible. Without an ORDER BY it returned whatever Postgres
-        # happened to scan first, which made a --limit test run un-repeatable
-        # and never showed the postings most likely to reveal a prompt problem.
+        # Ordered (see _SELECTION_ORDER): without an ORDER BY it returned
+        # whatever Postgres happened to scan first, which made a --limit test
+        # run un-repeatable and never showed the postings most likely to reveal
+        # a prompt problem.
         cur.execute(
             "SELECT id, url, body_markdown, attachment_text, schema_json, "
             "detail_content_hash "
-            "FROM jobs_jobposting" + where +
-            " ORDER BY published_at DESC NULLS LAST, id DESC",
+            "FROM jobs_jobposting" + where + _SELECTION_ORDER,
             params,
         )
         for row_id, url, body, attachment, existing_schema, content_hash in cur:
@@ -646,15 +727,84 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
                 yield row_id, url, content_hash or "", content
 
 
-def count_postings(conn, slug_filter=None, force=False, active_only=False, resume_key=None,
-                   upgrade_legacy=False):
-    """Return the number of postings that iter_postings would yield."""
-    where, params = _selection_where(slug_filter, active_only, resume_key, upgrade_legacy)
+def _full_where(slug_filter=None, force=False, active_only=False, resume_key=None,
+                upgrade_legacy=False, url_entries=None):
+    """The complete WHERE of a run: `_selection_where` plus the already-extracted skip.
+
+    iter_postings applies that skip in Python (it needs the row anyway);
+    counting and listing apply it in SQL. Same postings either way.
+    """
+    where, params = _selection_where(slug_filter, active_only, resume_key, upgrade_legacy,
+                                     url_entries)
     if not force and resume_key is None:
         where += (" AND " if where else " WHERE ") + "schema_json IS NULL"
+    return where, params
+
+
+def count_postings(conn, slug_filter=None, force=False, active_only=False, resume_key=None,
+                   upgrade_legacy=False, url_entries=None):
+    """Return the number of postings that iter_postings would yield."""
+    where, params = _full_where(slug_filter, force, active_only, resume_key, upgrade_legacy,
+                                url_entries)
     with conn.cursor() as cur:
         cur.execute("SELECT COUNT(*) FROM jobs_jobposting" + where, params)
         return cur.fetchone()[0]
+
+
+def selection_report(conn, *, limit=None, preview=20, **selection) -> dict:
+    """What a run with this selection WOULD process, from SELECTs alone (--dry-run).
+
+    Uses the same `_full_where` and ordering as the run, so the counts are the
+    run's own. `active_total` is the denominator for "would this revision select
+    the whole active corpus?" — every posting with `expires_at >= CURRENT_DATE`,
+    whether or not --active-only is in effect. Reads only: no API call, no write.
+    """
+    selected = count_postings(conn, **selection)
+    where, params = _full_where(**selection)
+    glue = " AND " if where else " WHERE "
+    shown = min(preview, limit) if limit else preview
+    with conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM jobs_jobposting" + where + glue
+                    + "expires_at >= CURRENT_DATE", params)
+        selected_active = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM jobs_jobposting WHERE expires_at >= CURRENT_DATE")
+        active_total = cur.fetchone()[0]
+        cur.execute("SELECT url FROM jobs_jobposting" + where + _SELECTION_ORDER + " LIMIT %s",
+                    [*params, shown])
+        slugs = [slug_of(row[0]) for row in cur.fetchall()]
+    return {
+        "selected": selected,
+        "would_process": min(selected, limit) if limit else selected,
+        "selected_active": selected_active,
+        "active_total": active_total,
+        "whole_active_corpus": active_total > 0 and selected_active >= active_total,
+        "slugs": slugs,
+    }
+
+
+def url_entry_report(conn, **selection) -> dict:
+    """Reconcile the --urls-file entries against the database and the selection.
+
+    `not_found`: the entry names no posting at all (typo, wrong slug, not yet
+    imported). `not_selected`: it names a posting that the other selectors leave
+    out — already extracted (add --force), expired under --active-only, or
+    current under --resume. Both are reported rather than silently dropped.
+    """
+    entries = selection["url_entries"]
+
+    def urls_for(where, params):
+        with conn.cursor() as cur:
+            cur.execute("SELECT url FROM jobs_jobposting" + where, params)
+            return [row[0] for row in cur.fetchall()]
+
+    found = _entries_hit(entries, urls_for(*_selection_where(url_entries=entries)))
+    chosen = _entries_hit(entries, urls_for(*_full_where(**selection)))
+    return {
+        "entries": len(entries),
+        "selected_entries": len(chosen),
+        "not_found": [e.raw for e in entries if e not in found],
+        "not_selected": [e.raw for e in entries if e in found and e not in chosen],
+    }
 
 
 def write_schema(conn, posting_id, schema, *, provider, model, prompt_version,
@@ -844,7 +994,173 @@ def _append_schema_record(run_log: Path, summary: RunSummary, run_id: str) -> No
         print(f"  WARNING: could not write the schema run record: {exc}", file=sys.stderr)
 
 
-if __name__ == '__main__':
+# ---------------------------------------------------------------------------
+# Per-posting failure diagnostics (FIX-05-STAGES)
+# ---------------------------------------------------------------------------
+# A posting that fails for good used to leave one console line and nothing else:
+# the first (repaired) attempt's error went only into the repair prompt, so which
+# value the model emitted — an unlisted calendar stage, say — was lost the moment
+# the run ended. `data/schema-failures.jsonl` keeps one line per failed posting,
+# with every failed attempt, so a policy decision can read the evidence.
+
+FAILURE_LOG_KIND = "llm-schema-failure"
+#: A posting that failed validation, was repaired and then SUCCEEDED. Same file and
+#: shape as a failure; it is evidence that the model emitted a bad value (an unlisted
+#: stage, say) even though nothing was lost — the policy question is how often.
+REPAIRED_LOG_KIND = "llm-schema-repaired"
+DEFAULT_FAILURE_LOG = str(Path("data") / "schema-failures.jsonl")
+
+MAX_LOGGED_MESSAGE = 800    # the final exception's message
+MAX_ATTEMPT_MESSAGE = 300   # a non-validation attempt's message
+MAX_LOGGED_INPUT = 200      # one rejected value
+MAX_LOGGED_ERRORS = 25      # validation errors kept per attempt (the total is recorded)
+
+_FAILURE_LOG_LOCK = threading.Lock()
+
+
+def failure_class(exc) -> str:
+    """`HTTP_<status>` when the SDK exposes one, else the exception's class name.
+
+    The vocabulary of RunSummary.failure_classes and of the failure log alike.
+    """
+    status = _status_of(exc)
+    return f"HTTP_{status}" if status is not None else type(exc).__name__
+
+
+def _clip(value, limit: int) -> str:
+    try:
+        text = value if isinstance(value, str) else str(value)
+    except Exception:  # noqa: BLE001 — a hostile __str__ must not lose the record
+        text = "<unprintable>"
+    return text[:limit]
+
+
+def describe_attempt(exc, attempt: int) -> dict:
+    """One failed attempt as a JSON-safe dict.
+
+    A pydantic ValidationError carries `errors`: the dotted path, the error type
+    and the raw input the model produced, so the rejected value survives. Only
+    those three keys are taken — `ctx` can hold exception objects that do not
+    serialise.
+    """
+    entry = {"attempt": attempt, "error_class": failure_class(exc)}
+    if isinstance(exc, ValidationError):
+        try:
+            errors = exc.errors(include_url=False, include_context=False)
+        except Exception:  # noqa: BLE001
+            errors = []
+        entry["error_count"] = len(errors)
+        entry["errors"] = [
+            {
+                "loc": ".".join(str(part) for part in e.get("loc", ())) or "(root)",
+                "type": e.get("type", ""),
+                "input": _clip(e.get("input"), MAX_LOGGED_INPUT),
+            }
+            for e in errors[:MAX_LOGGED_ERRORS]
+        ]
+    else:
+        entry["message"] = _clip(exc, MAX_ATTEMPT_MESSAGE)
+    return entry
+
+
+@dataclass
+class AttemptTrail:
+    """The failed attempts of ONE posting, in order. Written by the worker, read once."""
+    attempts: list = field(default_factory=list)
+    last_message: str = ""      # str() of the most recent failed attempt's exception
+
+    def note(self, attempt: int, exc) -> None:
+        self.attempts.append(describe_attempt(exc, attempt))
+        self.last_message = _clip(exc, MAX_LOGGED_MESSAGE)
+
+    @property
+    def was_repaired(self) -> bool:
+        """True when some failed attempt was a validation error — the repair's trigger."""
+        return any(a.get("error_class") == "ValidationError" for a in self.attempts)
+
+
+def build_failure_record(*, run_id, posting_id, url, provider, model, prompt_version,
+                         source_revision, compare, error_class, message, attempts,
+                         at=None, kind=FAILURE_LOG_KIND) -> dict:
+    return {
+        "kind": kind,
+        "format": 1,
+        "run_id": run_id,
+        "at": (at or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "posting_id": posting_id,
+        "url": url,
+        "slug": slug_of(url),
+        "provider": provider,
+        "model": model,
+        "prompt_version": prompt_version,
+        # The revision a successful run would have stamped: the posting's
+        # detail_content_hash ("" when it has none).
+        "source_revision": source_revision or "",
+        "compare": bool(compare),
+        "error_class": error_class,
+        "message": _clip(message, MAX_LOGGED_MESSAGE),
+        "attempts": attempts,
+    }
+
+
+def append_failure_record(path: Path, record: dict) -> bool:
+    """Append one JSON line to the failure log. Never fails a run.
+
+    One `os.write` of the whole line on an O_APPEND descriptor, under a lock:
+    concurrent workers (and a hand-run beside the cron) cannot interleave two
+    records. Errors are reported and swallowed, like the run log's.
+    """
+    line = (json.dumps(record, ensure_ascii=False) + "\n").encode("utf-8")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _FAILURE_LOG_LOCK:
+            fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+            try:
+                view = memoryview(line)
+                while view:
+                    view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+        return True
+    except OSError as exc:
+        print(f"  WARNING: could not write the failure log at {path}: {exc}", file=sys.stderr)
+        return False
+
+
+def _print_url_entry_report(report: dict) -> None:
+    def names(items, shown=20):
+        extra = f", ... and {len(items) - shown} more" if len(items) > shown else ""
+        return ", ".join(items[:shown]) + extra
+
+    print(f"  --urls-file: {report['entries']} entries, {report['selected_entries']} "
+          f"selected for this run")
+    if report["not_found"]:
+        print(f"  ⚠ {len(report['not_found'])} entries match no posting in the database: "
+              f"{names(report['not_found'])}")
+    if report["not_selected"]:
+        print(f"  ⚠ {len(report['not_selected'])} entries match a posting this run leaves out "
+              f"(already extracted — add --force; or excluded by --active-only/--resume): "
+              f"{names(report['not_selected'])}")
+
+
+def _print_dry_run(provider, model, prompt_version, report: dict, limit) -> None:
+    print(f"  [dry run] {provider}/{model} @ {prompt_version} — no API calls, no database writes")
+    print(f"  selected:       {report['selected']} postings "
+          f"({report['selected_active']} of them active)")
+    print(f"  active corpus:  {report['active_total']} postings (expires_at >= today)")
+    if report["whole_active_corpus"]:
+        print("  ⚠ this selection covers the ENTIRE active corpus — a run would re-pay for all of it")
+    elif report["active_total"]:
+        print(f"  coverage:       {report['selected_active'] / report['active_total']:.1%} "
+              f"of the active corpus")
+    if limit:
+        print(f"  would process:  {report['would_process']} (--limit {limit})")
+    print(f"  first {len(report['slugs'])} selected (newest first):")
+    for slug in report["slugs"]:
+        print(f"    {slug}")
+
+
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description='Extract structured job sections and store in Postgres schema_json')
     parser.add_argument('--provider', choices=list(PROVIDERS), default=None,
                         help='LLM provider. Defaults to $LLM_PROVIDER, then models_config.json '
@@ -853,6 +1169,17 @@ if __name__ == '__main__':
                         help='Override the provider default model. Defaults to $LLM_MODEL when it '
                              'names a model of the selected provider, then models_config.json.')
     parser.add_argument('--slug', default=None, help='Process only postings whose URL contains this string')
+    parser.add_argument('--urls-file', default=None, metavar='PATH',
+                        help='Process only the postings named in this file — one full URL or slug '
+                             'per line (blank and # lines ignored). EXACT matches only: a URL is '
+                             'compared whole, a slug against the last path segment, so "...-10" '
+                             'never selects "...-100". Combines with --force, --resume, --compare, '
+                             '--active-only and --prompt-version; entries that match nothing, or '
+                             'that another selector leaves out, are reported.')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='Compute the selection exactly as a real run would, print the selected '
+                             'count, the active-corpus size and the first 20 slugs, then exit 0 — no '
+                             'API calls, no database writes, no run-log or failure-log records.')
     parser.add_argument('--force', action='store_true', help='Re-generate even if schema_json already set')
     parser.add_argument('--limit', type=int, default=None, help='Process at most N postings')
     parser.add_argument('--compare', action='store_true', help='Run all enabled providers and save variants only (does NOT overwrite schema_json)')
@@ -887,10 +1214,29 @@ if __name__ == '__main__':
                              '(default: %(default)s).')
     parser.add_argument('--no-run-log', action='store_true',
                         help='Do not write the schema run summary records.')
-    args = parser.parse_args()
+    parser.add_argument('--failure-log', default=DEFAULT_FAILURE_LOG, metavar='PATH',
+                        help='Append one JSON line per posting that fails for good — every '
+                             'failed attempt, with the rejected values — to this file '
+                             '(default: %(default)s); a posting repaired after a validation '
+                             'error and then successful is recorded as kind '
+                             '"llm-schema-repaired". `ops/stage-failures.py` summarises it.')
+    parser.add_argument('--no-failure-log', action='store_true',
+                        help='Do not write per-posting failure records.')
+    args = parser.parse_args(argv)
 
     if args.workers < 1:
         parser.error("--workers must be at least 1")
+
+    url_entries = None
+    if args.urls_file:
+        try:
+            url_entries = parse_url_entries(Path(args.urls_file).read_text(encoding="utf-8"))
+        except OSError as exc:
+            parser.error(f"--urls-file: cannot read {args.urls_file}: {exc}")
+        if not url_entries:
+            parser.error(f"--urls-file: {args.urls_file} has no entries (blank and # lines are "
+                         "ignored) — refusing to run an empty restriction")
+    failure_log = None if args.no_failure_log else Path(args.failure_log)
 
     args.prompt_version = resolve_prompt_version(args.prompt_version)
 
@@ -902,14 +1248,13 @@ if __name__ == '__main__':
     system_prefix = get_prompt(args.prompt_version)
     if not system_prefix:
         print(f"✗ Prompt version '{args.prompt_version}' not found in config")
-        sys.exit(1)
+        return 1
 
     with psycopg.connect(DATABASE_URL) as conn:
         if args.compare:
             # Get all enabled models, optionally filtered by regex
             all_enabled = get_enabled_models()
             if args.model_filter:
-                import re
                 pattern = re.compile(args.model_filter)
                 providers_to_run = [(p, m) for p, m in all_enabled if pattern.search(m)]
                 print(f"Running comparison (filtered by '{args.model_filter}') on {len(providers_to_run)} models...")
@@ -925,7 +1270,6 @@ if __name__ == '__main__':
         summaries = []
         for provider, model in providers_to_run:
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
-            generate = make_generator(provider, model, system_prefix, args.prompt_version)
             force_flag = args.force or args.compare
             resume_key = (provider, model, args.prompt_version) if args.resume else None
             selection = dict(
@@ -934,7 +1278,17 @@ if __name__ == '__main__':
                 active_only=args.active_only,
                 resume_key=resume_key,
                 upgrade_legacy=args.upgrade_legacy and resume_key is not None,
+                url_entries=url_entries,
             )
+            if url_entries is not None:
+                _print_url_entry_report(url_entry_report(conn, **selection))
+            if args.dry_run:
+                # Before make_generator: a preview must not need provider
+                # credentials, and nothing below it may run.
+                _print_dry_run(provider, model, args.prompt_version,
+                               selection_report(conn, limit=args.limit, **selection), args.limit)
+                continue
+            generate = make_generator(provider, model, system_prefix, args.prompt_version)
             total = count_postings(conn, **selection)
             if args.limit:
                 total = min(total, args.limit)
@@ -946,33 +1300,54 @@ if __name__ == '__main__':
                                  prompt_version=args.prompt_version, selected=total)
             run_start = time.monotonic()
 
+            #: posting id -> the failed attempts of that posting. A worker adds its
+            #: own key; the calling thread pops it once the future completes.
+            trails: dict = {}
+
             def call(row, _generate=generate):
                 """Runs on a worker thread: LLM call + local checks, no database."""
                 posting_id, url, content_hash, content = row
                 retries = 0
+                trail = trails[posting_id] = AttemptTrail()
 
                 def note_retry(attempt, exc, delay):
                     nonlocal retries
                     retries += 1
+                    # The failed attempt's own error — for a repair this is the
+                    # first rejection, which otherwise only reaches the repair
+                    # prompt. The console line below is unchanged.
+                    trail.note(attempt, exc)
                     wait_note = f", retrying in {delay:.1f}s" if delay else ", repairing"
                     tqdm.write(f"  ⟳ {url.rstrip('/').split('/')[-1][:45]}: "
                                f"{type(exc).__name__} on attempt {attempt}{wait_note}")
 
                 t0 = time.monotonic()
-                schema, input_tokens, output_tokens, cached_tokens = generate_with_retry(
-                    _generate, content,
-                    max_attempts=args.max_attempts,
-                    on_retry=note_retry,
-                )
+                try:
+                    schema, input_tokens, output_tokens, cached_tokens = generate_with_retry(
+                        _generate, content,
+                        max_attempts=args.max_attempts,
+                        on_retry=note_retry,
+                    )
+                except Exception as exc:
+                    trail.note(len(trail.attempts) + 1, exc)   # the attempt that raised
+                    raise
                 latency_ms = int((time.monotonic() - t0) * 1000)
                 # Grounding is a local string check against the same text the
                 # model saw — no extra call, so it runs on every posting.
                 ungrounded = check_grounding(schema, content) if isinstance(schema, dict) else []
                 return schema, input_tokens, output_tokens, cached_tokens, latency_ms, ungrounded, retries
 
-            def failure_class(exc) -> str:
-                status = _status_of(exc)
-                return f"HTTP_{status}" if status is not None else type(exc).__name__
+            repaired_logged = 0
+
+            def log_failure(posting_id, url, content_hash, error_class, message, attempts,
+                            kind=FAILURE_LOG_KIND):
+                if failure_log is not None:
+                    append_failure_record(failure_log, build_failure_record(
+                        run_id=run_id, posting_id=posting_id, url=url, provider=provider,
+                        model=model, prompt_version=args.prompt_version,
+                        source_revision=content_hash, compare=args.compare,
+                        error_class=error_class, message=message, attempts=attempts,
+                        kind=kind))
 
             fatal_error = None
             with tqdm(total=total, unit="post", dynamic_ncols=True) as bar:
@@ -983,6 +1358,7 @@ if __name__ == '__main__':
                     bar.set_description(slug[:55])
                     bar.update(1)
                     summary.attempted += 1
+                    trail = trails.pop(posting_id, None) or AttemptTrail()
                     try:
                         (schema, input_tokens, output_tokens, cached_tokens,
                          latency_ms, ungrounded, retries) = future.result()
@@ -1012,6 +1388,10 @@ if __name__ == '__main__':
                             if t_cost:
                                 summary.cost_usd += t_cost
                         tqdm.write(f"  ✗ {slug}: {type(e).__name__}: {e}")
+                        # Nothing was stored, so the posting's previous
+                        # schema_json and provenance are untouched.
+                        log_failure(posting_id, url, content_hash, failure_class(e), str(e),
+                                    trail.attempts)
                         continue
 
                     summary.retried += bool(retries)
@@ -1020,7 +1400,20 @@ if __name__ == '__main__':
                         summary.failed += 1
                         summary.failure_classes["non_dict"] = summary.failure_classes.get("non_dict", 0) + 1
                         tqdm.write(f"  ✗ {slug}: non-dict: {repr(schema)[:80]}")
+                        log_failure(posting_id, url, content_hash, "non_dict",
+                                    f"non-dict: {repr(schema)}",
+                                    trail.attempts + [{"attempt": len(trail.attempts) + 1,
+                                                       "error_class": "non_dict",
+                                                       "message": _clip(repr(schema), MAX_ATTEMPT_MESSAGE)}])
                         continue
+
+                    if trail.was_repaired:
+                        # Succeeded after a rejected first attempt: nothing is lost,
+                        # but the rejected value is evidence. Logging it changes no
+                        # database write below.
+                        log_failure(posting_id, url, content_hash, trail.attempts[-1]["error_class"],
+                                    trail.last_message, trail.attempts, kind=REPAIRED_LOG_KIND)
+                        repaired_logged += failure_log is not None
 
                     for finding in ungrounded:
                         summary.ungrounded += 1
@@ -1068,6 +1461,12 @@ if __name__ == '__main__':
                       f"{summary.skipped} skipped (empty content), "
                       f"{summary.retried} needed a retry, "
                       f"{summary.ungrounded} unsupported quote(s)")
+            if (summary.failed or repaired_logged) and failure_log is not None:
+                print(f"  failure diagnostics appended to {failure_log} "
+                      f"({summary.failed} failed, {repaired_logged} repaired)")
+
+        if args.dry_run:
+            return 0
 
         if not args.no_run_log:
             for summary in summaries:
@@ -1078,4 +1477,8 @@ if __name__ == '__main__':
             print("\n✗✗ Extraction stopped: a provider-wide fatal error (402 / invalid auth).")
         elif exit_code == 1:
             print("\n✗ Extraction finished with too many failures — see the summary above.")
-        sys.exit(exit_code)
+        return exit_code
+
+
+if __name__ == '__main__':
+    sys.exit(main())

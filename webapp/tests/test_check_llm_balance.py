@@ -42,6 +42,12 @@ def check_export():
     return _load("check_export_balance_under_test", REPO_ROOT / "ops" / "check-export.py")
 
 
+@pytest.fixture(autouse=True)
+def _never_the_real_run_log(bal, monkeypatch, tmp_path):
+    """Belt and braces: even a call that forgot the flag lands in tmp_path, not data/."""
+    monkeypatch.setattr(bal, "DEFAULT_RUN_LOG", tmp_path / "default-runs.jsonl")
+
+
 def body(total: str | None = "12.34", *, available=True, currency="USD", extra=()):
     infos = list(extra)
     if total is not None:
@@ -63,7 +69,15 @@ def env(monkeypatch, tmp_path):
 
 
 def run_main(bal, monkeypatch, response, *argv):
-    """main() with fetch_balance returning `response` (or raising it if exception)."""
+    """main() with fetch_balance returning `response` (or raising it if exception).
+
+    Every call must name a scratch run log (`--run-log`) or write none (`--no-record`):
+    without either, main() appends to the real data/pipeline-runs.jsonl — three tests
+    did, so every full suite run added two lines to it.
+    """
+    assert "--run-log" in argv or "--no-record" in argv, \
+        "pass --run-log <tmp path> (or --no-record): the default is the repository's data/ log"
+
     def fake(api_key, timeout=10.0):
         if isinstance(response, BaseException):
             raise response
@@ -221,17 +235,18 @@ class TestMain:
 
     def test_provider_comes_from_llm_config(self, bal, env, monkeypatch, capsys):
         monkeypatch.setenv("LLM_PROVIDER", "openai")
-        assert run_main(bal, monkeypatch, RuntimeError("must not be called")) == 0
+        assert run_main(bal, monkeypatch, RuntimeError("must not be called"),
+                        "--run-log", str(env)) == 0
         assert "skipped: provider openai has no balance check" in capsys.readouterr().out
 
     def test_unknown_provider_never_blocks(self, bal, env, monkeypatch, capsys):
         monkeypatch.setenv("LLM_PROVIDER", "nonesuch")
-        assert run_main(bal, monkeypatch, body("1.00")) == 0
+        assert run_main(bal, monkeypatch, body("1.00"), "--run-log", str(env)) == 0
         assert "balance check unavailable" in capsys.readouterr().out
 
     def test_no_key_prints_skipped(self, bal, env, monkeypatch, capsys):
         monkeypatch.delenv("DEEPSEEK_API_KEY")
-        assert run_main(bal, monkeypatch, RuntimeError("never")) == 0
+        assert run_main(bal, monkeypatch, RuntimeError("never"), "--run-log", str(env)) == 0
         assert "skipped" in capsys.readouterr().out
 
     def test_network_error_prints_the_warning_and_exits_0(self, bal, env, monkeypatch, capsys):

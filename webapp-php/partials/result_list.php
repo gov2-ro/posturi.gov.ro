@@ -84,7 +84,7 @@ $chips = $active_chips ?? [];
         $days = days_until($dl['date']);
         $est  = $dl['source'] === 'expirare';
     ?>
-    <li class="pg-row group -mx-1 px-1 py-4 transition-colors hover:bg-sunken data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
+    <li class="pg-row group hover:bg-sunken data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <?php $dt = display_title($p); ?>
@@ -150,7 +150,7 @@ $chips = $active_chips ?? [];
         </div>
 
         <?php /* Deadline badge */ ?>
-        <div class="pg-deadline min-w-[80px] max-w-[9.5rem] shrink-0 text-right">
+        <div class="pg-deadline sm:min-w-[80px] sm:max-w-[9.5rem] shrink-0 sm:text-right">
           <?php if ($days !== null): ?>
             <?php if ($days < 0): ?>
               <span class="font-mono text-xs text-ink-muted"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?></span>
@@ -181,9 +181,9 @@ $chips = $active_chips ?? [];
 
   <!-- Pagination -->
   <?php if ($num_pages > 1): ?>
-  <nav class="mt-6 flex items-center justify-between text-sm" aria-label="Paginare rezultate">
+  <nav class="pg-pagination mt-6 flex flex-wrap items-center justify-between gap-3 text-sm" aria-label="Paginare rezultate">
     <div class="font-mono text-xs text-ink-muted"><?= $start ?>–<?= $end ?> din <?= $total_count ?></div>
-    <div class="flex items-center gap-1">
+    <div class="flex flex-wrap items-center gap-1">
       <?php if ($page > 1): ?>
         <a href="<?= e(qs_page($page - 1)) ?>" rel="prev" aria-label="Pagina anterioară"
            hx-get="<?= e(qs_page($page - 1)) ?>"

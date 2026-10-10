@@ -100,13 +100,17 @@ test('detail icon buttons: save, and hide marks the posting without removing the
 
 test('compact toggle: lg+ only, persists across reload and an HTMX filter change, cards in a grid', async ({ page, viewport }) => {
   await page.goto('/');
+  await expect(page.locator('#sort')).toBeVisible();
+  expect(await page.locator('#sort').evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('#results')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  expect(await page.locator('#urmareste').evaluate((el) => !!(document.querySelector('#results').compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   const toggle = page.locator('#layout-toggle');
   if (!isDesktop(viewport)) {
     await expect(toggle).toBeHidden();
     return;
   }
   await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveText(/Vizualizare compactă/);
+  await expect(toggle).toContainText('Vizualizare: Listă');
+  await expect(toggle).toHaveAttribute('aria-label', 'Vizualizare: Listă. Schimbă la grilă');
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   expect(await page.evaluate(() => document.documentElement.dataset.layout)).toBeUndefined();
   const listCols = await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).display);
@@ -114,6 +118,8 @@ test('compact toggle: lg+ only, persists across reload and an HTMX filter change
 
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await expect(toggle).toContainText('Vizualizare: Grilă');
+  await expect(toggle).toHaveAttribute('aria-label', 'Vizualizare: Grilă. Schimbă la listă');
   expect(await page.evaluate(() => localStorage.getItem('posturi.layout'))).toBe('compact');
   const cols = await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).gridTemplateColumns.split(' ').length);
   expect(cols).toBe(viewport.width >= 1280 ? 3 : 2);
@@ -140,6 +146,8 @@ test('compact toggle: lg+ only, persists across reload and an HTMX filter change
 
   // Toggle off: back to the sidebar layout.
   await page.locator('#layout-toggle').click();
+  await expect(page.locator('#layout-toggle')).toContainText('Vizualizare: Listă');
+  await expect(page.locator('#layout-toggle')).toHaveAttribute('aria-label', 'Vizualizare: Listă. Schimbă la grilă');
   expect(await page.evaluate(() => localStorage.getItem('posturi.layout'))).toBe('list');
   expect(await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).display)).toBe('block');
 });

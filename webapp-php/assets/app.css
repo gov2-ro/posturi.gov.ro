@@ -83,6 +83,11 @@
     color: rgb(var(--c-ink));
   }
 
+  :where(a, button, summary, select, input):focus-visible {
+    outline: 2px solid rgb(var(--c-focus));
+    outline-offset: 3px;
+  }
+
   /* Facet disclosures: no native triangle, caret flips when open. */
   summary { list-style: none; cursor: pointer; }
   summary::-webkit-details-marker { display: none; }
@@ -126,7 +131,52 @@
   .pref-flag { @apply mt-1 block text-xs text-ink-muted; }
 
   /* htmx loading indicator */
-  #results.htmx-request { opacity: 0.5; transition: opacity 200ms ease; }
+  #results { transition: opacity 160ms ease; }
+  #results.htmx-request { opacity: 0.65; }
+
+  /* Quiet surfaces make each result easier to scan without adding height. */
+  .pg-results { border-top: 0; }
+  .pg-row {
+    margin: 0 0 0.625rem;
+    padding: 1rem;
+    border: 1px solid rgb(var(--c-line));
+    border-radius: var(--radius-lg);
+    background: rgb(var(--c-surface));
+    transition: border-color 160ms ease, background-color 160ms ease;
+  }
+  .pg-results > .pg-row { border-top-width: 1px; border-bottom-width: 1px; }
+  .pg-row:hover, .pg-row:focus-within { border-color: rgb(var(--c-line-strong)); }
+  .pg-badges > span { border-radius: var(--radius); }
+  .pref-btn:hover { background: rgb(var(--c-gov-light)); }
+  .pg-pagination a, .pg-pagination [aria-current="page"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border-radius: var(--radius-md);
+  }
+
+  @media (max-width: 639px) {
+    .pg-row > div:first-child { flex-direction: column; gap: 0.75rem; }
+    .pg-row > div:first-child > div:first-child { width: 100%; }
+    .pg-deadline {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.25rem 0.5rem;
+      min-width: 0;
+      max-width: none;
+      width: 100%;
+      padding-top: 0.625rem;
+      border-top: 1px solid rgb(var(--c-line));
+      text-align: left;
+    }
+    .pg-deadline time { margin-top: 0; }
+    .pg-deadline .deadline-fallback { flex-basis: 100%; margin-top: 0; }
+    .pref-btn { width: 2.75rem; height: 2.75rem; }
+    .pg-pagination > div { width: 100%; }
+  }
 
   .facet-check:checked + span { color: rgb(var(--c-gov)); font-weight: 500; }
 

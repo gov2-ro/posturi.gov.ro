@@ -577,7 +577,7 @@ if (!$is_htmx): ?>
     </div>
     <?php endif; ?>
 
-    <!-- STATUS + SORT -->
+    <!-- STATUS -->
     <div class="status-block mb-5">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div role="group" aria-label="Stare anunț" class="flex flex-wrap gap-1.5">
@@ -592,22 +592,6 @@ if (!$is_htmx): ?>
         <?php endforeach; ?>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <?php /* Compact view: horizontal filters + card grid, lg and up. Shown
-           by the script below (it does nothing without JavaScript), and the
-           choice is kept per browser in localStorage `posturi.layout`. */ ?>
-        <button type="button" id="layout-toggle" hidden aria-pressed="false"
-                class="hidden items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink-muted transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-gov aria-pressed:bg-gov-light aria-pressed:text-gov lg:inline-flex">
-          <svg class="h-4 w-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          Vizualizare compactă
-        </button>
-        <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
-        <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
-          <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
-          <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
-          <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
-        </select>
-      </div>
     </div>
     <?php /* Persistent, not a tooltip: "Active" means "not known to be closed". The
        7-day line is shown by CSS while that tab is checked (the control sits
@@ -617,8 +601,49 @@ if (!$is_htmx): ?>
       <span class="status-soon-note"><?= e(STATUS_HELP_SOON) ?></span>
     </p>
 
-    <?php /* UX-04-FEEDS: the one subscription block. It sits with the result
-       controls but outside #results, so HTMX never rebuilds it; syncFeedLinks()
+        <div role="group" aria-label="Opțiuni rezultate" class="mt-3 flex flex-wrap items-center gap-2">
+          <?php /* Compact view: horizontal filters + card grid, lg and up. Shown
+             by the script below (it does nothing without JavaScript), and the
+             choice is kept per browser in localStorage `posturi.layout`. */ ?>
+          <button type="button" id="layout-toggle" hidden aria-pressed="false" aria-label="Vizualizare: Listă. Schimbă la grilă"
+                  class="hidden items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink-muted transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-gov aria-pressed:bg-gov-light aria-pressed:text-gov lg:inline-flex">
+            <svg class="h-4 w-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span data-layout-label>Vizualizare: Listă</span>
+          </button>
+          <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
+          <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
+            <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
+            <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
+            <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
+          </select>
+    </div>
+
+        <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
+        <div id="results">
+<?php endif; // !$is_htmx ?>
+
+<?php require __DIR__ . '/../partials/result_list.php'; ?>
+
+<?php
+// Live facet counts: the sidebar goes back with every HTMX response as an
+// out-of-band swap. The counts were computed above either way — this is the
+// only thing that puts the fresh ones on screen. htmx lifts an `hx-swap-oob`
+// element out of the response before the main swap, so it never lands in
+// #results.
+//
+// Paging is the exception. The filter form carries no `page` field, so a
+// filter change always arrives without one and a `page` in the query string
+// means a pagination link — same filters, same counts, no reason to re-ship
+// ~120 KB of sidebar (10 KB over mod_deflate, but still the whole thing
+// re-rendered and re-swapped) to redraw identical numbers.
+if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.php';
+?>
+
+<?php if (!$is_htmx): ?>
+        </div>
+
+    <?php /* UX-04-FEEDS: the one subscription block. It sits below results
+       but outside #results, so HTMX never rebuilds it; syncFeedLinks()
        keeps every href in step with the address bar. A native <details>, so it
        opens and closes with no JavaScript, and the export line below links to
        the content id inside it (browsers expand a closed <details> for a
@@ -674,31 +699,6 @@ if (!$is_htmx): ?>
         </ul>
       </div>
     </details>
-    </div>
-
-        <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
-        <div id="results">
-<?php endif; // !$is_htmx ?>
-
-<?php require __DIR__ . '/../partials/result_list.php'; ?>
-
-<?php
-// Live facet counts: the sidebar goes back with every HTMX response as an
-// out-of-band swap. The counts were computed above either way — this is the
-// only thing that puts the fresh ones on screen. htmx lifts an `hx-swap-oob`
-// element out of the response before the main swap, so it never lands in
-// #results.
-//
-// Paging is the exception. The filter form carries no `page` field, so a
-// filter change always arrives without one and a `page` in the query string
-// means a pagination link — same filters, same counts, no reason to re-ship
-// ~120 KB of sidebar (10 KB over mod_deflate, but still the whole thing
-// re-rendered and re-swapped) to redraw identical numbers.
-if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.php';
-?>
-
-<?php if (!$is_htmx): ?>
-        </div>
 
         <?php /* Export, at the end of the list rather than in the sidebar.
            Deliberately OUTSIDE #results: htmx swaps that element on every
@@ -863,14 +863,20 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   function setLayout(mode, persist) {
     if (mode === 'compact') root.dataset.layout = 'compact'; else delete root.dataset.layout;
     if (persist) { try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* private mode */ } }
-    if (layoutBtn) layoutBtn.setAttribute('aria-pressed', mode === 'compact' ? 'true' : 'false');
+    if (layoutBtn) {
+      var compact = mode === 'compact';
+      layoutBtn.setAttribute('aria-pressed', compact ? 'true' : 'false');
+      layoutBtn.setAttribute('aria-label', 'Vizualizare: ' + (compact ? 'Grilă' : 'Listă') + '. Schimbă la ' + (compact ? 'listă' : 'grilă'));
+      var label = layoutBtn.querySelector('[data-layout-label]');
+      if (label) label.textContent = 'Vizualizare: ' + (compact ? 'Grilă' : 'Listă');
+    }
     openKey = null;
     syncPanels();
   }
 
   if (layoutBtn) {
     layoutBtn.hidden = false;
-    layoutBtn.setAttribute('aria-pressed', root.dataset.layout === 'compact' ? 'true' : 'false');
+    setLayout(root.dataset.layout === 'compact' ? 'compact' : 'list', false);
     layoutBtn.addEventListener('click', function () {
       setLayout(root.dataset.layout === 'compact' ? 'list' : 'compact', true);
     });

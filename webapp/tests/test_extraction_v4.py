@@ -128,6 +128,14 @@ class TestCompetitionCalendar:
             {"stage": "contestatii_proba_practica", "date": "2026-09-20"}]})
         assert cal.events[0].stage == "contestatii_proba_practica"
 
+    def test_the_oral_exam_stages_validate(self):
+        """FIX-05-STAGES: the only values the VPS logs of 2026-10-06..11 rejected."""
+        from schema_models import CompetitionCalendar
+        cal = CompetitionCalendar.model_validate({"events": [
+            {"stage": "proba_orala", "date": "2026-10-20"},
+            {"stage": "rezultate_proba_orala", "date": "2026-10-21"}]})
+        assert [e.stage for e in cal.events] == ["proba_orala", "rezultate_proba_orala"]
+
     def test_the_prompt_lists_every_stage_literally(self):
         """Each value must appear verbatim, not as a template.
 

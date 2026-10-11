@@ -539,12 +539,16 @@ class JobPostingExtractionV3(JobPostingExtraction):
 #: Learned twice. `rezultate_selectie_dosare` was missing and scattered ten rows
 #: across five stages; `contestatii_proba_practica` was then missing and caused
 #: 9 of 100 hard failures in a VPS sample — ~850 postings at corpus scale.
+#: Then `proba_orala`, already an `exam_stages` value, was missing here: the only
+#: rejected stage values in the VPS logs of 2026-10-06..11 were `proba_orala` and
+#: `rezultate_proba_orala` (5 postings failing every run, FIX-05-STAGES).
 EVALUATION_STAGES = (
     "selectie_dosare",
     "proba_scrisa",
     "proba_practica",
     "proba_sportiva",
     "interviu",
+    "proba_orala",
     "test_psihologic",
 )
 
@@ -571,6 +575,10 @@ CalendarStage = Literal[
     "rezultate_interviu",
     "contestatii_interviu",
     "rezultate_contestatii_interviu",
+    "proba_orala",
+    "rezultate_proba_orala",
+    "contestatii_proba_orala",
+    "rezultate_contestatii_proba_orala",
     "test_psihologic",
     "rezultate_test_psihologic",
     "contestatii_test_psihologic",

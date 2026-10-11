@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-10-11 — FIX-05-STAGES: oral exam stages added to the calendar vocabulary
+
+Pulled and migrated the VPS (`0016_postingobservation` applied), then ran
+`ops/stage-failures.py` over its pipeline logs (2026-10-06..11). Every rejected
+calendar stage was `proba_orala` (5 postings) or `rezultate_proba_orala` (2): the
+oral exam was a valid `exam_stages` value but missing from `CalendarStage`, the same
+gap as `rezultate_selectie_dosare` and `contestatii_proba_practica` before it. Added
+`proba_orala` to `EVALUATION_STAGES` with its `rezultate_` / `contestatii_` /
+`rezultate_contestatii_` counterparts and listed all four in the v4 prompt (28 → 32
+values). The unknown-stage rejection rule stays; no `altele` coercion, since the
+evidence showed one missing stage family rather than open-ended model invention.
+Prompt text is not in the `--resume` staleness key, so only the postings without an
+extraction (the failing ones) are re-paid by the next run. Python suite: 1,010 passed.
+
 ### 2026-10-10 — First slices of the October 10 follow-up packages
 
 Implemented the policy-independent parts of all six packages in

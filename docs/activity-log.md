@@ -2,6 +2,24 @@
 
 ## 2026
 
+### 2026-10-13 — FIX-10: the PHP side verified on the Mac, /statistici browser spec
+
+The second slice (be43f9d) was written on gov2-1, which has no `php`. On the Mac:
+`request_test.php` (187 assertions) and `compat_test.php` (938) pass, and Django `migrate`
+(0017 already applied locally) plus `pytest webapp` give 1217 passed.
+
+- New `webapp-php/tests/browser/stats.spec.js` (17adffa), run at 320/375/1280 on the fixture:
+  no horizontal overflow; "Costuri inferență" total $0.032, "La 100 de anunțuri" $0.429 over
+  7 postings, the two per-step lines (schema 5 calls, occupations 2), the measured day
+  "04.10.2026 · 7 apeluri", the legacy day "02.10.2026 · 3 anunțuri (estimare)", the unpriced
+  count, and no old-export copy.
+- Shown failing against four mutations before being relied on: the section hidden, the per-step
+  block removed, a 600px day label (fails at 320 and 375 only — it fits at 1280, as it should),
+  and "(estimare)" dropped from `llm_day_label`.
+- Full Playwright suite: 278 passed, 40 skipped (the existing width-gated `test.skip`s).
+- `./deploy-php.sh --code-only` is pax's to run from the Mac. Until the 2026-10-13T10:15Z run
+  rebuilds the export, the live page shows the old-export copy (no per-step block), as designed.
+
 ### 2026-10-12 — FIX-10 (second slice): the export and /statistici read the ledger
 
 `llm_costs` (SQLite) is now built from two sources that never overlap. `ledger` rows are

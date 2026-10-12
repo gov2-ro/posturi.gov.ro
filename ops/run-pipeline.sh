@@ -9,7 +9,9 @@
 # 69 the LLM account balance is too low to start (ops/check-llm-balance.py),
 # 75 a previous run is still going, 78 the checkout has unapplied migrations,
 # anything else a failure. Every non-zero exit has already been reported to
-# $HEALTHCHECK_URL.
+# $HEALTHCHECK_URL, and (except 69, which ops/check-llm-balance.py reports itself) to
+# ntfy.sh through ops/ntfy.py when NTFY_TOPIC is set. A run that never starts -- 75,
+# or a cron that never fires -- can only be reported by the healthcheck's silence.
 #
 # Commands whose failure this script HANDLES are written `cmd || status=$?`. An
 # ERR trap is not disabled by `set +e`: the old `set +e; cmd; status=$?` form let
@@ -55,10 +57,18 @@ ping_health() {          # $1: "" (success) | /start | /fail
     curl -fsS -m 10 -o /dev/null "${HEALTHCHECK_URL}${1:-}" || true
 }
 
+# One push per finished run (OPS-BALANCE): ops/ntfy.py reads this run's records from
+# data/pipeline-runs.jsonl, does nothing without NTFY_TOPIC and exits 0 on every path of
+# its own; `|| true` keeps even a crash of it from changing this script's exit status.
+notify_run() {           # $1: ok | degraded | failed   $2: the exit status being reported
+    "$PYTHON" ops/ntfy.py run --outcome "$1" --exit "$2" || true
+}
+
 on_error() {
     local status=$?
     echo "FAILED (exit ${status}) at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&2
     ping_health /fail
+    notify_run failed "$status"
     exit "$status"
 }
 trap on_error ERR
@@ -77,6 +87,7 @@ if [ "$migrate_status" -ne 0 ]; then
     echo "       Run: $PYTHON webapp/manage.py migrate   — then re-run this script."
     "$PYTHON" webapp/manage.py showmigrations jobs 2>&1 | grep -F '[ ]' || true
     ping_health /fail
+    notify_run failed 78
     echo "=== aborted before the pipeline — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     exit 78
 fi
@@ -126,6 +137,7 @@ if [ "$pipeline_status" -ne 0 ]; then
         echo "       POSTURI_ALLOW_DEGRADED_DEPLOY is not 1 — not deploying. The"
         echo "       shared host keeps serving the previous database."
         ping_health /fail
+        notify_run failed "$pipeline_status"
         echo "=== aborted before deploy — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
         exit "$pipeline_status"
     fi
@@ -145,6 +157,7 @@ if [ "$check_status" -ne 0 ]; then
     echo "ABORT: the export failed its hard checks and was NOT deployed. The shared"
     echo "       host keeps serving the previous database, which is stale but whole."
     ping_health /fail
+    notify_run failed 65
     echo "=== aborted before deploy — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     exit 65
 fi
@@ -157,10 +170,12 @@ fi
 if [ "$pipeline_status" -ne 0 ]; then
     "$PYTHON" ops/record-deploy.py --degraded
     ping_health /fail
+    notify_run degraded "$pipeline_status"
     echo "=== finished with failures — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
     exit "$pipeline_status"
 fi
 
 "$PYTHON" ops/record-deploy.py
 ping_health
+notify_run ok 0
 echo "=== done — $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="

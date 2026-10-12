@@ -2,6 +2,65 @@
 
 ## 2026
 
+### 2026-10-12 — OPS-BALANCE: thresholds $1 / $5 and a spend ledger in the run summary
+
+pax topped up DeepSeek and moved this project to its own API key; the account is shared
+with other projects, which explained the ~$0.40 that no run had logged. A read with the
+new key returned $5.45 = the old $0.45 + the $5.00 top-up, so the balance is the
+account's whichever key reads it.
+
+- `LLM_BALANCE_MIN` 0.50 -> 1.00 and `LLM_BALANCE_WARN` 3.00 -> 5.00 (code defaults,
+  `.env.example`, README, deploy-vps.md; `.env` never pinned them). One Monday-sized run
+  was $0.37 and the logged schema spend is ~$1.5/week, and the pot is shared.
+- `ntfy.balance_ledger()` compares a run's start-of-run balance with the previous one
+  and adds back the `llm-schema` cost logged between them (hand-runs included). A gap
+  over $0.05 is `Other spend` or `Top-up` in the summary; below that is the cents the
+  `occupations` step spends without writing a record. No new records and no wrapper
+  changes. Replayed over every real reading: only 12 Oct 10:15Z ($0.402) is flagged.
+- Not done: logging the `occupations` cost (about a cent a run, under the tolerance) and
+  FIX-10's per-call ledger. A separate DeepSeek account is the only way to a balance
+  that is this project's alone.
+
+### 2026-10-12 — OPS-BALANCE: ntfy.sh pushes for a low balance and for every run
+
+The 15:33Z slot aborted on a $0.45 DeepSeek balance after the $3 warning had fired on
+six runs in a row and reached only `pipeline.log` (no MTA, no `/fail` on warn). Added
+`ops/ntfy.py` and wired it into the two places that already knew:
+
+- **`check-llm-balance.py`** pushes an `abort` every time (priority 5) and a `warn` at
+  most once per 20 h. "Already sent" is read back from a new `notified` field on the
+  `llm-balance` records, set only when the push was delivered, so a failed push is
+  retried on the next run and no state file exists. `--no-notify`; `--no-record` implies it.
+- **`run-pipeline.sh`** calls `notify_run` at every exit: `ok` after the deploy is
+  recorded, `degraded`, and `failed` for a step failure, exit 65, exit 78 and the ERR trap.
+  Not on 69 (the balance check already pushed) and not on 75 (no run; only Healthchecks
+  can report that). The summary carries postings and the change since the previous
+  export-check, schema ok/failed with failure classes, the run's LLM cost and tokens, the
+  export checks (soft warnings named, hard failures listed), and the balance left.
+
+Non-obvious decisions:
+- Public ntfy.sh with a secret topic (`NTFY_TOPIC` in `.env`, generated on the VPS, never
+  in git); JSON publish because headers carry only ASCII and the messages are Romanian.
+- One push per run for now (pax: still in development, daily later). `NTFY_SUMMARY=off`
+  keeps only failed/degraded runs and a balance under the abort level.
+- LLM cost is the `llm-schema` record's `cost_usd` (~99% of spend). `occupations` also
+  calls the LLM (about a cent a run, e.g. $0.0070 for 50 titles) but writes no record.
+- The balance in a summary is read fresh at the end of the run, so a heavy run that
+  leaves the account under `LLM_BALANCE_MIN` says "next slot will abort" one slot early
+  (today's 10:15Z run would have warned at 11:05Z, not 15:33Z).
+- `previous_export()` returns the export-check *before* the run's own, so a re-sent
+  summary for an old run does not diff against the newest one (found by rendering the
+  11 Oct run from the real log).
+- `webapp/conftest.py` imports `llm_config` first and then strips `NTFY_*` for every test:
+  `load_dotenv()` would otherwise put the real topic back and a test of the abort path
+  would buzz a phone. A shared `posts` fixture stands in for `urlopen`.
+
+Tests: `test_ntfy.py` (57), the new `TestNotifications` in `test_check_llm_balance.py`,
+and eight wrapper tests in `test_run_pipeline_sh.py`; whole suite 1088 passed. Live on
+this box as soon as the working tree is (the cron runs from it); one marker push sent.
+Not committed. Still open under the backlog item: the top-up, the unlogged ~$0.40 spend,
+and the threshold change.
+
 ### 2026-10-11 — FIX-05-STAGES: oral exam stages added to the calendar vocabulary
 
 Pulled and migrated the VPS (`0016_postingobservation` applied), then ran

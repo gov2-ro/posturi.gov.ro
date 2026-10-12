@@ -605,9 +605,9 @@ recorded as degraded).
 
 `ops/check-llm-balance.py` runs first, before anything is fetched or paid for: it reads
 the DeepSeek balance (`GET /user/balance`, free) and **exits 69 below `LLM_BALANCE_MIN`**
-(default `0.50` USD, or when the account reports `is_available: false`), which
+(default `1.00` USD, or when the account reports `is_available: false`), which
 `ops/run-pipeline.sh` turns into a `/fail` ping and an immediate stop. Below
-`LLM_BALANCE_WARN` (default `3.00`) it only warns. A check that cannot reach the API,
+`LLM_BALANCE_WARN` (default `5.00`) it only warns. A check that cannot reach the API,
 or a provider other than DeepSeek, prints a line and exits 0 — it never blocks a run.
 `POSTURI_SKIP_BALANCE_CHECK=1` bypasses it; `--need USD` is for a manual backfill of known
 cost. Exit codes of `ops/run-pipeline.sh`: `0` fine, `65` export failed its hard checks,

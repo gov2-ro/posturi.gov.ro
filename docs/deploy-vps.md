@@ -162,7 +162,8 @@ leaves stale jobs published.
 Exit codes from `ops/run-pipeline.sh`: `0` fine, `65` the export failed its hard
 checks and was **not** deployed, `69` the LLM account balance is too low to start (nothing
 ran), `75` a previous run still holds the lock, `78` unapplied migrations, anything
-else a failure. Every non-zero exit has already been reported to `HEALTHCHECK_URL`.
+else a failure. Every non-zero exit has already been reported to `HEALTHCHECK_URL`,
+and, when `NTFY_TOPIC` is set, pushed to your phone (see [Notifications](#notifications)).
 
 ### Observability
 
@@ -173,6 +174,50 @@ Three artefacts, in increasing order of how often you need them:
 | `data/pipeline-runs.jsonl` | one record per run (`kind: "run"`) plus one per export check (`kind: "export-check"`), joined by `run_id`. Step timings, exit codes, and 33 data metrics with run-over-run deltas. Also `kind: "llm-balance"` (the pre-flight balance and its outcome), `"llm-schema"` and `"deploy"`. |
 | `logs/pipeline.log` | everything the steps printed. Runs are delimited by `=== posturi pipeline run <id> (<trigger>) — … ===`; grep the run id. Rotate it with `ops/logrotate.posturi`. |
 | `HEALTHCHECK_URL` | the dead-man's switch. `/start` at the top of a run, `/fail` on any failure, a bare ping on success. **This is the only signal that can report a run which never happened** — a failure alert cannot. |
+
+### Notifications
+
+`ops/ntfy.py` pushes to [ntfy.sh](https://ntfy.sh) so a low balance or a bad run reaches
+you without anyone reading a log. It is additive: `HEALTHCHECK_URL` stays the only thing
+that can report a run which never started (a stopped cron, exit `75`).
+
+Setup, once, on the VPS:
+
+```bash
+echo "NTFY_TOPIC=posturi-$(openssl rand -hex 8)" >> .env   # the topic IS the secret
+.venv/bin/python ops/ntfy.py test                           # one marker push
+```
+
+Then install the ntfy app and subscribe to that topic. Settings (`.env`): `NTFY_TOPIC`
+(blank = off), `NTFY_URL` (default `https://ntfy.sh`), `NTFY_SUMMARY` (`off` = only what
+needs attention).
+
+| Push | Sent by | Priority | When |
+|---|---|---|---|
+| `posturi 13:15 ok` | `run-pipeline.sh`, end of every run | low (silent); default if a soft check warned or the balance is under `LLM_BALANCE_WARN`; high if it is under `LLM_BALANCE_MIN` | postings and the change since last run, extraction counts, **LLM cost** and tokens, export checks, balance left |
+| `posturi 13:15 FAILED` / `degraded` | `run-pipeline.sh`, any failing exit | high | names the failed step and exit code; `65` lists the failed hard checks; says the site still serves the previous build |
+| `posturi: LLM balance low` | `check-llm-balance.py` | default | below `LLM_BALANCE_WARN`, at most once per 20 h (read back from the `notified` field of the `llm-balance` records) |
+| `posturi: LLM balance too low, run aborted` | `check-llm-balance.py` | urgent | every slot aborted with exit `69` |
+
+The per-run LLM cost is the schema step's (`kind: "llm-schema"`), about 99% of spend; the
+`occupations` step costs under a cent a run and is not in the run log. The balance in the
+message is read from DeepSeek at the end of the run, so a heavy run that leaves you under
+the abort level says so one slot early. Times are Europe/Bucharest.
+
+**The balance is the DeepSeek account's, not the API key's** (checked 2026-10-12: a new
+dedicated key read the old balance plus the $5.00 top-up). Other projects on the account
+spend from the same pot, so the summary reconciles it: `Other spend $0.40 since last run`
+when the balance fell by more than this project logged, `Top-up $5.00 since last run`
+when it rose. It compares this run's start-of-run reading with the previous one, counts
+every `llm-schema` record written in between (hand-runs included) as ours, and ignores a
+gap under $0.05 (the `occupations` cents). Nothing extra is logged for it
+(`balance_ledger()` in `ops/ntfy.py`). For a balance that is only this project's, give it
+its own DeepSeek account; a separate key does not do that.
+
+A push that cannot be delivered prints one `WARNING: ntfy push failed` line (never the
+topic) and the run goes on; the notifier cannot change an exit status. To make the summary
+a daily digest later, send it from a once-a-day cron or the second slot only: the builder
+is `build_run_summary()` in `ops/ntfy.py`.
 
 `ops/check-export.py` runs between the export and the deploy and is what decides
 whether the file ships. It has two severities:
@@ -219,9 +264,9 @@ real run compares its deltas against.
   posting, so it is a reviewed, paid step, not a config tweak.
 - **The balance check runs first.** `ops/check-llm-balance.py` asks DeepSeek for the
   account balance (`GET /user/balance`, free) before anything is fetched or paid for.
-  Below `LLM_BALANCE_MIN` (default `0.50` USD) or with `is_available: false` it exits
+  Below `LLM_BALANCE_MIN` (default `1.00` USD) or with `is_available: false` it exits
   69 and `ops/run-pipeline.sh` pings `/fail` and stops — the 2026-10-05 backfill instead
-  died on a `402` half an hour in. Below `LLM_BALANCE_WARN` (default `3.00`) it only
+  died on a `402` half an hour in. Below `LLM_BALANCE_WARN` (default `5.00`) it only
   prints `WARNING: … top up soon` and the run continues. Anything that is not a verdict
   on the balance (network error, bad response, no key, a provider other than DeepSeek)
   prints a line and exits 0: a broken check never blocks a run. The provider is the one

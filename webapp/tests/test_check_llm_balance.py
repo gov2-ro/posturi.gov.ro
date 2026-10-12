@@ -16,6 +16,7 @@ import io
 import json
 import sys
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -263,6 +264,19 @@ class TestMain:
 
 # ---------------------------------------------------------------- the record
 
+class TestDefaults:
+    def test_a_run_needs_a_dollar_and_the_warning_comes_at_five(self, bal):
+        # $1 clears one Monday-sized run ($0.37 on 2026-10-12) with room to spare; $5 is
+        # about three weeks at the logged ~$1.5/week, and the account is shared, so it
+        # is the headroom for what other projects spend as well.
+        assert (bal.DEFAULT_MIN, bal.DEFAULT_WARN) == (1.0, 5.0)
+
+    def test_a_balance_between_the_two_warns_and_one_under_the_minimum_aborts(self, bal):
+        assert bal.assess(body("4.99"), minimum=bal.DEFAULT_MIN, warn=bal.DEFAULT_WARN).outcome == "warn"
+        assert bal.assess(body("5.00"), minimum=bal.DEFAULT_MIN, warn=bal.DEFAULT_WARN).outcome == "ok"
+        assert bal.assess(body("0.99"), minimum=bal.DEFAULT_MIN, warn=bal.DEFAULT_WARN).outcome == "abort"
+
+
 class TestRecord:
     def test_shape(self, bal, env, monkeypatch):
         monkeypatch.setenv("POSTURI_RUN_ID", "2026-10-10T11:45:00Z")
@@ -276,7 +290,7 @@ class TestRecord:
         assert rec["currency"] == "USD"
         assert rec["balance"] == 1.40
         assert rec["is_available"] is True
-        assert (rec["min"], rec["warn"], rec["need"]) == (0.5, 3.0, None)
+        assert (rec["min"], rec["warn"], rec["need"]) == (1.0, 5.0, None)
         assert rec["outcome"] == "warn"
         assert rec["checked_at"].endswith("Z") and rec["host"]
 
@@ -343,3 +357,98 @@ class TestReadersIgnoreTheRecord:
         log = tmp_path / "a.jsonl"
         self.write(log, [{"kind": "llm-balance", "run_id": "r1", "outcome": "ok"}])
         assert check_export.load_baselines(log) == {"previous": None, "window": []}
+
+
+# ----------------------------------------------------------- ntfy notifications
+
+class TestNotifications:
+    """OPS-BALANCE: the abort always pushes, the warning at most once a day.
+
+    `posts` (webapp/conftest.py) stands in for urlopen, so nothing reaches ntfy.sh;
+    the balance lookup itself is replaced by run_main as in every test above.
+    """
+
+    TOPIC = "posturi-test-topic-0123456789abcdef"
+
+    @pytest.fixture(autouse=True)
+    def topic(self, monkeypatch, _never_push_to_the_real_topic):
+        # Depending on the guard by name makes it run first, so this wins.
+        monkeypatch.setenv("NTFY_TOPIC", self.TOPIC)
+
+    def test_an_abort_pushes_urgently_and_records_the_delivery(self, bal, env, monkeypatch, posts):
+        assert run_main(bal, monkeypatch, body("0.45"), "--run-log", str(env)) == 69
+        (post,) = posts
+        assert post["body"]["topic"] == self.TOPIC
+        assert post["body"]["priority"] == 5
+        assert "$0.45" in post["body"]["message"]
+        assert records(env)[-1]["notified"] is True
+
+    def test_a_warning_pushes_at_default_priority_and_the_run_goes_on(
+            self, bal, env, monkeypatch, posts):
+        assert run_main(bal, monkeypatch, body("1.40"), "--run-log", str(env)) == 0
+        (post,) = posts
+        assert post["body"]["priority"] == 3 and "$1.40" in post["body"]["message"]
+        assert records(env)[-1]["notified"] is True
+
+    def test_a_second_warning_inside_the_window_is_not_pushed(self, bal, env, monkeypatch, posts):
+        run_main(bal, monkeypatch, body("1.40"), "--run-log", str(env))
+        run_main(bal, monkeypatch, body("1.35"), "--run-log", str(env))
+        assert len(posts) == 1
+        assert [r["notified"] for r in records(env)] == [True, False]
+
+    def test_a_warning_whose_push_failed_is_retried_on_the_next_run(
+            self, bal, env, monkeypatch, posts):
+        working = urllib.request.urlopen            # the `posts` fake, patched in by the fixture
+
+        def down(*a, **k):
+            raise urllib.error.URLError("down")
+        monkeypatch.setattr("urllib.request.urlopen", down)
+        assert run_main(bal, monkeypatch, body("1.40"), "--run-log", str(env)) == 0
+        assert records(env)[-1]["notified"] is False
+
+        monkeypatch.setattr("urllib.request.urlopen", working)
+        run_main(bal, monkeypatch, body("1.35"), "--run-log", str(env))
+        assert len(posts) == 1, "the earlier failure did not count as a delivered warning"
+        assert records(env)[-1]["notified"] is True
+
+    def test_every_abort_is_pushed(self, bal, env, monkeypatch, posts):
+        run_main(bal, monkeypatch, body("0.45"), "--run-log", str(env))
+        run_main(bal, monkeypatch, body("0.45"), "--run-log", str(env))
+        assert len(posts) == 2
+
+    @pytest.mark.parametrize("response, provider", [
+        (body("12.34"), "deepseek"),                         # ok
+        (urllib.error.URLError("x"), "deepseek"),            # unavailable
+        (RuntimeError("never called"), "gemini"),            # skipped
+    ])
+    def test_ok_unavailable_and_skipped_push_nothing(
+            self, bal, env, monkeypatch, posts, response, provider):
+        monkeypatch.setenv("LLM_PROVIDER", provider)
+        run_main(bal, monkeypatch, response, "--run-log", str(env))
+        assert posts == []
+        assert records(env)[-1]["notified"] is None
+
+    def test_no_topic_means_no_push(self, bal, env, monkeypatch, posts):
+        monkeypatch.delenv("NTFY_TOPIC")
+        assert run_main(bal, monkeypatch, body("0.45"), "--run-log", str(env)) == 69
+        assert posts == [] and records(env)[-1]["notified"] is None
+
+    def test_no_notify_flag_silences_a_hand_run_but_still_records(self, bal, env, monkeypatch, posts):
+        run_main(bal, monkeypatch, body("0.45"), "--no-notify", "--run-log", str(env))
+        assert posts == [] and records(env)[-1]["notified"] is None
+
+    def test_no_record_is_a_hand_run_and_pushes_nothing(self, bal, env, monkeypatch, posts):
+        assert run_main(bal, monkeypatch, body("0.45"), "--no-record", "--run-log", str(env)) == 69
+        assert posts == []
+
+    def test_a_dead_ntfy_never_changes_the_exit_status(self, bal, env, monkeypatch):
+        def down(*a, **k):
+            raise urllib.error.URLError("down")
+        monkeypatch.setattr("urllib.request.urlopen", down)
+        assert run_main(bal, monkeypatch, body("0.45"), "--run-log", str(env)) == 69
+        assert run_main(bal, monkeypatch, body("1.40"), "--run-log", str(env)) == 0
+
+    def test_the_topic_is_never_printed_or_recorded(self, bal, env, monkeypatch, posts, capsys):
+        run_main(bal, monkeypatch, body("0.45"), "--run-log", str(env))
+        out = capsys.readouterr()
+        assert self.TOPIC not in out.out + out.err + env.read_text()

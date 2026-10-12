@@ -28,12 +28,14 @@ case "$1" in
   pipeline.py)      exit "${STUB_PIPELINE:-0}" ;;
   ops/check-export.py) exit "${STUB_CHECK:-0}" ;;
   ops/record-deploy.py) exit 0 ;;
+  ops/ntfy.py)      exit "${STUB_NTFY:-0}" ;;
 esac
 exit 0
 """
 
 STUB_DEPLOY = """#!/usr/bin/env bash
 echo "deploy-php.sh $*" >> "$STUB_LOG"
+exit "${STUB_DEPLOY_EXIT:-0}"
 """
 
 
@@ -156,3 +158,62 @@ def test_skip_env_bypasses_the_balance_check(root):
     code, out, calls = run(root, STUB_BALANCE=69, POSTURI_SKIP_BALANCE_CHECK=1)
     assert code == 0 and deployed(calls)
     assert not any(c.startswith("ops/check-llm-balance.py") for c in calls)
+
+
+# ------------------------------------------------- ntfy: one line per finished run
+
+def ntfy_calls(calls):
+    return [c for c in calls if c.startswith("ops/ntfy.py")]
+
+
+def test_a_healthy_run_sends_its_summary_once_after_the_deploy_is_recorded(root):
+    code, out, calls = run(root)
+    assert code == 0
+    assert ntfy_calls(calls) == ["ops/ntfy.py run --outcome ok --exit 0"]
+    assert calls.index("ops/record-deploy.py") < calls.index(ntfy_calls(calls)[0])
+
+
+def test_a_failed_step_sends_a_failure(root):
+    code, out, calls = run(root, STUB_PIPELINE=1)
+    assert code == 1
+    assert ntfy_calls(calls) == ["ops/ntfy.py run --outcome failed --exit 1"]
+
+
+def test_a_degraded_deploy_sends_a_degraded_summary_after_recording_it(root):
+    code, out, calls = run(root, STUB_PIPELINE=1, POSTURI_ALLOW_DEGRADED_DEPLOY=1)
+    assert code == 1
+    assert ntfy_calls(calls) == ["ops/ntfy.py run --outcome degraded --exit 1"]
+    assert calls.index("ops/record-deploy.py --degraded") < calls.index(ntfy_calls(calls)[0])
+
+
+def test_a_failed_export_check_sends_a_failure_with_exit_65(root):
+    code, out, calls = run(root, STUB_CHECK=1)
+    assert code == 65
+    assert ntfy_calls(calls) == ["ops/ntfy.py run --outcome failed --exit 65"]
+
+
+def test_pending_migrations_send_a_failure_with_exit_78(root):
+    code, out, calls = run(root, STUB_MIGRATE=1)
+    assert code == 78
+    assert ntfy_calls(calls) == ["ops/ntfy.py run --outcome failed --exit 78"]
+
+
+def test_a_crash_after_the_checks_still_reports_through_the_error_handler(root):
+    code, out, calls = run(root, STUB_DEPLOY_EXIT=3)
+    assert code == 3 and "FAILED (exit 3)" in out
+    assert ntfy_calls(calls) == ["ops/ntfy.py run --outcome failed --exit 3"]
+
+
+def test_a_balance_abort_leaves_the_push_to_the_balance_check(root):
+    # check-llm-balance.py has already sent the urgent push; a second one would be noise.
+    code, out, calls = run(root, STUB_BALANCE=69)
+    assert code == 69
+    assert ntfy_calls(calls) == []
+
+
+def test_a_crashing_notifier_never_changes_the_exit_status(root):
+    assert run(root, STUB_NTFY=1)[0] == 0
+    assert run(root, STUB_NTFY=1, STUB_CHECK=1)[0] == 65
+    assert run(root, STUB_NTFY=1, STUB_PIPELINE=2)[0] == 2
+    code, out, calls = run(root, STUB_NTFY=1, STUB_MIGRATE=1)
+    assert code == 78 and "FAILED (exit" not in out, "not routed through the crash handler"

@@ -31,7 +31,7 @@ a run, an export check or a deploy (check-export.py's baselines select on `kind`
 Usage:
     ops/check-llm-balance.py --no-record            # by hand: what is left?
     ops/check-llm-balance.py --need 8               # before a backfill costing ~$8
-    LLM_BALANCE_MIN=1 LLM_BALANCE_WARN=5 ops/check-llm-balance.py
+    LLM_BALANCE_MIN=2 LLM_BALANCE_WARN=10 ops/check-llm-balance.py
 """
 from __future__ import annotations
 
@@ -57,8 +57,9 @@ TIMEOUT_S = 10.0
 #: script can exit with stops a run.
 EXIT_ABORT = 69
 
-DEFAULT_MIN = 0.50    # a run that starts below this will not finish
-DEFAULT_WARN = 3.00   # a few runs' worth: enough warning to top up in time
+# The account is shared with other projects, so these cover what they spend too.
+DEFAULT_MIN = 1.00    # one heavy run ($0.37 on a Monday) with room to spare
+DEFAULT_WARN = 5.00   # about three weeks of this project's ~$1.5/week
 
 
 @dataclass
@@ -238,6 +239,7 @@ def build_record(
     minimum: float,
     warn: float,
     need: float | None,
+    notified: bool | None = None,
 ) -> dict:
     return {
         "kind": "llm-balance",
@@ -255,6 +257,9 @@ def build_record(
         "need": need,
         "outcome": verdict.outcome,
         "message": verdict.message,
+        # Whether an ntfy push went out for this verdict; None when none was due or
+        # configured. ops/ntfy.py's once-a-day rule for warnings reads this back.
+        "notified": notified,
     }
 
 
@@ -267,6 +272,30 @@ def record(run_log: Path, rec: dict) -> None:
     except Exception as exc:
         print(f"WARNING: could not record the balance check: "
               f"{type(exc).__name__}: {exc}")
+
+
+def push(verdict: Verdict, *, minimum: float, warn: float, run_log: Path) -> bool | None:
+    """Tell a human about an `abort` (always) or a `warn` (at most once a day).
+
+    True / False: the push was / was not delivered, which `ops/ntfy.py` reads back from
+    the run log to decide whether a warning is already out. None: no topic configured.
+    A broken notifier is False, never an exception: the verdict, not the phone, decides
+    whether the run goes ahead.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import ntfy
+        if ntfy.settings() is None:
+            return None
+        if verdict.outcome == "warn" and ntfy.warn_already_sent(
+                ntfy.read_records(run_log), datetime.now(timezone.utc)):
+            return False
+        return ntfy.notify(ntfy.build_balance_alert(
+            verdict.outcome, verdict.balance, minimum=minimum, warn=warn,
+            top_up_url=TOP_UP_URL))
+    except Exception as exc:
+        print(f"WARNING: could not send the balance notification: {type(exc).__name__}")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +329,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run-log", default=str(DEFAULT_RUN_LOG), metavar="PATH",
                     help="Run log to append this observation to.")
     ap.add_argument("--no-record", action="store_true",
-                    help="Do not append a record (for manual use).")
+                    help="Do not append a record (for manual use). Implies --no-notify.")
+    ap.add_argument("--no-notify", action="store_true",
+                    help="Do not send an ntfy push for a warn or abort.")
     args = ap.parse_args(argv)
 
     try:
@@ -323,10 +354,14 @@ def main(argv: list[str] | None = None) -> int:
     print(verdict.message)
     sys.stdout.flush()
 
+    notified = None
+    if verdict.outcome in ("warn", "abort") and not (args.no_record or args.no_notify):
+        notified = push(verdict, minimum=minimum, warn=warn, run_log=Path(args.run_log))
+
     if not args.no_record:
         record(Path(args.run_log),
                build_record(verdict, provider=provider, minimum=minimum,
-                            warn=warn, need=args.need))
+                            warn=warn, need=args.need, notified=notified))
     return verdict.exit_code
 
 

@@ -175,6 +175,51 @@ Three artefacts, in increasing order of how often you need them:
 | `logs/pipeline.log` | everything the steps printed. Runs are delimited by `=== posturi pipeline run <id> (<trigger>) — … ===`; grep the run id. Rotate it with `ops/logrotate.posturi`. |
 | `HEALTHCHECK_URL` | the dead-man's switch. `/start` at the top of a run, `/fail` on any failure, a bare ping on success. **This is the only signal that can report a run which never happened** — a failure alert cannot. |
 
+### LLM call ledger
+
+Every provider API attempt the pipeline makes is one immutable row in `jobs_llmcall`
+(`llm_ledger.py`, FIX-10): the `schema`, `infer` and `occupations` steps, retries and
+repairs included, a call that failed before returning any usage included. Unlike
+`JobPostingSchemaVariant.cost_usd` (upserted per posting, so a re-extraction overwrites
+the earlier amount and moves the spend to the latest day) nothing is ever updated.
+
+```sql
+-- spend per Bucharest day and step; `unpriced` calls are NOT in `usd`
+SELECT (ended_at AT TIME ZONE 'Europe/Bucharest')::date AS day, step, count(*) AS calls,
+       round(sum(cost_usd), 4) AS usd, count(*) FILTER (WHERE cost_usd IS NULL) AS unpriced
+  FROM jobs_llmcall GROUP BY 1, 2 ORDER BY 1 DESC, 2;
+```
+
+What a row means:
+
+- Unknown is `NULL`, never `0`: a call that returned no usage has no tokens and no cost,
+  so a `sum(cost_usd)` under-counts by exactly the `unpriced` calls.
+- `pricing` is the rate card applied (per-million input/output/cache-read, the peak
+  multiplier, a hash of the config block), so editing `models_config.json` later does not
+  restate old spend. The amount is priced at the time the call ended.
+- `api_ok` says the provider answered; `outcome` says what happened to the answer
+  (`ok`, `validation_failed`, `truncated`, `transient_error`, `fatal_error`, `error`). A
+  rejected answer is billed, so a `validation_failed` row has tokens and a cost.
+- `is_repair` marks the retry that re-asked with the validation error appended.
+  Reasoning tokens are recorded but never added to the cost: they are inside the output
+  tokens. Cache-write tokens are recorded; the config has no cache-write rate, so they are
+  priced as ordinary input (no enabled provider bills them separately).
+- No prompts, responses, keys or error messages: `subject` is a slug or a job title and
+  `error_class` is an exception class name.
+
+Each step also appends one `kind: "llm-usage"` record to `data/pipeline-runs.jsonl`
+(calls, tokens, `cost_usd`, `unknown_cost_calls`, `ledger_write_errors`). Those totals are
+kept in memory by the step, so they do not depend on the database: a ledger write that
+fails prints one warning, is counted in `ledger_write_errors`, and never fails the step.
+The ntfy summary and the balance reconciliation read these records (the older
+`llm-schema` record stays, and covers a run from before the ledger).
+
+`POSTURI_LEDGER=off` keeps the totals but writes no rows (the test suite sets it).
+It is a local record of attempts this code made, **not the provider's invoice**: a process
+that dies after the provider accepted a request and before the row was written leaves a
+call that cost money and is not here, and calls made by other projects on the same DeepSeek
+account are not here at all (the ntfy summary reports those as `Other spend`).
+
 ### Notifications
 
 `ops/ntfy.py` pushes to [ntfy.sh](https://ntfy.sh) so a low balance or a bad run reaches
@@ -199,8 +244,9 @@ needs attention).
 | `posturi: LLM balance low` | `check-llm-balance.py` | default | below `LLM_BALANCE_WARN`, at most once per 20 h (read back from the `notified` field of the `llm-balance` records) |
 | `posturi: LLM balance too low, run aborted` | `check-llm-balance.py` | urgent | every slot aborted with exit `69` |
 
-The per-run LLM cost is the schema step's (`kind: "llm-schema"`), about 99% of spend; the
-`occupations` step costs under a cent a run and is not in the run log. The balance in the
+The per-run LLM cost is the sum of the `llm-usage` records (schema, occupations and infer, every
+attempt; the message names the steps over half a cent), falling back to the schema record for a run
+from before the ledger. The balance in the
 message is read from DeepSeek at the end of the run, so a heavy run that leaves you under
 the abort level says so one slot early. Times are Europe/Bucharest.
 

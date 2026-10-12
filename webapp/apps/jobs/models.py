@@ -426,3 +426,86 @@ class PostingObservation(models.Model):
 
     def __str__(self):
         return f"{self.url} @ {self.observed_at:%Y-%m-%d %H:%M}"
+
+
+class LlmCall(models.Model):
+    """One provider API attempt, as it happened (FIX-10). Append-only.
+
+    The ledger of LLM spend. `JobPostingSchemaVariant.cost_usd` cannot be it: that row
+    is upserted per (posting, provider, model, prompt), so a re-extraction overwrites
+    the earlier amount and moves the spend to the latest day. Here every attempt --
+    retries, repairs, calls that failed before returning any usage -- is a row of its
+    own and nothing is ever updated or removed.
+
+    Written by `llm_ledger.py` from the three steps that call a provider (`schema`,
+    `infer`, `occupations`). It is a local record of attempts this code made, not the
+    provider's invoice: a process that dies between the provider accepting a request
+    and the row being written leaves a call that cost money and is not here.
+
+    Unknown is null, never zero: a call that returned no usage has no token counts
+    and no cost, and a sum over `cost_usd` therefore under-counts by exactly the calls
+    whose `cost_usd` is null. `pricing` is the rate card used at call time (including
+    the peak multiplier if one applied), so editing models_config.json later cannot
+    restate old spend.
+
+    No prompts, no responses, no keys, no personal data: `subject` is a slug or a job
+    title, and `error_class` is an exception class name, not its message.
+    """
+
+    #: Identifies the attempt locally so a re-delivered record is a no-op
+    #: (`INSERT ... ON CONFLICT DO NOTHING`). Two real calls never share one.
+    call_id = models.CharField(max_length=120, unique=True)
+    run_id = models.CharField(max_length=80, blank=True, default="", db_index=True,
+                              help_text="The pipeline run (POSTURI_RUN_ID); '' for a hand-run.")
+    step = models.CharField(max_length=24, db_index=True,
+                            help_text="schema | infer | occupations")
+    subject = models.CharField(max_length=300, blank=True, default="",
+                               help_text="Posting slug, or the job title being classified.")
+    posting_id = models.IntegerField(null=True, blank=True, db_index=True)
+    provider = models.CharField(max_length=50)
+    model = models.CharField(max_length=100)
+    prompt_version = models.CharField(max_length=20, blank=True, default="")
+    source_revision = models.CharField(max_length=64, blank=True, default="")
+
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(db_index=True)
+    latency_ms = models.IntegerField(null=True, blank=True)
+
+    attempt = models.PositiveSmallIntegerField(
+        default=1, help_text="1-based attempt within one logical request.")
+    is_repair = models.BooleanField(
+        default=False, help_text="This attempt re-asked with the validation error appended.")
+    api_ok = models.BooleanField(
+        help_text="The provider returned a response. Says nothing about whether it was valid.")
+    outcome = models.CharField(
+        max_length=24,
+        help_text="ok | validation_failed | truncated | transient_error | fatal_error | error")
+    error_class = models.CharField(max_length=80, blank=True, default="")
+    request_id = models.CharField(max_length=120, blank=True, default="")
+
+    input_tokens = models.IntegerField(null=True, blank=True,
+                                       help_text="Total prompt tokens, cached ones included.")
+    output_tokens = models.IntegerField(null=True, blank=True)
+    cache_read_tokens = models.IntegerField(null=True, blank=True)
+    cache_write_tokens = models.IntegerField(null=True, blank=True)
+    reasoning_tokens = models.IntegerField(null=True, blank=True)
+
+    pricing = models.JSONField(null=True, blank=True,
+                               help_text="The rates applied: per-million input/output/cache, "
+                                         "the peak multiplier, and a hash of the config block.")
+    cost_usd = models.DecimalField(max_digits=12, decimal_places=8, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-ended_at", "-id"]
+        verbose_name = "Apel LLM"
+        verbose_name_plural = "Apeluri LLM"
+        indexes = [models.Index(fields=["step", "ended_at"], name="llmcall_step_ended_idx")]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise RuntimeError("LlmCall is append-only: insert a new row instead of saving this one")
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.step} {self.provider}/{self.model} {self.outcome} @ {self.ended_at:%Y-%m-%d %H:%M}"

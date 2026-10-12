@@ -25,6 +25,12 @@ def _never_push_to_the_real_topic(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _never_write_to_the_real_llm_ledger(monkeypatch):
+    """No test may insert into the real `jobs_llmcall` (FIX-10); tests pass their own sink."""
+    monkeypatch.setenv("POSTURI_LEDGER", "off")
+
+
 class _FakeNtfyResponse:
     status = 200
 

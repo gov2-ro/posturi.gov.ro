@@ -84,6 +84,16 @@ def schema_rec(run_id=RUN, selected=148, ok=147, failed=1, cost=0.369916,
                       "cost_usd": cost}}
 
 
+def usage_rec(step="schema", run_id=RUN, cost=0.369916, tokens_in=1_877_120,
+              tokens_out=409_072, unpriced=0, write_errors=0, calls=148):
+    """The `llm-usage` record every LLM step now writes (FIX-10)."""
+    return {"kind": "llm-usage", "format": 1, "run_id": run_id, "step": step,
+            "provider": "deepseek", "model": "deepseek-v4-flash", "calls": calls,
+            "unknown_cost_calls": unpriced, "ledger_write_errors": write_errors,
+            "usage": {"input_tokens": tokens_in, "output_tokens": tokens_out,
+                      "cached_input_tokens": 0, "reasoning_tokens": 0, "cost_usd": cost}}
+
+
 def deploy_rec(run_id=RUN, at="2026-10-12T11:05:15Z", degraded=False):
     return {"kind": "deploy", "run_id": run_id, "deployed": True,
             "degraded": degraded, "at": at}
@@ -478,6 +488,87 @@ class TestRunSummaryLedger:
             None, run_id=RUN, end_balance=12.0, minimum=1.0, warn=5.0,
             ledger={"elsewhere": 3.0, "topped_up": 0.0})
         assert m.priority == 2
+
+
+# ------------------------------------------------- FIX-10: every step's LLM cost
+
+class TestUsageRecords:
+    def test_for_run_collects_the_usage_of_each_step(self, ntfy):
+        recs = [usage_rec("schema"), usage_rec("occupations", cost=0.007),
+                usage_rec("schema", run_id="other"), schema_rec()]
+        got = ntfy.for_run(recs, RUN)
+        assert set(got["usage"]) == {"schema", "occupations"}
+        assert got["usage"]["occupations"]["usage"]["cost_usd"] == 0.007
+
+    def test_a_run_with_no_usage_records_has_no_usage_key(self, ntfy):
+        assert "usage" not in ntfy.for_run([schema_rec()], RUN)
+
+
+class TestRunSummaryLlmCost:
+    def body(self, ntfy, usage, **kw):
+        recs = {"run": run_rec(), "export": export_rec(), "schema": schema_rec(), "usage": usage}
+        return ntfy.build_run_summary("ok", 0, recs, None, run_id=RUN, end_balance=None,
+                                      minimum=1.0, warn=5.0, **kw).body
+
+    def test_the_total_covers_every_step_with_the_breakdown(self, ntfy):
+        usage = {"schema": usage_rec("schema", cost=0.369916),
+                 "occupations": usage_rec("occupations", cost=0.0070, tokens_in=40_000, tokens_out=8_000),
+                 "infer": usage_rec("infer", cost=0.0003, tokens_in=900, tokens_out=40)}
+        text = self.body(ntfy, usage)
+        assert "LLM $0.377 (schema $0.370, occupations $0.007)" in text
+        assert "1.9M in / 0.4M out" in text, "tokens are summed across steps too"
+
+    def test_one_step_needs_no_breakdown(self, ntfy):
+        text = self.body(ntfy, {"schema": usage_rec("schema", cost=0.369916)})
+        assert "LLM $0.370 ·" in text and "(schema" not in text
+
+    def test_older_runs_without_usage_records_fall_back_to_the_schema_record(self, ntfy):
+        recs = {"run": run_rec(), "export": export_rec(), "schema": schema_rec()}
+        text = ntfy.build_run_summary("ok", 0, recs, None, run_id=RUN, end_balance=None,
+                                      minimum=1.0, warn=5.0).body
+        assert "LLM $0.370 · 1.9M in / 0.4M out" in text
+
+    def test_calls_with_no_price_are_counted_not_hidden(self, ntfy):
+        text = self.body(ntfy, {"schema": usage_rec("schema", unpriced=3)})
+        assert "3 calls unpriced" in text
+
+    def test_a_ledger_that_missed_writes_says_so(self, ntfy):
+        text = self.body(ntfy, {"schema": usage_rec("schema", write_errors=2)})
+        assert "2 calls not in the ledger" in text
+
+    def test_a_clean_ledger_adds_nothing(self, ntfy):
+        text = self.body(ntfy, {"schema": usage_rec("schema")})
+        assert "unpriced" not in text and "ledger" not in text
+
+
+class TestLedgerCountsEveryStep:
+    A, B = "2026-10-11T15:33:01Z", "2026-10-12T10:15:01Z"
+
+    def log(self, before, after, *between):
+        return [balance_rec("2026-10-11T15:33:04Z", "ok", before, run_id=self.A), *between,
+                balance_rec("2026-10-12T10:15:05Z", "ok", after, run_id=self.B)]
+
+    def test_occupations_and_infer_spend_is_ours_not_elsewhere(self, ntfy):
+        between = [usage_rec("schema", run_id=self.A, cost=0.37),
+                   usage_rec("occupations", run_id=self.A, cost=0.20),
+                   usage_rec("infer", run_id=self.A, cost=0.10)]
+        got = ntfy.balance_ledger(self.log(1.40, 0.73, *between), self.B)
+        assert got == {"elsewhere": 0.0, "topped_up": 0.0}
+
+    def test_a_step_with_both_records_is_counted_once(self, ntfy):
+        # llm-schema (old measure) and llm-usage describe the same spend.
+        between = [schema_rec(run_id=self.A, cost=0.35), usage_rec("schema", run_id=self.A, cost=0.37)]
+        got = ntfy.balance_ledger(self.log(1.40, 1.03, *between), self.B)
+        assert got == {"elsewhere": 0.0, "topped_up": 0.0}
+
+    def test_a_run_from_before_usage_records_still_counts_through_llm_schema(self, ntfy):
+        got = ntfy.balance_ledger(self.log(1.26, 0.83, schema_rec(run_id=self.A, cost=0.028)), self.B)
+        assert got["elsewhere"] == pytest.approx(0.402)
+
+    def test_hand_run_usage_between_the_readings_counts_as_ours(self, ntfy):
+        manual = [usage_rec("schema", run_id="v4-backfill-resume-2026-10-12T06:00:00Z", cost=0.30)]
+        got = ntfy.balance_ledger(self.log(1.40, 1.10, *manual), self.B)
+        assert got == {"elsewhere": 0.0, "topped_up": 0.0}
 
 
 # ------------------------------------------------------------------------- CLI

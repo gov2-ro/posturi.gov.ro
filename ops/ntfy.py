@@ -161,7 +161,8 @@ _KIND_TO_KEY = {"run": "run", "export-check": "export", "llm-balance": "balance"
 
 def for_run(records: list[dict], run_id: str) -> dict[str, dict]:
     """The last record of each kind written under `run_id`, keyed run/export/schema/
-    balance/deploy. A kind the run did not write is absent."""
+    balance/deploy, plus `usage`: the `llm-usage` record of each LLM step by step name.
+    A kind the run did not write is absent."""
     found: dict[str, dict] = {}
     for record in records:
         if record.get("run_id") != run_id:
@@ -170,6 +171,8 @@ def for_run(records: list[dict], run_id: str) -> dict[str, dict]:
         if kind == "llm-schema":
             if record.get("step", "schema") == "schema":
                 found["schema"] = record
+        elif kind == "llm-usage":
+            found.setdefault("usage", {})[record.get("step", "?")] = record
         elif kind in _KIND_TO_KEY:
             found[_KIND_TO_KEY[kind]] = record
     return found
@@ -206,12 +209,35 @@ def warn_already_sent(records: list[dict], now: datetime,
     return False
 
 
+def _cost(record: dict) -> float:
+    return float((record.get("usage") or {}).get("cost_usd") or 0.0)
+
+
+def _logged_spend(records: list[dict]) -> float:
+    """What this project logged as spent in `records`, every LLM step counted once.
+
+    `llm-usage` records (schema, infer, occupations: every attempt, from the ledger) are
+    the full account. An `llm-schema` record covers the same schema spend more narrowly
+    (ok and truncated postings only), so it counts only for a run that has no
+    `llm-usage` record for the schema step, i.e. one from before FIX-10.
+    """
+    covered = {(r.get("run_id"), r.get("step")) for r in records if r.get("kind") == "llm-usage"}
+    total = 0.0
+    for r in records:
+        kind = r.get("kind")
+        if kind == "llm-usage":
+            total += _cost(r)
+        elif kind == "llm-schema" and (r.get("run_id"), "schema") not in covered:
+            total += _cost(r)
+    return total
+
+
 def balance_ledger(records: list[dict], run_id: str) -> dict[str, float] | None:
     """What moved the account between the previous start-of-run reading and this run's.
 
     The DeepSeek balance belongs to the account, whichever API key reads it, and other
     projects spend from it. Between two readings it can only fall by what this project
-    logged (the `llm-schema` records written in between, hand-runs included) plus
+    logged (every step's spend written in between, hand-runs included) plus
     whatever else was spent, and rise by a top-up:
 
         gap = (balance now - balance then) + our logged spend
@@ -231,8 +257,7 @@ def balance_ledger(records: list[dict], run_id: str) -> dict[str, float] | None:
     if not earlier:
         return None
     then_at, then = earlier[-1]
-    ours = sum(float((r.get("usage") or {}).get("cost_usd") or 0.0)
-               for r in records[then_at + 1:now_at] if r.get("kind") == "llm-schema")
+    ours = _logged_spend(records[then_at + 1:now_at])
     gap = (now["balance"] - then["balance"]) + ours
     if gap > LEDGER_TOLERANCE:
         return {"elsewhere": 0.0, "topped_up": round(gap, 6)}
@@ -300,6 +325,39 @@ def _failed_step_lines(run: dict, exit_code: int) -> list[str]:
     return lines
 
 
+def _llm_line(usage_by_step: dict[str, dict], schema: dict | None) -> str:
+    """`LLM $0.377 (schema $0.370, occupations $0.007) · 1.9M in / 0.4M out`.
+
+    From the `llm-usage` records, which cover every step and every attempt; a run from
+    before FIX-10 falls back to the schema record alone. A step under half a cent stays
+    in the total but not in the breakdown. Calls whose cost is unknown, and calls the
+    ledger could not store, are said, never folded into a smaller-looking number.
+    """
+    if usage_by_step:
+        steps = {name: rec for name, rec in usage_by_step.items()}
+        cost = sum(_cost(r) for r in steps.values())
+        tokens_in = sum((r.get("usage") or {}).get("input_tokens") or 0 for r in steps.values())
+        tokens_out = sum((r.get("usage") or {}).get("output_tokens") or 0 for r in steps.values())
+        unpriced = sum(r.get("unknown_cost_calls") or 0 for r in steps.values())
+        missing = sum(r.get("ledger_write_errors") or 0 for r in steps.values())
+        shown = [f"{name} ${_cost(r):.3f}" for name, r in steps.items() if _cost(r) >= 0.0005]
+        text = f"LLM ${cost:.3f}" + (f" ({', '.join(shown)})" if len(shown) > 1 else "")
+    elif schema:
+        usage = schema.get("usage") or {}
+        cost = usage.get("cost_usd")
+        text = f"LLM ${cost:.3f}" if isinstance(cost, (int, float)) else "LLM"
+        tokens_in, tokens_out = usage.get("input_tokens"), usage.get("output_tokens")
+        unpriced = missing = 0
+    else:
+        return ""
+    text += f" · {_tokens(tokens_in)} in / {_tokens(tokens_out)} out"
+    if unpriced:
+        text += f" · {unpriced} calls unpriced"
+    if missing:
+        text += f" · {missing} calls not in the ledger"
+    return text
+
+
 def build_run_summary(outcome: str, exit_code: int, recs: dict[str, dict],
                       previous: dict | None, *, run_id: str, end_balance: float | None,
                       minimum: float, warn: float,
@@ -364,11 +422,10 @@ def build_run_summary(outcome: str, exit_code: int, recs: dict[str, dict],
                                 for k, v in (schema.get("failure_classes") or {}).items())
             text += f" · {schema['failed']} failed" + (f" ({classes})" if classes else "")
         lines.append(text)
-        usage = schema.get("usage") or {}
-        cost = usage.get("cost_usd")
-        llm = f"LLM ${cost:.3f} · " if isinstance(cost, (int, float)) else "LLM "
-        lines.append(f"{llm}{_tokens(usage.get('input_tokens'))} in / "
-                     f"{_tokens(usage.get('output_tokens'))} out")
+
+    llm_line = _llm_line(recs.get("usage") or {}, schema)
+    if llm_line:
+        lines.append(llm_line)
 
     balance_level = None
     if end_balance is not None:

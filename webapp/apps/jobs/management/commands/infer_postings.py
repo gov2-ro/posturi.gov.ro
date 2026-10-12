@@ -22,10 +22,18 @@ from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from pathlib import Path
+import sys
+
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 
-from apps.jobs.models import JobPosting
+REPO_ROOT = Path(__file__).resolve().parents[5]
+sys.path.insert(0, str(REPO_ROOT))
+
+import llm_ledger  # noqa: E402  (shared FIX-10 call ledger, at the repo root)
+
+from apps.jobs.models import JobPosting  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Profession family dictionary
@@ -515,52 +523,109 @@ _LLM_PROMPT = (
 )
 
 
-def _llm_classify(title: str, provider: str) -> str:
+#: The model each provider uses for the one-word classification.
+LLM_MODELS = {
+    "gemini": "gemini-2.5-flash",
+    "openai": "gpt-4o-mini",
+    "anthropic": "claude-haiku-4-5-20251001",
+    "deepseek": "deepseek-v4-flash",
+}
+
+
+def _ledger_call(request, started, exc) -> None:
+    """Hand the finished call to the ledger request, if any. Never raises."""
+    if request is None:
+        return
+    try:
+        request.record_attempt(
+            attempt=1, is_repair=False, started_at=started,
+            ended_at=datetime.now(timezone.utc), outcome="ok" if exc is None else "error",
+            error=exc, usage=llm_ledger.take_usage())
+    except Exception:  # noqa: BLE001 — recording must never change the outcome
+        pass
+
+
+def _llm_classify(title: str, provider: str, ledger=None) -> str:
+    """One-word family classification. `ledger` (an `llm_ledger.Request`) gets one row
+    for the call, failed or not (FIX-10)."""
+    if provider not in LLM_MODELS:
+        raise RuntimeError(f"LLM call failed: Unknown provider: {provider}")
     prompt = _LLM_PROMPT.format(title=title)
     raw = ""
+    model = LLM_MODELS[provider]
+    started = datetime.now(timezone.utc)
+    if ledger is not None:
+        llm_ledger.discard_usage()
     try:
         if provider == "gemini":
             from google import genai
             client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
-            raw = client.models.generate_content(
-                model="gemini-2.5-flash", contents=prompt
-            ).text.strip()
+            resp = client.models.generate_content(model=model, contents=prompt)
+            meta = getattr(resp, "usage_metadata", None)
+            llm_ledger.note_usage(getattr(meta, "prompt_token_count", None),
+                                  getattr(meta, "candidates_token_count", None),
+                                  (getattr(meta, "cached_content_token_count", 0) or 0) if meta else None,
+                                  request_id=getattr(resp, "response_id", None))
+            raw = resp.text.strip()
         elif provider == "openai":
             import openai
             client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-            raw = client.chat.completions.create(
-                model="gpt-4o-mini",
+            resp = client.chat.completions.create(
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
-            ).choices[0].message.content.strip()
+            )
+            usage = getattr(resp, "usage", None)
+            details = getattr(usage, "prompt_tokens_details", None) if usage else None
+            llm_ledger.note_usage(getattr(usage, "prompt_tokens", None),
+                                  getattr(usage, "completion_tokens", None),
+                                  (getattr(details, "cached_tokens", 0) or 0) if usage else None,
+                                  request_id=getattr(resp, "id", None))
+            raw = resp.choices[0].message.content.strip()
         elif provider == "anthropic":
             import anthropic
             client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-            raw = client.messages.create(
-                model="claude-haiku-4-5-20251001",
+            resp = client.messages.create(
+                model=model,
                 max_tokens=20,
                 messages=[{"role": "user", "content": prompt}],
-            ).content[0].text.strip()
-        elif provider == "deepseek":
+            )
+            usage = getattr(resp, "usage", None)
+            cache_read = (getattr(usage, "cache_read_input_tokens", 0) or 0) if usage else None
+            billable = (getattr(usage, "input_tokens", None) + (cache_read or 0)
+                        if usage is not None and getattr(usage, "input_tokens", None) is not None
+                        else None)
+            llm_ledger.note_usage(billable, getattr(usage, "output_tokens", None), cache_read,
+                                  request_id=getattr(resp, "id", None))
+            raw = resp.content[0].text.strip()
+        else:  # deepseek
             import openai
             client = openai.OpenAI(
                 api_key=os.environ["DEEPSEEK_API_KEY"],
                 base_url="https://api.deepseek.com",
             )
-            raw = client.chat.completions.create(
-                model="deepseek-v4-flash",
+            resp = client.chat.completions.create(
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=20,
                 # deepseek-v4-* reason by default and would spend the whole
                 # 20-token budget thinking, returning empty content. This is a
                 # one-word classification — no reasoning needed.
                 extra_body={"thinking": {"type": "disabled"}},
-            ).choices[0].message.content.strip()
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
+            )
+            usage = getattr(resp, "usage", None)
+            details = getattr(usage, "completion_tokens_details", None) if usage else None
+            llm_ledger.note_usage(getattr(usage, "prompt_tokens", None),
+                                  getattr(usage, "completion_tokens", None),
+                                  (getattr(usage, "prompt_cache_hit_tokens", 0) or 0) if usage else None,
+                                  reasoning_tokens=getattr(details, "reasoning_tokens", None),
+                                  request_id=getattr(resp, "id", None))
+            raw = resp.choices[0].message.content.strip()
     except Exception as exc:
+        _ledger_call(ledger, started, exc)
         raise RuntimeError(f"LLM call failed: {exc}") from exc
 
+    _ledger_call(ledger, started, None)
     return _match_family(raw)
 
 
@@ -608,6 +673,7 @@ def infer_posting(
     provider: str,
     use_llm: bool,
     frequent_repost_ids: frozenset[int] | None = None,
+    ledger=None,
 ) -> dict:
     body = (posting.body_markdown or "") + "\n\n" + (posting.attachment_text or "")
     title = posting.title or ""
@@ -627,7 +693,9 @@ def infer_posting(
         source = "llm"
     elif use_llm and confidence < 0.5:
         try:
-            family = _llm_classify(title, provider)
+            family = _llm_classify(
+                title, provider,
+                ledger=ledger.request(title, posting_id=posting.pk) if ledger else None)
             confidence = 0.7
             source = "llm"
             time.sleep(0.5)
@@ -750,6 +818,16 @@ class Command(BaseCommand):
                  "batch without paying for a full --force pass over every posting.",
         )
         parser.add_argument(
+            "--run-log",
+            default=str(REPO_ROOT / "data" / "pipeline-runs.jsonl"),
+            metavar="PATH",
+            help="Append this step's LLM usage (kind llm-usage) to the pipeline run log.",
+        )
+        parser.add_argument(
+            "--no-run-log", action="store_true",
+            help="Do not append the usage record (for hand-runs).",
+        )
+        parser.add_argument(
             "--conditions-only",
             action="store_true",
             help="Re-run only the work-condition fields (work_type, remote, computer, salary) "
@@ -787,6 +865,11 @@ class Command(BaseCommand):
 
         done = llm_calls = errors = 0
 
+        ledger = None
+        if use_llm:
+            ledger = llm_ledger.make_ledger("infer", provider, LLM_MODELS.get(provider, provider),
+                                            pricer=llm_ledger.default_pricer())
+
         with tqdm(qs.iterator(chunk_size=200), total=total, unit="post", dynamic_ncols=True) as bar:
             for posting in bar:
                 bar.set_description((posting.title or "")[:50])
@@ -796,6 +879,7 @@ class Command(BaseCommand):
                         provider=provider,
                         use_llm=use_llm,
                         frequent_repost_ids=frequent_repost_ids,
+                        ledger=ledger,
                     )
                     # Only count a real call: with --no-llm a source of "llm"
                     # means a previous run's result was carried forward.
@@ -809,6 +893,9 @@ class Command(BaseCommand):
                     tqdm.write(f"  Error on pk={posting.pk} '{posting.title[:60]}': {exc}")
                     errors += 1
                 bar.set_postfix(done=done, llm=llm_calls, err=errors)
+
+        if ledger is not None and not opts["no_run_log"]:
+            ledger.write_usage_record(opts["run_log"])
 
         self.stdout.write(
             self.style.SUCCESS(

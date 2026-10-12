@@ -34,6 +34,8 @@ from pathlib import Path
 
 import psycopg
 from psycopg.rows import dict_row
+
+import llm_ledger
 from pydantic import ValidationError
 
 ROOT = Path(__file__).parent.resolve()
@@ -192,6 +194,10 @@ def make_generator(provider: str, model: str, system_prompt: str):
             u = r.usage
             cached = getattr(getattr(u, "prompt_cache_hit_tokens", None), "real", None) \
                 or getattr(u, "prompt_cache_hit_tokens", 0) or 0
+            details = getattr(u, "completion_tokens_details", None)
+            llm_ledger.note_usage(u.prompt_tokens, u.completion_tokens, cached,
+                                  reasoning_tokens=getattr(details, "reasoning_tokens", None),
+                                  request_id=getattr(r, "id", None))
             return (r.choices[0].message.content, u.prompt_tokens, u.completion_tokens, cached)
 
     elif provider == "gemini":
@@ -207,6 +213,9 @@ def make_generator(provider: str, model: str, system_prompt: str):
                     response_mime_type="application/json",
                     response_schema=OccupationMapping))
             u = r.usage_metadata
+            llm_ledger.note_usage(u.prompt_token_count, u.candidates_token_count,
+                                  u.cached_content_token_count or 0,
+                                  request_id=getattr(r, "response_id", None))
             return (r.text, u.prompt_token_count, u.candidates_token_count,
                     u.cached_content_token_count or 0)
 
@@ -227,6 +236,9 @@ def make_generator(provider: str, model: str, system_prompt: str):
             block = next(b for b in r.content if b.type == "tool_use")
             u = r.usage
             cache_read = getattr(u, "cache_read_input_tokens", 0) or 0
+            llm_ledger.note_usage(u.input_tokens + cache_read, u.output_tokens, cache_read,
+                                  cache_write_tokens=getattr(u, "cache_creation_input_tokens", None),
+                                  request_id=getattr(r, "id", None))
             return (block.input, u.input_tokens + cache_read, u.output_tokens, cache_read)
     else:
         raise SystemExit(f"unknown provider {provider!r}")
@@ -351,7 +363,7 @@ def link_postings(conn) -> int:
     return len(pairs)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--provider", default=None)
@@ -366,7 +378,15 @@ def main() -> int:
                     help="print what would be sent and written; call no provider, write nothing")
     ap.add_argument("--link-only", action="store_true",
                     help="skip the LLM; just re-point postings at existing occupation rows")
-    args = ap.parse_args()
+    ap.add_argument("--run-log", default=str(ROOT / "data" / "pipeline-runs.jsonl"), metavar="PATH",
+                    help="Append this step's LLM usage (kind llm-usage) to the pipeline run log.")
+    ap.add_argument("--no-run-log", action="store_true",
+                    help="Do not append the usage record (for hand-runs).")
+    return ap
+
+
+def main() -> int:
+    args = build_parser().parse_args()
 
     provider = resolve_provider(args.provider)
     model = resolve_model(provider, args.model)
@@ -419,6 +439,9 @@ def main() -> int:
             return 0
 
         generate = make_generator(provider, model, system_prompt)
+        ledger = llm_ledger.make_ledger(
+            "occupations", provider, model, PROMPT_KEY,
+            pricer=llm_ledger.pricer_from(runner.compute_cost, runner.rate_card))
         stats = Counter()
         cost = 0.0
         started = time.time()
@@ -435,7 +458,8 @@ def main() -> int:
                 mapping = validate(raw, cor_codes, grid_codes, runner.parse_json_response)
                 return mapping, in_tok, out_tok, cached
 
-            return runner.generate_with_retry(call, content, max_attempts=args.max_attempts)
+            return runner.generate_with_retry(call, content, max_attempts=args.max_attempts,
+                                              ledger=ledger.request(group["sample"]))
 
         # `imap_unordered` yields (item, future); the DB write stays on this
         # thread because one psycopg connection is not safe to share.
@@ -464,6 +488,8 @@ def main() -> int:
         print("  confidence: " + ", ".join(
             f"{k}={stats[k]}" for k in ("exact", "probabil", "incert", "none") if stats[k]))
         print(f"linked {link_postings(conn)} postings to occupations")
+        if not args.no_run_log:
+            ledger.write_usage_record(args.run_log)
     return 0
 
 

@@ -2,6 +2,40 @@
 
 ## 2026
 
+### 2026-10-12 — FIX-10 (first slice): an append-only ledger of every LLM call
+
+Asked to log the occupations cost and do per-call accounting. The spec
+(docs/specs/2026-10-03-project-audit/10-llm-cost-ledger.md) covers the pipeline, the SQLite export
+and the public stats page; this is the pipeline side, the part that makes the numbers true.
+
+- `jobs_llmcall` (migration 0017, additive, applied to the live database) holds one immutable row
+  per provider API attempt: step, subject, provider/model/prompt, attempt + repair flag, `api_ok`
+  and `outcome`, tokens (null when unknown), the rate card applied, `cost_usd`. `LlmCall.save()`
+  refuses to update.
+- `llm_ledger.py` is the shared path: provider code calls `note_usage()` the moment a response
+  arrives (before validating it, so a rejected answer keeps its tokens), `generate_with_retry()`
+  records every attempt, repair and failure, and a lock-serialised connection writes the rows.
+  Ids are `run/step/nonce-seq`: unique across threads and processes, a re-delivery is
+  `ON CONFLICT DO NOTHING`. A dead database costs a warning and `ledger_write_errors`, never a step.
+- The four schema closures, the three occupations closures and the infer fallback were
+  instrumented (Gemini/Anthropic read usage after validating; reordered). `llm-schema.py` gained
+  `rate_card()` next to `compute_cost()` and both use one `_effective_rates()`, so the stored card
+  cannot disagree with the amount.
+- Each step writes a `kind: "llm-usage"` run-log record from in-memory totals. The ntfy LLM line
+  is now the total over all steps with a breakdown ("LLM $0.377 (schema $0.370, occupations
+  $0.007)"), says how many calls were unpriced or missing from the ledger, and the balance
+  reconciliation counts every step once (an `llm-schema` record counts only where no `llm-usage`
+  exists for that run and step).
+- Verified live: one DeepSeek call on the posting that fails validation most nights wrote a
+  row costing $0.00152410, equal to the step's own $0.001524. That one row (run
+  `smoke-fix10-2026-10-12`) stays in the table: it was real spend.
+- Tests: ledger core 39, retry/closures 18, occupations 6, infer +7, ntfy +16, model 6, rate card 6;
+  each wiring test was shown to fail when the wiring was removed. Whole suite 1200 passed.
+
+Not done, and why: the SQLite by-date/by-step export, the public stats copy and the legacy-estimate
+labelling are separate export/PHP work (still FIX-10, listed in the backlog); `infer_conditions_llm.py`
+is a manual command outside the pipeline.
+
 ### 2026-10-12 — OPS-BALANCE: thresholds $1 / $5 and a spend ledger in the run summary
 
 pax topped up DeepSeek and moved this project to its own API key; the account is shared

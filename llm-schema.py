@@ -42,6 +42,7 @@ the evidence. So are postings that were repaired and then succeeded
 """
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -63,6 +64,7 @@ from dotenv import load_dotenv
 
 from boilerplate import strip_hg_1336
 from grounding import check_grounding
+import llm_ledger
 from llm_config import (
     MODELS_CONFIG,
     PROVIDERS,
@@ -148,6 +150,29 @@ def is_peak(peak_config, at):
     return any(start <= at.hour < end for start, end in peak_config.get("hours_utc", []))
 
 
+def _effective_rates(provider, model, at):
+    """`(input, output, cache_read, peak_applied, multiplier, model_config)` or None.
+
+    The three rates are USD per million tokens as Decimals, AFTER any peak multiplier;
+    None when the provider/model has no pricing in the config. One lookup serves both
+    compute_cost (the amount) and rate_card (the record of how it was computed), so the
+    stored card can never drift from the price actually applied.
+    """
+    try:
+        model_config = MODELS_CONFIG["providers"][provider]["models"][model]
+        in_rate = Decimal(str(model_config["input_cost_per_million"]))
+        out_rate = Decimal(str(model_config["output_cost_per_million"]))
+        cache_rate = Decimal(str(model_config.get("cache_input_cost_per_million", model_config["input_cost_per_million"])))
+    except (KeyError, TypeError):
+        return None
+
+    mult, peak_applied = Decimal(1), False
+    peak = model_config.get("peak")
+    if peak and is_peak(peak, at if at is not None else datetime.now(timezone.utc)):
+        mult, peak_applied = Decimal(str(peak.get("multiplier", 1))), True
+    return in_rate * mult, out_rate * mult, cache_rate * mult, peak_applied, mult, model_config
+
+
 def compute_cost(provider, model, input_tokens, output_tokens, cached_input_tokens=0, *, at=None):
     """Calculate cost in USD based on model pricing from config.
 
@@ -161,25 +186,45 @@ def compute_cost(provider, model, input_tokens, output_tokens, cached_input_toke
     """
     if not input_tokens or output_tokens is None:
         return None
+    rates = _effective_rates(provider, model, at)
+    if rates is None:
+        return None
+    in_rate, out_rate, cache_rate = rates[:3]
     try:
-        model_config = MODELS_CONFIG["providers"][provider]["models"][model]
-        in_rate = Decimal(str(model_config["input_cost_per_million"]))
-        out_rate = Decimal(str(model_config["output_cost_per_million"]))
-        cache_rate = Decimal(str(model_config.get("cache_input_cost_per_million", model_config["input_cost_per_million"])))
-
-        peak = model_config.get("peak")
-        if peak and is_peak(peak, at if at is not None else datetime.now(timezone.utc)):
-            mult = Decimal(str(peak.get("multiplier", 1)))
-            in_rate, out_rate, cache_rate = in_rate * mult, out_rate * mult, cache_rate * mult
-
         cached = max(0, cached_input_tokens or 0)
         uncached = max(0, input_tokens - cached)
 
         input_cost = (Decimal(uncached) * in_rate + Decimal(cached) * cache_rate) / Decimal("1000000")
         output_cost = Decimal(output_tokens) * out_rate / Decimal("1000000")
         return float(input_cost + output_cost)
-    except (KeyError, TypeError):
+    except TypeError:
         return None
+
+
+def rate_card(provider, model, *, at=None):
+    """The rates a call completed at `at` is billed at, as plain JSON; None if unpriced.
+
+    Stored on every ledger row (FIX-10) so that editing models_config.json later
+    cannot restate old spend. `config_hash` identifies the rate revision (the pricing
+    keys of the model block, not its notes); the per-million rates are the EFFECTIVE
+    ones, peak multiplier included.
+    """
+    rates = _effective_rates(provider, model, at)
+    if rates is None:
+        return None
+    in_rate, out_rate, cache_rate, peak_applied, mult, model_config = rates
+    revision = {k: model_config.get(k) for k in (
+        "input_cost_per_million", "output_cost_per_million",
+        "cache_input_cost_per_million", "peak")}
+    return {
+        "input_per_million": float(in_rate),
+        "output_per_million": float(out_rate),
+        "cache_read_per_million": float(cache_rate),
+        "peak": peak_applied,
+        "multiplier": float(mult),
+        "config_hash": hashlib.sha256(
+            json.dumps(revision, sort_keys=True, default=str).encode()).hexdigest()[:12],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +330,44 @@ def _is_fatal(exc) -> bool:
     return any(hint in name for hint in _FATAL_HINTS)
 
 
-def generate_with_retry(generate, content, *, max_attempts=4, base_delay=2.0, on_retry=None):
+def attempt_outcome(exc) -> str:
+    """The ledger's name for how an attempt that raised ended."""
+    if isinstance(exc, FatalError) or _is_fatal(exc):
+        return "fatal_error"
+    if isinstance(exc, OutputTruncated):
+        return "truncated"
+    if _is_transient(exc):
+        return "transient_error"
+    if _is_repairable(exc):
+        return "validation_failed"
+    return "error"
+
+
+def _ledger_attempt(ledger, attempt, is_repair, started, exc) -> None:
+    """Hand one finished attempt to the ledger request. Never raises.
+
+    The usage comes from `llm_ledger.note_usage()`, which the provider code calls as soon
+    as the response arrives, before validating it. An OutputTruncated that reached us
+    without a note carries the same numbers on the exception.
+    """
+    if ledger is None:
+        return
+    try:
+        usage = llm_ledger.take_usage()
+        if usage is None and isinstance(exc, OutputTruncated):
+            in_tok, out_tok, cached = exc.usage
+            usage = llm_ledger.Usage(input_tokens=in_tok, output_tokens=out_tok,
+                                     cache_read_tokens=cached)
+        ledger.record_attempt(
+            attempt=attempt, is_repair=is_repair, started_at=started,
+            ended_at=datetime.now(timezone.utc),
+            outcome="ok" if exc is None else attempt_outcome(exc), error=exc, usage=usage)
+    except Exception:  # noqa: BLE001 — recording must never change the outcome
+        pass
+
+
+def generate_with_retry(generate, content, *, max_attempts=4, base_delay=2.0, on_retry=None,
+                        ledger=None):
     """Call `generate(content)`, retrying transient failures and repairing invalid output.
 
     Two different failures need two different responses:
@@ -295,17 +377,25 @@ def generate_with_retry(generate, content, *, max_attempts=4, base_delay=2.0, on
 
     Only one repair is attempted: if the model cannot produce valid output when
     shown the error, a third try is not going to help and costs a full prompt.
+
+    `ledger` is an `llm_ledger.Request`: every attempt, repair and failure included,
+    becomes one row (FIX-10). It changes nothing about what is retried or returned.
     """
     payload = content
     repaired = False
     last_exc = None
 
     for attempt in range(1, max_attempts + 1):
+        started = datetime.now(timezone.utc)
+        if ledger is not None:
+            llm_ledger.discard_usage()      # a previous call's numbers are not this attempt's
         try:
-            return generate(payload)
-        except FatalError:
+            result = generate(payload)
+        except FatalError as exc:
+            _ledger_attempt(ledger, attempt, repaired, started, exc)
             raise
         except Exception as exc:  # noqa: BLE001 — classified immediately below
+            _ledger_attempt(ledger, attempt, repaired, started, exc)
             last_exc = exc
             if attempt == max_attempts:
                 break
@@ -326,6 +416,9 @@ def generate_with_retry(generate, content, *, max_attempts=4, base_delay=2.0, on
                     on_retry(attempt, exc, 0.0)
                 continue
             break
+        else:
+            _ledger_attempt(ledger, attempt, repaired, started, None)
+            return result
 
     raise last_exc
 
@@ -434,14 +527,16 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 contents=content,
                 config=genai_types.GenerateContentConfig(**cfg_kwargs),
             )
-            raw = resp.parsed if use_schema and getattr(resp, "parsed", None) is not None else resp.text
-            if hasattr(raw, "model_dump"):
-                raw = raw.model_dump(mode="json")
-            schema = _validate_extraction(raw, prompt_version) if use_schema else parse_json_response(raw)
             usage = getattr(resp, "usage_metadata", None)
             input_tokens = getattr(usage, "prompt_token_count", None) if usage else None
             output_tokens = getattr(usage, "candidates_token_count", None) if usage else None
             cached_tokens = getattr(usage, "cached_content_token_count", 0) if usage else 0
+            llm_ledger.note_usage(input_tokens, output_tokens, cached_tokens or 0,
+                                  request_id=getattr(resp, "response_id", None))
+            raw = resp.parsed if use_schema and getattr(resp, "parsed", None) is not None else resp.text
+            if hasattr(raw, "model_dump"):
+                raw = raw.model_dump(mode="json")
+            schema = _validate_extraction(raw, prompt_version) if use_schema else parse_json_response(raw)
             return schema, input_tokens, output_tokens, cached_tokens or 0
 
     elif provider == 'openai':
@@ -481,6 +576,9 @@ def make_generator(provider, model, system_prefix, prompt_version):
             details = getattr(usage, "prompt_tokens_details", None) if usage else None
             if details is not None:
                 cached_tokens = getattr(details, "cached_tokens", 0) or 0
+            llm_ledger.note_usage(input_tokens, output_tokens, cached_tokens,
+                                  reasoning_tokens=_reasoning_tokens(usage),
+                                  request_id=getattr(resp, "id", None))
             if getattr(resp.choices[0], "finish_reason", None) == "length":
                 raise OutputTruncated(out_budget, input_tokens, output_tokens, cached_tokens)
             schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
@@ -512,16 +610,6 @@ def make_generator(provider, model, system_prefix, prompt_version):
                 kwargs["tools"] = anthropic_tools
                 kwargs["tool_choice"] = {"type": "tool", "name": tool_name}
             msg = client.messages.create(**kwargs)
-            if getattr(msg, "stop_reason", None) == "max_tokens":
-                u = getattr(msg, "usage", None)
-                raise OutputTruncated(out_budget, getattr(u, "input_tokens", None),
-                                      getattr(u, "output_tokens", None))
-            if use_schema:
-                tool_block = next(b for b in msg.content if getattr(b, "type", "") == "tool_use")
-                schema = _validate_extraction(tool_block.input, prompt_version)
-            else:
-                text_block = next(b for b in msg.content if getattr(b, "type", "") == "text")
-                schema = parse_json_response(text_block.text)
             usage = getattr(msg, "usage", None)
             input_tokens = getattr(usage, "input_tokens", None) if usage else None
             output_tokens = getattr(usage, "output_tokens", None) if usage else None
@@ -530,6 +618,18 @@ def make_generator(provider, model, system_prefix, prompt_version):
             # so cost math matches: total billable input = input_tokens + cache_read
             if cached_tokens and input_tokens is not None:
                 input_tokens = input_tokens + cached_tokens
+            llm_ledger.note_usage(input_tokens, output_tokens, cached_tokens,
+                                  cache_write_tokens=(getattr(usage, "cache_creation_input_tokens", None)
+                                                      if usage else None),
+                                  request_id=getattr(msg, "id", None))
+            if getattr(msg, "stop_reason", None) == "max_tokens":
+                raise OutputTruncated(out_budget, input_tokens, output_tokens, cached_tokens)
+            if use_schema:
+                tool_block = next(b for b in msg.content if getattr(b, "type", "") == "tool_use")
+                schema = _validate_extraction(tool_block.input, prompt_version)
+            else:
+                text_block = next(b for b in msg.content if getattr(b, "type", "") == "text")
+                schema = parse_json_response(text_block.text)
             return schema, input_tokens, output_tokens, cached_tokens
 
     elif provider == 'deepseek':
@@ -561,6 +661,9 @@ def make_generator(provider, model, system_prefix, prompt_version):
             input_tokens = getattr(usage, "prompt_tokens", None) if usage else None
             output_tokens = getattr(usage, "completion_tokens", None) if usage else None
             cached_tokens = getattr(usage, "prompt_cache_hit_tokens", 0) if usage else 0
+            llm_ledger.note_usage(input_tokens, output_tokens, cached_tokens or 0,
+                                  reasoning_tokens=_reasoning_tokens(usage),
+                                  request_id=getattr(resp, "id", None))
             if getattr(resp.choices[0], "finish_reason", None) == "length":
                 raise OutputTruncated(out_budget, input_tokens, output_tokens, cached_tokens)
             schema = _validate_extraction(text, prompt_version) if use_schema else parse_json_response(text)
@@ -570,6 +673,16 @@ def make_generator(provider, model, system_prefix, prompt_version):
         raise ValueError(f"Unknown provider: {provider}")
 
     return generate
+
+
+def _reasoning_tokens(usage):
+    """Reasoning tokens an OpenAI-compatible usage object reports, else None.
+
+    Informational only: they are already inside completion_tokens, so the cost is
+    never computed from them separately.
+    """
+    details = getattr(usage, "completion_tokens_details", None) if usage else None
+    return getattr(details, "reasoning_tokens", None) if details is not None else None
 
 
 def slug_of(url: str) -> str:
@@ -1268,6 +1381,7 @@ def main(argv=None) -> int:
             print(f"Provider: {provider}, model: {model}, prompt: {args.prompt_version}")
 
         summaries = []
+        ledgers = []     # one per (provider, model): FIX-10 usage, written beside the summaries
         for provider, model in providers_to_run:
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
             force_flag = args.force or args.compare
@@ -1289,6 +1403,10 @@ def main(argv=None) -> int:
                                selection_report(conn, limit=args.limit, **selection), args.limit)
                 continue
             generate = make_generator(provider, model, system_prefix, args.prompt_version)
+            ledger = llm_ledger.make_ledger(
+                "schema", provider, model, args.prompt_version, run_id=run_id,
+                pricer=llm_ledger.pricer_from(compute_cost, rate_card))
+            ledgers.append(ledger)
             total = count_postings(conn, **selection)
             if args.limit:
                 total = min(total, args.limit)
@@ -1304,8 +1422,12 @@ def main(argv=None) -> int:
             #: own key; the calling thread pops it once the future completes.
             trails: dict = {}
 
-            def call(row, _generate=generate):
-                """Runs on a worker thread: LLM call + local checks, no database."""
+            def call(row, _generate=generate, _ledger=ledger):
+                """Runs on a worker thread: LLM call + local checks, no database.
+
+                The ledger writes its own rows (one lock-serialised connection), so this
+                stays off the calling thread's connection.
+                """
                 posting_id, url, content_hash, content = row
                 retries = 0
                 trail = trails[posting_id] = AttemptTrail()
@@ -1327,6 +1449,8 @@ def main(argv=None) -> int:
                         _generate, content,
                         max_attempts=args.max_attempts,
                         on_retry=note_retry,
+                        ledger=_ledger.request(slug_of(url), posting_id=posting_id,
+                                               source_revision=content_hash or ""),
                     )
                 except Exception as exc:
                     trail.note(len(trail.attempts) + 1, exc)   # the attempt that raised
@@ -1471,6 +1595,8 @@ def main(argv=None) -> int:
         if not args.no_run_log:
             for summary in summaries:
                 _append_schema_record(Path(args.run_log), summary, run_id)
+            for ledger in ledgers:
+                ledger.write_usage_record(args.run_log)
 
         exit_code = evaluate_exit(summaries, args.max_failure_share)
         if exit_code == 2:

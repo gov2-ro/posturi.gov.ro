@@ -113,6 +113,23 @@ foreach ([$noevidence, $oldest_noevidence] as $file) {
     $edb = null;
 }
 
+// FIX-10: an export from before llm_costs had step/source/postings (and the oldest, with no
+// llm_costs at all). The page deployed after the data must keep rendering against both.
+$preledger = "$tmp-preledger.sqlite";
+copy($current, $preledger);
+$pdb = new PDO("sqlite:$preledger", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$pdb->exec('DROP TABLE llm_costs');
+$pdb->exec('CREATE TABLE llm_costs (day TEXT NOT NULL, provider TEXT NOT NULL, model TEXT NOT NULL,
+    prompt_version TEXT NOT NULL, calls INTEGER NOT NULL, input_tokens INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL, cost_usd REAL NOT NULL, PRIMARY KEY (day, provider, model, prompt_version))');
+$pdb->exec("INSERT INTO llm_costs VALUES ('2026-10-02', 'openrouter', 'fixture-model', 'v4', 3, 12000, 900, 0.01)");
+$pdb = null;
+$nollm = "$tmp-nollm.sqlite";
+copy($current, $nollm);
+$ndb = new PDO("sqlite:$nollm", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$ndb->exec('DROP TABLE llm_costs');
+$ndb = null;
+
 run_suite('shim reproduces the exported status vocabulary row for row', function () use ($current, $legacy) {
     $want = (new PDO("sqlite:$current"))
         ->query("SELECT id, application_status FROM job_postings ORDER BY id")
@@ -270,6 +287,8 @@ $shapes = [
     'the oldest export without posting_roles'                => $oldest_noroles,
     'an export with every column but no requirement_evidence' => $noevidence,
     'the oldest export without roles or requirement_evidence' => $oldest_noevidence,
+    'an export from before the LLM call ledger (llm_costs without step/source)' => $preledger,
+    'an export with no llm_costs table'                       => $nollm,
 ];
 // Requirement filters on an export without posting_roles = the posting-level predicates.
 $flat_cases = [
@@ -292,6 +311,21 @@ foreach ($shapes as $label => $file) {
                 sort($got);
                 assert_same($want, $got, "$qs");
             }
+        });
+    }
+    if ($file === $preledger) {
+        run_suite("the LLM spend section keeps its old, honest copy against $label", function () use ($srv) {
+            $body = (string)@file_get_contents($srv['base'] . '/statistici/');
+            assert_contains('$0.010', $body, 'old export: the total still shows');
+            assert_contains('02.10.2026 · 3 anunțuri (estimare)', $body, 'old export: every row is an estimate');
+            assert_contains('Estimare incompletă', $body, 'old export: says the figure is incomplete');
+            assert_not_contains('Pe etape', $body, 'old export: no per-step breakdown it cannot support');
+        });
+    }
+    if ($file === $nollm) {
+        run_suite("the LLM spend section says unavailable against $label", function () use ($srv) {
+            $body = (string)@file_get_contents($srv['base'] . '/statistici/');
+            assert_contains('Date indisponibile', $body, 'no table: the section degrades, the page stays up');
         });
     }
     run_suite("every route renders against $label", function () use ($srv, $paths) {

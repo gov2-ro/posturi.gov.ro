@@ -23,7 +23,8 @@ Output: posturi.sqlite with tables:
   requirement_evidence — one row per extracted requirement fact per role (UX-13): the quote the
                    extraction kept, and whether it could be located in the posting text
   job_postings_fts — FTS5 virtual table (rowid = job_posting id)
-  llm_costs       — daily LLM extraction spend, for /statistici (not sliced by --active-only)
+  llm_costs       — daily LLM spend by step, for /statistici: the call ledger since it began,
+                    the variant-table estimate before (not sliced by --active-only)
   build_meta      — one row: when this file was built, from which commit and host
 """
 
@@ -338,10 +339,20 @@ CREATE TABLE requirement_evidence (
     PRIMARY KEY (posting_id, ordinal, fact_kind, fact_index)
 );
 
--- Daily LLM extraction spend, one row per (day, provider, model, prompt version).
+-- Daily LLM spend, one row per (day, provider, model, prompt version, step, source).
 -- Aggregated at export time because the shared host has no Postgres. `day` is the
--- Bucharest calendar day of the call. It reflects each posting's *current* extraction:
--- a re-extraction upserts the variant and moves its cost to the new day.
+-- Bucharest calendar day the call ended.
+--
+-- `source` says how good the number is:
+--   ledger  one row per provider API attempt (jobs_llmcall, FIX-10): measured. `calls`
+--           counts attempts, retries and repairs included; `cost_usd` sums the calls
+--           whose cost is known and `unpriced_calls` counts the rest, which are NOT in
+--           it; `postings` is the distinct postings with a valid schema extraction.
+--   legacy  an estimate from the variant table, which a re-extraction overwrites, so it
+--           forgets every earlier payment for the same posting and has never seen the
+--           occupations and infer steps. Only variants created BEFORE the first ledgered
+--           call are legacy; later ones are the ledger's, and are not counted twice.
+-- The first eight columns are what the page deployed before FIX-10 reads by name.
 CREATE TABLE llm_costs (
     day             TEXT NOT NULL,
     provider        TEXT NOT NULL,
@@ -351,7 +362,11 @@ CREATE TABLE llm_costs (
     input_tokens    INTEGER NOT NULL,
     output_tokens   INTEGER NOT NULL,
     cost_usd        REAL NOT NULL,
-    PRIMARY KEY (day, provider, model, prompt_version)
+    step            TEXT NOT NULL DEFAULT 'schema',
+    source          TEXT NOT NULL DEFAULT 'ledger' CHECK (source IN ('ledger', 'legacy')),
+    unpriced_calls  INTEGER NOT NULL DEFAULT 0,
+    postings        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, provider, model, prompt_version, step, source)
 );
 
 -- One row, written last. Lets the deploy verify on the remote that the file that
@@ -649,19 +664,44 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
 
 def export_llm_costs(cur, con: sqlite3.Connection) -> None:
-    """Aggregate `jobs_jobpostingschemavariant` into `llm_costs`, one row per day/model.
+    """Build `llm_costs`: the call ledger, plus the variant estimate from before it.
 
-    Reads the variants table directly, so it covers all history whatever `--active-only`
-    does to `job_postings`. Two choices matter:
+    Reads Postgres directly, so it covers all history whatever `--active-only` does to
+    `job_postings`. Choices that matter:
 
     * The day is converted to Bucharest explicitly. The export pins its own session
       zone, but anything else handing us a cursor (Django's is UTC) would otherwise
       push the 18:33 cron run's late-evening rows onto the wrong date.
-    * Rows with a NULL cost are skipped. NULL means the provider returned no usage,
-      not that the call was free, and counting it would drag the per-posting average
-      toward zero.
+    * Ledger amounts are the ones stored at call time; nothing is re-priced. A call
+      with no cost is counted (`unpriced_calls`) but is not in `cost_usd`: NULL means
+      the provider returned no usage, not that the call was free.
+    * The two sources never overlap. The ledger starts at its first call; a variant
+      created at or after that moment records spend the ledger already has, so only
+      earlier variants are exported, labelled `legacy`.
     """
     print("Exporting llm_costs...", end=" ", flush=True)
+    cur.execute("SELECT MIN(started_at) AS since FROM jobs_llmcall")
+    first = cur.fetchone()
+    ledger_since = first["since"] if first else None      # None while the ledger is empty
+
+    cur.execute("""
+        SELECT (ended_at AT TIME ZONE 'Europe/Bucharest')::date AS day,
+               provider, model, prompt_version, step,
+               COUNT(*)                          AS calls,
+               COALESCE(SUM(input_tokens), 0)    AS input_tokens,
+               COALESCE(SUM(output_tokens), 0)   AS output_tokens,
+               COALESCE(SUM(cost_usd), 0)        AS cost_usd,
+               COUNT(*) FILTER (WHERE cost_usd IS NULL) AS unpriced_calls,
+               COUNT(DISTINCT posting_id) FILTER (WHERE step = 'schema' AND outcome = 'ok') AS postings
+        FROM jobs_llmcall
+        GROUP BY 1, 2, 3, 4, 5
+        ORDER BY 1, 2, 3, 4, 5
+    """)
+    ledger = [(fmt_date(r["day"]), r["provider"], r["model"], r["prompt_version"],
+               r["calls"], int(r["input_tokens"]), int(r["output_tokens"]),
+               float(r["cost_usd"]), r["step"], "ledger", r["unpriced_calls"], r["postings"])
+              for r in cur.fetchall()]
+
     cur.execute("""
         SELECT (created_at AT TIME ZONE 'Europe/Bucharest')::date AS day,
                provider, model, prompt_version,
@@ -671,18 +711,20 @@ def export_llm_costs(cur, con: sqlite3.Connection) -> None:
                SUM(cost_usd)                     AS cost_usd
         FROM jobs_jobpostingschemavariant
         WHERE cost_usd IS NOT NULL
+          AND (%(since)s::timestamptz IS NULL OR created_at < %(since)s::timestamptz)
         GROUP BY 1, 2, 3, 4
         ORDER BY 1, 2, 3, 4
-    """)
-    rows = cur.fetchall()
+    """, {"since": ledger_since})
+    legacy = [(fmt_date(r["day"]), r["provider"], r["model"], r["prompt_version"],
+               r["calls"], int(r["input_tokens"]), int(r["output_tokens"]),
+               float(r["cost_usd"]), "schema", "legacy", 0, r["calls"])
+              for r in cur.fetchall()]
+
     con.executemany(
-        "INSERT INTO llm_costs(day, provider, model, prompt_version, calls, "
-        "input_tokens, output_tokens, cost_usd) VALUES (?,?,?,?,?,?,?,?)",
-        [(fmt_date(r["day"]), r["provider"], r["model"], r["prompt_version"],
-          r["calls"], int(r["input_tokens"]), int(r["output_tokens"]),
-          float(r["cost_usd"])) for r in rows],
-    )
-    print(f"{len(rows)} rows")
+        "INSERT INTO llm_costs(day, provider, model, prompt_version, calls, input_tokens, "
+        "output_tokens, cost_usd, step, source, unpriced_calls, postings) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", legacy + ledger)
+    print(f"{len(legacy)} legacy + {len(ledger)} ledger rows")
 
 
 def git_sha() -> str:

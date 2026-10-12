@@ -214,6 +214,17 @@ fails prints one warning, is counted in `ledger_write_errors`, and never fails t
 The ntfy summary and the balance reconciliation read these records (the older
 `llm-schema` record stays, and covers a run from before the ledger).
 
+The export turns this into the `llm_costs` table behind `/statistici` (`export_llm_costs()`
+in `export-to-sqlite.py`): the Bucharest day a call ended × provider × model × prompt × step
+× `source`. `ledger` rows are measured; `legacy` rows are the old variant-table estimate,
+exported only for variants created **before the first ledgered call** (the ledger already
+holds that spend, so nothing is counted twice, and the cutover is exact to the second, not
+to the day). `cost_usd` sums the calls whose cost is known; `unpriced_calls` counts the
+rest; `postings` is the distinct postings with a valid schema extraction, which is what
+"La 100 de anunțuri" divides by. The stored amounts are summed as they are: the export never
+re-prices. The columns after `cost_usd` are additive, so a page deployed before them keeps
+summing correctly. PHP code is deployed separately from the data (`deploy-php.sh`).
+
 `POSTURI_LEDGER=off` keeps the totals but writes no rows (the test suite sets it).
 It is a local record of attempts this code made, **not the provider's invoice**: a process
 that dies after the provider accepted a request and before the row was written leaves a

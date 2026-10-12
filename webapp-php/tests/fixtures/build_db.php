@@ -188,7 +188,11 @@ CREATE TABLE llm_costs (
     input_tokens    INTEGER NOT NULL,
     output_tokens   INTEGER NOT NULL,
     cost_usd        REAL NOT NULL,
-    PRIMARY KEY (day, provider, model, prompt_version)
+    step            TEXT NOT NULL DEFAULT 'schema',
+    source          TEXT NOT NULL DEFAULT 'ledger' CHECK (source IN ('ledger', 'legacy')),
+    unpriced_calls  INTEGER NOT NULL DEFAULT 0,
+    postings        INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, provider, model, prompt_version, step, source)
 );
 CREATE TABLE build_meta (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
@@ -503,7 +507,17 @@ SQL);
         detail_fetched_at_max, detail_fetched_rows)
         VALUES (1, '2026-10-03 09:00:00', 'fixture-data-sha', 'fixture-host', 1, $n_postings, 3, 4,
         'fixture-run-1', '2026-10-03 08:30:00', 12, 1, '2026-10-03T09:00:00+00:00', 8)");
-    $db->exec("INSERT INTO llm_costs VALUES ('2026-10-02', 'openrouter', 'fixture-model', 'v4', 3, 12000, 900, 0.01)");
+    // FIX-10: 2 Oct is a legacy estimate (3 postings); 4 Oct is the call ledger: 5 schema
+    // calls (4 postings, one call with no known cost) and 2 occupations calls.
+    $llm = $db->prepare("INSERT INTO llm_costs (day, provider, model, prompt_version, calls, input_tokens,
+        output_tokens, cost_usd, step, source, unpriced_calls, postings) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+    foreach ([
+        ['2026-10-02', 'openrouter', 'fixture-model', 'v4', 3, 12000, 900, 0.01, 'schema', 'legacy', 0, 3],
+        ['2026-10-04', 'openrouter', 'fixture-model', 'v4', 5, 40000, 4000, 0.02, 'schema', 'ledger', 1, 4],
+        ['2026-10-04', 'openrouter', 'fixture-model', 'occupation_v1', 2, 3000, 400, 0.002, 'occupations', 'ledger', 0, 0],
+    ] as $row) {
+        $llm->execute($row);
+    }
 }
 
 

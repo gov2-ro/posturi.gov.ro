@@ -519,12 +519,19 @@ the deploy to verify against, never rendered.
 (only the listing's expiry date, still ahead), `closed` (any date in the past) and `unknown`
 (no date). Cancelled postings are excluded from the export rather than given a status.
 
-The export also carries `llm_costs` — one row per Bucharest day, provider, model and
-prompt version, summed from `jobs_jobpostingschemavariant` — which feeds the "Costuri
-inferență" section of `/statistici`. It is not cut down by `--active-only`, and it covers
-the `schema` extraction step only: `infer` and `occupations` record no tokens or cost. A
-variant is upserted, so a re-extracted posting's cost moves to its newest day. An export
-that predates the table makes the section read "Date indisponibile" instead of failing.
+The export also carries `llm_costs` — one row per Bucharest day, provider, model, prompt
+version, pipeline step and `source` — which feeds the "Costuri inferență" section of
+`/statistici`. It is not cut down by `--active-only`. From the first ledgered call on
+(FIX-10) the rows are `source = 'ledger'`: measured, summed from `jobs_llmcall` (every
+provider call of the `schema`, `infer` and `occupations` steps, retries and repairs
+included; `unpriced_calls` counts the calls with no known cost, which are not in
+`cost_usd`). Before that they are `source = 'legacy'`: an estimate from
+`jobs_jobpostingschemavariant`, which a re-extraction overwrites and which never saw
+`infer` or `occupations`. Variants created at or after the first ledgered call are not
+exported, since the ledger already holds that spend. An export that predates the table
+makes the section read "Date indisponibile" instead of failing; one that predates the new
+columns renders with its old, "estimare incompletă" copy. See docs/deploy-vps.md § LLM call
+ledger.
 
 `posting_roles` (DATA-04) is the role read model: one row per advertised role, so a
 requirement search can demand that *one* role satisfies every condition. A posting whose

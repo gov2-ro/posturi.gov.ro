@@ -189,6 +189,34 @@ function usd_label(float $v): string {
     return '$' . number_format($v, $v >= 1 ? 2 : 3, '.', ',');
 }
 
+/** Romanian count of provider calls: 1 apel · 2–19 apeluri · 20+ de apeluri. */
+function calls_label(int $n): string {
+    if ($n === 1) return '1 apel';
+    $mod = $n % 100;
+    return ($mod === 0 || $mod >= 20) ? "$n de apeluri" : "$n apeluri";
+}
+
+/** The LLM pipeline step as the stats page names it (llm_costs.step). */
+function llm_step_label(string $step): string {
+    return match ($step) {
+        'schema'      => 'Extracția structurată',
+        'occupations' => 'Normalizarea ocupațiilor',
+        'infer'       => 'Clasificarea profesiilor',
+        default       => $step,
+    };
+}
+
+/**
+ * One day of LLM spend, said honestly: legacy rows are postings in an estimate, ledger
+ * rows are measured provider calls, and a day can hold both (the day the ledger began).
+ */
+function llm_day_label(int $ledger_calls, int $legacy_postings): string {
+    $parts = [];
+    if ($legacy_postings > 0) $parts[] = postings_label($legacy_postings) . ' (estimare)';
+    if ($ledger_calls > 0)    $parts[] = calls_label($ledger_calls);
+    return implode(' + ', $parts);
+}
+
 /** Romanian year count: 1 an · 2–19 ani · 20+ de ani. */
 function years_label(int $n): string {
     if ($n === 1) return '1 an';

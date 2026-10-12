@@ -271,8 +271,20 @@ run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', fu
     assert_true(preg_match('#<option value="cluj" selected#', $emp) === 1, 'county select keeps the selection');
     assert_contains('Spitalul Clinic Județean Cluj', $emp, 'filtered list shows a Cluj employer');
 
-    // REV-03: active counts are real, not 0.
+    // FIX-10: the LLM spend section says what is measured, what is an estimate and what is unknown.
     [, $stats] = fetch_page($base, '/statistici');
+    assert_contains('$0.032', $stats, 'LLM spend: legacy estimate and ledger sum into one total');
+    assert_contains('02.10.2026 · 3 anunțuri (estimare)', $stats, 'LLM spend: legacy day is marked as an estimate');
+    assert_contains('04.10.2026 · 7 apeluri', $stats, 'LLM spend: ledger day counts provider calls');
+    assert_contains('Extracția structurată · 5 apeluri', $stats, 'LLM spend: per-step breakdown (schema)');
+    assert_contains('Normalizarea ocupațiilor · 2 apeluri', $stats, 'LLM spend: per-step breakdown (occupations)');
+    assert_contains('Apeluri fără cost cunoscut, neincluse în sume: 1', $stats, 'LLM spend: unpriced calls are said, not hidden');
+    assert_contains('nu sunt o factură a furnizorului', $stats, 'LLM spend: not an invoice');
+    assert_contains('$0.429', $stats, 'LLM spend: per 100 postings is schema spend over postings with a valid extraction');
+    assert_not_contains('Clasificarea și normalizarea ocupațiilor nu sunt incluse.', $stats,
+        'LLM spend: the pre-ledger caveat is gone once the ledger covers those steps');
+
+    // REV-03: active counts are real, not 0.
     assert_true(preg_match('#\b' . $open . '\b#', $stats) === 1, "stats shows open count $open");
     [, $emp_all] = fetch_page($base, '/angajatori/');
     assert_true(preg_match('#\b' . $open_emp . '\b#', $emp_all) === 1, "employers shows active employers $open_emp");

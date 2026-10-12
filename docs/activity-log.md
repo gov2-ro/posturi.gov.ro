@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-10-12 — FIX-10 (second slice): the export and /statistici read the ledger
+
+`llm_costs` (SQLite) is now built from two sources that never overlap. `ledger` rows are
+summed from `jobs_llmcall` by the Bucharest day a call ended, per step; `legacy` rows are the
+old variant-table estimate, exported only for variants created before the first ledgered call
+(`MIN(started_at)`), so a payment is in exactly one of them. The first eight columns are
+unchanged and the new ones (`step`, `source`, `unpriced_calls`, `postings`) are additive, so the
+page already deployed keeps summing correctly in the meantime; `cost_usd` sums the known costs
+and `unpriced_calls` counts the rest.
+
+- `/statistici` (PHP) names what is measured, an estimate and unknown: per-step list from the
+  first ledgered day, "(estimare)" on legacy days, the unpriced count, "nu sunt o factură a
+  furnizorului". "La 100 de anunțuri" is now schema spend over postings with a valid extraction
+  (a ledger attempt is not a posting). It falls back to the old copy on an export without the
+  columns and to "Date indisponibile" without the table; `compat_test.php` gained both shapes.
+- Tests: 17 new export tests, including the Bucharest midnight and the 2026-10-25 DST change
+  either side, a rejected-then-repaired answer, an unpriced call, stored prices across the peak
+  window edge, and the cutover. A scratch export of the live database gave 44 legacy rows
+  ($12.907) + the 1 ledger row, with the old page's own queries still returning the true total.
+- Found by the full suite: two other test files drive the export with a stub cursor that
+  answers unknown queries with no rows; `export_llm_costs()` now tolerates a missing `MIN()` row.
+- **Not run here:** there is no `php` on gov2-1. The PHP changes are syntax-checked with
+  tree-sitter and their SQL was executed against a fixture-shaped SQLite; `request_test.php` and
+  `compat_test.php` must be run on a machine with PHP before the page is deployed.
+- Left out on purpose: `infer_conditions_llm.py`, a manual command outside the pipeline whose
+  provider dispatch belongs to spec 11.
+
 ### 2026-10-12 — FIX-10 (first slice): an append-only ledger of every LLM call
 
 Asked to log the occupations cost and do per-call accounting. The spec

@@ -51,18 +51,43 @@ foreach (array_keys(ANOMALY_LABELS) as $flag) {
     $anomaly_counts[$flag] = (int)$stmt->fetchColumn();
 }
 
-// LLM extraction spend (llm_costs is built by export-to-sqlite.py). An export
-// from before the table existed has no such table — show the section as unavailable
-// rather than take the whole page down.
+// LLM spend (llm_costs is built by export-to-sqlite.py). Since FIX-10 it joins two sources:
+// `ledger` rows (every provider call, measured) and `legacy` rows (an estimate from the
+// variant table, for the time before the ledger). The two never overlap, so every total
+// below is a plain SUM. An export from before that has no step/source columns, and one
+// from before the table has no table at all: show what is there rather than take the
+// whole page down.
 $llm = null;
 $llm_days = [];
+$llm_steps = [];
+$llm_ledger = null;
 try {
     $thirty_ago = date('Y-m-d', strtotime('-30 days'));
+    $llm_cols = db()->query("SELECT name FROM pragma_table_info('llm_costs')")->fetchAll(PDO::FETCH_COLUMN);
+    $has_source = in_array('source', $llm_cols, true);
     $llm = db()->query("SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(calls), 0) AS calls, MIN(day) AS since FROM llm_costs")->fetch();
     $stmt = db()->prepare("SELECT COALESCE(SUM(cost_usd), 0) AS usd FROM llm_costs WHERE day >= ?");
     $stmt->execute([$thirty_ago]);
     $llm['usd_30'] = (float)$stmt->fetchColumn();
-    $llm_days = db()->query("SELECT day, SUM(calls) AS calls, SUM(cost_usd) AS usd FROM llm_costs GROUP BY day ORDER BY day DESC LIMIT 30")->fetchAll();
+    if ($has_source) {
+        // Per 100 postings: the schema step only (occupations and infer calls are not per
+        // posting), against the postings that got a valid extraction. A legacy row is one
+        // posting per variant, so its `postings` equals its `calls`.
+        $per = db()->query("SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(postings), 0) AS postings FROM llm_costs WHERE step = 'schema'")->fetch();
+        $llm['postings'] = (int)$per['postings'];
+        $llm['per_posting_usd'] = $llm['postings'] > 0 ? 100 * (float)$per['usd'] / $llm['postings'] : null;
+        $llm_days = db()->query("SELECT day, SUM(cost_usd) AS usd, SUM(CASE WHEN source = 'ledger' THEN calls ELSE 0 END) AS ledger_calls, SUM(CASE WHEN source = 'legacy' THEN calls ELSE 0 END) AS legacy_postings FROM llm_costs GROUP BY day ORDER BY day DESC LIMIT 30")->fetchAll();
+        $llm_ledger = db()->query("SELECT MIN(day) AS since, COALESCE(SUM(unpriced_calls), 0) AS unpriced FROM llm_costs WHERE source = 'ledger'")->fetch();
+        if (!$llm_ledger || $llm_ledger['since'] === null) $llm_ledger = null;
+        if ($llm_ledger) {
+            $llm_steps = db()->query("SELECT step, SUM(calls) AS calls, SUM(cost_usd) AS usd FROM llm_costs WHERE source = 'ledger' GROUP BY step ORDER BY usd DESC")->fetchAll();
+        }
+    } else {
+        // Before the ledger every row is a stored variant, i.e. one posting.
+        $llm['postings'] = (int)$llm['calls'];
+        $llm['per_posting_usd'] = $llm['postings'] > 0 ? 100 * (float)$llm['usd'] / $llm['postings'] : null;
+        $llm_days = db()->query("SELECT day, SUM(cost_usd) AS usd, 0 AS ledger_calls, SUM(calls) AS legacy_postings FROM llm_costs GROUP BY day ORDER BY day DESC LIMIT 30")->fetchAll();
+    }
 } catch (PDOException $e) {
     $llm = null;
 }
@@ -234,7 +259,7 @@ require __DIR__ . '/../inc/header.php';
   <!-- LLM extraction spend -->
   <section class="bg-surface border border-line rounded-lg p-6 mb-8">
     <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Costuri inferență</h2>
-    <p class="text-xs text-ink-faint mb-4">Extracția structurată a anunțurilor (modelul LLM), în USD, pe zile.</p>
+    <p class="text-xs text-ink-faint mb-4">Apelurile către modelul LLM, în USD, pe zile.</p>
     <?php if ($llm === null): ?>
       <p class="text-ink-muted text-sm italic">Date indisponibile.</p>
     <?php else: ?>
@@ -248,17 +273,32 @@ require __DIR__ . '/../inc/header.php';
           <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label($llm['usd_30'])) ?></div>
           <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Ultimele 30 zile</div>
         </div>
+        <?php if ($llm['per_posting_usd'] !== null): ?>
         <div class="border border-line rounded p-3 col-span-2 sm:col-span-1">
-          <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label(100 * (float)$llm['usd'] / (int)$llm['calls'])) ?></div>
+          <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label((float)$llm['per_posting_usd'])) ?></div>
           <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">La 100 de anunțuri</div>
-          <div class="text-xs text-ink-faint mt-0.5"><?= e(postings_label((int)$llm['calls'])) ?> procesate</div>
+          <div class="text-xs text-ink-faint mt-0.5"><?= e(postings_label((int)$llm['postings'])) ?> procesate</div>
         </div>
+        <?php endif; ?>
       </div>
+      <?php if ($llm_steps): ?>
+      <div class="mb-6">
+        <h3 class="text-xs text-ink-muted font-mono uppercase tracking-wide mb-2">Pe etape, de la <?= e(fmt_date($llm_ledger['since'])) ?> (apeluri măsurate)</h3>
+        <ul class="text-sm space-y-1">
+          <?php foreach ($llm_steps as $step): ?>
+          <li class="flex justify-between">
+            <span class="text-ink-muted"><?= e(llm_step_label((string)$step['step'])) ?> · <?= e(calls_label((int)$step['calls'])) ?></span>
+            <span class="font-mono text-ink-muted"><?= e(usd_label((float)$step['usd'])) ?></span>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+      <?php endif; ?>
       <div class="space-y-1.5">
         <?php foreach ($llm_days as $d): ?>
         <div>
           <div class="flex justify-between text-xs mb-0.5">
-            <span class="font-mono text-ink-muted"><?= e(fmt_date($d['day'])) ?> · <?= e(postings_label((int)$d['calls'])) ?></span>
+            <span class="font-mono text-ink-muted"><?= e(fmt_date($d['day'])) ?> · <?= e(llm_day_label((int)$d['ledger_calls'], (int)$d['legacy_postings'])) ?></span>
             <span class="text-ink-muted font-mono"><?= e(usd_label((float)$d['usd'])) ?></span>
           </div>
           <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
@@ -267,7 +307,11 @@ require __DIR__ . '/../inc/header.php';
         </div>
         <?php endforeach; ?>
       </div>
-      <p class="text-xs text-ink-faint mt-4">Fiecare anunț este numărat la data ultimei sale extrageri; o reextragere mută costul pe ziua nouă. Clasificarea și normalizarea ocupațiilor nu sunt incluse.</p>
+      <?php if ($llm_ledger): ?>
+      <p class="text-xs text-ink-faint mt-4">De la <?= e(fmt_date($llm_ledger['since'])) ?> fiecare apel către modelul LLM este înregistrat, cu reîncercările și cererile de reparare, pe etape și la prețul de la momentul apelului: sumele sunt măsurate, dar nu sunt o factură a furnizorului.<?php if ((int)$llm_ledger['unpriced'] > 0): ?> Apeluri fără cost cunoscut, neincluse în sume: <?= e((int)$llm_ledger['unpriced']) ?>.<?php endif; ?> Zilele marcate „estimare” sunt calculate din extragerile păstrate: o reextragere o suprascrie pe cea veche, așa că estimarea nu include apelurile înlocuite ulterior și nici normalizarea ocupațiilor sau clasificarea profesiilor.</p>
+      <?php else: ?>
+      <p class="text-xs text-ink-faint mt-4">Estimare incompletă: fiecare anunț este numărat la data ultimei sale extrageri; o reextragere mută costul pe ziua nouă. Clasificarea și normalizarea ocupațiilor nu sunt incluse.</p>
+      <?php endif; ?>
     <?php endif; ?>
   </section>
 

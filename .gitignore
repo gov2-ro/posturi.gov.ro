@@ -65,3 +65,5 @@ node_modules/
 test-results/
 playwright-report/
 webapp-php/static/code-version.txt
+tmp/
+*/tmp/*

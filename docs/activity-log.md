@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-10-16 — /statistici: the per-100 cost is per extraction, and says so
+
+The live card read "La 100 de anunțuri · 8535 de anunțuri procesate" against an export of
+2,558 postings. `llm_costs.postings` is distinct per row: a legacy row is one stored variant per
+posting and prompt version (v2, v3 and v4 of one posting count three times, expired postings
+since May included), a ledger row is distinct postings per day and model. Summed over rows it
+counts extractions, which is the right unit for a per-extraction cost, so only the copy changed.
+
+- The card now reads "La 100 de extrageri", and under it "8535 de extrageri; un anunț reextras
+  se numără din nou". "Extragere" is the word the page's footnote already uses. A new
+  `extractions_label()` in `helpers.php` follows the same Romanian plural rule as the others.
+- `request_test.php` gained three assertions (title, sub-line, no "procesate"), seen failing
+  before the change; `stats.spec.js` checks the same and fails against the old copy.
+  `request_test.php` 190 passed, `compat_test.php` 938 passed, Playwright 278 passed (40
+  width-gated skips).
+- Playwright's browser cache on the Mac had gone (`~/Library/Caches/ms-playwright`), and
+  `npx playwright install` timed out on every try while `curl` fetched the same build at once.
+  The 1243 headless shell was fetched with `curl` and unpacked into the cache by hand. The
+  full `chromium-1243` is still missing, but headless runs don't need it.
+
 ### 2026-10-16 — FIX-10 closed after the live check
 
 The live site runs code `17adffa`, and the 2026-10-15T15:33Z export's `/statistici` shows the

@@ -181,6 +181,13 @@ function postings_label(int $n): string {
     return ($mod === 0 || $mod >= 20) ? "$n de anunțuri" : "$n anunțuri";
 }
 
+/** Romanian count of schema extractions: 1 extragere · 2–19 extrageri · 20+ de extrageri. */
+function extractions_label(int $n): string {
+    if ($n === 1) return '1 extragere';
+    $mod = $n % 100;
+    return ($mod === 0 || $mod >= 20) ? "$n de extrageri" : "$n extrageri";
+}
+
 /**
  * US dollars for LLM spend. Daily figures are fractions of a cent per posting, so
  * below $1 three decimals ($0.095) keep a quiet weekend day from reading as $0.00.

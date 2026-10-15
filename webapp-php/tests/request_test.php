@@ -280,7 +280,10 @@ run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', fu
     assert_contains('Normalizarea ocupațiilor · 2 apeluri', $stats, 'LLM spend: per-step breakdown (occupations)');
     assert_contains('Apeluri fără cost cunoscut, neincluse în sume: 1', $stats, 'LLM spend: unpriced calls are said, not hidden');
     assert_contains('nu sunt o factură a furnizorului', $stats, 'LLM spend: not an invoice');
-    assert_contains('$0.429', $stats, 'LLM spend: per 100 postings is schema spend over postings with a valid extraction');
+    assert_contains('$0.429', $stats, 'LLM spend: per 100 extractions is schema spend over valid extractions');
+    assert_contains('La 100 de extrageri', $stats, 'LLM spend: the unit is an extraction, not a distinct posting');
+    assert_contains('7 extrageri; un anunț reextras se numără din nou', $stats, 'LLM spend: a re-extraction counts again, and the page says so');
+    assert_not_contains('procesate', $stats, 'LLM spend: no "anunțuri procesate" (reads as distinct postings)');
     assert_not_contains('Clasificarea și normalizarea ocupațiilor nu sunt incluse.', $stats,
         'LLM spend: the pre-ledger caveat is gone once the ledger covers those steps');
 

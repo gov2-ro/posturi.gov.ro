@@ -29,11 +29,12 @@ test('/statistici: inference costs are measured per step, legacy days marked as 
 
   // $0.01 legacy + $0.02 schema + $0.002 occupations.
   await expect(card(s, 'Total')).toContainText('$0.032');
-  // Schema spend only, over postings with a valid extraction: 100 × $0.03 / 7.
-  const per100 = card(s, 'La 100 de anunțuri');
+  // Schema spend only, over valid extractions (a re-extraction counts again): 100 × $0.03 / 7.
+  const per100 = card(s, 'La 100 de extrageri');
   await expect(per100).toBeVisible();
   await expect(per100).toContainText('$0.429');
-  await expect(per100).toContainText('7 anunțuri procesate');
+  await expect(per100).toContainText('7 extrageri; un anunț reextras se numără din nou');
+  await expect(s).not.toContainText('procesate');
 
   const steps = s.locator('ul > li');
   await expect(steps).toHaveCount(2);

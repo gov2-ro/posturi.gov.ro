@@ -70,9 +70,10 @@ try {
     $stmt->execute([$thirty_ago]);
     $llm['usd_30'] = (float)$stmt->fetchColumn();
     if ($has_source) {
-        // Per 100 postings: the schema step only (occupations and infer calls are not per
-        // posting), against the postings that got a valid extraction. A legacy row is one
-        // posting per variant, so its `postings` equals its `calls`.
+        // Per 100 extractions: the schema step only (occupations and infer calls are not per
+        // posting), against valid extractions. `postings` is distinct per row, so a posting
+        // extracted again on another day or with another prompt or model counts again; a
+        // legacy row is one variant per posting, so its `postings` equals its `calls`.
         $per = db()->query("SELECT COALESCE(SUM(cost_usd), 0) AS usd, COALESCE(SUM(postings), 0) AS postings FROM llm_costs WHERE step = 'schema'")->fetch();
         $llm['postings'] = (int)$per['postings'];
         $llm['per_posting_usd'] = $llm['postings'] > 0 ? 100 * (float)$per['usd'] / $llm['postings'] : null;
@@ -276,8 +277,8 @@ require __DIR__ . '/../inc/header.php';
         <?php if ($llm['per_posting_usd'] !== null): ?>
         <div class="border border-line rounded p-3 col-span-2 sm:col-span-1">
           <div class="text-2xl font-display font-semibold text-ink"><?= e(usd_label((float)$llm['per_posting_usd'])) ?></div>
-          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">La 100 de anunțuri</div>
-          <div class="text-xs text-ink-faint mt-0.5"><?= e(postings_label((int)$llm['postings'])) ?> procesate</div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">La 100 de extrageri</div>
+          <div class="text-xs text-ink-faint mt-0.5"><?= e(extractions_label((int)$llm['postings'])) ?>; un anunț reextras se numără din nou</div>
         </div>
         <?php endif; ?>
       </div>

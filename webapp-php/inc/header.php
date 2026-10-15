@@ -58,9 +58,10 @@ if (!isset($_build_stamp)) {
   <link rel="stylesheet" href="/static/app.css?v=<?= @filemtime(__DIR__ . '/../static/app.css') ?: '1' ?>">
   <?= pg_skin_links() ?>
   <?= pg_skin_boot() ?>
-  <?php /* Compact-list preference, applied before first paint (no flash). The
-     list page's script owns the toggle; the CSS only acts on the list at lg+. */ ?>
-  <script>try{if(localStorage.getItem('posturi.layout')==='compact')document.documentElement.dataset.layout='compact'}catch(e){}</script>
+  <?php /* Result view preference (list / compact = grid / table), applied before first
+     paint (no flash). The list page's script owns the switch; the CSS only acts on the
+     list at lg+. */ ?>
+  <script>try{var l=localStorage.getItem('posturi.layout');if(l==='compact'||l==='table')document.documentElement.dataset.layout=l}catch(e){}</script>
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/prefs.js?v=<?= @filemtime(__DIR__ . '/../static/prefs.js') ?: '1' ?>" defer></script>
   <?php /* UX-09: one shared script for browser-local save/hide, loaded once here

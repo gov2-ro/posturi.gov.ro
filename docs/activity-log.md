@@ -2,6 +2,77 @@
 
 ## 2026
 
+### 2026-10-16 — Grid view: three columns, four-line cards, no hole in the bar
+
+pax's review of the deployed grid (2 columns at ~1100px, half of each card empty, a gap in
+the bar between the last filter and the view switch, the home shortcuts in a block of their
+own below it):
+
+- **Columns:** `repeat(auto-fill, minmax(19rem, 1fr))`, i.e. three columns from 1024px up to
+  the 1280px page width (was two below 1280).
+- **Cards:** the card's wrappers become one grid of four lines: title; employer · place; pay
+  with the deadline on its right; badges at the foot (bottom-aligned across a row). The old
+  bordered deadline footer and the `gap-4` row gap are gone. A card is about 120px tall at
+  1280 (was ~255px). The pay amount and "brut" stay together (`.pg-salary-amount`), so on a
+  narrow card a wide range wraps under its label as a whole.
+- **Bar:** view and sort follow the last filter (no `margin-left: auto`), and on the home page
+  the script also moves the counts and "Începe cu" shortcuts (`#shortcuts`) into the bar,
+  flattened, so they fill its last line instead of taking ~150px below it. Back in their place
+  in the list view.
+
+Tests: `compact.spec.js` now expects three columns at 1280 and no gap before the view switch,
+and adds a shortcuts-in-the-bar test and a four-line card test; each was seen failing against
+its mutation (auto margin back, two columns, deadline on the foot, shortcuts not moved).
+PHP suites all pass; Playwright 291 passed, 48 width-gated skips.
+
+Observed: live `/versiuni.json` said code `a21a5c8` while serving this uncommitted tree:
+`deploy-php.sh` stamps `git rev-parse HEAD` whatever the working tree holds (backlog
+DEPLOY-DIRTY).
+
+### 2026-10-16 — Result views: Listă / Grilă / Tabel, one filter bar, pay on every row; filters start collapsed; "Elementele dvs." off
+
+pax's review of the live grid view (filter pills wrapping under a taller search box, view and
+sort on a line of their own) and four asks, all in the PHP webapp, CSS over the same server
+markup as before:
+
+- **Table view.** The single grid toggle is now a three-way switch (`#layout-switch`:
+  Listă / Grilă / Tabel, `aria-pressed`, lg+ only). `posturi.layout` gains `'table'`; the
+  pre-paint script in `inc/header.php` accepts it. In the table every row is a CSS grid on one
+  shared template: the row's wrappers are `display: contents`, so title, employer, place, pay
+  and deadline become cells, pinned to row 1 so a missing place keeps the other cells in
+  their columns. `.pg-thead` (visual only, `aria-hidden`) carries the same template. Badges,
+  the auto line and the publication date are hidden there.
+- **One bar.** In the grid and table views `#facet-panel` and `#facet-list` are
+  `display: contents`, so search, every group pill and "Șterge filtrele" are items of one
+  wrapping flex row, all 40px (`--pg-bar-h`), and the script moves the view/sort row
+  (`#result-options`) to its end (back under the status tabs in the list view; focus is kept
+  across the move). Found on the way: the bar kept `top: 1rem` from the sidebar's
+  `lg:top-4`, which with `position: relative` pushed it down onto the next line; now `top: auto`.
+- **Pay in the list views.** `list_salary()` (helpers.php): the stated salary when there is
+  one, else the draft-grid estimate, the same precedence as `SALARY_EXPR`, so a row never
+  disagrees with the salary filter; always labelled ("Salariu estimat" / "Salariu anunțat";
+  "estimare" / "din anunț" in the table cell).
+- **Filters collapsed on desktop.** `facet_group()`'s `$open` now renders
+  `data-default-open` instead of `open`; the script opens those (Județ, Domeniu profesional)
+  only below lg, in the drawer, and only while the reader has no stored choice. A group
+  holding a selection still renders open everywhere.
+- **"Elementele dvs." off.** `CHECKLIST_CUSTOM_ITEMS_ENABLED = false` in
+  `inc/checklist.php` (env `POSTURI_CHECKLIST_CUSTOM=1|0` overrides, the eligibility-panel
+  pattern). Off, the add box, the reader-item list and its template are not rendered and the
+  clear confirmation names only the ticks; `checklist.js` skips the region when it is absent,
+  and items stored earlier stay in storage, unseen.
+
+Tests: `compact.spec.js` rewrote the toggle test for the three views and added the bar
+(every control 40px and inside the bar, sort at the right edge, tabs below), table (cells
+under their heads, one line, pay labelled) and pay-in-every-view checks; `checklist.spec.js`
+runs its main server with the items on and a second one at the default for two "off" tests;
+`checklist_test.php` gained the release-gate suite; `discovery_test.php` the pay suite and the
+new fresh-load expectations. Each new browser check was seen failing against a mutation (cells
+not flattened, row not moved, pill height, no pay line, pre-paint ignoring `table`, the gate
+constant on, the null guard removed). `deadline_test.php` read a fixed 3,000-byte window after
+the title link, which the pay line pushed the deadline out of; it now reads to the row's
+`</li>`. PHP suites all pass; Playwright 289 passed, 44 width-gated skips.
+
 ### 2026-10-16 — /statistici: the per-100 cost is per extraction, and says so
 
 The live card read "La 100 de anunțuri · 8535 de anunțuri procesate" against an export of

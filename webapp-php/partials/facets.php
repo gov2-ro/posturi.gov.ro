@@ -26,6 +26,11 @@
          * behaviour for free. The open/closed state is client state and this
          * markup is swapped on every filter change, so it is re-applied from
          * localStorage by applyFacetState() in list.php's script.
+         *
+         * `$open` no longer renders `open` (2026-10-16: on desktop every group
+         * starts collapsed). It marks the group `data-default-open`, and the
+         * script opens those below lg only, where the drawer is a screen of its
+         * own. A group holding a selection is still rendered open everywhere.
          */
         function facet_group(string $label, array $items, string $name, array $active, bool $open = false, string $help = ''): void {
             $active = array_values(array_filter(array_map('strval', $active), fn($v) => $v !== ''));
@@ -52,10 +57,10 @@
             }
 
             $selected = array_intersect($active, $values);
-            $is_open  = $open || $selected;   // never hide a filter that is switched on
+            $is_open  = (bool)$selected;      // never hide a filter that is switched on
             $mode     = facet_mode($name);
             ?>
-            <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="<?= e($name) ?>"<?= $selected ? ' data-selected="1"' : '' ?><?= $is_open ? ' open' : '' ?>>
+            <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="<?= e($name) ?>"<?= $selected ? ' data-selected="1"' : '' ?><?= $open ? ' data-default-open' : '' ?><?= $is_open ? ' open' : '' ?>>
               <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-ink-muted marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                 <span><?= e($label) ?><?php if ($selected): ?> <span class="font-mono text-gov normal-case tracking-normal">(<?= count($selected) ?>)</span><?php endif; ?></span>
                 <span aria-hidden="true" class="facet-caret text-ink-muted transition-transform">▾</span>
@@ -171,8 +176,9 @@
 
         $auto_help = 'Clasificare automată din textul anunțului; poate fi incompletă. Cerințele valabile sunt cele din anunțul oficial.';
 
-        // --- Location and profession. Only Județ and Domeniu profesional
-        //     start open; Ocupație is the finer cut and starts closed.
+        // --- Location and profession. Every group starts collapsed on desktop;
+        //     in the small-screen drawer Județ and Domeniu profesional start
+        //     open (data-default-open), Ocupație, the finer cut, closed.
         facet_group('Județ',                $judet_options,      'judet',      $judet_slugs, true);
         facet_group('Domeniu profesional',  $family_options,     'family',     $families,    true, $auto_help);
         facet_group('Ocupație',             $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
@@ -280,6 +286,6 @@
         ?>
 
         <?php if ($active_chips): ?>
-          <a href="/" class="mt-2 block py-1 text-center text-xs text-gov hover:underline">✕ Șterge filtrele</a>
+          <a href="/" class="pg-clear mt-2 block py-1 text-center text-xs text-gov hover:underline">✕ Șterge filtrele</a>
         <?php endif; ?>
 </div>

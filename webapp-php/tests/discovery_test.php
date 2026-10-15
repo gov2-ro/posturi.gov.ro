@@ -13,6 +13,7 @@
  */
 
 require_once __DIR__ . '/bootstrap.php';
+require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/fixtures/build_db.php';
 require_once __DIR__ . '/fixtures/server.php';
 require_once __DIR__ . '/old_urls.php';
@@ -108,9 +109,13 @@ run_suite('old filter URLs return the same postings as before the regroup', func
     }
 });
 
-run_suite('only Județ and Domeniu profesional are open on a fresh load', function () use ($base) {
+run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the drawer defaults', function () use ($base) {
     $home = get_html($base, '/');
-    assert_same(['family', 'judet'], open_facets($home), 'default-open disclosures');
+    assert_same([], open_facets($home), 'no disclosure is rendered open (desktop starts collapsed)');
+    $defaults = [];
+    foreach (xpath_for($home)->query('//details[contains(@class,"facet-group") and @data-default-open]') as $d) $defaults[] = $d->getAttribute('data-facet');
+    sort($defaults);
+    assert_same(['family', 'judet'], $defaults, 'the small-screen drawer opens these two (list.php script)');
     // The grouping that replaces the flat list.
     $anc = facet_ancestors($home);
     foreach (['eqf', 'isced', 'studies_level'] as $k) assert_same(['studii'], $anc[$k] ?? null, "$k is under Studii");
@@ -184,7 +189,7 @@ run_suite('a bookmarked selection opens every ancestor and stays removable', fun
         $html = get_html($base, '/?status=all&' . str_replace(['[', ']'], ['%5B', '%5D'], $qs));
         $open = open_facets($html);
         foreach ($must_open as $k) assert_true(in_array($k, $open, true), "$qs opens $k");
-        assert_same(['family', 'judet'], array_values(array_diff($open, $must_open)), "$qs opens nothing else");
+        assert_same([], array_values(array_diff($open, $must_open)), "$qs opens nothing else");
         $x = xpath_for($html)->query('//input[@name="' . $field . '" and @value="' . $value . '" and @checked]');
         assert_same(1, $x->length, "$qs: control checked and present");
         // Removable: a chip whose no-JS href drops the value.
@@ -301,6 +306,27 @@ run_suite('labels: Romanian for known values, unfamiliar values kept visible', f
     assert_contains('Domeniu profesional: Sănătate', $chips, 'family chip label');
     assert_contains('zz_nou', $chips, 'unmapped chip value kept');
     assert_contains('Salariu estimat', get_html($base, '/?status=all&salary_bucket=3000-4000'), 'salary stays labelled as an estimate');
+});
+
+run_suite('result rows show pay: the stated salary first, else the labelled estimate', function () use ($base) {
+    // Same precedence as SALARY_EXPR (the salary filter), so a row and a bucket never disagree.
+    assert_same(['label' => 'Salariu estimat', 'text' => '4.100–5.200 lei', 'estimated' => true],
+        list_salary(['sal_min' => 4100.0, 'sal_max' => 5200.0]), 'grid estimate, a range');
+    assert_same('3.300 lei', list_salary(['sal_min' => 3300, 'sal_max' => 3300])['text'], 'one figure when min = max');
+    assert_same('3.300 lei', list_salary(['sal_min' => 3300, 'sal_max' => null])['text'], 'no max: the min alone');
+    assert_same(['label' => 'Salariu anunțat', 'text' => '6.000 lei', 'estimated' => false],
+        list_salary(['inf_salary_min' => 6000, 'inf_salary_max' => 6000, 'sal_min' => 4100, 'sal_max' => 5200]), 'a stated salary wins');
+    assert_same(null, list_salary(['sal_min' => null]), 'nothing to show');
+    assert_same(null, list_salary(['inf_salary_min' => 0, 'sal_min' => null]), 'a zero is not a salary');
+    assert_same(null, list_salary([]), 'an old export without the columns');
+
+    $html = get_html($base, '/?status=all');
+    $x = xpath_for($html);
+    $row = $x->query('//li[@data-pref-id="1001"]//p[contains(@class,"pg-salary")]');
+    assert_same(1, $row->length, 'posting 1001 has a pay line');
+    $text = preg_replace('/\s+/', ' ', trim($row->item(0)->textContent));
+    assert_contains('Salariu estimat 4.100–5.200 lei brut', $text, 'labelled estimate in the row');
+    assert_same(1, $x->query('//div[contains(@class,"pg-thead")]')->length, 'table heads ship with the rows (shown only in the table view)');
 });
 
 run_suite('employer scope and legacy params survive form serialisation and stay removable', function () use ($base) {

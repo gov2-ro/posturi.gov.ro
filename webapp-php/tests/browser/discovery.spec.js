@@ -81,9 +81,9 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { try { localStorage.removeItem('posturi.facets'); } catch (e) {} });
 });
 
-test('fresh load: only Județ and Domeniu profesional are open; no overflow', async ({ page }, testInfo) => {
+test('fresh load: desktop starts with every group collapsed, the drawer with Județ and Domeniu open; no overflow', async ({ page }, testInfo) => {
   await page.goto('/');
-  expect(await openKeys(page)).toEqual(['family', 'judet']);
+  expect(await openKeys(page)).toEqual(isNarrow(page) ? ['family', 'judet'] : []);
   // Server-rendered open state is not a reader preference: nothing is stored.
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => localStorage.getItem('posturi.facets'))).toBeNull();
@@ -138,8 +138,11 @@ test('deadline wording is visible without hovering', async ({ page }, testInfo) 
 test('bookmarked advanced and diagnostic selections open every ancestor and are removable', async ({ page }, testInfo) => {
   await page.goto('/?status=all&anomaly%5B%5D=missing_contact&type%5B%5D=Temporar&exp_level%5B%5D=5plus');
   const open = await openKeys(page);
-  for (const k of ['family', 'judet', 'more', 'diagnostics', 'anomaly', 'legacy', 'type', 'experienta', 'exp_level']) {
+  for (const k of ['more', 'diagnostics', 'anomaly', 'legacy', 'type', 'experienta', 'exp_level']) {
     expect(open, k).toContain(k);
+  }
+  for (const k of ['family', 'judet']) {
+    if (isNarrow(page)) expect(open, k).toContain(k); else expect(open, k).not.toContain(k);
   }
   expect(open).not.toContain('contract');
   expect(open).not.toContain('studii');

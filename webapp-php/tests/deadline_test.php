@@ -97,9 +97,13 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
 
     // Extract one result row by its canonical job URL — title needles can also
     // match facet labels in the sidebar, the URL anchor cannot.
+    // The rest of the row from its title link: up to the row's own </li> (a row holds
+    // no nested list), not a fixed byte count that every new row line would outgrow.
     $row = function (string $html, string $anchor) {
         $pos = strpos($html, $anchor);
-        return $pos === false ? '' : substr($html, $pos, 3000);
+        if ($pos === false) return '';
+        $end = strpos($html, '</li>', $pos);
+        return substr($html, $pos, $end === false ? 3000 : $end - $pos);
     };
 
     // 1001: scraped deadline 13 days away, competition ends later. The countdown

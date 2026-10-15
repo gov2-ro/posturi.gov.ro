@@ -75,6 +75,11 @@ $chips = $active_chips ?? [];
     <p data-pref-banner-all hidden class="font-medium">Toate anunțurile de pe această pagină sunt ascunse în acest browser. Paginarea rămâne disponibilă, iar rezultatele căutării de pe server nu s-au schimbat.</p>
     <p>Numărul rezultatelor include anunțurile ascunse în acest browser.</p>
   </div>
+  <?php /* Column heads for the table view (lg+, html[data-layout="table"]); hidden in
+     the list and grid views. Visual only: every row still carries its own labels. */ ?>
+  <div class="pg-thead" aria-hidden="true">
+    <span>Post</span><span>Angajator</span><span>Localitate</span><span>Salariu</span><span>Termen</span>
+  </div>
   <ul class="pg-results divide-y divide-line border-t border-line">
     <?php foreach ($postings as $p):
         $inferred = json_decode($p['inferred'] ?? '{}', true) ?: [];
@@ -99,18 +104,29 @@ $chips = $active_chips ?? [];
           <?php endif; ?>
           <div class="pg-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
             <a href="/angajator/<?= e($p['employer_slug_display'] ?? $p['employer_slug'] ?? '') ?>/"
-               class="max-w-xs truncate py-1 font-medium text-ink-muted hover:text-gov hover:underline">
+               class="pg-employer max-w-xs truncate py-1 font-medium text-ink-muted hover:text-gov hover:underline">
               <?= e($p['employer_name']) ?>
             </a>
             <?php if ($place = place_label($p)): ?>
               <span aria-hidden="true" class="text-ink-muted">·</span>
-              <span><?= e($place) ?></span>
+              <span class="pg-place"><?= e($place) ?></span>
             <?php endif; ?>
             <?php if ($p['published_at']): ?>
               <span aria-hidden="true" class="pg-pub text-ink-muted">·</span>
               <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>" class="pg-pub font-mono"><?= fmt_date($p['published_at']) ?></time>
             <?php endif; ?>
           </div>
+
+          <?php /* Pay: the stated salary, else the draft-grid estimate, always labelled
+             (list_salary()). In the table view this is the Salariu column. */ ?>
+          <?php if ($sal = list_salary($p)): ?>
+            <p class="pg-salary mt-1 text-xs text-ink-muted">
+              <span class="pg-salary-label"><?= e($sal['label']) ?></span>
+              <span class="pg-salary-amount whitespace-nowrap"><span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span>
+              <span class="pg-salary-unit">brut</span></span>
+              <span class="pg-salary-kind"><?= $sal['estimated'] ? 'estimare' : 'din anunț' ?></span>
+            </p>
+          <?php endif; ?>
 
           <?php /* Badges */ ?>
           <div class="pg-badges mt-2 flex flex-wrap gap-1.5">

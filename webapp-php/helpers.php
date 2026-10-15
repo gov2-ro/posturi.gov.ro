@@ -196,6 +196,30 @@ function usd_label(float $v): string {
     return '$' . number_format($v, $v >= 1 ? 2 : 3, '.', ',');
 }
 
+/**
+ * The pay a result row shows (list, grid and table views): the salary the posting states
+ * when it states one, else the estimate from the 2026 draft salary grid. The same
+ * precedence as SALARY_EXPR, so a row and the salary filter never disagree. Gross lei per
+ * month at gradația 0 for the estimate (the detail page says how it was reached), and an
+ * estimate is always labelled as one. Null when there is no figure (or an old export
+ * without the columns).
+ *
+ * @return array{label: string, text: string, estimated: bool}|null
+ */
+function list_salary(array $p): ?array {
+    foreach ([['inf_salary_min', 'inf_salary_max', 'Salariu anunțat', false],
+              ['sal_min', 'sal_max', 'Salariu estimat', true]] as [$lo, $hi, $label, $estimated]) {
+        $min = $p[$lo] ?? null;
+        if ($min === null || $min === '' || (float)$min <= 0) continue;
+        $min = (int)round((float)$min);
+        $max = ($p[$hi] ?? null) === null || ($p[$hi] ?? '') === '' ? $min : (int)round((float)$p[$hi]);
+        $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
+        $text = $max > $min ? $fmt($min) . '–' . $fmt($max) . ' lei' : $fmt($min) . ' lei';
+        return ['label' => $label, 'text' => $text, 'estimated' => $estimated];
+    }
+    return null;
+}
+
 /** Romanian count of provider calls: 1 apel · 2–19 apeluri · 20+ de apeluri. */
 function calls_label(int $n): string {
     if ($n === 1) return '1 apel';

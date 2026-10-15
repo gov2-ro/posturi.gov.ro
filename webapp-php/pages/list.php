@@ -624,7 +624,9 @@ if (!$is_htmx): ?>
       <div class="pg-main min-w-0 lg:flex-1">
 
     <?php if ($shortcuts): ?>
-    <div class="mb-5 border-b border-line pb-4">
+    <?php /* In the grid and table views the script moves this block into the filter
+       bar, after view and sort, where it fills the bar's last line (CSS flattens it). */ ?>
+    <div id="shortcuts" class="pg-shortcuts mb-5 border-b border-line pb-4">
       <?php if ($quick_stats): ?>
       <p class="mb-2 font-mono text-xs text-ink-muted">
         <strong class="font-semibold text-ink"><?= number_format($quick_stats['active'], 0, ',', '.') ?></strong> anunțuri active ·
@@ -668,21 +670,37 @@ if (!$is_htmx): ?>
       <span class="status-soon-note"><?= e(STATUS_HELP_SOON) ?></span>
     </p>
 
-        <div role="group" aria-label="Opțiuni rezultate" class="mt-3 flex flex-wrap items-center gap-2">
-          <?php /* Compact view: horizontal filters + card grid, lg and up. Shown
-             by the script below (it does nothing without JavaScript), and the
-             choice is kept per browser in localStorage `posturi.layout`. */ ?>
-          <button type="button" id="layout-toggle" hidden aria-pressed="false" aria-label="Vizualizare: Listă. Schimbă la grilă"
-                  class="hidden items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink-muted transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus aria-pressed:border-gov aria-pressed:bg-gov-light aria-pressed:text-gov lg:inline-flex">
-            <svg class="h-4 w-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            <span data-layout-label>Vizualizare: Listă</span>
-          </button>
-          <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
-          <select id="sort" name="sort" class="rounded-md bg-surface border border-line-strong px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-gov focus:ring-1 focus:ring-focus">
-            <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
-            <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
-            <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
-          </select>
+        <?php /* View switch and sort. In the list view this row sits under the status
+           tabs; in the grid and table views (lg+) the script moves it to the end of
+           the filter bar, so search, filters, view and sort read as one row. It stays
+           inside the form either way, so `sort` is serialised as before. */ ?>
+        <div id="result-options" role="group" aria-label="Opțiuni rezultate" class="pg-options mb-3 mt-3 flex flex-wrap items-center gap-2">
+          <?php /* Three views, lg and up: list (sidebar + rows), grid (filter bar +
+             cards), table (filter bar + one line per posting). Shown by the script
+             below (it does nothing without JavaScript); the choice is kept per
+             browser in localStorage `posturi.layout` ('list' | 'compact' | 'table'). */ ?>
+          <div id="layout-switch" role="group" aria-label="Vizualizare" hidden
+               class="pg-views hidden h-10 overflow-hidden rounded-md border border-line-strong bg-surface lg:inline-flex">
+            <?php foreach ([
+                'list'    => ['Listă', '<path d="M4 6h16M4 12h16M4 18h16"/>'],
+                'compact' => ['Grilă', '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>'],
+                'table'   => ['Tabel', '<rect x="3" y="4" width="18" height="16"/><path d="M3 10h18M3 15h18M9 10v10"/>'],
+            ] as $mode => [$mlabel, $micon]): ?>
+            <button type="button" data-layout-mode="<?= $mode ?>" aria-pressed="<?= $mode === 'list' ? 'true' : 'false' ?>"
+                    class="inline-flex items-center gap-1.5 border-l border-line px-3 text-sm text-ink-muted transition-colors first:border-l-0 hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus aria-pressed:bg-gov-light aria-pressed:font-medium aria-pressed:text-gov">
+              <svg class="h-4 w-4 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false"><?= $micon ?></svg>
+              <?= $mlabel ?>
+            </button>
+            <?php endforeach; ?>
+          </div>
+          <div class="pg-sort inline-flex h-10 items-center gap-2 rounded-md border border-line-strong bg-surface pl-3 focus-within:border-gov focus-within:ring-1 focus-within:ring-focus">
+            <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
+            <select id="sort" name="sort" class="h-full rounded-md border-0 bg-transparent py-0 pl-1 pr-2 text-sm text-ink focus:outline-none">
+              <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
+              <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
+              <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
+            </select>
+          </div>
     </div>
 
         <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
@@ -840,9 +858,13 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   var state = {};
   try { state = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { state = {}; }
 
+  var drawerQuery = window.matchMedia('(min-width: 1024px)');
   function applyFacetState() {
     document.querySelectorAll('.facet-group').forEach(function (el) {
       var key = el.dataset.facet;
+      // Desktop starts with every group collapsed; the drawer (below lg)
+      // opens the server's default-open groups unless the reader chose.
+      if (!el.open && state[key] === undefined && el.hasAttribute('data-default-open') && !drawerQuery.matches) el.open = true;
       // A group — or a parent of a group — holding an active selection is
       // rendered open (server sets data-selected) and stays open. Parent
       // groups introduced by UX-01A have keys no old preference can mention.
@@ -871,22 +893,46 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
     }, 0);
   });
 
-  // ---- Compact view (lg and up): horizontal filters + card grid ----
-  // The layout itself is CSS over this same markup (html[data-layout="compact"],
-  // set before paint by inc/header.php), so swaps and history need nothing from
-  // here. This only owns the toggle and the dropdown behaviour of the top-level
-  // groups. In compact mode a group's panel is driven by [data-pg-open], NOT by
-  // the native `open` attribute: the stored list-mode preferences (STORE) are
-  // neither read nor written, and every panel starts closed.
+  // ---- Grid and table views (lg and up): filter bar + cards / table rows ----
+  // The layout itself is CSS over this same markup (html[data-layout="compact"]
+  // for the grid, "table" for the table; set before paint by inc/header.php), so
+  // swaps and history need nothing from here. This owns the view switch, the
+  // move of the view/sort row into the filter bar, and the dropdown behaviour of
+  // the top-level groups. In the bar a group's panel is driven by
+  // [data-pg-open], NOT by the native `open` attribute: the stored list-mode
+  // preferences (STORE) are neither read nor written, and every panel starts closed.
   var LAYOUT_KEY = 'posturi.layout';
+  var MODES = ['list', 'compact', 'table'];
   var root = document.documentElement;
-  var layoutBtn = document.getElementById('layout-toggle');
+  var layoutSwitch = document.getElementById('layout-switch');
+  var bar = document.querySelector('.pg-side');
+  // Blocks that join the filter bar in the bar views, in this order, and go back
+  // to their place (a comment left there) in the list view.
+  var movers = ['result-options', 'shortcuts'].map(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return null;
+    var slot = document.createComment(id);
+    el.parentNode.insertBefore(slot, el);
+    return { el: el, slot: slot };
+  }).filter(Boolean);
   var lgQuery = window.matchMedia('(min-width: 1024px)');
   var openKey = null;
 
-  function compactOn() { return root.dataset.layout === 'compact' && lgQuery.matches; }
+  /** True while the filters are a bar above the results (grid or table view, lg+). */
+  function barOn() { return !!root.dataset.layout && lgQuery.matches; }
   function topGroups() { return Array.prototype.slice.call(document.querySelectorAll('#facet-list > .facet-group')); }
   function topSummary(el) { return el.querySelector(':scope > summary'); }
+
+  /** View/sort and the shortcuts: end of the filter bar in the bar views, their own place otherwise. */
+  function placeOptions() {
+    if (!bar) return;
+    var focused = document.activeElement;
+    movers.forEach(function (m) {
+      if (barOn()) { if (m.el.parentNode !== bar) bar.appendChild(m.el); }
+      else if (m.el.previousSibling !== m.slot) m.slot.parentNode.insertBefore(m.el, m.slot.nextSibling);
+    });
+    if (focused && focused !== document.body && document.activeElement !== focused) focused.focus();
+  }
 
   function placePanel(el) {
     var body = el.querySelector(':scope > .facet-body');
@@ -896,20 +942,20 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
     if (r.right > document.documentElement.clientWidth - 8) el.classList.add('pg-pop-right');
   }
 
-  /** Sync [data-pg-open] and aria-expanded to openKey (no-op outside compact). */
+  /** Sync [data-pg-open] and aria-expanded to openKey (no-op outside the bar). */
   function syncPanels() {
     topGroups().forEach(function (el) {
-      var on = compactOn() && openKey !== null && el.dataset.facet === openKey;
+      var on = barOn() && openKey !== null && el.dataset.facet === openKey;
       el.toggleAttribute('data-pg-open', on);
       // A closed <details> does not render its content at all, so an opened
       // panel needs the native attribute too. Only panels this code forced open
       // are closed again by it, and nothing here records into STORE (that is
-      // written by the summary click handler, which a compact click never reaches).
+      // written by the summary click handler, which a bar click never reaches).
       if (on && !el.open) { el.open = true; el.setAttribute('data-pg-forced', ''); }
       else if (!on && el.hasAttribute('data-pg-forced')) { el.open = false; el.removeAttribute('data-pg-forced'); }
       var sum = topSummary(el);
       if (sum) {
-        if (compactOn()) sum.setAttribute('aria-expanded', on ? 'true' : 'false');
+        if (barOn()) sum.setAttribute('aria-expanded', on ? 'true' : 'false');
         else sum.removeAttribute('aria-expanded');
       }
       if (on) placePanel(el);
@@ -928,33 +974,33 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   }
 
   function setLayout(mode, persist) {
-    if (mode === 'compact') root.dataset.layout = 'compact'; else delete root.dataset.layout;
+    if (MODES.indexOf(mode) < 0) mode = 'list';
+    if (mode === 'list') delete root.dataset.layout; else root.dataset.layout = mode;
     if (persist) { try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* private mode */ } }
-    if (layoutBtn) {
-      var compact = mode === 'compact';
-      layoutBtn.setAttribute('aria-pressed', compact ? 'true' : 'false');
-      layoutBtn.setAttribute('aria-label', 'Vizualizare: ' + (compact ? 'Grilă' : 'Listă') + '. Schimbă la ' + (compact ? 'listă' : 'grilă'));
-      var label = layoutBtn.querySelector('[data-layout-label]');
-      if (label) label.textContent = 'Vizualizare: ' + (compact ? 'Grilă' : 'Listă');
+    if (layoutSwitch) {
+      layoutSwitch.querySelectorAll('[data-layout-mode]').forEach(function (b) {
+        b.setAttribute('aria-pressed', b.dataset.layoutMode === mode ? 'true' : 'false');
+      });
     }
+    placeOptions();
     openKey = null;
     syncPanels();
   }
 
-  if (layoutBtn) {
-    layoutBtn.hidden = false;
-    setLayout(root.dataset.layout === 'compact' ? 'compact' : 'list', false);
-    layoutBtn.addEventListener('click', function () {
-      setLayout(root.dataset.layout === 'compact' ? 'list' : 'compact', true);
+  if (layoutSwitch) {
+    layoutSwitch.hidden = false;
+    layoutSwitch.addEventListener('click', function (ev) {
+      var b = ev.target.closest && ev.target.closest('[data-layout-mode]');
+      if (b) setLayout(b.dataset.layoutMode, true);
     });
   }
-  syncPanels();
-  lgQuery.addEventListener('change', function () { openKey = null; syncPanels(); });
+  setLayout(root.dataset.layout || 'list', false);
+  lgQuery.addEventListener('change', function () { openKey = null; placeOptions(); syncPanels(); });
 
   // Capture phase and stopPropagation: the persisted-state recorder below must
-  // not see a click that only toggled a compact panel.
+  // not see a click that only toggled a bar panel.
   document.addEventListener('click', function (ev) {
-    if (!compactOn()) return;
+    if (!barOn()) return;
     var t = ev.target;
     var sum = t.closest && t.closest('#facet-list > .facet-group > summary');
     if (sum) {
@@ -969,7 +1015,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   }, true);
 
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape' && compactOn() && openKey !== null) { ev.preventDefault(); closePanels(true); }
+    if (ev.key === 'Escape' && barOn() && openKey !== null) { ev.preventDefault(); closePanels(true); }
   });
 
   // An HTMX swap replaces #facet-list: put the open panel back.

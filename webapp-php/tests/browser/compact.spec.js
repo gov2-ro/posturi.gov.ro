@@ -122,7 +122,7 @@ test('view switch: lg+ only, three views persist across reload and an HTMX filte
   await expect(sw).toHaveAttribute('aria-label', 'Vizualizare');
   await expect(sw.locator('[data-layout-mode]')).toHaveText(['Listă', 'Grilă', 'Tabel']);
   await expectView(page, 'list');
-  expect(await display(page, 'ul.pg-results')).toBe('block');
+  expect(await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).gridTemplateColumns.split(' ').length)).toBe(2);   // list view: two columns
   await expect(page.locator('.pg-thead')).toBeHidden();
 
   await view(page, 'compact').click();
@@ -165,7 +165,7 @@ test('view switch: lg+ only, three views persist across reload and an HTMX filte
   await view(page, 'list').click();
   await expectView(page, 'list');
   expect(await page.evaluate(() => localStorage.getItem('posturi.layout'))).toBe('list');
-  expect(await display(page, 'ul.pg-results')).toBe('block');
+  expect(await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).gridTemplateColumns.split(' ').length)).toBe(2);   // list view: two columns
   expect(await page.locator('#result-options').evaluate((el) => !!el.closest('.pg-main'))).toBe(true);
 });
 
@@ -204,14 +204,19 @@ test('filter bar: search, filters, view and sort are one row of equal controls',
   }
 });
 
-test('home shortcuts join the bar in the grid and table views, and go back in the list view', async ({ page, viewport }) => {
+test('home shortcuts close the bar on a row of their own in the grid and table views, and go back in the list view', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'the bar is lg+ only');
   await setLayout(page, 'compact');
   await page.goto('/');
   const sc = page.locator('#shortcuts');
   expect(await sc.evaluate((el) => el.parentElement.classList.contains('pg-side'))).toBe(true);
-  expect(await sc.evaluate((el) => getComputedStyle(el).display)).toBe('contents');
+  expect(await sc.evaluate((el) => el === el.parentElement.lastElementChild), 'last in the bar').toBe(true);
   const bar = await page.locator('.pg-side').boundingBox();
+  const own = await sc.boundingBox();
+  const sort = await page.locator('.pg-sort').boundingBox();
+  expect(own.y, 'a row below view and sort').toBeGreaterThanOrEqual(sort.y + sort.height);
+  expect(Math.abs(own.x - bar.x), 'starts at the bar\'s left edge').toBeLessThanOrEqual(1);
+  expect(Math.abs(own.width - bar.width), 'the whole bar width').toBeLessThanOrEqual(1);
   for (const el of await sc.locator('a').all()) {
     const bb = await el.boundingBox();
     expect(bb.y + bb.height, 'chip inside the bar').toBeLessThanOrEqual(bar.y + bar.height + 1);
@@ -221,9 +226,44 @@ test('home shortcuts join the bar in the grid and table views, and go back in th
   await noOverflow(page, 'shortcuts in the bar');
   await view(page, 'list').click();
   expect(await sc.evaluate((el) => !!el.closest('.pg-main'))).toBe(true);
-  expect(await sc.evaluate((el) => getComputedStyle(el).display)).toBe('block');
   // In the list view the shortcuts precede the status tabs, as before.
   expect(await sc.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('.status-block')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+});
+
+test('the total is said once, just before the results', async ({ page }) => {
+  await page.goto('/');
+  // Text nodes a reader sees (the sr-only live region is for screen readers and says it once more on change).
+  const seen = (re) => page.evaluate((src) => {
+    const re = new RegExp(src);
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const el = n.parentElement;
+      if (!re.test(n.textContent) || el.closest('.sr-only, script, template, [hidden]')) continue;
+      hits.push(el);
+    }
+    const list = document.querySelector('ul.pg-results');
+    return hits.map((el) => !!(el.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING));
+  }, re.source);
+  expect(await seen(/anunțuri active/)).toEqual([]);                    // the old corpus line above the shortcuts
+  expect(await seen(/anunțuri găsite/)).toEqual([true]);                // once, and before the list
+});
+
+test('list view: two columns beside the sidebar, the deadline beside the title on one line', async ({ page, viewport }) => {
+  test.skip(!isDesktop(viewport), 'two columns from about 1050px up');
+  await page.goto('/');
+  const cols = await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).gridTemplateColumns.split(' ').length);
+  expect(cols).toBe(2);
+  const ys = await page.locator('ul.pg-results > li.pg-row').evaluateAll((els) => els.slice(0, 2).map((e) => Math.round(e.getBoundingClientRect().y)));
+  expect(ys[0]).toBe(ys[1]);
+  const li = row(page, 1001);
+  const [title, dl, meta] = [await li.locator('.pg-title').boundingBox(), await li.locator('.pg-deadline').boundingBox(), await li.locator('.pg-meta').boundingBox()];
+  expect(dl.x, 'deadline right of the title').toBeGreaterThan(title.x + title.width - 1);
+  expect(dl.height, 'days and date on one line').toBeLessThanOrEqual(22);
+  expect(meta.y, 'employer line below the title block').toBeGreaterThanOrEqual(title.y + title.height);
+  expect(meta.x + meta.width, 'employer line runs under the deadline too').toBeGreaterThan(dl.x);
+  await expect(li.locator('.pg-salary')).toContainText('Salariu estimat 4.100–5.200 lei brut');
+  await noOverflow(page, 'two-column list');
 });
 
 test('grid cards: three columns, four lines: title, employer, pay beside the deadline, badges', async ({ page, viewport }) => {

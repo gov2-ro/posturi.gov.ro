@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-10-16 — The total said once; "Începe cu" closes the bar; two-column list view
+
+pax's next review:
+
+- **The total, once.** The "N anunțuri active · M angajatori" line above the shortcuts is gone
+  (and its two COUNT queries): on the home page it repeated the count just above the results,
+  which is now the only visible total (the status tabs still carry their per-tab counts).
+- **"Începe cu" at the end.** In the grid and table views the shortcuts are no longer
+  flattened into the bar's last line: they close the bar on a row of their own
+  (`flex-basis: 100%`), after the filters, view and sort.
+- **List view, two columns.** Beside the sidebar the rows are now a grid of 22rem+ columns:
+  two from about 1050px, one below. A half-width row cannot spare a deadline column down its
+  whole height, so the deadline (days and date on one line) sits beside the title and the
+  original title only, and the employer line, pay, badges and the auto line run the full
+  width below.
+
+Tests: `compact.spec.js` adds "the total is said once" (visible text nodes only: the sr-only
+live region says it again on purpose) and the two-column list check, and the shortcut test
+now expects a full-width last row; each seen failing against its mutation (stats line back,
+shortcuts flattened, one column, deadline on two lines). PHP suites all pass; Playwright 295
+passed, 50 width-gated skips.
+
 ### 2026-10-16 — Grid view: three columns, four-line cards, no hole in the bar
 
 pax's review of the deployed grid (2 columns at ~1100px, half of each card empty, a gap in

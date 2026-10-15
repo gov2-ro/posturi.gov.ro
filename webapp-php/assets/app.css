@@ -252,6 +252,36 @@
  */
 .pg-thead, .pg-salary-kind { display: none; }
 
+/* List view, lg and up: the rows in two 22rem+ columns beside the sidebar (from
+   about 1050px; one column below that). A half-width
+   row cannot spare a deadline column down its whole height, so the deadline (on
+   one line) sits beside the title and the original title under it only, and the
+   employer line, pay, badges and the auto line take the full width below. */
+@media (min-width: 1024px) {
+  html:not([data-layout]) ul.pg-results {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 0.625rem; border-top: 0;
+  }
+  html:not([data-layout]) ul.pg-results > li.pg-row { margin: 0; }
+  html:not([data-layout]) .pg-row > div:first-child {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 1rem; align-items: start;
+  }
+  html:not([data-layout]) .pg-row > div:first-child > div:first-child { display: contents; }
+  html:not([data-layout]) .pg-title { grid-column: 1; grid-row: 1; }
+  html:not([data-layout]) .pg-sub { grid-column: 1; grid-row: 2; }
+  html:not([data-layout]) .pg-deadline {
+    grid-column: 2; grid-row: 1 / span 2;
+    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; column-gap: 0.375rem;
+    max-width: 11rem;
+  }
+  html:not([data-layout]) .pg-deadline > span:not(.deadline-fallback),
+  html:not([data-layout]) .pg-deadline time { display: inline; margin-top: 0; white-space: nowrap; }
+  html:not([data-layout]) .pg-deadline .deadline-fallback { flex-basis: 100%; }
+  html:not([data-layout]) .pg-meta,
+  html:not([data-layout]) .pg-salary,
+  html:not([data-layout]) .pg-badges,
+  html:not([data-layout]) .pg-auto { grid-column: 1 / -1; }
+}
+
 @media (min-width: 1024px) {
   html[data-layout] { --pg-bar-h: 2.5rem; }
   html[data-layout] .pg-layout { display: block; }
@@ -294,16 +324,12 @@
     white-space: nowrap;
   }
 
-  /* View switch and sort, then the home page's shortcuts, moved here by the
-     script: they follow the last filter on the same line, no gap. The shortcut
-     block's wrappers are flattened so the counts, "Începe cu" and each chip
-     wrap as items of the bar too. */
+  /* View switch and sort, moved here by the script, follow the last filter on
+     the same line, no gap. The home page's "Începe cu" shortcuts, moved here
+     too, close the bar on a row of their own. */
   html[data-layout] .pg-side > #result-options { margin: 0; flex-wrap: nowrap; }
   html[data-layout] .pg-side > #result-options > * { height: var(--pg-bar-h); }
-  html[data-layout] .pg-side > .pg-shortcuts,
-  html[data-layout] .pg-side > .pg-shortcuts > div { display: contents; }
-  html[data-layout] .pg-side > .pg-shortcuts > p { margin: 0 0.25rem; white-space: nowrap; }
-  html[data-layout] .pg-side > .pg-shortcuts a { height: 2rem; }
+  html[data-layout] .pg-side > .pg-shortcuts { flex-basis: 100%; margin: 0.25rem 0 0; padding: 0; border: 0; }
 
   html[data-layout] .pg-main { width: 100%; }
 

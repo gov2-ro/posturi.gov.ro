@@ -102,19 +102,8 @@ $postings = $stmt->fetchAll();
 $active_chips  = active_filter_chips();
 $is_unfiltered = $page === 1 && !$active_chips;
 
-// ---- Quick stats (unfiltered home page only) ----
-$quick_stats = null;
-if ($is_unfiltered) {
-    $today = ro_today();
-    // Județe and domenii counts were dropped 2026-09-08: as numbers they said
-    // nothing a visitor could act on, and both are reachable as facets. The two
-    // that stayed are corpus scale, and they now render as one line of text
-    // rather than as four cards above the fold.
-    $quick_stats = [
-        'active'    => (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE application_status IN (" . OPEN_STATUS_SQL . ")")->fetchColumn(),
-        'employers' => (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn(),
-    ];
-}
+// The "N anunțuri active · M angajatori" line above the shortcuts was dropped
+// 2026-10-16: the total is said once, by the count just above the results.
 
 // ---- Landing shortcuts ----
 //
@@ -625,14 +614,8 @@ if (!$is_htmx): ?>
 
     <?php if ($shortcuts): ?>
     <?php /* In the grid and table views the script moves this block into the filter
-       bar, after view and sort, where it fills the bar's last line (CSS flattens it). */ ?>
+       bar, where it is the bar's last row, on a line of its own. */ ?>
     <div id="shortcuts" class="pg-shortcuts mb-5 border-b border-line pb-4">
-      <?php if ($quick_stats): ?>
-      <p class="mb-2 font-mono text-xs text-ink-muted">
-        <strong class="font-semibold text-ink"><?= number_format($quick_stats['active'], 0, ',', '.') ?></strong> anunțuri active ·
-        <strong class="font-semibold text-ink"><?= number_format($quick_stats['employers'], 0, ',', '.') ?></strong> angajatori
-      </p>
-      <?php endif; ?>
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-xs uppercase tracking-widest text-ink-muted">Începe cu</span>
         <?php foreach ($shortcuts as $sc): ?>

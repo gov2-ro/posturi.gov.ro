@@ -2,6 +2,19 @@
 
 ## 2026
 
+### 2026-10-16 — FIX-10 closed after the live check
+
+The live site runs code `17adffa`, and the 2026-10-15T15:33Z export's `/statistici` shows the
+measured per-step block, call counts on ledger days and "(estimare)" on legacy days. The VPS
+session's `/pipeline-check` came back HEALTHY (14/14 slots recorded, no failed steps, export
+checks ok, live site matching the last build), and its ledger day totals match the `llm-usage`
+run records to the cent.
+
+- FIX-10 ticked. The one part left over, `infer_conditions_llm.py`, is recorded under FIX-11.
+- OPS-BALANCE stays open on purpose. The 13.10 push cannot be read back any more, and it is
+  only implied by the +$5.00 in the balance records. The 15.10 pushes were read from the
+  topic and have the full format. pax decides which of the two closes it.
+
 ### 2026-10-13 — FIX-10: the PHP side verified on the Mac, /statistici browser spec
 
 The second slice (be43f9d) was written on gov2-1, which has no `php`. On the Mac:

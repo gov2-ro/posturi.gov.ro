@@ -10,6 +10,10 @@
 // corrupt / wrong-version / invalid / unavailable / quota storage, clear with cancel and confirm,
 // hostile labels (reader's and source's), duplicates, keyboard and live announcements, no-JS,
 // privacy (no requests, no forms, preferences key untouched, URL unchanged), 320/375/1280.
+//
+// Reader-added items ("Elementele dvs.") ship off (inc/checklist.php). The main server turns
+// them on with POSTURI_CHECKLIST_CUSTOM=1 so every check above keeps covering them; a second
+// server on the same database runs the default, and the "off" describe checks that one.
 const { test, expect } = require('@playwright/test');
 const { spawn, execFileSync } = require('child_process');
 const fs = require('fs');
@@ -30,6 +34,8 @@ const DISCLOSURE = 'Progresul se păstrează doar în acest browser.';
 
 let server;
 let base;
+let serverOff;
+let baseOff;
 let live;
 let dbA;
 let dbB;
@@ -57,21 +63,27 @@ test.beforeAll(async () => {
   execFileSync('php', ['tests/fixtures/make_checklist.php', dbA, 'a'], { cwd: webappDir });
   execFileSync('php', ['tests/fixtures/make_checklist.php', dbB, 'b'], { cwd: webappDir });
   setDb('a');
-  const port = await freePort();
-  base = `http://127.0.0.1:${port}`;
-  server = spawn('php', ['-S', `127.0.0.1:${port}`, 'router.php'], {
-    cwd: webappDir, stdio: 'ignore',
-    env: { ...process.env, POSTURI_DB: live, POSTURI_TODAY: '2026-10-03' },
-  });
-  for (let i = 0; i < 50; i++) {
-    try { if ((await fetch(base + '/')).ok) return; } catch { /* not up yet */ }
-    await new Promise((r) => setTimeout(r, 100));
-  }
-  throw new Error('checklist fixture server did not start');
+  const start = async (custom) => {
+    const port = await freePort();
+    const url = `http://127.0.0.1:${port}`;
+    const env = { ...process.env, POSTURI_DB: live, POSTURI_TODAY: '2026-10-03' };
+    delete env.POSTURI_CHECKLIST_CUSTOM;
+    if (custom) env.POSTURI_CHECKLIST_CUSTOM = '1';
+    const proc = spawn('php', ['-S', `127.0.0.1:${port}`, 'router.php'], { cwd: webappDir, stdio: 'ignore', env });
+    for (let i = 0; i < 50; i++) {
+      try { if ((await fetch(url + '/')).ok) return [proc, url]; } catch { /* not up yet */ }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    proc.kill();
+    throw new Error('checklist fixture server did not start');
+  };
+  [server, base] = await start(true);
+  [serverOff, baseOff] = await start(false);
 });
 
 test.afterAll(() => {
   server?.kill();
+  serverOff?.kill();
   for (const f of [live, dbA, dbB]) { try { fs.unlinkSync(f); } catch { /* already gone */ } }
 });
 
@@ -644,4 +656,39 @@ test('widths: nothing overflows, touch targets are large on phones', async ({ pa
     fs.mkdirSync(process.env.UX11_SHOTS, { recursive: true });
     await sec(page).screenshot({ path: path.join(process.env.UX11_SHOTS, `checklist-${page.viewportSize().width}.png`) });
   }
+});
+
+test.describe('"Elementele dvs." off (the default)', () => {
+  const goOff = async (page, id) => {
+    await page.goto(`${baseOff}/job/${id}/`);
+    await expect(sec(page).locator('[data-cl-js]')).toBeVisible();
+  };
+
+  test('no add box and no reader items; source items still check, the confirm text names only the ticks', async ({ page }) => {
+    await goOff(page, 1101);
+    await expect(sec(page).locator('[data-cl-custom-region]')).toHaveCount(0);
+    await expect(sec(page).getByText('Elementele dvs.')).toHaveCount(0);
+    await expect(page.locator('#cl-add-input')).toHaveCount(0);
+    await expect(page.locator('#cl-tpl-custom')).toHaveCount(0);
+    await doc(page, 'Cerere de înscriere').check();
+    await expect(sec(page).locator('[data-cl-summary="document"]')).toHaveText('1 din 5 documente pregătite');
+    await page.reload();
+    await expect(doc(page, 'Cerere de înscriere')).toBeChecked();
+    await sec(page).getByRole('button', { name: 'Șterge progresul' }).click();
+    await expect(sec(page).locator('[data-cl-confirm-text]')).toHaveText(
+      'Ștergi progresul salvat pentru acest anunț (bifele)? Alte anunțuri și lista de salvate nu se schimbă.');
+    expect(await noOverflow(page)).toBeLessThanOrEqual(1);
+  });
+
+  test('items a reader added before stay stored, unseen, through new ticks', async ({ page }) => {
+    const at = '2026-10-01T10:00:00.000Z';
+    const custom = [{ id: 'c1', label: 'Poză pașaport', checked: true, at }];
+    await page.goto(`${baseOff}/despre/`);
+    await page.evaluate(([k, v]) => localStorage.setItem(k, v),
+      [KEY, JSON.stringify({ version: 1, postings: { [URL1101]: { rev: REV_A, updatedAt: at, seen: [], items: {}, custom } } })]);
+    await goOff(page, 1101);
+    await expect(sec(page).getByText('Poză pașaport')).toHaveCount(0);
+    await doc(page, 'Curriculum vitae').check();
+    await expect.poll(async () => (await stored(page)).postings[URL1101].custom).toEqual(custom);
+  });
 });

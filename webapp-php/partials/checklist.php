@@ -12,6 +12,7 @@ declare(strict_types=1);
  *
  * Source facts and reader-added items look different on purpose: source rows are plain
  * lines under a neutral rule, reader rows sit in the info family with an "Adăugat de dvs." tag.
+ * Reader-added items ("Elementele dvs.") are off unless checklist_custom_items_enabled().
  */
 
 require_once __DIR__ . '/../inc/checklist.php';
@@ -21,6 +22,7 @@ $cl_docs   = array_values(array_filter($cl['items'], static fn($i) => $i['kind']
 $cl_stages = array_values(array_filter($cl['items'], static fn($i) => $i['kind'] === 'stage'));
 $cl_official = evidence_safe_url((string)($p['url'] ?? ''));
 $cl_has_deadline = (bool)array_filter($cl_stages, static fn($i) => ($i['evidence']['basis'] ?? '') === 'resolved');
+$cl_custom = checklist_custom_items_enabled();
 ?>
 <section id="pregatire-dosar" data-checklist aria-labelledby="cl-heading" class="mb-8">
   <h2 id="cl-heading" class="mb-3 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
@@ -135,6 +137,7 @@ $cl_has_deadline = (bool)array_filter($cl_stages, static fn($i) => ($i['evidence
       <ul class="list-disc pl-5" data-cl-unconfirmed-list></ul>
     </div>
 
+<?php if ($cl_custom): ?>
     <div class="mb-4" data-cl-custom-region>
       <h3 class="mb-1 text-xs font-semibold uppercase tracking-widest text-ink-muted">Elementele dvs.</h3>
       <ul class="mb-2 space-y-1" data-cl-custom-list></ul>
@@ -147,6 +150,7 @@ $cl_has_deadline = (bool)array_filter($cl_stages, static fn($i) => ($i['evidence
       </div>
       <p class="mt-1 text-xs text-ink-faint">Nu scrie date personale (CNP, adresă, telefon). Textul rămâne doar în acest browser.</p>
     </div>
+    <?php endif; ?>
 
     <p class="text-xs text-ink-muted" data-cl-storage>
       Progresul se păstrează doar în acest browser. Nu se trimite nicăieri, nu se sincronizează între dispozitive și se poate pierde dacă ștergi datele browserului.
@@ -156,7 +160,7 @@ $cl_has_deadline = (bool)array_filter($cl_stages, static fn($i) => ($i['evidence
       <button type="button" data-cl-clear class="min-h-[2.75rem] border border-line px-3 py-2 text-xs text-ink-muted hover:border-gov hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2.25rem]">Șterge progresul</button>
     </div>
     <div class="mt-2 rounded border border-alert-line bg-alert px-3 py-2 text-sm text-alert-ink" data-cl-confirm hidden>
-      <p class="mb-2" data-cl-confirm-text>Ștergi progresul salvat pentru acest anunț (bifele și elementele adăugate de dvs.)? Alte anunțuri și lista de salvate nu se schimbă.</p>
+      <p class="mb-2" data-cl-confirm-text>Ștergi progresul salvat pentru acest anunț (<?= $cl_custom ? 'bifele și elementele adăugate de dvs.' : 'bifele' ?>)? Alte anunțuri și lista de salvate nu se schimbă.</p>
       <div class="flex flex-wrap gap-2">
         <button type="button" data-cl-clear-yes class="min-h-[2.75rem] border border-alert-line bg-surface px-3 py-2 text-xs font-medium text-alert-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2.25rem]">Șterge</button>
         <button type="button" data-cl-clear-no class="min-h-[2.75rem] border border-line bg-surface px-3 py-2 text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2.25rem]">Anulează</button>
@@ -173,6 +177,7 @@ $cl_has_deadline = (bool)array_filter($cl_stages, static fn($i) => ($i['evidence
     <span data-cl-check-text></span>
   </label>
 </template>
+<?php if ($cl_custom): ?>
 <template id="cl-tpl-custom">
   <li class="flex flex-wrap items-center gap-x-3 gap-y-0 border-l-2 border-info-line bg-info py-1 pl-3 pr-2" data-cl-custom-item>
     <span class="border border-info-line bg-surface px-1.5 py-0.5 text-[11px] font-medium text-info-ink">Adăugat de dvs.</span>
@@ -181,6 +186,7 @@ $cl_has_deadline = (bool)array_filter($cl_stages, static fn($i) => ($i['evidence
     <button type="button" data-cl-remove class="min-h-[2.75rem] px-2 text-sm text-info-ink underline hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2rem]">Elimină</button>
   </li>
 </template>
+<?php endif; ?>
 <template id="cl-tpl-line"><li></li></template>
 
 <script type="application/json" id="checklist-data"><?= checklist_json($cl) ?></script>

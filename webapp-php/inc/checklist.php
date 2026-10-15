@@ -26,6 +26,21 @@ declare(strict_types=1);
 //   evidence   {basis: 'extracted' | 'scraped' | 'resolved', quote?: scraped calendar row label,
 //              deadline_source?: concurs|anunt|expirare}
 
+/**
+ * "Elementele dvs." (reader-added items) ship OFF since 2026-10-16: too much novelty at once.
+ * Off, the page renders no add box and no reader items; items stored earlier stay in the
+ * browser untouched and come back when this is turned on. `POSTURI_CHECKLIST_CUSTOM=1` (or
+ * `=0`) overrides it per process, which is how the browser tests keep the feature covered.
+ */
+const CHECKLIST_CUSTOM_ITEMS_ENABLED = false;
+
+function checklist_custom_items_enabled(): bool {
+    $env = getenv('POSTURI_CHECKLIST_CUSTOM');
+    if ($env === '1') return true;
+    if ($env === '0') return false;
+    return CHECKLIST_CUSTOM_ITEMS_ENABLED;
+}
+
 const CHECKLIST_DOCS_MAX   = 60;
 const CHECKLIST_STAGES_MAX = 40;     // with the documents, at most 100 items: the client's per-posting storage cap
 const CHECKLIST_LABEL_MAX  = 300;

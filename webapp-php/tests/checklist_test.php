@@ -29,6 +29,7 @@ require_once __DIR__ . '/fixtures/checklist.php';
 require_once __DIR__ . '/fixtures/server.php';
 
 putenv('POSTURI_TODAY=2026-10-03');
+putenv('POSTURI_CHECKLIST_CUSTOM=1');   // "Elementele dvs." ships off; the suites below test it on, the gate suite off
 
 $db_a = sys_get_temp_dir() . '/posturi-checklist-a-' . getmypid() . '.sqlite';
 $db_b = sys_get_temp_dir() . '/posturi-checklist-b-' . getmypid() . '.sqlite';
@@ -390,6 +391,28 @@ run_suite('old export (no deadline or revision columns): renders, falls back, cl
     assert_same(1, $xp->query('//*[@data-cl-estimated]')->length, 'qualified on the page too');
     $log = (string)@file_get_contents($GLOBALS['old_srv']['log']);
     foreach (['Fatal', 'Warning', 'Notice', 'Deprecated', 'no such'] as $bad) assert_not_contains($bad, $log, "log: $bad");
+});
+
+run_suite('release gate: "Elementele dvs." ships off; off, the page has no add box and the confirm names only the ticks', function () use ($db_a) {
+    assert_false(CHECKLIST_CUSTOM_ITEMS_ENABLED, 'the constant ships off');
+    putenv('POSTURI_CHECKLIST_CUSTOM');
+    assert_false(checklist_custom_items_enabled(), 'no override: off');
+    putenv('POSTURI_CHECKLIST_CUSTOM=0');
+    $off_db = sys_get_temp_dir() . '/posturi-checklist-off-' . getmypid() . '.sqlite';
+    copy($db_a, $off_db);
+    $srv = start_fixture_server($off_db);
+    putenv('POSTURI_CHECKLIST_CUSTOM=1');
+    try {
+        $xp = cl_xp(cl_section(cl_get($srv['base'], '/job/1101/')));
+        assert_same(0, $xp->query('//input')->length, 'no add field');
+        assert_same(0, $xp->query('//*[@data-cl-custom-region] | //*[@data-cl-custom-list]')->length, 'no reader-items region');
+        assert_not_contains('Elementele dvs.', cl_text($xp->query('//section')->item(0)), 'no heading');
+        assert_same(5, $xp->query('//ul[@data-cl-list="document"]/li')->length, 'the source list is unchanged');
+        assert_same('Ștergi progresul salvat pentru acest anunț (bifele)? Alte anunțuri și lista de salvate nu se schimbă.',
+            cl_text($xp->query('//*[@data-cl-confirm-text]')->item(0)), 'the confirm names only the ticks');
+    } finally {
+        stop_fixture_server($srv, $off_db);
+    }
 });
 
 stop_fixture_server($old_srv, $old_db);

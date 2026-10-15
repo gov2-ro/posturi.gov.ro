@@ -1,7 +1,8 @@
 /* UX-11 — browser-local application preparation checklist.
  *
  * The server renders the whole checklist as a read-only list (partials/checklist.php); this
- * script only adds check boxes, reader-added items and the revision review on top of it. All
+ * script only adds check boxes, reader-added items (when the page renders their region) and
+ * the revision review on top of it. All
  * state lives in this browser under ONE separate key, `posturi.checklist.v1`:
  *
  *   {version: 1, postings: {<official source URL>: {
@@ -382,6 +383,7 @@
 
   function renderCustom(rec) {
     var list = qs('[data-cl-custom-list]');
+    if (!list) return;       // "Elementele dvs." off (inc/checklist.php): stored items stay untouched
     var had = list.contains(document.activeElement);
     while (list.firstChild) list.removeChild(list.firstChild);
     (rec ? rec.custom : []).forEach(function (c) {

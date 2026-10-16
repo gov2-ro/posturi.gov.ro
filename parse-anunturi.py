@@ -3,15 +3,32 @@ output_csv_path = 'data/anunturi/anunturi.csv'
 output_calendar_path = 'data/calendar.csv'
 index_csv_path = 'data/posturi_gov_ro.csv'
 
+import argparse
 import csv
+import hashlib
+import json
 import os
 import re
+import sys
+import time
 from datetime import datetime
 import glob
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
 from posting_urls import build_slug_index, url_from_slug
+
+#: Bump this whenever a change to this file can alter what a given HTML page
+#: parses to — a selector, a regex, a date rule, the markdown conversion, a CSV
+#: column. The incremental parse (LATER-05) reuses the previous rows of every
+#: page whose sidecar hash is unchanged, so without a bump the old output would
+#: silently survive a parser fix. A bump invalidates the whole cache and the next
+#: run re-parses everything (`--full` does the same on demand). Pure refactors,
+#: comments and log changes do not need one.
+PARSER_VERSION = 1
+
+#: Name of the reuse cache, written next to the anunturi CSV.
+CACHE_NAME = '.parse-cache.json'
 
 _RO_MONTHS = {
     'ianuarie': 1, 'februarie': 2, 'martie': 3, 'aprilie': 4,
@@ -616,73 +633,265 @@ def extract_job_details(file_path):
     }
 
 
-def save_to_csv(data_list, path):
-    headers = [
-        'Source URL',
-        'Job Title', 'Employer', 'Location', 'Job Level', 'Job Type',
-        'Employer Category', 'Categorie', 'Announcement URL',
-        'Main Body Markdown', 'Other Links',
-        'Nr Posturi', 'Contact Telefon', 'Contact Email', 'Contact Persoana',
-        'Data Limita Depunere', 'Data Proba Scrisa', 'Data Interviu', 'Data Rezultate Finale',
-        'Data Publicare', 'Data Expirare',
-        'Status', 'Detail Fetched At', 'Detail Content Hash',
+CSV_HEADERS = [
+    'Source URL',
+    'Job Title', 'Employer', 'Location', 'Job Level', 'Job Type',
+    'Employer Category', 'Categorie', 'Announcement URL',
+    'Main Body Markdown', 'Other Links',
+    'Nr Posturi', 'Contact Telefon', 'Contact Email', 'Contact Persoana',
+    'Data Limita Depunere', 'Data Proba Scrisa', 'Data Interviu', 'Data Rezultate Finale',
+    'Data Publicare', 'Data Expirare',
+    'Status', 'Detail Fetched At', 'Detail Content Hash',
+]
+CALENDAR_HEADERS = ['url', 'eveniment', 'data', 'ora']
+
+
+def job_row(d):
+    """One parsed posting as an `anunturi.csv` row (keyed by `CSV_HEADERS`)."""
+    return {
+        'Source URL': d['source_url'],
+        'Job Title': d['job_title'],
+        'Employer': d['employer'],
+        'Location': d['location'],
+        'Job Level': d['job_level'],
+        'Job Type': d['job_type'],
+        'Employer Category': d['employer_category'],
+        'Categorie': d['categorie'],
+        'Announcement URL': d['announcement_url'],
+        'Main Body Markdown': d['main_body_markdown'],
+        'Other Links': ', '.join(d['other_links']),
+        'Nr Posturi': d['nr_posturi'],
+        'Contact Telefon': d['contact_telefon'],
+        'Contact Email': d['contact_email'],
+        'Contact Persoana': d['contact_persoana'],
+        'Data Limita Depunere': d['data_limita_depunere'],
+        'Data Proba Scrisa': d['data_proba_scrisa'],
+        'Data Interviu': d['data_interviu'],
+        'Data Rezultate Finale': d['data_rezultate_finale'],
+        'Data Publicare': d.get('data_publicare', ''),
+        'Data Expirare': d.get('data_expirare', ''),
+        'Status': {'anulat': 'Anulat', 'live': 'Live'}.get(d.get('detail_status'), ''),
+        'Detail Fetched At': d.get('detail_fetched_at', ''),
+        'Detail Content Hash': d.get('detail_content_hash', ''),
+    }
+
+
+def calendar_csv_rows(d):
+    """The posting's competition-timeline rows as `calendar.csv` rows."""
+    url = d['source_url']
+    return [
+        {'url': url, 'eveniment': eveniment, 'data': data_str, 'ora': ora}
+        for eveniment, data_str, ora, _end in d['_calendar_rows']
     ]
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, mode='w', newline='', encoding='utf-8') as f:
+
+
+def _write_csv(path, headers, rows):
+    """Write a CSV via temp file + rename, so a crash never leaves half a file
+    (and the reuse cache, which fingerprints the finished file, stays honest)."""
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    tmp = path + '.tmp'
+    with open(tmp, mode='w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         writer.writeheader()
-        for d in data_list:
-            writer.writerow({
-                'Source URL': d['source_url'],
-                'Job Title': d['job_title'],
-                'Employer': d['employer'],
-                'Location': d['location'],
-                'Job Level': d['job_level'],
-                'Job Type': d['job_type'],
-                'Employer Category': d['employer_category'],
-                'Categorie': d['categorie'],
-                'Announcement URL': d['announcement_url'],
-                'Main Body Markdown': d['main_body_markdown'],
-                'Other Links': ', '.join(d['other_links']),
-                'Nr Posturi': d['nr_posturi'],
-                'Contact Telefon': d['contact_telefon'],
-                'Contact Email': d['contact_email'],
-                'Contact Persoana': d['contact_persoana'],
-                'Data Limita Depunere': d['data_limita_depunere'],
-                'Data Proba Scrisa': d['data_proba_scrisa'],
-                'Data Interviu': d['data_interviu'],
-                'Data Rezultate Finale': d['data_rezultate_finale'],
-                'Data Publicare': d.get('data_publicare', ''),
-                'Data Expirare': d.get('data_expirare', ''),
-                'Status': {'anulat': 'Anulat', 'live': 'Live'}.get(d.get('detail_status'), ''),
-                'Detail Fetched At': d.get('detail_fetched_at', ''),
-                'Detail Content Hash': d.get('detail_content_hash', ''),
-            })
+        for row in rows:
+            writer.writerow(row)
+    os.replace(tmp, path)
+
+
+def save_to_csv(data_list, path):
+    _write_csv(path, CSV_HEADERS, (job_row(d) for d in data_list))
 
 
 def save_calendar(data_list, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, mode='w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['url', 'eveniment', 'data', 'ora'])
-        writer.writeheader()
-        for d in data_list:
-            url = d['source_url']
-            for eveniment, data_str, ora, _end in d['_calendar_rows']:
-                writer.writerow({'url': url, 'eveniment': eveniment, 'data': data_str, 'ora': ora})
+    _write_csv(path, CALENDAR_HEADERS,
+               (r for d in data_list for r in calendar_csv_rows(d)))
 
 
 def find_html_files(directory):
-    return glob.glob(os.path.join(directory, '**/*.html'), recursive=True)
+    # Sorted: glob order is filesystem order, which differs between machines and
+    # between a fresh checkout and a long-lived cache. A stable order makes the
+    # CSVs reproducible and a full and an incremental run comparable byte for byte.
+    return sorted(glob.glob(os.path.join(directory, '**/*.html'), recursive=True))
 
 
-def process_html_files(directory, output_csv_path):
+# --- Incremental parse (LATER-05) ---
+
+def _file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _read_rows(path):
+    """All rows of a CSV as dicts, or None when it is missing/unreadable."""
+    csv.field_size_limit(sys.maxsize if sys.maxsize < 2**31 else 2**31 - 1)
+    try:
+        with open(path, newline='', encoding='utf-8') as f:
+            return list(csv.DictReader(f))
+    except (OSError, ValueError, csv.Error):
+        return None
+
+
+def _load_cache(cache_path, csv_path, calendar_path):
+    """The reuse cache, or None when it cannot be trusted.
+
+    Trusted only if it was written by this parser version for exactly the CSVs
+    now on disk (their SHA-256 are recorded in it): a hand-edited, truncated or
+    swapped output, or a crash between writing the CSVs and the cache, therefore
+    falls back to a full parse instead of reusing rows that do not match it.
+    """
+    try:
+        with open(cache_path, encoding='utf-8') as f:
+            cache = json.load(f)
+        if (cache.get('parser_version') != PARSER_VERSION
+                or cache.get('csv_headers') != CSV_HEADERS
+                or not isinstance(cache.get('entries'), dict)):
+            return None
+        if (cache.get('anunturi_sha256') != _file_sha256(csv_path)
+                or cache.get('calendar_sha256') != _file_sha256(calendar_path)):
+            return None
+        return cache
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _page_key(file_path, sidecar):
+    """Everything outside the HTML bytes that the parsed row depends on.
+
+    `content_hash` stands for the HTML (sidecar `bytes` is checked against the
+    file size as a cheap guard against a page/sidecar pair torn by a crash);
+    the rest is what `extract_job_details` takes from elsewhere: the posting URL
+    (slug index), the index CSV's dates and the sidecar's status. `fetched_at`
+    is a pure pass-through, so it is overlaid on reuse rather than keyed.
+    Returns None when the page has no usable hash (legacy) — always parse.
+    """
+    content_hash = (sidecar or {}).get('content_hash') or ''
+    if not content_hash:
+        return None
+    size = (sidecar or {}).get('bytes')
+    try:
+        if size is not None and int(size) != os.path.getsize(file_path):
+            return None
+    except (OSError, ValueError, TypeError):
+        return None
+    src_url = source_url_from_path(file_path)
+    return {
+        'url': src_url,
+        'hash': content_hash,
+        'index': list(_try_index_lookup(src_url)),
+        'status': (sidecar or {}).get('status', '') or '',
+    }
+
+
+def process_html_files(directory, output_csv_path, calendar_csv_path=None,
+                       full=False, progress_every=500, log=print):
+    """Parse the HTML cache into the two CSVs, reusing unchanged pages.
+
+    A page is reused — its previous `anunturi.csv` row and `calendar.csv` rows
+    copied verbatim — when its key (`_page_key`) equals the one recorded by the
+    last run, which was made by this `PARSER_VERSION` for the CSVs on disk.
+    Everything else is parsed: new or changed pages, legacy pages without a
+    sidecar hash, a missing/untrusted cache, `full=True`. Pages that vanished
+    from the cache directory are dropped, as before. Returns a summary dict.
+    """
+    calendar_csv_path = calendar_csv_path or output_calendar_path
+    cache_path = os.path.join(os.path.dirname(output_csv_path) or '.', CACHE_NAME)
+    started = time.monotonic()
+
+    # Loaded even for --full, so "removed" is reported either way; only an
+    # incremental run reads the old rows and reuses them.
+    old_cache = _load_cache(cache_path, output_csv_path, calendar_csv_path)
+    old_entries = (old_cache or {}).get('entries', {})
+    old_rows = old_cal = None
+    if old_cache is not None and not full:
+        old_rows = _read_rows(output_csv_path)
+        old_cal = _read_rows(calendar_csv_path)
+        if old_rows is None or old_cal is None:
+            old_entries = {}
+
     html_files = find_html_files(directory)
-    all_job_details = []
-    for html_file in html_files:
-        job_details = extract_job_details(html_file)
-        all_job_details.append(job_details)
-    save_to_csv(all_job_details, output_csv_path)
-    save_calendar(all_job_details, output_calendar_path)
+    total = len(html_files)
+    rows, cal_rows, entries = [], [], {}
+    parsed = reused = 0
+    for n, html_file in enumerate(html_files, 1):
+        rel = os.path.relpath(html_file, directory)
+        sidecar = _read_sidecar(html_file)
+        key = _page_key(html_file, sidecar)
+        prev = old_entries.get(rel)
+        reuse_ok = False
+        if (not full and old_rows is not None and key is not None
+                and prev is not None and prev.get('key') == key):
+            r0, n_cal = prev.get('row'), prev.get('cal')
+            c0 = prev.get('cal_start')
+            if (isinstance(r0, int) and 0 <= r0 < len(old_rows)
+                    and isinstance(c0, int) and isinstance(n_cal, int)
+                    and 0 <= c0 and c0 + n_cal <= len(old_cal)):
+                row = dict(old_rows[r0])
+                row['Detail Fetched At'] = (sidecar or {}).get('fetched_at', '') or ''
+                page_cal = old_cal[c0:c0 + n_cal]
+                reuse_ok = True
+        if reuse_ok:
+            reused += 1
+        else:
+            d = extract_job_details(html_file)
+            row, page_cal = job_row(d), calendar_csv_rows(d)
+            parsed += 1
+        # Legacy pages (key None) are recorded too, so a vanished one is
+        # counted as removed; they are never reused.
+        entries[rel] = {'key': key, 'row': len(rows),
+                        'cal_start': len(cal_rows), 'cal': len(page_cal)}
+        rows.append(row)
+        cal_rows.extend(page_cal)
+        if progress_every and n % progress_every == 0:
+            log(f"parse: {n}/{total} files (parsed {parsed}, reused {reused}, "
+                f"{time.monotonic() - started:.0f}s)")
+
+    removed = len(set(old_entries) - set(entries))
+    _write_csv(output_csv_path, CSV_HEADERS, rows)
+    _write_csv(calendar_csv_path, CALENDAR_HEADERS, cal_rows)
+
+    cache = {
+        'parser_version': PARSER_VERSION,
+        'csv_headers': CSV_HEADERS,
+        'anunturi_sha256': _file_sha256(output_csv_path),
+        'calendar_sha256': _file_sha256(calendar_csv_path),
+        'entries': entries,
+    }
+    tmp = cache_path + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False, separators=(',', ':'))
+    os.replace(tmp, cache_path)
+
+    summary = {'files': total, 'parsed': parsed, 'reused': reused,
+               'removed': removed, 'full': bool(full),
+               'seconds': round(time.monotonic() - started, 1)}
+    log(f"parse: parsed {parsed}, reused {reused}, removed {removed} "
+        f"({total} files, {'full' if full else 'incremental'}, {summary['seconds']}s)")
+    return summary
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Parse the cached posting pages into anunturi.csv + calendar.csv.")
+    ap.add_argument('--full', action='store_true',
+                    help="re-parse every page, ignoring the reuse cache (use after a parser change that did not bump PARSER_VERSION)")
+    ap.add_argument('--input-dir', default=folder_path, help="HTML cache directory (default: %(default)s)")
+    ap.add_argument('--out-dir', default=None,
+                    help="write anunturi.csv, calendar.csv and the reuse cache here instead of the default data/ paths")
+    ap.add_argument('--progress-every', type=int, default=500, metavar='N',
+                    help="print a progress line every N files (0 = none; default %(default)s)")
+    args = ap.parse_args(argv)
+
+    if args.out_dir:
+        csv_path = os.path.join(args.out_dir, 'anunturi.csv')
+        cal_path = os.path.join(args.out_dir, 'calendar.csv')
+    else:
+        csv_path, cal_path = output_csv_path, output_calendar_path
+    process_html_files(args.input_dir, csv_path, cal_path,
+                       full=args.full, progress_every=args.progress_every)
+    print(f"Data saved to {csv_path}")
+    print(f"Calendar saved to {cal_path}")
 
 
 if __name__ == "__main__":
@@ -690,6 +899,4 @@ if __name__ == "__main__":
     # `import parse_anunturi` re-parsed all 9,691 cached pages and rewrote both
     # CSVs as a side effect — which is what a test importing it did, and what
     # an interactive import did before that.
-    process_html_files(folder_path, output_csv_path)
-    print(f"Data saved to {output_csv_path}")
-    print(f"Calendar saved to {output_calendar_path}")
+    main()

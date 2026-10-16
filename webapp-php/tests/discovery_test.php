@@ -321,6 +321,13 @@ run_suite('result rows show pay: the stated salary first, else the labelled esti
     assert_same(null, list_salary(['sal_min' => null]), 'nothing to show');
     assert_same(null, list_salary(['inf_salary_min' => 0, 'sal_min' => null]), 'a zero is not a salary');
     assert_same(null, list_salary([]), 'an old export without the columns');
+    // 261016: net pay, estimated from the same gross (CAS 25 %, CASS 10 %, tax 10 % after art. 77's deduction).
+    assert_same(2981, net_from_gross(5000), '5.000 brut: deduction 13 % of the minimum wage');
+    assert_same(3802, net_from_gross(6500), 'above minimum wage + 2.000 there is no deduction: 58.5 %');
+    assert_same(2616, net_from_gross(4325), 'at the minimum wage: 20 % deduction (facility left out on purpose)');
+    assert_same('≈ 2.485–3.090 lei net', net_label(4100, 5200), 'a range stays a range');
+    assert_same('', list_salary_net(['sal_min' => null]), 'no gross, no net');
+    assert_same(net_label(6000, 6000), list_salary_net(['inf_salary_min' => 6000, 'inf_salary_max' => 6000, 'sal_min' => 4100]), 'net follows the stated salary first');
 
     $html = get_html($base, '/?status=all');
     $x = xpath_for($html);

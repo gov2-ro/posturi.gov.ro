@@ -586,6 +586,10 @@ require __DIR__ . '/../inc/header.php';
           <?php endif; ?>
           <span class="text-sm font-normal text-ink-muted">brut / lună, la gradația 0</span>
         </p>
+        <?php if (($net = net_label((float)$sal['lei_min'], (float)$sal['lei_max'])) !== ''): ?>
+        <p class="mt-0.5 text-sm text-ink"><?= e($net) ?>
+          <span class="text-xs text-ink-muted">— estimare: CAS 25 %, CASS 10 %, impozit 10 % cu deducerea personală, fără persoane în întreținere</span></p>
+        <?php endif; ?>
 
         <?php if (!empty($sal['avertismente'])): ?>
         <ul class="mt-2 space-y-1 text-xs text-ink-muted">

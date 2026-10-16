@@ -130,7 +130,7 @@ $chips = $active_chips ?? [];
           <?php if ($sal || $labels || $meta): ?>
           <p class="pg-facts mt-1 text-xs leading-relaxed text-ink-muted">
             <?php if ($sal): ?>
-              <span class="pg-salary whitespace-nowrap" title="<?= e($sal['label']) ?> (brut lunar)">
+              <span class="pg-salary whitespace-nowrap" title="<?= e($sal['label']) ?> (brut lunar)<?= ($n = list_salary_net($p)) !== '' ? ' · ' . e($n) . ', estimat' : '' ?>">
                 <span class="pg-salary-label" role="img" aria-label="<?= e($sal['label']) ?>">💰</span>
                 <span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
                 <span class="pg-salary-kind">(estimat)</span><?php endif; ?>

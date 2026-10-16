@@ -220,6 +220,56 @@ function list_salary(array $p): ?array {
     return null;
 }
 
+/**
+ * 261016 "salariu net": take-home pay estimated from a monthly gross, for an
+ * employee at their base job with no dependants. Arithmetic, never extracted —
+ * postings almost never state pay, so this runs on the same figure the row shows.
+ * Codul fiscal 2026 (rates checked 2026-10-16): CAS 25 %, CASS 10 %, income tax
+ * 10 % of gross − CAS − CASS − the personal deduction (art. 77): 20 % of the
+ * minimum wage up to the minimum wage, 0.5 points less per started 50 lei above
+ * it, nothing above minimum wage + 2.000 lei. Left out on purpose: dependants,
+ * the minimum-wage tax facility, and the exemptions some posts have (disability,
+ * IT, construction) — the result is labelled an estimate wherever it is shown.
+ */
+const NET_MIN_WAGE = 4325;          // gross minimum wage from 2026-07-01 (HG 146/2026)
+
+function net_from_gross(float $gross): int {
+    if ($gross <= 0) return 0;
+    $cas  = round($gross * 0.25);
+    $cass = round($gross * 0.10);
+    $over = $gross - NET_MIN_WAGE;
+    if ($over <= 0) {
+        $pct = 20.0;
+    } elseif ($over > 2000) {
+        $pct = 0.0;
+    } else {
+        $pct = max(0.0, 20.0 - 0.5 * ceil($over / 50));
+    }
+    $deduction = round(NET_MIN_WAGE * $pct / 100);
+    $tax = round(max(0, $gross - $cas - $cass - $deduction) * 0.10);
+    return (int)($gross - $cas - $cass - $tax);
+}
+
+/** net_label() for the pay a result row shows: the same precedence as list_salary(). */
+function list_salary_net(array $p): string {
+    foreach ([['inf_salary_min', 'inf_salary_max'], ['sal_min', 'sal_max']] as [$lo, $hi]) {
+        $min = $p[$lo] ?? null;
+        if ($min === null || $min === '' || (float)$min <= 0) continue;
+        $max = ($p[$hi] ?? null) === null || ($p[$hi] ?? '') === '' ? null : (float)$p[$hi];
+        return net_label((float)$min, $max);
+    }
+    return '';
+}
+
+/** "≈ 2.981 lei net" (or a range) for a gross min/max, '' when there is none. */
+function net_label(?float $min, ?float $max = null): string {
+    if ($min === null || $min <= 0) return '';
+    $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
+    $lo = net_from_gross($min);
+    $hi = ($max !== null && $max > $min) ? net_from_gross($max) : $lo;
+    return '≈ ' . ($hi > $lo ? $fmt($lo) . '–' . $fmt($hi) : $fmt($lo)) . ' lei net';
+}
+
 /** Romanian count of provider calls: 1 apel · 2–19 apeluri · 20+ de apeluri. */
 function calls_label(int $n): string {
     if ($n === 1) return '1 apel';

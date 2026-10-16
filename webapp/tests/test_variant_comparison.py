@@ -1,4 +1,4 @@
-"""Tests for the rewritten variant_comparison view and _section_status helper."""
+"""Tests for the variant_comparison view and _section_status helper."""
 import pytest
 from django.test import Client
 

@@ -8,8 +8,8 @@
 
   {# ── Header — preserved ── #}
   <div class="mb-4">
-    <a href="{% url 'job_detail' posting.pk %}"
-       class="text-gov hover:underline text-sm">← Înapoi la anunț</a>
+    <a href="{% url 'admin:jobs_jobposting_change' posting.pk %}"
+       class="text-gov hover:underline text-sm">← Înapoi la anunț (admin)</a>
   </div>
   <h1 class="text-3xl font-bold font-display mb-1">{{ posting.title }}</h1>
   <p class="text-ink-muted mb-6">

@@ -36,8 +36,9 @@ class Employer(models.Model):
         return self.name
 
     def get_absolute_url(self):
-        from django.urls import reverse
-        return reverse("employer_profile", kwargs={"slug": self.slug})
+        # The public employer page lives in the PHP app (webapp-php/index.php),
+        # not in Django; this keeps the admin "View on site" link pointing there.
+        return f"/angajator/{self.slug}/"
 
     def save(self, *args, **kwargs):
         if not self.slug:

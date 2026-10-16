@@ -6,7 +6,8 @@
 >
 > **Note (2026-08):** The stack/deployment section below prescribes Django+HTMX on Fly.io,
 > but the current production deployment is PHP+SQLite on shared hosting
-> (`webapp-php/` + `deploy-php.sh`, added 2026-06-25).
+> (`webapp-php/` + `deploy-php.sh`, added 2026-06-25). The Django public UI described
+> here was retired on 2026-10-16 (FIX-12); only the admin and LLM-variant tools remain in Django.
 
 ## Context
 

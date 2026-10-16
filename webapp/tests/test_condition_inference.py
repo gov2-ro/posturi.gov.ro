@@ -1,5 +1,4 @@
-"""Tests for work-condition inference helpers and new view filter params."""
-import pytest
+"""Tests for work-condition inference helpers."""
 
 from apps.jobs.management.commands.infer_postings import (
     _extract_salary_range,
@@ -200,72 +199,3 @@ class TestInferExperience:
         yrs, flag = _infer_experience("Experienta: nu este cazul.")
         assert yrs == 0
         assert flag is True
-
-
-# ---------------------------------------------------------------------------
-# View filter params (integration tests)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.django_db
-class TestConditionFilters:
-    def _make_posting(self, inferred=None, **kwargs):
-        from apps.jobs.models import Employer, JobPosting
-        employer, _ = Employer.objects.get_or_create(name="Test Angajator")
-        defaults = dict(
-            title="Test Post",
-            url=f"https://example.com/{id(inferred)}",
-            employer=employer,
-            inferred=inferred or {},
-        )
-        defaults.update(kwargs)
-        return JobPosting.objects.create(**defaults)
-
-    def test_work_type_filter(self, client):
-        p1 = self._make_posting(
-            inferred={"work_type": "norma_partiala"},
-            url="https://example.com/p1",
-        )
-        self._make_posting(
-            inferred={"work_type": "norma_intreaga"},
-            url="https://example.com/p2",
-        )
-        resp = client.get("/?work_type=norma_partiala", HTTP_HX_REQUEST="true")
-        assert resp.status_code == 200
-        content = resp.content.decode()
-        assert "norma_partiala" not in content or str(p1.pk) in content or "Normă parțială" in content
-
-    def test_remote_filter(self, client):
-        self._make_posting(
-            inferred={"remote_eligible": True},
-            url="https://example.com/remote1",
-        )
-        self._make_posting(
-            inferred={"remote_eligible": None},
-            url="https://example.com/remote2",
-        )
-        resp = client.get("/?remote=1", HTTP_HX_REQUEST="true")
-        assert resp.status_code == 200
-
-    def test_computer_solicitat_filter(self, client):
-        self._make_posting(
-            inferred={"requires_computer": True},
-            url="https://example.com/comp1",
-        )
-        resp = client.get("/?computer=solicitat", HTTP_HX_REQUEST="true")
-        assert resp.status_code == 200
-
-    def test_computer_nesolicitat_filter(self, client):
-        self._make_posting(
-            inferred={"requires_computer": False},
-            url="https://example.com/comp2",
-        )
-        resp = client.get("/?computer=nesolicitat", HTTP_HX_REQUEST="true")
-        assert resp.status_code == 200
-
-    def test_studies_level_filter(self, client):
-        self._make_posting(
-            inferred={"studies_required": "licenta"},
-            url="https://example.com/stud1",
-        )
-        resp = client.get("/?studies_level=licenta", HTTP_HX_REQUEST="true")
-        assert resp.status_code == 200

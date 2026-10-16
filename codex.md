@@ -2,12 +2,11 @@
 
 This is a python project using django with django.
 
-The API has 13 routes. See .codesight/routes.md for the full route map with methods, paths, and tags.
+Django serves only admin and two developer routes (`/llm-variante/`, `/job/<pk>/variants/`); the public site is the PHP app in `webapp-php/`, which this generated map does not parse. See .codesight/routes.md for the Django route map.
 The database has 7 models. See .codesight/schema.md for the full schema with fields, types, and relations.
 
 High-impact files (most imported, changes here affect many other files):
 - webapp/apps/jobs/models.py (imported by 12 files)
-- webapp/apps/jobs/views.py (imported by 3 files)
 - boilerplate.py (imported by 2 files)
 - schema_models.py (imported by 1 files)
 - webapp/apps/jobs/management/commands/infer_postings.py (imported by 1 files)

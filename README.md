@@ -67,7 +67,7 @@ flowchart LR
         pg[/"PostgreSQL"/]
         sqliteExport["export-to-sqlite.py\n--active-only"]
         sqliteDB[/"posturi.sqlite\n(active only)"/]
-        webapp["Django webapp\n(local dev)"]
+        webapp["Django admin +\nLLM variant tools\n(local, internal)"]
         phpApp["PHP webapp\n(shared hosting)"]
         browser(["browser"])
         
@@ -271,7 +271,7 @@ Each variant is stored in `JobPostingSchemaVariant` with:
 
 **View results:**
 - Django admin: `Admin → Schema LLM variants` (filter by provider/model/date)
-- Job detail page: click "Dev → Comparație LLM" to see all variants for a posting side-by-side
+- Variant tools (Django, local only): `/llm-variante/` is the per-model/prompt cost, latency and quality leaderboard; `/job/<pk>/variants/` is the field-by-field matrix for one posting. Run `webapp/manage.py runserver` and open them directly (the public PHP site has no link to them)
 
 **Configuration** (`models_config.json`):
 - Models: enable/disable flag per model, pricing (including `cache_input_cost_per_million` for cache-hit billing)
@@ -409,14 +409,35 @@ For LLM scripts and the webapp, copy `.env.example` to `.env` and fill in your A
 brew install libreoffice pandoc tesseract
 ```
 
-### Webapp setup
+### Django setup (processing, admin and variant tools)
+
+The public site is the PHP app below (PHP + SQLite). Django + PostgreSQL is the
+processing side: models and migrations, the importers and `manage.py` commands,
+the admin (`/admin/`), and two developer routes for comparing LLM extractions
+(`/llm-variante/`, `/job/<pk>/variants/`). It has no public browse, detail,
+statistics or feed pages — the duplicate Django UI was retired (FIX-12, 2026-10-16;
+PostgreSQL table names are unchanged because the export scripts read them).
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+docker compose up -d db    # local PostgreSQL (see docker-compose.yml)
 .venv/bin/python webapp/manage.py migrate
-.venv/bin/python webapp/manage.py runserver
+.venv/bin/python webapp/manage.py runserver   # admin + variant tools only
+cd webapp && ../.venv/bin/python -m pytest -q  # Python suite (test database)
 ```
+
+To preview the public site without Postgres or any API call, build the PHP
+test fixture and serve it (see also *Local preview* below):
+
+```bash
+php -r 'require "webapp-php/tests/fixtures/build_db.php"; build_fixture_db("/tmp/fixture.sqlite");'
+POSTURI_DB=/tmp/fixture.sqlite POSTURI_TODAY=2026-10-03 php -S localhost:8000 -t webapp-php webapp-php/router.php
+```
+
+Hosting: the public site runs on shared hosting and the pipeline on a VPS
+(`docs/deploy-vps.md`). The former Fly.io files (`webapp/fly.toml`,
+`webapp/Dockerfile`) were removed; Fly.io is not used for production.
 
 ## PHP webapp (shared hosting)
 

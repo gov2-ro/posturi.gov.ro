@@ -184,6 +184,20 @@
   .facet-not:focus-within { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
   .facet-not:has(input:checked) { color: rgb(var(--c-alert-ink)); background: rgb(var(--c-alert-bg)); border-color: rgb(var(--c-alert-line)); font-weight: 600; }
   .facet-not:has(input:disabled) { visibility: hidden; }
+  /* Status and sort share a line on phones (each takes half). */
+  .pg-status, .pg-sort { flex: 1 1 9rem; min-width: 0; max-width: 18rem; }
+  .pg-status select, .pg-sort select { min-width: 0; width: 100%; }
+
+  /* 261016: pay against the median, 1–5 — five bars rising in height, the first
+     `level` filled. Sits after the amount; a title and aria-label say it in words. */
+  .pay-meter { display: inline-flex; align-items: flex-end; gap: 1px; height: 0.75rem; margin-left: 0.3rem; vertical-align: -0.05rem; cursor: help; }
+  .pay-meter i { display: block; width: 3px; border-radius: 1px; background: rgb(var(--c-line-strong)); }
+  .pay-meter i:nth-child(1) { height: 30%; } .pay-meter i:nth-child(2) { height: 47%; }
+  .pay-meter i:nth-child(3) { height: 64%; } .pay-meter i:nth-child(4) { height: 82%; }
+  .pay-meter i:nth-child(5) { height: 100%; }
+  .pay-meter i.on { background: rgb(var(--c-ok-ink)); }
+  .pay-meter-lg { height: 1.1rem; gap: 2px; } .pay-meter-lg i { width: 5px; }
+
   /* Tree groups (COR, languages): a twisty before a node, a pad of the same width
      before a leaf, and each level indented under its parent's checkbox. */
   .facet-twisty, .facet-twisty-pad { flex: 0 0 1.25rem; width: 1.25rem; }
@@ -195,7 +209,9 @@
   .facet-twisty:focus-visible { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
   .facet-twisty span { transition: transform 0.15s; }
   .facet-twisty[aria-expanded="true"] span { transform: rotate(90deg); }
-  .facet-children { padding-left: 1.25rem; }
+  .facet-children { padding-left: 0.75rem; }
+  /* Tree labels wrap instead of truncating: the indent leaves little room. */
+  .facet-row[data-depth] .facet-check + span, .facet-row:has(.facet-twisty) .facet-check + span { white-space: normal; }
   .facet-row-not .facet-check + span { text-decoration: line-through; color: rgb(var(--c-alert-ink)); }
   @media (hover: hover) {
     .facet-row:not(:hover) .facet-not:not(:focus-within):not(:has(input:checked)) { opacity: 0; }

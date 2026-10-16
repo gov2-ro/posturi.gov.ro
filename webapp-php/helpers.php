@@ -250,6 +250,51 @@ function net_from_gross(float $gross): int {
     return (int)($gross - $cas - $cass - $tax);
 }
 
+/**
+ * 261016 "show pay visually, compared to the median, on a 1–5 scale": the
+ * quintiles of the pay rows show (SALARY_EXPR) over the open postings, computed
+ * once per request. Level 3 holds the median; 5 is the top fifth.
+ *
+ * @return array{cuts: float[], median: float}|null  null with too few figures
+ */
+function pay_quintiles(): ?array {
+    static $q = false;
+    if ($q !== false) return $q;
+    $vals = db()->query("SELECT CAST(" . SALARY_EXPR . " AS REAL) FROM job_postings j
+        WHERE j.application_status IN (" . OPEN_STATUS_SQL . ") AND " . SALARY_EXPR . " > 0
+        ORDER BY 1")->fetchAll(PDO::FETCH_COLUMN);
+    $n = count($vals);
+    if ($n < 20) return $q = null;
+    $at = static fn(float $f): float => (float)$vals[min($n - 1, (int)floor($f * $n))];
+    return $q = ['cuts' => [$at(0.2), $at(0.4), $at(0.6), $at(0.8)], 'median' => $at(0.5)];
+}
+
+/** Level 1–5 of a row's pay against pay_quintiles(), with a sentence that says so; null without one. */
+function pay_level(array $p): ?array {
+    $v = (float)($p['inf_salary_min'] ?? 0) > 0 ? (float)$p['inf_salary_min'] : (float)($p['sal_min'] ?? 0);
+    if ($v <= 0 || !($q = pay_quintiles())) return null;
+    $level = 1;
+    foreach ($q['cuts'] as $cut) if ($v >= $cut) $level++;
+    $median = number_format($q['median'], 0, ',', '.');
+    $words = [1 => 'printre cele mai mici', 2 => 'sub mediană', 3 => 'în jurul medianei',
+              4 => 'peste mediană', 5 => 'printre cele mai mari'][$level];
+    return ['level' => $level,
+            'text' => "Salariu $words: treapta $level din 5 față de posturile active (mediana $median lei brut)"];
+}
+
+/** The 1–5 pay meter: five small bars, the first `level` filled. Decorative beside a text title. */
+function pay_meter(array $p, string $extra = ''): string {
+    $pl = pay_level($p);
+    if (!$pl) return '';
+    $bars = '';
+    for ($i = 1; $i <= 5; $i++) $bars .= '<i' . ($i <= $pl['level'] ? ' class="on"' : '') . '></i>';
+    return '<span class="pay-meter ' . e($extra) . '" data-level="' . $pl['level'] . '" role="img" aria-label="' . e($pl['text'])
+         . '" title="' . e($pl['text']) . '">' . $bars . '</span>';
+}
+
+/** Short regime word for a result row (261016: replaces the source's unreliable `categorie`). */
+const JOB_REGIME_SHORT = ['contractuala' => 'Contractual', 'publica' => 'Funcție publică', 'militara' => 'Funcție militară'];
+
 /** net_label() for the pay a result row shows: the same precedence as list_salary(). */
 function list_salary_net(array $p): string {
     foreach ([['inf_salary_min', 'inf_salary_max'], ['sal_min', 'sal_max']] as [$lo, $hi]) {
@@ -983,7 +1028,7 @@ const ISCO_GROUP_LABELS = [
     '213' => 'Biologi, agronomi, specialiști în mediu', '214' => 'Ingineri (construcții, mecanică, chimie …)',
     '215' => 'Ingineri electrotehnici și electroniști', '216' => 'Arhitecți, urbaniști, topografi',
     '221' => 'Medici', '222' => 'Asistenți medicali și moașe', '224' => 'Paramedici',
-    '225' => 'Medici veterinari', '226' => 'Farmaciști, stomatologi, kinetoterapeuți, alți specialiști',
+    '225' => 'Medici veterinari', '226' => 'Farmaciști, stomatologi și alții',
     '231' => 'Profesori universitari', '232' => 'Formatori profesionali', '233' => 'Profesori de liceu și gimnaziu',
     '234' => 'Învățători și educatori', '235' => 'Alți specialiști în învățământ',
     '241' => 'Finanțe și contabilitate', '242' => 'Administrație și politici publice', '243' => 'Vânzări, marketing, PR',

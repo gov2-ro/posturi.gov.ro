@@ -443,5 +443,24 @@ run_suite('occupation tree (COR) and medical specialty filter by prefix', functi
     assert_true(xpath_for($home)->query('//div[@data-tree-children][@hidden]')->length > 0, 'branches start closed');
 });
 
+run_suite('pay meter: 1–5 against the median of open postings, said in words', function () use ($base) {
+    $html = get_html($base, '/?status=all');
+    $x = xpath_for($html);
+    $m = $x->query('//span[contains(@class,"pay-meter")]');
+    assert_true($m->length > 0, 'rows with pay carry a meter');
+    $levels = [];
+    foreach ($m as $el) {
+        $lvl = (int)$el->getAttribute('data-level');
+        $levels[$lvl] = true;
+        assert_true($lvl >= 1 && $lvl <= 5, 'level in 1..5');
+        assert_same($lvl, $x->query('.//i[@class="on"]', $el)->length, 'as many bars on as the level');
+        assert_contains('din 5 față de posturile active (mediana', $el->getAttribute('aria-label'), 'said in words');
+    }
+    $top = get_html($base, '/?status=all&sort=salary');
+    assert_contains('data-level="5"', $top, 'the best-paid rows are in the top fifth');
+    // Rows show the regime read off the text, not the source's categorie.
+    assert_not_contains('Funcționari publici</span>', $html, 'no source categorie in the fact line');
+});
+
 stop_fixture_server($srv, $db_path);
 finish();

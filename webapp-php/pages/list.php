@@ -157,11 +157,17 @@ if ($is_unfiltered) {
                         'label' => $r['v'], 'count' => (int)$r['c']];
     }
     foreach ([
+        // 261016: "nu necesită calificare" is the COR group of unskilled work; a
+        // criminal-record certificate is asked of virtually every public post
+        // (HG 1336/2022, Codul administrativ), so "fără cazier" is not offered.
         ['Fără experiență',     ['exp_level' => ['fara']]],
+        ['Fără calificare',     ['cor' => ['9']]],
+        ['Studii generale',     ['studies_level' => ['generala']]],
         ['Studii medii',        ['studies_level' => ['liceala']]],
+        ['Normă parțială',      ['schedule' => ['norma_partiala']]],
         ['Salariu peste 7.000', ['salary_bucket' => 'peste-7000']],
-        ['Funcție publică',     ['categorie' => ['Funcție publică']]],
-        ['Fonduri europene',    ['funding' => ['fonduri_europene']]],
+        ['Funcție publică',     ['regime' => ['publica']]],
+        ['Fonduri europene',    ['funding' => ['fonduri_europene', 'pnrr']]],
         ['Telemuncă',           ['remote' => '1']],
     ] as [$label, $params]) {
         $c = $count_for($params);

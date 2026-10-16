@@ -617,6 +617,10 @@ require __DIR__ . '/../inc/header.php';
           <?php endif; ?>
           <span class="text-sm font-normal text-ink-muted">brut / lună, la gradația 0</span>
         </p>
+        <?php if ($pl = pay_level($p)): ?>
+        <p class="mt-1 flex items-center gap-2 text-sm text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
+          <span><?= e($pl['text']) ?></span></p>
+        <?php endif; ?>
         <?php if (($net = net_label((float)$sal['lei_min'], (float)$sal['lei_max'])) !== ''): ?>
         <p class="mt-0.5 text-sm text-ink"><?= e($net) ?>
           <span class="text-xs text-ink-muted">— estimare: CAS 25 %, CASS 10 %, impozit 10 % cu deducerea personală, fără persoane în întreținere</span></p>

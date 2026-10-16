@@ -124,7 +124,7 @@ $chips = $active_chips ?? [];
                 $labels = array_values(array_filter([
                     $p['job_level'] ? job_level_label((string)$p['job_level']) : '',
                     (string)($p['job_type'] ?? ''),
-                    (string)($p['categorie'] ?? ''),
+                    JOB_REGIME_SHORT[(string)($p['job_regime'] ?? '')] ?? '',
                     ($p['nr_posturi'] ?? 0) > 1 ? $p['nr_posturi'] . ' posturi' : '',
                 ], fn($v) => $v !== '')); ?>
           <?php if ($sal || $labels || $meta): ?>
@@ -134,6 +134,7 @@ $chips = $active_chips ?? [];
                 <span class="pg-salary-label" role="img" aria-label="<?= e($sal['label']) ?>">💰</span>
                 <span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
                 <span class="pg-salary-kind">(estimat)</span><?php endif; ?>
+                <?= pay_meter($p) ?>
               </span>
             <?php endif; ?>
             <?php if ($labels): ?>

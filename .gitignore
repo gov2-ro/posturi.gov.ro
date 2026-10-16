@@ -25,6 +25,9 @@ docs/salarii/
 # The COR occupation table is reference data with a recorded provenance, not
 # pipeline output. See data/ocupatii/README.md.
 !/data/ocupatii/
+# Town populations, 2021 census (DATA-06): reference data with its source and
+# revision in every row. Rebuild with ops/build-uat-population.py.
+!/data/uat-populatie.csv
 /data/cached-responses/*
 /testbench/
 */scraping.log

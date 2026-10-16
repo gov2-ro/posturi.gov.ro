@@ -115,8 +115,11 @@ def bands_for(employer: str) -> tuple[frozenset[str], str]:
     uat_type, name = parse_employer(employer)
     key = norm(name)
 
+    # The table lists towns only (data/uat-populatie.csv, 2021 census) and is
+    # keyed on the name alone, so a comună that shares a town's name (Slatina in
+    # Suceava, Satu Mare in Harghita) must not borrow that town's population.
     populations = load_populations()
-    if key and key in populations:
+    if key and key in populations and uat_type != "comuna":
         return frozenset({band_for_population(populations[key])}), "populație"
 
     if uat_type == "sector" or key in OVER_200K:

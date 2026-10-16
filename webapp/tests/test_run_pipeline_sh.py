@@ -252,3 +252,17 @@ def test_systemd_unit_and_docs_crontab_set_the_trigger():
     doc = (REPO_ROOT / "docs" / "deploy-vps.md").read_text()
     lines = [ln for ln in doc.splitlines() if ln.rstrip().endswith("2>&1") and "ops/run-pipeline.sh" in ln]
     assert len(lines) == 2 and all("POSTURI_RUN_TRIGGER=cron" in ln for ln in lines)
+
+
+def test_the_prompt_version_comes_from_dotenv(root):
+    """BETA-V5: LLM_PROMPT_VERSION=v5 in .env switches the run, no crontab edit."""
+    (root / ".env").write_text("LLM_PROMPT_VERSION=v5\n")
+    code, out, calls = run(root)
+    check = next(c for c in calls if c.startswith("ops/check-export.py"))
+    assert "--prompt-version v5" in check
+
+
+def test_the_prompt_version_defaults_to_v4(root):
+    code, out, calls = run(root)
+    check = next(c for c in calls if c.startswith("ops/check-export.py"))
+    assert "--prompt-version v4" in check

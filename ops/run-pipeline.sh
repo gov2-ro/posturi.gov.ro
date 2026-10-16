@@ -42,7 +42,10 @@ HEALTHCHECK_URL="${HEALTHCHECK_URL:-$(env_value HEALTHCHECK_URL)}"
 # it is v3 plus the competition calendar, whose `application_deadline` is what
 # separates confirmed-open postings from expiry-only ones. Going back to v3 would
 # make --resume re-pay for every active posting (provenance carries the version).
-PROMPT_VERSION="${LLM_PROMPT_VERSION:-v4}"
+# BETA-V5: read from .env too, so switching to v5 (with LLM_ACCEPT_PROMPT_VERSIONS=v4,v5,
+# which llm-schema.py reads from .env) is one edit on the box, not a crontab change.
+PROMPT_VERSION="${LLM_PROMPT_VERSION:-$(env_value LLM_PROMPT_VERSION)}"
+PROMPT_VERSION="${PROMPT_VERSION:-v4}"
 WORKERS="${SCHEMA_WORKERS:-4}"
 DOWNLOAD_SINCE="${DOWNLOAD_SINCE:-7}"
 

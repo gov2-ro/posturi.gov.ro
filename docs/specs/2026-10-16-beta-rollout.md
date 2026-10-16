@@ -75,7 +75,10 @@ After steps 1 and 3 (the code knows the v5 columns, the VPS export writes them),
 .venv/bin/python llm-schema.py --active-only --force --prompt-version v5 --limit 200 --workers 4   # ≈ $0.45
 ```
 
-Then make v5 the intake version without re-extracting the v4 rows — in the VPS `.env`:
+Then make v5 the intake version without re-extracting the v4 rows — in the VPS `.env`
+(`ops/run-pipeline.sh` reads `LLM_PROMPT_VERSION` from `.env` since this weekend; first
+check with `grep LLM_PROMPT_VERSION .env` that it is not already set to something else —
+it was empty on 2026-10-05):
 
 ```
 LLM_PROMPT_VERSION=v5

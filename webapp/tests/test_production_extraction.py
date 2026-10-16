@@ -59,7 +59,7 @@ class TestRevisionAwareSelection:
         sql = where.lower()
         assert "schema_provider" in sql and "schema_prompt_version" in sql
         assert "schema_source_revision" in sql and "detail_content_hash" in sql
-        assert params == ["p", "m", "v3"]
+        assert params == ["p", "m", ["v3"]]
 
     def test_plain_selection_keeps_the_old_shape(self, llm):
         where, params = llm._selection_where(slug_filter="medic", active_only=True)

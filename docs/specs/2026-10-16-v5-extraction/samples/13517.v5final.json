@@ -1,0 +1,237 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": null,
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": "Tura de 12 ore, după cum urmează: (800-2000 și 2000-800).",
+ "jobLocation": "Formația Baraj Ogrezeni, sat Suseni, comuna Malu Spart, oraș Bolintin Vale, județul Giurgiu",
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": "Popescu Georgiana - secretar comisie de concurs și comisie de soluționare a contestațiilor",
+  "phone": "0248.223.449, interior 276",
+  "email": "dispecer@daav.rowater.ro",
+  "address": "Strada Calea Câmpulung, nr. 6-8, Pitești, județul Argeș"
+ },
+ "education": {
+  "minimum_level": "liceala",
+  "eqf_level": 4,
+  "fields_of_study": [],
+  "specialization": null,
+  "required": true,
+  "verbatim": "-studii medii"
+ },
+ "experience": {
+  "years_minimum": null,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": true,
+  "verbatim": "-vechime în specialitate: nu este cazul"
+ },
+ "skill_list": [],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "certificat sau diplomă de calificare în meseria de electromecanic",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true,
+   "evidence": "-certificat sau diploma de calificare în meseria de electromecanic",
+   "licence_category": null
+  }
+ ],
+ "contract": {
+  "duration": "nedeterminata",
+  "duration_months": null,
+  "schedule": "schimburi",
+  "hours_per_week": null,
+  "remote_mode": null,
+  "probation_months": null,
+  "shift_work": true,
+  "fte": null,
+  "end_date": null,
+  "post_status": "vacant"
+ },
+ "policy_domains": [
+  "administratie_publica",
+  "energie"
+ ],
+ "occupation_title": "Electromecanic",
+ "seniority_hint": null,
+ "positions": [],
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "electrotehnică",
+  "motoare electrice",
+  "echipament hidroelectromecanic baraj",
+  "securitate și sănătate în muncă",
+  "apărare împotriva incendiilor",
+  "paza bunurilor materiale",
+  "echipament de protecție",
+  "stingătoare de incendiu"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-09-17",
+  "application_deadline_time": "10:00",
+  "events": [
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-17",
+    "time": "10:00",
+    "verbatim": "data limită de depunere la registratura Administrației Bazinale de Apă Argeș Vedea a dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-09-18",
+    "time": "10:00",
+    "verbatim": "selecţia dosarelor de concurs",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-09-21",
+    "time": "10:00",
+    "verbatim": "termen de afişare rezultate la selecţia dosarelor de concurs",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-09-22",
+    "time": "10:00",
+    "verbatim": "termen de depunere contestaţii cu privire la rezultatul selecţiei dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-09-23",
+    "time": "10:00",
+    "verbatim": "termen de afişare a rezultatelor privind contestaţia la selecţia dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-09-24",
+    "time": "10:00",
+    "verbatim": "desfăşurare probă scrisă",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": "2026-09-25",
+    "time": "10:00",
+    "verbatim": "termen de afişare rezultate proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": "2026-09-28",
+    "time": "10:00",
+    "verbatim": "termen de depunere contestaţii cu privire la rezultatul probei scrise",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_proba_scrisa",
+    "date": "2026-09-29",
+    "time": "10:00",
+    "verbatim": "termen de afişare a rezultatelor privind contestaţia la rezultatele probei scrise",
+    "relative": null
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-09-30",
+    "time": "10:00",
+    "verbatim": "susţinere interviului",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_interviu",
+    "date": "2026-10-01",
+    "time": "10:00",
+    "verbatim": "termen de afişare a rezultatelor privind interviul",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_interviu",
+    "date": "2026-10-02",
+    "time": "10:00",
+    "verbatim": "termen de depunere contestaţii cu privire la rezultatul interviului",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_interviu",
+    "date": "2026-10-05",
+    "time": "10:00",
+    "verbatim": "termen de afişare a rezultatelor privind contestaţia la rezultatele interviului",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": "2026-10-06",
+    "time": "12:00",
+    "verbatim": "termen de afişare a rezultatelor finale",
+    "relative": null
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "administratie_centrala",
+  "parent_institution": null,
+  "uat_type": null,
+  "uat_name": null,
+  "subordinated_to": null
+ },
+ "note_suplimentare": "- Activitatea se desfășoară la Formația Baraj Ogrezeni, cu sediul în sat Suseni, comuna Malu Spart, oraș Bolintin Vale, județul Giurgiu.\n- Programul de lucru este în ture de 12 ore (800-2000 și 2000-800).",
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 1,
+ "application": {
+  "channels": [
+   "sediu",
+   "posta",
+   "email",
+   "online"
+  ],
+  "window_start": null
+ },
+ "age_limit": null,
+ "work_localities": [
+  "Suseni",
+  "Malu Spart",
+  "Bolintin Vale"
+ ],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "adeverinta_medicala",
+   "cv"
+  ],
+  "specific": [
+   {
+    "label": "certificat sau diplomă de calificare în meseria de electromecanic",
+    "evidence": "-certificat sau diploma de calificare în meseria de electromecanic",
+    "roles": []
+   }
+  ]
+ }
+}

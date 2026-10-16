@@ -426,6 +426,7 @@ def evidence_rows(posting: dict, schema: dict | None, roles: list[dict],
             "text_hash": text_hash, "normalization": NORMALIZATION,
         })
 
+    credential_quotes = isinstance(schema, dict) and "recruitment" in schema
     for role in roles:
         box = _containers(schema, role)
         if box is None:
@@ -446,7 +447,14 @@ def evidence_rows(posting: dict, schema: dict | None, roles: list[dict],
             c = _dict(cred)
             label = str(c.get("label") or c.get("kind") or "").strip()
             if label:
-                add(role, "credential", i, label, None, has_field=False)
+                # v5 credentials carry their quote (BETA-V5); a v4 credential has no
+                # evidence field at all, which is a different fact from an empty one.
+                # A v5 answer is told by its own keys (model_dump always writes
+                # `recruitment`), never by a stray key on a v4 credential.
+                if credential_quotes:
+                    add(role, "credential", i, label, c.get("evidence"))
+                else:
+                    add(role, "credential", i, label, None, has_field=False)
     return rows
 
 

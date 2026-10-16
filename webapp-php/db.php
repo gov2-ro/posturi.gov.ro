@@ -92,6 +92,15 @@ function shim_legacy_export(PDO $pdo): void {
         // off a fetched row with `??` today, but later per-role history will not.
         'schema_source_revision' => "''",
         'schema_prompt_version'  => "''",
+        // BETA-V5 facts (export-to-sqlite.py::_v5_columns): empty until v5 rows exist.
+        'v5_recruitment_kind'    => "''",
+        'v5_internal_only'       => 'NULL',
+        'v5_vacancies_total'     => 'NULL',
+        'v5_fte'                 => 'NULL',
+        'v5_post_status'         => "''",
+        'v5_end_date'            => 'NULL',
+        'v5_channels'            => "'[]'",
+        'v5_work_localities'     => "'[]'",
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

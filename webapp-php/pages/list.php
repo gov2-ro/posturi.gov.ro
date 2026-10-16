@@ -39,6 +39,10 @@ $duration_sel  = (array)($_GET['duration'] ?? []);
 $schedule_sel  = (array)($_GET['schedule'] ?? []);
 $shift         = $_GET['shift'] ?? '';
 $loc_sel       = (array)($_GET['loc'] ?? []);
+$recr_sel      = (array)($_GET['recruitment'] ?? []);
+$parttime      = $_GET['parttime'] ?? '';
+$temp_vacant   = $_GET['temp_vacant'] ?? '';
+$remote_apply  = $_GET['remote_apply'] ?? '';
 $published     = $_GET['published'] ?? '';
 $sort         = $_GET['sort']          ?? '';
 $page         = max(1, (int)($_GET['page'] ?? 1));
@@ -494,6 +498,14 @@ unset($o);
 foreach ($schedule_options as &$o) { $o['label'] = SCHEDULE_LABELS[$o['val']] ?? $o['val']; }
 unset($o);
 $shift_count = scope_count(facet_scope('shift'), ["j.v3_shift_work = 1"]);
+// BETA-V5 facts: zero (and so hidden) until v5 rows exist in the export.
+$recr_options = get_facet('v5_recruitment_kind', 'recruitments');
+foreach ($recr_options as &$o) { $o['label'] = RECRUITMENT_KIND_SHORT[$o['val']] ?? $o['val']; }
+unset($o);
+$parttime_count     = scope_count(facet_scope('parttime'), ["j.v5_fte IS NOT NULL AND j.v5_fte < 1"]);
+$temp_vacant_count  = scope_count(facet_scope('temp_vacant'), ["j.v5_post_status = 'temporar_vacant'"]);
+$remote_apply_count = scope_count(facet_scope('remote_apply'),
+    ["(j.v5_channels LIKE '%\"email\"%' OR j.v5_channels LIKE '%\"posta\"%' OR j.v5_channels LIKE '%\"online\"%')"]);
 $funding_options    = get_facet('v4_funding_source',  'funding');
 $sector_options     = get_facet('v4_employer_sector', 'sector');
 foreach ($funding_options as &$o) { $o['label'] = FUNDING_SOURCE_LABELS[$o['val']] ?? $o['val']; }

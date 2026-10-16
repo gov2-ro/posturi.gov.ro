@@ -712,6 +712,269 @@ class JobPostingExtractionV4(JobPostingExtractionV3):
 
 
 # ---------------------------------------------------------------------------
+# Prompt v5 — who can apply and how, minus what v4 invented
+# ---------------------------------------------------------------------------
+#
+# docs/specs/2026-10-16-v5-extraction/README.md is the evidence. v5 is v4 with:
+#   * keys dropped because they cost output and nothing reads them, or because the
+#     model invents them: the three v2 free-text requirement strings, the dosar as
+#     transcribed bullets, `contract.remote_mode` (0 of 1,708 postings mention
+#     telework, v4 filled it in 32%) and `employer_context.parent_institution`
+#     ("Ministerul Sănătății" for county hospitals);
+#   * facts a candidate decides on: recruitment kind, seats, fraction of a norm,
+#     end date, temporary vacancy, submission channels, age limit, work localities,
+#     the dosar as standard codes plus quoted specific items, quotes for credentials.
+#
+# The dropped keys stay declared (inherited) so a mixed v4/v5 corpus reads the
+# same way everywhere; the `mode="before"` validator removes them from a v5
+# answer, so whatever the model emits there is never stored.
+#
+# Robustness: an unknown value in one of the NEW closed lists never voids the
+# extraction (the FIX-05-STAGES lesson). It is coerced — to `altele`, to null, or
+# for a dosar code to a `specific` item that keeps the raw text. The calendar
+# stage list keeps its strict rule (pax, 2026-10-11).
+
+RecruitmentKind = Literal["recrutare", "promovare", "management", "rezidentiat", "altele"]
+PostStatus = Literal["vacant", "temporar_vacant"]
+ApplicationChannel = Literal["sediu", "posta", "email", "online"]
+
+#: The standard HG 1.336/2022 dosar items, as codes. The site renders each with a
+#: fixed Romanian label (webapp-php/inc/checklist.php), so the model spends a few
+#: tokens on the boilerplate half of every dosar instead of transcribing it.
+DOCUMENT_CODES = (
+    "formular_inscriere", "act_identitate", "certificat_casatorie", "acte_studii",
+    "carnet_munca_adeverinta_vechime", "cazier_judiciar", "adeverinta_medicala",
+    "certificat_integritate", "cv", "declaratie_conformitate", "dosar_plic",
+)
+DocumentCode = Literal[
+    "formular_inscriere", "act_identitate", "certificat_casatorie", "acte_studii",
+    "carnet_munca_adeverinta_vechime", "cazier_judiciar", "adeverinta_medicala",
+    "certificat_integritate", "cv", "declaratie_conformitate", "dosar_plic",
+]
+
+_V5_DROPPED_TOP = ("educationRequirements", "experienceRequirements", "skills", "application_docs")
+
+
+def _code(v) -> str:
+    """'Poșta ' → 'posta': lower case, no diacritics, spaces as underscores."""
+    if not isinstance(v, str):
+        return v
+    folded = unicodedata.normalize("NFKD", v.strip().lower())
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return re.sub(r"\s+", "_", folded)
+
+
+def _coerce_choice(allowed: tuple[str, ...], fallback):
+    """BeforeValidator: a known code (case/space-insensitive) or `fallback`."""
+    def check(v):
+        if v is None:
+            return None
+        c = _code(v)
+        return c if c in allowed else fallback
+    return BeforeValidator(check)
+
+
+def _bounded_int(lo: int, hi: int):
+    """BeforeValidator: an integer in [lo, hi], else null — never a failure."""
+    def check(v):
+        if v is None or isinstance(v, bool):
+            return None
+        try:
+            n = int(float(v))
+        except (TypeError, ValueError):
+            return None
+        return n if lo <= n <= hi else None
+    return BeforeValidator(check)
+
+
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_RO_DATE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
+
+
+def _iso_date_or_none(v):
+    """ISO as given, a Romanian DD.MM.YYYY converted, anything else null."""
+    if not isinstance(v, str):
+        return None
+    v = v.strip()
+    if _ISO_DATE.match(v):
+        return v
+    m = _RO_DATE.match(v)
+    return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}" if m else None
+
+
+IsoDate = Annotated[Optional[str], BeforeValidator(_iso_date_or_none)]
+
+
+class CredentialV5(Credential):
+    """v4's credential plus the source quote (UX-10/UX-13) and a licence category."""
+
+    evidence: Optional[str] = Field(
+        default=None, description="The posting's own words, ≤20 words, copied exactly.")
+    licence_category: Optional[str] = Field(
+        default=None, description="Driving-licence categories as written ('B', 'B, C, CE').")
+
+
+class PositionRequirementV5(PositionRequirement):
+    credentials: list[CredentialV5] = Field(default_factory=list)
+
+
+class ContractTermsV5(ContractTerms):
+    """v4's contract terms without remote mode, plus fte, end date and post status.
+
+    `shift_work` defaults to null here: v4's `false` read as "no shifts" when the
+    posting was simply silent.
+    """
+
+    shift_work: Optional[bool] = Field(default=None, description="True only when stated.")
+    fte: Optional[float] = Field(default=None, gt=0, le=1, description="Fraction of a full norm.")
+    end_date: IsoDate = Field(default=None, description="End of a fixed-term post, ISO.")
+    post_status: Annotated[Optional[PostStatus], _coerce_choice(("vacant", "temporar_vacant"), None)] = Field(
+        default=None, description="The post's own status, never the generic phrase.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_remote_and_bound_fte(cls, data):
+        if isinstance(data, dict):
+            data = dict(data)
+            data.pop("remote_mode", None)
+            fte = data.get("fte")
+            try:
+                fte = float(fte) if fte is not None else None
+            except (TypeError, ValueError):
+                fte = None
+            data["fte"] = fte if fte is not None and 0 < fte < 1 else None
+        return data
+
+    @model_validator(mode="after")
+    def _fte_from_hours(self):
+        # "84 ore/lună" came back as 19.5 h/week with fte null in the trial: the
+        # arithmetic is deterministic, so it is done here, not asked for.
+        if self.fte is None and self.hours_per_week and self.hours_per_week < 40:
+            object.__setattr__(self, "fte", round(self.hours_per_week / 40, 2))
+        return self
+
+
+class CalendarEntryV5(CalendarEntry):
+    relative: Optional[str] = Field(
+        default=None, description="A relative rule for an undated row: '2 zile lucrătoare după depunere'.")
+
+
+class CompetitionCalendarV5(CompetitionCalendar):
+    events: list[CalendarEntryV5] = Field(default_factory=list)
+
+
+class EmployerContextV5(EmployerContext):
+    """v4's context with `subordinated_to` (stated only) instead of a guessed parent."""
+
+    subordinated_to: Optional[str] = Field(
+        default=None, description="The authority the posting itself says the employer answers to.")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_parent(cls, data):
+        if isinstance(data, dict) and "parent_institution" in data:
+            data = {k: v for k, v in data.items() if k != "parent_institution"}
+        return data
+
+
+class Recruitment(BaseModel):
+    kind: Annotated[Optional[RecruitmentKind],
+                    _coerce_choice(("recrutare", "promovare", "management", "rezidentiat", "altele"), "altele")] = Field(
+        default=None)
+    internal_only: Optional[bool] = Field(
+        default=None, description="True when only current employees may take part.")
+
+    @model_validator(mode="after")
+    def _promotion_is_internal(self):
+        if self.kind == "promovare" and self.internal_only is None:
+            object.__setattr__(self, "internal_only", True)
+        return self
+
+
+_CHANNEL_ALIASES = {"e-mail": "email", "posta_electronica": "email", "mail": "email",
+                    "curier": "posta", "posta_curier": "posta", "registratura": "sediu",
+                    "personal": "sediu", "la_sediu": "sediu", "platforma": "online"}
+
+
+def _channels(v):
+    if not isinstance(v, list):
+        return []
+    out = []
+    for c in v:
+        c = _code(c)
+        c = _CHANNEL_ALIASES.get(c, c)
+        if c in ("sediu", "posta", "email", "online") and c not in out:
+            out.append(c)
+    return out
+
+
+class Application(BaseModel):
+    channels: Annotated[list[ApplicationChannel], BeforeValidator(_channels)] = Field(default_factory=list)
+    window_start: IsoDate = Field(default=None)
+
+
+class AgeLimit(BaseModel):
+    min_years: Annotated[Optional[int], _bounded_int(14, 80)] = Field(default=None)
+    max_years: Annotated[Optional[int], _bounded_int(14, 80)] = Field(default=None)
+    verbatim: Optional[str] = Field(default=None)
+
+
+class DocumentItem(BaseModel):
+    label: str
+    evidence: Optional[str] = Field(default=None)
+    roles: list[str] = Field(default_factory=list, description="Position titles; [] = every role.")
+
+
+class Documents(BaseModel):
+    standard: list[DocumentCode] = Field(default_factory=list)
+    specific: list[DocumentItem] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _unknown_codes_become_items(cls, data):
+        """A code outside DOCUMENT_CODES is kept as a specific item, not lost."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        std, extra = [], []
+        for c in data.get("standard") or []:
+            code = _code(c)
+            if code in DOCUMENT_CODES:
+                if code not in std:
+                    std.append(code)
+            elif isinstance(c, str) and c.strip():
+                extra.append({"label": c.strip().replace("_", " "), "evidence": None, "roles": []})
+        data["standard"] = std
+        data["specific"] = list(data.get("specific") or []) + extra
+        return data
+
+
+class JobPostingExtractionV5(JobPostingExtractionV4):
+    """v5 = v4 minus the invented or unused keys, plus who-can-apply-and-how."""
+
+    credentials: list[CredentialV5] = Field(default_factory=list)
+    positions: list[PositionRequirementV5] = Field(default_factory=list)
+    contract: Optional[ContractTermsV5] = Field(default=None)
+    competition_calendar: Optional[CompetitionCalendarV5] = Field(default=None)
+    employer_context: Optional[EmployerContextV5] = Field(default=None)
+
+    recruitment: Optional[Recruitment] = Field(default=None)
+    vacancies_total: Annotated[Optional[int], _bounded_int(1, 5000)] = Field(
+        default=None, description="Seats across all roles; never a code or an article number.")
+    application: Optional[Application] = Field(default=None)
+    age_limit: Optional[AgeLimit] = Field(default=None)
+    work_localities: list[str] = Field(default_factory=list)
+    documents: Optional[Documents] = Field(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_v4_keys(cls, data):
+        if isinstance(data, dict):
+            data = {k: v for k, v in data.items() if k not in _V5_DROPPED_TOP}
+        return data
+
+
+# ---------------------------------------------------------------------------
 # Occupation normalisation (the title-dictionary pass, `normalize-titles.py`)
 # ---------------------------------------------------------------------------
 #
@@ -815,6 +1078,7 @@ EXTRACTION_MODELS: dict[str, type[BaseModel]] = {
     "v2": JobPostingExtraction,
     "v3": JobPostingExtractionV3,
     "v4": JobPostingExtractionV4,
+    "v5": JobPostingExtractionV5,
 }
 
 #: Versions that use provider-native structured output. v1 is free-form JSON.

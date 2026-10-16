@@ -1,0 +1,275 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": null,
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": "84 ore/lună, program de lucru inegal",
+ "jobLocation": null,
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": null,
+  "phone": "0740230805",
+  "email": null,
+  "address": "sediul Primăriei Matca, județul Galați"
+ },
+ "education": {
+  "minimum_level": "licenta",
+  "eqf_level": 6,
+  "fields_of_study": [
+   {
+    "label_ro": "sociologie",
+    "isced_field": "03_stiinte_sociale"
+   },
+   {
+    "label_ro": "asistență socială",
+    "isced_field": "09_sanatate_asistenta_sociala"
+   },
+   {
+    "label_ro": "psihologie",
+    "isced_field": "03_stiinte_sociale"
+   },
+   {
+    "label_ro": "științe ale educației",
+    "isced_field": "01_educatie"
+   },
+   {
+    "label_ro": "științe administrative",
+    "isced_field": "04_afaceri_administratie_drept"
+   },
+   {
+    "label_ro": "științe ale comunicării",
+    "isced_field": "03_stiinte_sociale"
+   },
+   {
+    "label_ro": "științe politice",
+    "isced_field": "03_stiinte_sociale"
+   }
+  ],
+  "specialization": null,
+  "required": true,
+  "verbatim": "Studii superioare absolvite cu diplomă de licență în unul dintre domeniile: Sociologie, Asistență socială, Psihologie, Științe ale educației, Științe administrative, Științe ale comunicării, Științe politice"
+ },
+ "experience": {
+  "years_minimum": 3.0,
+  "in_specialty": false,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "Experiență generală: minimum 3 ani; experiență specifică: minimum 1 an de experiență în activități sociale, comunitare, educaționale ori în lucrul cu persoane vulnerabile."
+ },
+ "skill_list": [
+  {
+   "label": "facilitator de dezvoltare comunitară",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": false,
+   "evidence": "constituie avantaj deținerea sau frecventarea unui curs de facilitator de dezvoltare comunitară"
+  }
+ ],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "certificat de integritate comportamentală",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true,
+   "evidence": "certificatul de integritate comportamentală, potrivit Legii nr. 118/2019, pentru posturile care presupun contact direct cu persoane vârstnice sau alte categorii de persoane vulnerabile",
+   "licence_category": null
+  }
+ ],
+ "contract": {
+  "duration": "determinata",
+  "duration_months": 39,
+  "schedule": "norma_partiala",
+  "hours_per_week": 19.5,
+  "remote_mode": null,
+  "probation_months": null,
+  "shift_work": null,
+  "fte": 0.49,
+  "end_date": null,
+  "post_status": "vacant"
+ },
+ "policy_domains": [
+  "asistenta_sociala",
+  "administratie_publica"
+ ],
+ "occupation_title": "Expert dezvoltare comunitară",
+ "seniority_hint": null,
+ "positions": [],
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "Codul administrativ",
+  "asistență socială",
+  "calitatea serviciilor sociale",
+  "servicii sociale pentru persoane vârstnice",
+  "îngrijiri la domiciliu pentru persoane vârstnice",
+  "managementul de caz în serviciile sociale",
+  "Programul Incluziune și Demnitate Socială 2021–2027",
+  "majorare salarială"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-09-17",
+  "application_deadline_time": "15:00",
+  "events": [
+   {
+    "stage": "publicare",
+    "date": "2026-09-03",
+    "time": null,
+    "verbatim": "Data postării/publicării anunțului",
+    "relative": null
+   },
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-17",
+    "time": "15:00",
+    "verbatim": "Data limită de depunere a dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-09-18",
+    "time": "09:00",
+    "verbatim": "Selecția dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-09-18",
+    "time": "13:00",
+    "verbatim": "Afișarea selecției dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-09-21",
+    "time": "13:00",
+    "verbatim": "Termen limită contestații ref la selecția dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-09-22",
+    "time": "13:00",
+    "verbatim": "Afișarea rezultatelor la contestații",
+    "relative": null
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-09-25",
+    "time": "09:00",
+    "verbatim": "Proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": "2026-09-25",
+    "time": "13:00",
+    "verbatim": "Afișarea rezultatelor la proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": "2026-09-28",
+    "time": "13:00",
+    "verbatim": "Termen limită contestații la proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_proba_scrisa",
+    "date": "2026-09-29",
+    "time": "13:00",
+    "verbatim": "Afișarea rezultatelor la contestații ref proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-09-30",
+    "time": "09:00",
+    "verbatim": "Interviul",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_interviu",
+    "date": "2026-09-30",
+    "time": "11:00",
+    "verbatim": "Afișarea rezultatelor la proba de interviu",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_interviu",
+    "date": "2026-09-30",
+    "time": "13:00",
+    "verbatim": "Termen limită contestații la proba de interviu",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_interviu",
+    "date": "2026-09-30",
+    "time": "15:00",
+    "verbatim": "Afișarea rezultatelor la contestații la proba de interviu",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": "2026-09-30",
+    "time": "15:30",
+    "verbatim": "Afișare rezultat final",
+    "relative": null
+   }
+  ]
+ },
+ "funding": {
+  "source": "fonduri_europene",
+  "programme": null,
+  "project_code": "353396",
+  "project_name": "Dezvoltarea și furnizarea de servicii sociale integrate de îngrijire la domiciliu pentru vârstnicii vulnerabili din comuna Matca, județul Galați"
+ },
+ "employer_context": {
+  "sector": "administratie_locala",
+  "parent_institution": null,
+  "uat_type": "comuna",
+  "uat_name": "Matca",
+  "subordinated_to": null
+ },
+ "note_suplimentare": null,
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 1,
+ "application": {
+  "channels": [
+   "sediu",
+   "posta"
+  ],
+  "window_start": null
+ },
+ "age_limit": null,
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "certificat_integritate",
+   "cv"
+  ],
+  "specific": [
+   {
+    "label": "declarație de disponibilitate privind îndeplinirea cerințelor legate de timpul/programul de lucru și perioada de angajare",
+    "evidence": "declarație de disponibilitate privind îndeplinirea cerințelor legate de timpul/programul de lucru și perioada de angajare solicitate pentru postul vizat",
+    "roles": []
+   }
+  ]
+ }
+}

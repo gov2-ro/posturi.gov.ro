@@ -1,0 +1,177 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": null,
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": "8 ore/zi, 40 ore/săptămână",
+ "jobLocation": "sediul primăriei",
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": "Udrică Marius",
+  "phone": "0251446145",
+  "email": "resurse.umane@primariamalumare.ro",
+  "address": "str. Primăriei nr.7, com. Malu Mare, jud. Dolj, cod postal 207365"
+ },
+ "education": {
+  "minimum_level": "liceala",
+  "eqf_level": 4,
+  "fields_of_study": [],
+  "specialization": null,
+  "required": true,
+  "verbatim": "Studii medii liceale finalizate cu diplomă de bacalaureat"
+ },
+ "experience": {
+  "years_minimum": 3.0,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "Vechime minimă necesară în specialitatea studiilor: 3 ani"
+ },
+ "skill_list": [],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "permis de conducere categoria B și D",
+   "kind": "permis_conducere",
+   "issuer": null,
+   "required": true,
+   "evidence": "Permis de conducere categoria B și D",
+   "licence_category": "B, D"
+  },
+  {
+   "label": "atestat profesional transport persoane",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true,
+   "evidence": "Atestat profesional transport persoane",
+   "licence_category": null
+  },
+  {
+   "label": "aviz psihologic",
+   "kind": "aviz_medical",
+   "issuer": null,
+   "required": true,
+   "evidence": "adeverință medicală siguranța circulațíei, inclusiv avizul psihologic",
+   "licence_category": null
+  }
+ ],
+ "contract": {
+  "duration": "nedeterminata",
+  "duration_months": null,
+  "schedule": "norma_intreaga",
+  "hours_per_week": 40.0,
+  "remote_mode": null,
+  "probation_months": null,
+  "shift_work": null,
+  "fte": null,
+  "end_date": null,
+  "post_status": null
+ },
+ "policy_domains": [
+  "transporturi",
+  "administratie_publica"
+ ],
+ "occupation_title": "Șofer microbuz școlar",
+ "seniority_hint": null,
+ "positions": [],
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "Constituția României",
+  "prevenirea și sancționarea discriminării",
+  "egalitatea de șanse și de tratament",
+  "apărarea împotriva incendiilor",
+  "securitatea și sănătatea în muncă"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-09-14",
+  "application_deadline_time": "16:30",
+  "events": [
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-14",
+    "time": "16:30",
+    "verbatim": "până la data de 14 septembrie 2026, ora 16.30",
+    "relative": null
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-09-24",
+    "time": "11:00",
+    "verbatim": "proba scrisă – 24 septembrie 2026, ora 11.00",
+    "relative": null
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-09-28",
+    "time": "11:00",
+    "verbatim": "proba interviu – 28 septembrie 2026, ora 11.00",
+    "relative": null
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "administratie_locala",
+  "parent_institution": null,
+  "uat_type": "comuna",
+  "uat_name": "Malu Mare",
+  "subordinated_to": null
+ },
+ "note_suplimentare": null,
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 1,
+ "application": {
+  "channels": [
+   "sediu"
+  ],
+  "window_start": null
+ },
+ "age_limit": null,
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "adeverinta_medicala",
+   "certificat_integritate",
+   "cv"
+  ],
+  "specific": [
+   {
+    "label": "permis de conducere categoria B și D",
+    "evidence": "Permis de conducere categoria B și D",
+    "roles": []
+   },
+   {
+    "label": "atestat profesional transport persoane",
+    "evidence": "Atestat profesional transport persoane",
+    "roles": []
+   },
+   {
+    "label": "aviz psihologic",
+    "evidence": "adeverință medicală siguranța circulațíei, inclusiv avizul psihologic",
+    "roles": []
+   }
+  ]
+ }
+}

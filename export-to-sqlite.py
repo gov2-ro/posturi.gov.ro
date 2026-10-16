@@ -229,6 +229,17 @@ CREATE TABLE job_postings (
     v4_employer_sector      TEXT NOT NULL DEFAULT '',
     v4_parent_institution   TEXT NOT NULL DEFAULT '',
     v4_application_deadline TEXT,
+    -- Prompt v5 facts (BETA-V5; empty on v4 rows, which stay until their source
+    -- changes — docs/specs/2026-10-16-v5-extraction/README.md §6). JSON arrays
+    -- are queried with LIKE '%"value"%', like the v3 lists.
+    v5_recruitment_kind     TEXT NOT NULL DEFAULT '',
+    v5_internal_only        INTEGER,
+    v5_vacancies_total      INTEGER,
+    v5_fte                  REAL,
+    v5_post_status          TEXT NOT NULL DEFAULT '',
+    v5_end_date             TEXT,
+    v5_channels             TEXT NOT NULL DEFAULT '[]',
+    v5_work_localities      TEXT NOT NULL DEFAULT '[]',
     -- The date after which nobody can apply any more, and therefore the one the
     -- site treats as "active". NOT `expires_at`: that is when the competition
     -- ends, which on a 20-posting sample ran a median of 15 days — up to 52 —
@@ -514,6 +525,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
         v3 = _v3_columns(r["schema_json"])
         v4 = _v4_columns(r["schema_json"])
+        v5 = _v5_columns(r["schema_json"])
         est = _salary_columns(r["salary_estimate"])
         deadline = _apply_deadline(v4["application_deadline"],
                                    r["data_limita_depunere"], r["expires_at"])
@@ -598,6 +610,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             est["min"], est["max"], est["confidence"], est["variant"], r["salary_estimate"],
             v4["funding_source"], v4["funding_programme"],
             v4["employer_sector"], v4["parent_institution"], v4["application_deadline"],
+            v5["recruitment_kind"], v5["internal_only"], v5["vacancies_total"], v5["fte"],
+            v5["post_status"], v5["end_date"], v5["channels"], v5["work_localities"],
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
         ))
@@ -1000,6 +1014,46 @@ def _v4_columns(schema_json_text) -> dict:
     }
 
 
+def _v5_columns(schema_json_text) -> dict:
+    """Flatten the prompt-v5 facts worth filtering on (BETA-V5).
+
+    A v4 (or older) payload has none of these keys and returns the empty values, so a
+    mixed v4/v5 corpus exports cleanly. Values were validated by
+    schema_models.JobPostingExtractionV5 at extraction time; this only re-checks types.
+    """
+    empty = {"recruitment_kind": "", "internal_only": None, "vacancies_total": None, "fte": None,
+             "post_status": "", "end_date": None, "channels": "[]", "work_localities": "[]"}
+    if not schema_json_text:
+        return empty
+    try:
+        s = json.loads(schema_json_text)
+    except (json.JSONDecodeError, TypeError):
+        return empty
+    if not isinstance(s, dict) or "recruitment" not in s:
+        return empty
+    rec = s.get("recruitment") or {}
+    contract = s.get("contract") or {}
+    application = s.get("application") or {}
+    internal = rec.get("internal_only") if isinstance(rec, dict) else None
+    seats = s.get("vacancies_total")
+    fte = contract.get("fte") if isinstance(contract, dict) else None
+    end = contract.get("end_date") if isinstance(contract, dict) else None
+    channels = application.get("channels") if isinstance(application, dict) else []
+    locs = s.get("work_localities") or []
+    return {
+        "recruitment_kind": (rec.get("kind") or "") if isinstance(rec, dict) else "",
+        "internal_only": None if internal is None else (1 if internal else 0),
+        "vacancies_total": seats if isinstance(seats, int) and seats > 0 else None,
+        "fte": float(fte) if isinstance(fte, (int, float)) and 0 < fte < 1 else None,
+        "post_status": (contract.get("post_status") or "") if isinstance(contract, dict) else "",
+        "end_date": end if isinstance(end, str) and len(end) == 10 else None,
+        "channels": json.dumps(sorted({c for c in channels or [] if isinstance(c, str) and c}),
+                               ensure_ascii=False),
+        "work_localities": json.dumps(list(dict.fromkeys(x.strip() for x in locs if isinstance(x, str) and x.strip())),
+                                      ensure_ascii=False),
+    }
+
+
 def _v3_columns(schema_json_text) -> dict:
     """Flatten prompt-v3 `schema_json` into queryable SQLite columns.
 
@@ -1085,6 +1139,8 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         sal_min, sal_max, sal_confidence, sal_variant, sal_json,
         v4_funding_source, v4_funding_programme,
         v4_employer_sector, v4_parent_institution, v4_application_deadline,
+        v5_recruitment_kind, v5_internal_only, v5_vacancies_total, v5_fte,
+        v5_post_status, v5_end_date, v5_channels, v5_work_localities,
         apply_deadline, deadline_source, application_status"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart

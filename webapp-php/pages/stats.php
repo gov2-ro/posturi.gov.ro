@@ -20,7 +20,8 @@ foreach (db()->query("SELECT application_status AS s, COUNT(*) AS n FROM job_pos
 $confirmed_open = $by_status['confirmed_open'];
 $uncertain      = $by_status['unconfirmed'] + $by_status['unknown'];
 $closed         = $by_status['closed'];
-$active         = $confirmed_open + $uncertain;
+// Counted through the shared vocabulary, so this figure and the list's Active tab cannot disagree.
+$active         = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE application_status IN (" . OPEN_STATUS_SQL . ")")->fetchColumn();
 
 $inferred_cnt = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inferred != '{}'")->fetchColumn();
 $unique_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn();

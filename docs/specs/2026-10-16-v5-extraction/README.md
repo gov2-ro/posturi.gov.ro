@@ -306,6 +306,72 @@ re-extract every active posting (~2,500, ≈$6 off-peak), which is what D24 want
    - The v5 enum-coercion test, replacing the stage rule's "reject" expectation only for
      the new enums.
 
+## 7. Implementation status (2026-10-16, evening)
+
+Done (not committed by the implementer):
+
+- `schema_models.py`: `JobPostingExtractionV5` registered as `"v5"`. The dropped keys stay
+  declared (so mixed v4/v5 rows read alike) but a `mode="before"` validator removes them
+  from a v5 answer: `educationRequirements`, `experienceRequirements`, `skills`,
+  `application_docs`, `contract.remote_mode`, `employer_context.parent_institution`. New:
+  `recruitment`, `vacancies_total`, `application` (`channels`, `window_start`),
+  `age_limit`, `work_localities`, `documents` (`standard` codes + `specific` items),
+  `contract.fte|end_date|post_status`, `competition_calendar.events[].relative`,
+  `credentials[].evidence|licence_category`, `employer_context.subordinated_to`.
+  New closed lists coerce instead of failing (unknown kind → `altele`, unknown channel
+  dropped, unknown dosar code → a `specific` item, bad seat count/age/date → null);
+  the calendar stage list stays strict. Derived: `fte` from `hours_per_week` (< 40),
+  `internal_only` for a promotion; `shift_work` is null when silent.
+- `models_config.json` `prompts.v5`, built by `build_v5_final.py` from the draft
+  (`prompt-v5.txt` is the same text for review): v5-shaped examples, rule 6 (null when
+  silent), rule 7 (quotes of 5–20 words, copied exactly), the manager-contest rule.
+- `llm-schema.py`: `--accept-prompt-versions` / `$LLM_ACCEPT_PROMPT_VERSIONS` accept-list
+  under `--resume`; `dedup_body()` drops body paragraphs the attachments carry (≥80% of
+  6-grams and every number present there), **v5 only**. On the 400 newest local postings
+  with attachments it removes 67% of body characters, with 0 dropped paragraphs carrying a
+  date the attachments lack.
+- `evidence.py`: a v5 answer's credential quotes are checked (`credential` rows can now be
+  `verified`); v4 credentials stay `absent / no_evidence_field`.
+- `ops/check-export.py`: the v3 floor is skipped under v5 as under v4.
+
+**Trial of the final prompt** (`trial_v5.py`, 8 local postings incl. management,
+promotion, multi-role, 0,75-norm, multi-site; $0.016): 8/8 valid on the first answer, all
+`finish: stop`; 31/32 quotes verified (the miss is "aviz psihologic;", which is all the
+source says); input sent −30% (dedup); output on the 4 postings also run under v4:
+11,922 → 9,840 tokens (−17%). Facts checked by hand: promotion → `promovare` +
+`internal_only`; seats 4 / 2 / 3 on the multi-seat postings; 0,75 norm + end date
+2027-06-30 + `temporar_vacant`; manager contest `duration: null`; the Apele Române post's
+three work points.
+
+### VPS command sequence (pax runs it; code must be pulled first)
+
+```
+# 1. Preview the one-off: the 200 newest active postings, no calls, no writes.
+.venv/bin/python llm-schema.py --active-only --force --prompt-version v5 --limit 200 --dry-run
+# 2. Run it off-peak (weekends are off-peak all day). ≈ $0.45.
+.venv/bin/python llm-schema.py --active-only --force --prompt-version v5 --limit 200 --workers 4
+# 3. From then on the cron extracts new and revised postings with v5 and leaves v4 rows alone:
+#    in .env (or ops/run-pipeline.sh's environment)
+LLM_PROMPT_VERSION=v5
+LLM_ACCEPT_PROMPT_VERSIONS=v4,v5
+# 4. Check the next scheduled run selected only new/changed postings:
+.venv/bin/python llm-schema.py --active-only --resume --prompt-version v5 --dry-run
+```
+
+**Export and PHP (done, same evening):** `_v5_columns()` writes eight `v5_*` columns
+(empty on v4 rows; every one shimmed in `db.php`, covered by `compat_test.php`'s pre-v5
+export); `webapp-php/inc/v5.php` holds the readers: `v5_facts()` (shown in "Condiții
+contractuale"), `llm_calendar_rows()` (the extracted calendar, v4 and v5, is now the one
+calendar table, the scraped rows only a fallback), `schema_text_fallbacks()` (description
+sections and JSON-LD for v5 rows), `v5_document_items()` (checklist: standard codes with
+fixed labels, specific items with their quote and roles). The remote/on-site line is gone.
+Filters, hidden until v5 rows exist: Tip concurs, Normă parțială, Post temporar vacant,
+Depunere fără deplasare. Promotions are NOT hidden from the default view (pax's call).
+Tests: `tests/v5_test.php` (mixed v4/v5 fixture `tests/fixtures/v5_db.php`, in CI).
+
+**Order:** deploy this code (`deploy-php.sh --code-only`) and let the VPS pull the export
+change BEFORE step 2, so the first v5 rows are exported and read by code that knows them.
+
 ## Files here
 
 | File | What it is |

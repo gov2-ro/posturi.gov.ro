@@ -1,0 +1,213 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": "- Aviz psihologic.\n- Noțiuni de comunicare în relații publice.\n- Disponibilitate la timp de lucru prelungit.",
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": null,
+ "jobLocation": "Liceul Tehnologic „Alexandru Vlahuță”, Podu Turcului, jud. Bacău",
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": "Moraru Tatiana – secretar",
+  "phone": "0234289725",
+  "email": null,
+  "address": "secretariatul Liceului Tehnologic „Alexandru Vlahuță” Podu Turcului"
+ },
+ "education": {
+  "minimum_level": "liceala",
+  "eqf_level": 4,
+  "fields_of_study": [],
+  "specialization": null,
+  "required": true,
+  "verbatim": "nivelul studiilor: liceu cu examen de bacalaureat"
+ },
+ "experience": {
+  "years_minimum": null,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": true,
+  "verbatim": "vechime în specialitatea studiilor necesare ocupării postului: nu se solicită."
+ },
+ "skill_list": [
+  {
+   "label": "comunicare în relații publice",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "notiuni de comunicare in relatii publice"
+  }
+ ],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "aviz psihologic",
+   "kind": "aviz_medical",
+   "issuer": null,
+   "required": true,
+   "evidence": "aviz psihologic;",
+   "licence_category": null
+  }
+ ],
+ "contract": {
+  "duration": "determinata",
+  "duration_months": null,
+  "schedule": "tura_noapte",
+  "hours_per_week": null,
+  "remote_mode": null,
+  "probation_months": null,
+  "shift_work": true,
+  "fte": 0.75,
+  "end_date": "2027-06-30",
+  "post_status": "temporar_vacant"
+ },
+ "policy_domains": [
+  "educatie_cercetare"
+ ],
+ "occupation_title": "Supraveghetor de noapte",
+ "seniority_hint": null,
+ "positions": [],
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "Legea educației naționale",
+  "Regulamentul de organizare și funcționare a unităților de învățământ preuniversitar",
+  "Codul muncii",
+  "Statutul elevului",
+  "Norme de igienă privind unitățile pentru ocrotirea, educarea și instruirea copiilor și tinerilor",
+  "Psihologia adolescenței",
+  "Protecția și promovarea drepturilor copilului"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-08-26",
+  "application_deadline_time": null,
+  "events": [
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-08-26",
+    "time": null,
+    "verbatim": "Depunerea dosarelor 20.08.2026- 26.08.2026 ora 900-12.00",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-08-26",
+    "time": "13:00",
+    "verbatim": "Verificarea şi validarea dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-08-26",
+    "time": "13:00",
+    "verbatim": "Depunerea contestaţiilor în urma selecţiei dosarelor",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-08-26",
+    "time": "16:30",
+    "verbatim": "Afişarea rezultatelor în urma contestaţiilor depuse",
+    "relative": null
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-08-27",
+    "time": "09:00",
+    "verbatim": "Proba scrisă 27.08.2026, ora 900",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": "2026-08-27",
+    "time": "14:00",
+    "verbatim": "Afişarea rezultatelor după proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": "2026-08-27",
+    "time": "14:00",
+    "verbatim": "Depunerea contestaţiilor pentru proba scrisă",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_proba_scrisa",
+    "date": "2026-08-28",
+    "time": "10:00",
+    "verbatim": "Afişarea rezultatelor în urma contestaţiilor depuse",
+    "relative": null
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-08-28",
+    "time": "11:00",
+    "verbatim": "Proba de interviu 28.08.2026, ora 1100",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_interviu",
+    "date": "2026-08-28",
+    "time": "14:00",
+    "verbatim": "Afişarea rezultatelor 28.08.2026, ora 1400",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_interviu",
+    "date": "2026-08-28",
+    "time": "14:00",
+    "verbatim": "Depunerea contestaţiilor 28.08.2026, ora 1400-1630",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": "2026-08-31",
+    "time": "16:30",
+    "verbatim": "Afişarea rezultatelor finale 31.08.2026., ora 1630",
+    "relative": null
+   }
+  ]
+ },
+ "funding": null,
+ "employer_context": {
+  "sector": "educatie",
+  "parent_institution": null,
+  "uat_type": null,
+  "uat_name": null,
+  "subordinated_to": null
+ },
+ "note_suplimentare": "- Disponibilitate la timp de lucru prelungit.",
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 1,
+ "application": {
+  "channels": [
+   "sediu"
+  ],
+  "window_start": "2026-08-20"
+ },
+ "age_limit": null,
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "adeverinta_medicala",
+   "certificat_integritate",
+   "cv",
+   "dosar_plic"
+  ],
+  "specific": []
+ }
+}

@@ -92,6 +92,16 @@ foreach ($strip as $file => $cols) {
     $sdb = null;
 }
 
+// BETA-V5: the export live before the v5 columns (every other table and column present).
+$nov5 = "$tmp-nov5.sqlite";
+copy($current, $nov5);
+$vdb = new PDO("sqlite:$nov5", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+foreach ($vdb->query("SELECT name FROM pragma_table_info('job_postings') WHERE name LIKE 'v5\_%' ESCAPE '\\'")
+         ->fetchAll(PDO::FETCH_COLUMN) as $col) {
+    $vdb->exec("ALTER TABLE job_postings DROP COLUMN $col");
+}
+$vdb = null;
+
 // DATA-04: exports from before posting_roles existed. `noroles` has every other
 // column; `oldest-noroles` is the oldest shape with the table gone as well.
 $noroles = "$tmp-noroles.sqlite";
@@ -269,6 +279,18 @@ run_suite('a missing requirement_evidence table is stood in for by an empty view
     chmod($noevidence, 0644);
 });
 
+run_suite('BETA-V5: an export without the v5 columns reads them as empty', function () use ($nov5) {
+    $pdo = new PDO("sqlite:$nov5", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $have = $pdo->query("SELECT name FROM pragma_table_info('job_postings')")->fetchAll(PDO::FETCH_COLUMN);
+    assert_same([], array_values(array_filter($have, fn($c) => str_starts_with($c, 'v5_'))), 'fixture has no v5 column');
+    shim_legacy_export($pdo);
+    $row = $pdo->query("SELECT v5_recruitment_kind, v5_internal_only, v5_vacancies_total, v5_fte, v5_post_status,
+        v5_end_date, v5_channels, v5_work_localities FROM job_postings LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+    assert_same(['v5_recruitment_kind' => '', 'v5_internal_only' => null, 'v5_vacancies_total' => null, 'v5_fte' => null,
+                 'v5_post_status' => '', 'v5_end_date' => null, 'v5_channels' => '[]', 'v5_work_localities' => '[]'],
+        $row, 'v5 columns read as their empty values');
+});
+
 run_suite('shim works on a read-only file', function () use ($legacy) {
     chmod($legacy, 0444);   // as on a host whose document root is not writable
     $ro = new PDO("sqlite:$legacy", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -305,6 +327,7 @@ $shapes = [
     'the oldest export without roles or requirement_evidence' => $oldest_noevidence,
     'an export from before the LLM call ledger (llm_costs without step/source)' => $preledger,
     'an export with no llm_costs table'                       => $nollm,
+    'an export from before the v5 columns (BETA-V5)'          => $nov5,
     'an export with no publication_monthly (FIX-09)'          => $nohistory,
     'the oldest export without roles, evidence or publication_monthly' => $oldest_nohistory,
 ];
@@ -373,5 +396,6 @@ foreach ($shapes as $label => $file) {
     stop_fixture_server($srv, $file);
 }
 @unlink($current);
+@unlink($nov5);
 @unlink($unsplit);
 finish();

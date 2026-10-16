@@ -519,7 +519,7 @@ class TestParseUrlEntries:
         where, params = llm._selection_where(
             slug_filter="s", active_only=True, resume_key=("p", "m", "v3"), url_entries=entries)
         assert where.count("%s") == len(params) == 6
-        assert params == ["%s%", ["https://posturi.gov.ro/joburi/b"], ["slug-a"], "p", "m", "v3"]
+        assert params == ["%s%", ["https://posturi.gov.ro/joburi/b"], ["slug-a"], "p", "m", ["v3"]]
 
 
 @pytest.mark.django_db

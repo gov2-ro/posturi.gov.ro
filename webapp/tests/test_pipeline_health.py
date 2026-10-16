@@ -373,6 +373,13 @@ class TestFloors:
         level, ok, message = check_map(checks)["v3_floor"]
         assert ok and "v4" in message  # versioned expectations, not a failure
 
+    def test_v3_floor_is_skipped_under_a_v5_rollout(self, check):
+        checks = run_evaluate(check, metrics(v3_coverage_pct=50.0),
+                              {"previous": None, "window": []},
+                              prompt_version="v5", max_age_hours=6.0, v3_floor=70.0)
+        level, ok, message = check_map(checks)["v3_floor"]
+        assert ok and "v5" in message
+
     def test_v3_floor_enforced_under_v3(self, check):
         checks = run_evaluate(check, metrics(v3_coverage_pct=50.0),
                               {"previous": None, "window": []},

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/v5.php';
+
 // ---- UX-11 checklist ----
 //
 // Application-preparation checklist (UX-11, first slice). Pure functions: they turn what
@@ -241,14 +243,27 @@ function checklist_model(array $p, array $events, array $dl): array {
     if ($rev12 === '') $rev12 = 'norev';
 
     $schema = is_string($p['schema_json'] ?? null) ? json_decode((string)$p['schema_json'], true) : null;
-    $docs = checklist_docs(is_array($schema) ? ($schema['application_docs'] ?? null) : null);
+    // BETA-V5: a v5 row lists its dosar as standard codes (fixed labels) plus quoted
+    // specific documents scoped to roles; a v4 row as the markdown `application_docs`.
+    $v5docs = is_array($schema) ? v5_document_items($schema) : [];
+    $docs = [];
+    if ($v5docs) {
+        foreach (array_slice($v5docs, 0, CHECKLIST_DOCS_MAX) as $d) {
+            $label = checklist_clip($d['label'] . ($d['roles'] ? ' (pentru: ' . implode(', ', $d['roles']) . ')' : ''));
+            $docs[] = ['label' => $label, 'evidence' => array_filter(['basis' => 'extracted', 'quote' => $d['evidence']])];
+        }
+    } else {
+        foreach (checklist_docs(is_array($schema) ? ($schema['application_docs'] ?? null) : null) as $label) {
+            $docs[] = ['label' => $label, 'evidence' => ['basis' => 'extracted']];
+        }
+    }
 
     $items = [];
-    foreach ($docs as $i => $label) {
+    foreach ($docs as $i => $doc) {
         $items[] = [
-            'id' => $rev12 . ':document:' . ($i + 1), 'fp' => checklist_fp('document', null, $label),
-            'kind' => 'document', 'role_key' => null, 'label' => $label,
-            'evidence' => ['basis' => 'extracted'],
+            'id' => $rev12 . ':document:' . ($i + 1), 'fp' => checklist_fp('document', null, $doc['label']),
+            'kind' => 'document', 'role_key' => null, 'label' => $doc['label'],
+            'evidence' => $doc['evidence'],
         ];
     }
     foreach (checklist_stages($p, $events, $dl) as $i => $st) {

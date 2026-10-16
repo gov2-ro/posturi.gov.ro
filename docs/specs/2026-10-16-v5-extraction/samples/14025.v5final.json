@@ -1,0 +1,376 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": null,
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": "8 ore/zi, 40 ore/săptămână",
+ "jobLocation": null,
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": "Moraru Mihaela-Rozalia",
+  "phone": "0234/348119 int. 28",
+  "email": "salubrizare@primariaslanicmoldova.ro",
+  "address": "sediul U.A.T. oraș Slănic-Moldova, str. Vasile Alecsandri, nr. 4"
+ },
+ "education": {
+  "minimum_level": "licenta",
+  "eqf_level": 6,
+  "fields_of_study": [
+   {
+    "label_ro": "drept",
+    "isced_field": "04_afaceri_administratie_drept"
+   },
+   {
+    "label_ro": "economie",
+    "isced_field": "04_afaceri_administratie_drept"
+   },
+   {
+    "label_ro": "inginerie",
+    "isced_field": "07_inginerie_constructii"
+   }
+  ],
+  "specialization": null,
+  "required": true,
+  "verbatim": "studii universitare de licență absolvite cu diplomă de licență sau echivalentă în domeniul științelor juridice, economice, inginerești"
+ },
+ "experience": {
+  "years_minimum": 5.0,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "vechime în specialitatea studiilor - minim 5 ani"
+ },
+ "skill_list": [
+  {
+   "label": "operare calculator",
+   "type": "skill",
+   "proficiency": null,
+   "required": true,
+   "evidence": "cunoștinte de operare pe calculator"
+  },
+  {
+   "label": "adaptare la program de lucru în weekend",
+   "type": "transversal",
+   "proficiency": null,
+   "required": true,
+   "evidence": "capacitatea de  adaptare la programul de lucru sâmbata și duminica"
+  }
+ ],
+ "language_list": [],
+ "credentials": [],
+ "contract": {
+  "duration": "nedeterminata",
+  "duration_months": null,
+  "schedule": "norma_intreaga",
+  "hours_per_week": 40.0,
+  "remote_mode": null,
+  "probation_months": null,
+  "shift_work": true,
+  "fte": null,
+  "end_date": null,
+  "post_status": "vacant"
+ },
+ "policy_domains": [
+  "administratie_publica",
+  "mediu"
+ ],
+ "occupation_title": "Șef serviciu",
+ "seniority_hint": "conducere",
+ "positions": [
+  {
+   "title": "Șef serviciu",
+   "count": 1,
+   "education": {
+    "minimum_level": "licenta",
+    "eqf_level": 6,
+    "fields_of_study": [
+     {
+      "label_ro": "drept",
+      "isced_field": "04_afaceri_administratie_drept"
+     },
+     {
+      "label_ro": "economie",
+      "isced_field": "04_afaceri_administratie_drept"
+     },
+     {
+      "label_ro": "inginerie",
+      "isced_field": "07_inginerie_constructii"
+     }
+    ],
+    "specialization": null,
+    "required": true,
+    "verbatim": "studii universitare de licență absolvite cu diplomă de licență sau echivalentă în domeniul științelor juridice, economice, inginerești"
+   },
+   "experience": {
+    "years_minimum": 5.0,
+    "in_specialty": true,
+    "domain": null,
+    "none_required": false,
+    "verbatim": "vechime în specialitatea studiilor - minim 5 ani"
+   },
+   "skill_list": [
+    {
+     "label": "operare calculator",
+     "type": "skill",
+     "proficiency": null,
+     "required": true,
+     "evidence": "cunoștinte de operare pe calculator"
+    },
+    {
+     "label": "adaptare la program de lucru în weekend",
+     "type": "transversal",
+     "proficiency": null,
+     "required": true,
+     "evidence": "capacitatea de  adaptare la programul de lucru sâmbata și duminica"
+    }
+   ],
+   "credentials": [],
+   "seniority_hint": "conducere"
+  },
+  {
+   "title": "Muncitor calificat treapta I (electrician)",
+   "count": 1,
+   "education": {
+    "minimum_level": "profesionala",
+    "eqf_level": 3,
+    "fields_of_study": [],
+    "specialization": null,
+    "required": true,
+    "verbatim": "nivelul studiilor-studii medii/generale, tehnice sau școală profesională"
+   },
+   "experience": {
+    "years_minimum": 5.0,
+    "in_specialty": false,
+    "domain": null,
+    "none_required": false,
+    "verbatim": "vechime în muncă - minim 5 ani"
+   },
+   "skill_list": [
+    {
+     "label": "adaptare la program de lucru în weekend",
+     "type": "transversal",
+     "proficiency": null,
+     "required": true,
+     "evidence": "capacitatea de  adaptare la programul de lucru sâmbata și duminica"
+    }
+   ],
+   "credentials": [
+    {
+     "label": "curs/atestat/certificat calificare/specializare în domeniul electric, energetic, electronic",
+     "kind": "certificat_profesional",
+     "issuer": null,
+     "required": true,
+     "evidence": "curs/atestat/certificat,calificare/specializare în domeniul electric,energetic,electronic",
+     "licence_category": null
+    }
+   ],
+   "seniority_hint": null
+  },
+  {
+   "title": "Muncitor calificat treapta I (mecanic de întreținere și reparații)",
+   "count": 1,
+   "education": {
+    "minimum_level": "profesionala",
+    "eqf_level": 3,
+    "fields_of_study": [],
+    "specialization": null,
+    "required": true,
+    "verbatim": "nivelul studiilor-studii medii/generale, tehnice sau școală profesională"
+   },
+   "experience": {
+    "years_minimum": 5.0,
+    "in_specialty": false,
+    "domain": null,
+    "none_required": false,
+    "verbatim": "vechime în muncă - minim 5 ani"
+   },
+   "skill_list": [
+    {
+     "label": "adaptare la program de lucru în weekend",
+     "type": "transversal",
+     "proficiency": null,
+     "required": true,
+     "evidence": "capacitatea de  adaptare la programul de lucru sâmbata și duminica"
+    }
+   ],
+   "credentials": [
+    {
+     "label": "curs/atestat/certificat calificare/specializare mecanic",
+     "kind": "certificat_profesional",
+     "issuer": null,
+     "required": true,
+     "evidence": "curs/atestat/certificat,calificare/specializare mecanic",
+     "licence_category": null
+    }
+   ],
+   "seniority_hint": null
+  },
+  {
+   "title": "Muncitor calificat treapta I (instalator)",
+   "count": 1,
+   "education": {
+    "minimum_level": "profesionala",
+    "eqf_level": 3,
+    "fields_of_study": [],
+    "specialization": null,
+    "required": true,
+    "verbatim": "nivelul studiilor-studii medii/generale, tehnice sau școală profesională"
+   },
+   "experience": {
+    "years_minimum": 5.0,
+    "in_specialty": false,
+    "domain": null,
+    "none_required": false,
+    "verbatim": "vechime în muncă - minim 5 ani"
+   },
+   "skill_list": [
+    {
+     "label": "adaptare la program de lucru în weekend",
+     "type": "transversal",
+     "proficiency": null,
+     "required": true,
+     "evidence": "capacitatea de  adaptare la programul de lucru sâmbata și duminica"
+    }
+   ],
+   "credentials": [
+    {
+     "label": "curs/atestat/certificat calificare/specializare instalator",
+     "kind": "certificat_profesional",
+     "issuer": null,
+     "required": true,
+     "evidence": "curs/atestat/certificat,calificare/specializare instalator",
+     "licence_category": null
+    }
+   ],
+   "seniority_hint": null
+  }
+ ],
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "servicii comunitare de utilități publice",
+  "serviciul de salubrizare a localităților",
+  "regimul deșeurilor",
+  "securitatea și sănătatea în muncă",
+  "transport pe cablu pentru persoane",
+  "personalul contractual din autoritățile și instituțiile publice",
+  "finanțele publice locale",
+  "apărarea împotriva incendiilor"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-09-22",
+  "application_deadline_time": "16:00",
+  "events": [
+   {
+    "stage": "publicare",
+    "date": "2026-09-09",
+    "time": null,
+    "verbatim": "Dată publicare anunț",
+    "relative": null
+   },
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-22",
+    "time": "16:00",
+    "verbatim": "Depunere dosare candidați : 09.09.2026-22.09.2026, ora 16.00",
+    "relative": null
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": null,
+    "time": null,
+    "verbatim": "Selecția dosarelor:  în termen de două zile lucrătoare de la data expirării termenului de depunere a dosarelor",
+    "relative": "2 zile lucrătoare după depunere"
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-09-30",
+    "time": "10:00",
+    "verbatim": "Proba scrisă: 30.09.2026 ora  10.00",
+    "relative": null
+   },
+   {
+    "stage": "interviu",
+    "date": null,
+    "time": null,
+    "verbatim": "Interviul: în  termen de 4 zile lucrătoare de la data susţinerii probei scrise",
+    "relative": "4 zile lucrătoare după proba scrisă"
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": null,
+    "time": null,
+    "verbatim": "Comunicarea rezultatelor, la fiecare probă în termen de o zi lucrătoare de la data de fonalizării probei",
+    "relative": "1 zi lucrătoare după probă"
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": null,
+    "time": null,
+    "verbatim": "Depunere contestații, la fiecare probă în termen de o zi lucrătoare de la data afișării rezultatelor",
+    "relative": "1 zi lucrătoare după afișarea rezultatelor"
+   },
+   {
+    "stage": "rezultate_contestatii_proba_scrisa",
+    "date": null,
+    "time": null,
+    "verbatim": "Comunicarea rezultatelor contestațiilor în termen de o zi lucrătoare de la data depunerii contestațiilor",
+    "relative": "1 zi lucrătoare după depunerea contestațiilor"
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": null,
+    "time": null,
+    "verbatim": "Comunicarea rezultatelor finale în termen de o zi lucrătoare de la data afișării rezultatelor soluționării contestațiilor pentru ultima probă",
+    "relative": "1 zi lucrătoare după soluționarea contestațiilor"
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "administratie_locala",
+  "parent_institution": null,
+  "uat_type": "oras",
+  "uat_name": "Slănic-Moldova",
+  "subordinated_to": "Consiliul Local al orașului Slănic-Moldova"
+ },
+ "note_suplimentare": null,
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 4,
+ "application": {
+  "channels": [
+   "sediu"
+  ],
+  "window_start": "2026-09-09"
+ },
+ "age_limit": null,
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "cazier_judiciar",
+   "adeverinta_medicala",
+   "certificat_integritate",
+   "cv"
+  ],
+  "specific": []
+ }
+}

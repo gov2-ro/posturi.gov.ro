@@ -764,6 +764,8 @@ function render_schema_sections(?string $schema_json_str): ?array {
     if (!$schema_json_str) return null;
     $schema = json_decode($schema_json_str, true);
     if (!is_array($schema)) return null;
+    // BETA-V5: a v5 row has no free-text requirement keys; rebuild them from the structured ones.
+    $schema = schema_text_fallbacks($schema);
 
     $sections = [];
     foreach (SCHEMA_SECTION_LABELS as $key => $label) {
@@ -1401,6 +1403,10 @@ const FILTER_CHIP_GROUPS = [
     'family'         => 'Domeniu profesional',
     'judet'          => 'Județ',
     'loc'            => 'Localitate',
+    'recruitment'    => 'Tip concurs',
+    'parttime'       => '',
+    'temp_vacant'    => '',
+    'remote_apply'   => '',
     'published'      => 'Publicat',
     'level'          => '',
     'type'           => 'Tip',
@@ -1445,7 +1451,7 @@ const MULTI_PARAMS = [
     'judet', 'level', 'type', 'categorie', 'employer_cat',
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
-    'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc',
+    'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
 ];
 
 /** Form field name for a filter param. */
@@ -1516,6 +1522,10 @@ function filter_value_label(string $key, string $value): string {
         'duration'                         => CONTRACT_DURATION_LABELS[$value] ?? $value,
         'schedule'                         => SCHEDULE_LABELS[$value] ?? $value,
         'shift'                            => 'Lucru în ture / gărzi',
+        'recruitment'                      => RECRUITMENT_KIND_SHORT[$value] ?? $value,
+        'parttime'                         => 'Normă parțială',
+        'temp_vacant'                      => 'Post temporar vacant',
+        'remote_apply'                     => 'Depunere fără deplasare',
         'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
         'has_salary'                       => 'Cu salariu estimat',
         'expires_after', 'expires_before', 'published' => fmt_date($value),
@@ -2022,6 +2032,23 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         $where[] = "j.v3_shift_work = 1";
     }
 
+    // BETA-V5 facts (export-to-sqlite.py::_v5_columns). Empty on v4 rows, so each of
+    // these narrows to v5 postings: a v4 row has not been asked, which is not "no".
+    $recr = array_values(array_filter(array_map('strval', (array)($p['recruitment'] ?? [])), fn($v) => $v !== ''));
+    if ($recr && $excl !== 'recruitments') {
+        $where[] = "j.v5_recruitment_kind IN (" . implode(',', array_fill(0, count($recr), '?')) . ")";
+        array_push($binds, ...$recr);
+    }
+    if (($p['parttime'] ?? '') === '1' && $excl !== 'parttime') {
+        $where[] = "j.v5_fte IS NOT NULL AND j.v5_fte < 1";
+    }
+    if (($p['temp_vacant'] ?? '') === '1' && $excl !== 'temp_vacant') {
+        $where[] = "j.v5_post_status = 'temporar_vacant'";
+    }
+    if (($p['remote_apply'] ?? '') === '1' && $excl !== 'remote_apply') {
+        $where[] = "(j.v5_channels LIKE '%\"email\"%' OR j.v5_channels LIKE '%\"posta\"%' OR j.v5_channels LIKE '%\"online\"%')";
+    }
+
     // Quick choice: only postings we can put a number on.
     if (($p['has_salary'] ?? '') === '1' && $excl !== 'has_salary') {
         $where[] = SALARY_EXPR . " IS NOT NULL";
@@ -2252,3 +2279,6 @@ function stats_scope_sentence(): string {
     }
     return "Conține $what; generat " . ($when !== '' ? "la $when" : 'la o dată necunoscută') . '.';
 }
+
+// BETA-V5: reading v5 extractions (facts, calendar, dosar, text fallbacks).
+require_once __DIR__ . '/inc/v5.php';

@@ -85,7 +85,8 @@ $meta_description = trim(implode(' · ', array_filter([
 // Built from the same columns the page renders, plus the Schema.org-shaped
 // fields the v2 extraction prompt already produces.
 $schema = json_decode($p['schema_json'] ?? 'null', true);
-$schema = is_array($schema) ? $schema : [];
+// BETA-V5: a v5 row's requirement texts are rebuilt from its structured keys.
+$schema = is_array($schema) ? schema_text_fallbacks($schema) : [];
 
 $ld_description = '';
 if ($schema_sections) {
@@ -534,11 +535,12 @@ require __DIR__ . '/../inc/header.php';
             }
             if (!empty($ct['schedule']))    $terms['Program'] = SCHEDULE_LABELS[$ct['schedule']] ?? $ct['schedule'];
             if (!empty($ct['hours_per_week'])) $terms['Ore/săptămână'] = rtrim(rtrim(number_format((float)$ct['hours_per_week'], 1, ',', '.'), '0'), ',');
-            if (!empty($ct['remote_mode'])) $terms['Loc de muncă'] = REMOTE_MODE_LABELS[$ct['remote_mode']] ?? $ct['remote_mode'];
             if (!empty($ct['probation_months'])) $terms['Perioadă de probă'] = (int)$ct['probation_months'] . ' luni';
             if (!empty($ct['shift_work']))  $terms['Ture'] = 'Da — ture, gărzi sau weekend';
         }
         if ($sen && isset(SENIORITY_HINT_LABELS[$sen])) $terms['Grad'] = SENIORITY_HINT_LABELS[$sen];
+        // BETA-V5: who can apply and how (temporary vacancy, norm, end date, channels…).
+        foreach (v5_facts($v3c) as $k => $v) $terms[$k] = $v;
       ?>
       <?php if ($terms || $bib): ?>
       <section class="mb-6 rounded-lg border border-line bg-sunken p-4">
@@ -838,14 +840,18 @@ require __DIR__ . '/../inc/header.php';
       </section>
       <?php endif; ?>
 
-      <!-- Calendar timeline -->
-      <?php if ($events): ?>
+      <!-- Calendar timeline. BETA-V5 (261016 "render tables, normalised"): the
+           calendar the extraction typed (v4 and v5) is the one table, stage names from
+           one vocabulary; the scraped calendar_events rows are the fallback for a
+           posting with no extracted calendar. -->
+      <?php $llm_cal = llm_calendar_rows($schema); ?>
+      <?php if ($llm_cal || $events): ?>
       <section class="mb-8">
         <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-line">
           Calendar concurs
         </h2>
         <div class="overflow-x-auto">
-          <table class="w-full text-sm border-collapse">
+          <table class="w-full text-sm border-collapse" data-calendar="<?= $llm_cal ? 'extras' : 'tabel' ?>">
             <thead>
               <tr class="border-b border-line">
                 <th scope="col" class="text-left py-1.5 pr-4 text-xs font-medium uppercase tracking-widest text-ink-muted w-32 font-sans">Data</th>
@@ -853,18 +859,36 @@ require __DIR__ . '/../inc/header.php';
               </tr>
             </thead>
             <tbody class="divide-y divide-line">
-              <?php foreach ($events as $ev): ?>
-              <tr class="hover:bg-sunken transition-colors">
-                <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
-                  <?= fmt_date($ev['data']) ?>
-                  <?php if ($ev['ora']): ?><span> <?= e($ev['ora']) ?></span><?php endif; ?>
-                </td>
-                <td class="py-2 text-ink"><?= e($ev['eveniment']) ?></td>
-              </tr>
-              <?php endforeach; ?>
+              <?php if ($llm_cal): ?>
+                <?php foreach ($llm_cal as $row): ?>
+                <tr class="hover:bg-sunken transition-colors">
+                  <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
+                    <?= $row['date'] !== '' ? fmt_date($row['date']) : '—' ?>
+                    <?php if ($row['time']): ?><span> <?= e($row['time']) ?></span><?php endif; ?>
+                  </td>
+                  <td class="py-2 text-ink">
+                    <?= e($row['label']) ?>
+                    <?php if ($row['detail']): ?><span class="block text-xs text-ink-muted"><?= e($row['detail']) ?></span><?php endif; ?>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <?php foreach ($events as $ev): ?>
+                <tr class="hover:bg-sunken transition-colors">
+                  <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
+                    <?= fmt_date($ev['data']) ?>
+                    <?php if ($ev['ora']): ?><span> <?= e($ev['ora']) ?></span><?php endif; ?>
+                  </td>
+                  <td class="py-2 text-ink"><?= e($ev['eveniment']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
             </tbody>
           </table>
         </div>
+        <?php if ($llm_cal): ?>
+        <p class="mt-2 text-xs text-ink-muted">Etapele sunt extrase automat din anunț; datele exacte sunt cele din anunțul oficial.</p>
+        <?php endif; ?>
       </section>
       <?php endif; ?>
 

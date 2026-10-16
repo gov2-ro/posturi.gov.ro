@@ -50,6 +50,7 @@ import re
 import sys
 import threading
 import time
+import unicodedata
 import itertools
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -731,6 +732,20 @@ def _entries_hit(entries, urls) -> set:
     return hit
 
 
+def accepted_prompt_versions(current: str, extra: str | None = None) -> list[str]:
+    """Prompt versions whose production rows count as current under --resume.
+
+    BETA-V5 (D24): pinning a new version must not re-pay for every active
+    posting. `$LLM_ACCEPT_PROMPT_VERSIONS` (or --accept-prompt-versions), e.g.
+    "v4,v5", names the older versions that stay current until their SOURCE
+    changes; the corpus turns over to the new version as postings are revised
+    or replaced. The run's own version is always accepted. Unset = only the
+    run's version, the behaviour before the accept-list.
+    """
+    raw = extra if extra is not None else os.environ.get("LLM_ACCEPT_PROMPT_VERSIONS", "")
+    return sorted({current} | {v.strip() for v in raw.split(",") if v.strip()})
+
+
 def _selection_where(slug_filter=None, active_only=False, resume_key=None,
                      upgrade_legacy=False, url_entries=None):
     """Build the shared WHERE clause for posting selection.
@@ -738,7 +753,8 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None,
     Returns (sql_fragment, params) — used by both iter_postings and
     count_postings so the progress total always matches what is processed.
 
-    `resume_key` is a (provider, model, prompt_version) triple. With it, a
+    `resume_key` is a (provider, model, prompt_version) triple; the third item may
+    be a list of accepted versions (accepted_prompt_versions()). With it, a
     posting with a PRODUCTION extraction is re-paid only when that extraction
     is provably stale (FIX-03/FIX-05, REV-07):
       - the source changed: its recorded revision and the posting's current
@@ -778,18 +794,20 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None,
     if active_only:
         conds.append("expires_at >= CURRENT_DATE")
     if resume_key:
-        provider, model, prompt_version = resume_key
+        provider, model, versions = resume_key
+        if isinstance(versions, str):
+            versions = [versions]
         jp = "jobs_jobposting"
         conds.append(
             f"({jp}.schema_json IS NULL"
             f" OR ({jp}.schema_source_revision != '' AND {jp}.detail_content_hash != ''"
             f"     AND {jp}.schema_source_revision != {jp}.detail_content_hash)"
             f" OR ({jp}.schema_provider != '' AND ({jp}.schema_provider != %s"
-            f"     OR {jp}.schema_model != %s OR {jp}.schema_prompt_version != %s))"
+            f"     OR {jp}.schema_model != %s OR NOT ({jp}.schema_prompt_version = ANY(%s))))"
             + (f" OR {jp}.schema_provider = ''" if upgrade_legacy else "")
             + ")"
         )
-        params.extend([provider, model, prompt_version])
+        params.extend([provider, model, list(versions)])
     return (" WHERE " + " AND ".join(conds) if conds else ""), params
 
 
@@ -799,9 +817,51 @@ def _selection_where(slug_filter=None, active_only=False, resume_key=None,
 _SELECTION_ORDER = " ORDER BY published_at DESC NULLS LAST, id DESC"
 
 
+_DEDUP_DATE = re.compile(r"\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b")
+
+
+def _fold_words(text: str) -> list[str]:
+    text = unicodedata.normalize("NFKD", text.lower())
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return re.findall(r"[a-z0-9]+", text)
+
+
+def dedup_body(body: str, attachment: str, threshold: float = 0.8, n: int = 6) -> str:
+    """Drop the body paragraphs the attachments already carry (BETA-V5, README §3.2).
+
+    85% of postings with attachment text repeat the page body almost verbatim, and
+    the attachment is the better copy: the portal body has lost dates the
+    attachment kept ("Proba scrisă: 09.2026" vs "30.09.2026"). A paragraph goes when
+    at least `threshold` of its word 6-grams occur in the attachments AND every
+    number in it (dates included) occurs there too — so a paragraph whose only
+    difference is a figure is never dropped. Measured on the 400 newest local
+    postings with attachments: 67% of body characters removed, 0 dropped
+    paragraphs carrying a date the attachments lack. Used for v5 only; v4 inputs
+    are unchanged.
+    """
+    att_grams = set()
+    words = _fold_words(attachment)
+    for i in range(len(words) - n + 1):
+        att_grams.add(tuple(words[i:i + n]))
+    if not att_grams:
+        return body
+    att_compact = attachment.replace(" ", "").replace("/", ".")
+    att_numbers = set(re.findall(r"\d+", attachment))
+    kept = []
+    for para in re.split(r"\n\s*\n", body):
+        w = _fold_words(para)
+        grams = {tuple(w[i:i + n]) for i in range(len(w) - n + 1)}
+        covered = len(grams) >= 3 and len(grams & att_grams) / len(grams) >= threshold
+        numbers_ok = (all(d.replace("/", ".") in att_compact for d in _DEDUP_DATE.findall(para))
+                      and set(re.findall(r"\d+", para)) <= att_numbers)
+        if not (covered and numbers_ok):
+            kept.append(para)
+    return "\n\n".join(kept)
+
+
 def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
                   active_only=False, resume_key=None, upgrade_legacy=False,
-                  url_entries=None):
+                  url_entries=None, dedup=False):
     """Yield (posting_id, url, content_hash, combined_content) rows needing schema work.
 
     Combines body_markdown (web page text) and attachment_text (extracted from
@@ -830,6 +890,8 @@ def iter_postings(conn, slug_filter=None, force=False, strip_boilerplate=True,
                 continue
             content = (body or "").strip()
             if attachment and attachment.strip():
+                if dedup:
+                    content = dedup_body(content, attachment)
                 content += "\n\n---\n\n" + attachment.strip()
             if content:
                 if strip_boilerplate:
@@ -1314,6 +1376,11 @@ def main(argv=None) -> int:
     parser.add_argument('--resume', action='store_true',
                         help='Skip postings that already have a variant row for this exact '
                              'provider/model/prompt-version. Makes an interrupted run restartable.')
+    parser.add_argument('--accept-prompt-versions', default=None, metavar='V1,V2',
+                        help='With --resume: production rows extracted with any of these prompt '
+                             'versions count as current (the run\'s own version always does). '
+                             'Overrides $LLM_ACCEPT_PROMPT_VERSIONS. BETA-V5: "v4,v5" lets v5 '
+                             'apply to new and revised postings without re-paying for every v4 row.')
     parser.add_argument('--upgrade-legacy', action='store_true',
                         help='With --resume: also re-extract production rows that have no '
                              'provenance (extracted before migration 0014). This is the paid '
@@ -1385,7 +1452,11 @@ def main(argv=None) -> int:
         for provider, model in providers_to_run:
             print(f"\n[{provider}/{model} @ {args.prompt_version}]")
             force_flag = args.force or args.compare
-            resume_key = (provider, model, args.prompt_version) if args.resume else None
+            accepted = accepted_prompt_versions(args.prompt_version, args.accept_prompt_versions)
+            resume_key = (provider, model, accepted) if args.resume else None
+            if args.resume and len(accepted) > 1:
+                print(f"  current under --resume: prompt versions {', '.join(accepted)} "
+                      "(older rows are redone only when their source changes)")
             selection = dict(
                 slug_filter=args.slug,
                 force=force_flag,
@@ -1410,7 +1481,8 @@ def main(argv=None) -> int:
             total = count_postings(conn, **selection)
             if args.limit:
                 total = min(total, args.limit)
-            postings = iter_postings(conn, strip_boilerplate=not args.no_strip, **selection)
+            postings = iter_postings(conn, strip_boilerplate=not args.no_strip,
+                                     dedup=args.prompt_version == "v5", **selection)
             if args.limit:
                 postings = itertools.islice(postings, args.limit)
 

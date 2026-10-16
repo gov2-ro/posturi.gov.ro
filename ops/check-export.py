@@ -448,11 +448,11 @@ def evaluate(
         soft("schema_floor", m["schema_coverage_pct"] >= schema_floor,
              f"schema_json {m['schema_coverage_pct']:.1f}% vs floor {schema_floor}%")
     if v3_floor is not None:
-        if prompt_version == "v4":
-            # Versioned expectations: a deliberate v4 rollout stops growing the
+        if prompt_version in ("v4", "v5"):
+            # Versioned expectations: a deliberate v4/v5 rollout stops growing the
             # v3 columns without being a coverage failure.
-            soft("v3_floor", True, "skipped — the run pinned v4; v3 columns are "
-                                   "not expected to grow under a v4 rollout")
+            soft("v3_floor", True, f"skipped — the run pinned {prompt_version}; v3 columns are "
+                                   f"not expected to grow under a {prompt_version} rollout")
         else:
             soft("v3_floor", m["v3_coverage_pct"] >= v3_floor,
                  f"v3 columns {m['v3_coverage_pct']:.1f}% vs floor {v3_floor}%")

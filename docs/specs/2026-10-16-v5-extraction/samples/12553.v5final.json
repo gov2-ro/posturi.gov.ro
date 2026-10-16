@@ -1,0 +1,223 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": null,
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": "Normă întreagă.",
+ "jobLocation": "Dispeceratul medical integrat, sediul SAJ Cluj, Cluj-Napoca, str. Horea nr. 55, jud. Cluj.",
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": null,
+  "phone": "0264-407009",
+  "email": null,
+  "address": "Compartimentul RUNOS al SAJ Cluj, Cluj-Napoca, str. Horea nr. 55, jud. Cluj"
+ },
+ "education": {
+  "minimum_level": "liceala",
+  "eqf_level": 4,
+  "fields_of_study": [],
+  "specialization": null,
+  "required": true,
+  "verbatim": "diplomă de studii medii"
+ },
+ "experience": {
+  "years_minimum": 0.5,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "cel puțin șase luni vechime în specialitate"
+ },
+ "skill_list": [
+  {
+   "label": "operare calculator",
+   "type": "skill",
+   "proficiency": null,
+   "required": true,
+   "evidence": "cunoștințe operare calculator"
+  },
+  {
+   "label": "Microsoft Windows",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "Sistem de operare Windows (utilizare CD, creare foldere, copiere și mutare foldere,)"
+  },
+  {
+   "label": "Microsoft Word",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "Utilizare Word (deschidere și închidere Word, salvarea documentelor, noțiuni elementare de imprimare, selectarea, mutarea și copierea textelor)"
+  },
+  {
+   "label": "Microsoft Excel",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "Utilizare Excel (documente/fereastra de lucru, schimbarea dimensiunilor, simple schimbări de format, copierea și mutarea, formule de calcul uzuale SUM, MAX, MIN)."
+  },
+  {
+   "label": "Microsoft Outlook",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "Utilizare Microsoft Outlook (trimitere e-mail, personalizare cont cu creare liste de contacte, semnătura etc.)"
+  },
+  {
+   "label": "navigare pe internet",
+   "type": "skill",
+   "proficiency": null,
+   "required": true,
+   "evidence": "Navigare pe internet (căutare cu un motor de căutare, utilizare cont E-mail)."
+  },
+  {
+   "label": "prim ajutor calificat",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "Acordarea primului ajutor –manual: PRIMUL AJUTOR CALIFICAT"
+  }
+ ],
+ "language_list": [],
+ "credentials": [],
+ "contract": {
+  "duration": "nedeterminata",
+  "duration_months": null,
+  "schedule": "norma_intreaga",
+  "hours_per_week": null,
+  "remote_mode": null,
+  "probation_months": null,
+  "shift_work": null,
+  "fte": null,
+  "end_date": null,
+  "post_status": "vacant"
+ },
+ "policy_domains": [
+  "sanatate_publica",
+  "aparare_securitate"
+ ],
+ "occupation_title": "Operator registrator de urgență",
+ "seniority_hint": null,
+ "positions": [],
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "Sistemul național de asistență medicală de urgență și de prim ajutor calificat",
+  "protocoale de transfer interclinic al pacientului critic",
+  "transportul pacienților care nu se află în stare critică",
+  "raportarea cazurilor și evenimentelor la care intervin serviciile publice de ambulanță",
+  "cooperarea agențiilor specializate de intervenție în cazul urgențelor",
+  "operare calculator",
+  "prim ajutor calificat"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-08-28",
+  "application_deadline_time": "12:00",
+  "events": [
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-08-28",
+    "time": "12:00",
+    "verbatim": "candidații vor depune dosarul de concurs până în data de 28.08.2026 inclusiv, orele 12,00",
+    "relative": null
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-09-01",
+    "time": "12:00",
+    "verbatim": "Data, ora și locul selecției dosarelor de înscriere la concurs: 01.09.2026 ora 12,00",
+    "relative": null
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-09-07",
+    "time": "11:00",
+    "verbatim": "Data, ora și locul organizării probei scrise: 07.09.2026 ora 11,00",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": null,
+    "time": null,
+    "verbatim": "Comunicarea rezultatelor pentru proba scrisă se face în termen de maximum 24 de ore",
+    "relative": "maximum 24 de ore de la finalizarea probei"
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": null,
+    "time": null,
+    "verbatim": "Depunerea eventualelor contestații în cel mult 24 ore de la afișarea rezultatelor pentru proba scrisă.",
+    "relative": "24 ore de la afișarea rezultatelor"
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-09-09",
+    "time": "11:00",
+    "verbatim": "Data, ora și locul organizării interviului: 09.09.2026 ora 11,00",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_interviu",
+    "date": null,
+    "time": null,
+    "verbatim": "Comunicarea rezultatelor pentru proba interviu se face în termen de maximum 24 de ore",
+    "relative": "maximum 24 de ore de la finalizarea probei"
+   },
+   {
+    "stage": "contestatii_interviu",
+    "date": null,
+    "time": null,
+    "verbatim": "Depunerea eventualelor contestații în cel mult 24 ore de la afișarea rezultatelor pentru proba interviu.",
+    "relative": "24 ore de la afișarea rezultatelor"
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "sanatate",
+  "parent_institution": null,
+  "uat_type": null,
+  "uat_name": null,
+  "subordinated_to": null
+ },
+ "note_suplimentare": null,
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 2,
+ "application": {
+  "channels": [
+   "sediu"
+  ],
+  "window_start": null
+ },
+ "age_limit": null,
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "adeverinta_medicala",
+   "certificat_integritate",
+   "cv"
+  ],
+  "specific": []
+ }
+}

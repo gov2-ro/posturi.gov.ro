@@ -166,6 +166,15 @@
             facet_group('Telemuncă', [['val' => '1', 'label' => 'Disponibil remote', 'cnt' => $remote_count]],
                         'remote', $remote ? ['1'] : []);
         }
+        // BETA-V5 facts — offered once v5 extractions exist (a v4 row was never asked).
+        facet_group('Tip concurs', $recr_options, 'recruitment', $recr_sel, false,
+                    'Promovarea este un examen doar pentru angajații instituției.');
+        foreach ([['parttime', 'Normă', 'Normă parțială', $parttime_count, $parttime],
+                  ['temp_vacant', 'Statutul postului', 'Post temporar vacant', $temp_vacant_count, $temp_vacant],
+                  ['remote_apply', 'Depunere', 'Fără deplasare (e-mail, poștă, online)', $remote_apply_count, $remote_apply]]
+                 as [$param, $group, $label, $cnt, $on]) {
+            if ($cnt || $on) facet_group($group, [['val' => '1', 'label' => $label, 'cnt' => $cnt]], $param, $on ? ['1'] : []);
+        }
         facet_group('Limbi străine',       $lang_options,       'lang',       $lang_sel);
         facet_group('Competențe',          $skill_options,      'skill',      $skill_sel);
         facet_group('Documente necesare',  $cred_options,       'credential', $cred_sel);

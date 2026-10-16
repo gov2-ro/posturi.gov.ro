@@ -1,0 +1,207 @@
+{
+ "responsibilities": null,
+ "educationRequirements": null,
+ "experienceRequirements": null,
+ "qualifications": null,
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": null,
+ "jobLocation": "Ștefănești, Str. Fitotronului nr. 50, județul Argeș",
+ "application_docs": null,
+ "application_fee": null,
+ "application_contact": {
+  "name": null,
+  "phone": null,
+  "email": "incdbh.stefanesti_ro@yahoo.com",
+  "address": "Ștefănești, Str. Fitotronului nr. 50, județul Argeș"
+ },
+ "education": {
+  "minimum_level": "licenta",
+  "eqf_level": 6,
+  "fields_of_study": [],
+  "specialization": null,
+  "required": true,
+  "verbatim": "copia actelor doveditoare ale studiilor (copie diplomă licență sau echivalentă/ masterat /doctotorat) după caz"
+ },
+ "experience": null,
+ "skill_list": [],
+ "language_list": [],
+ "credentials": [],
+ "contract": null,
+ "policy_domains": [
+  "educatie_cercetare",
+  "agricultura_alimentatie"
+ ],
+ "occupation_title": "Cercetător științific",
+ "seniority_hint": "principal",
+ "positions": [
+  {
+   "title": "Cercetător principal (R4)/ Cercetător științific gradul I (CS I)",
+   "count": 1,
+   "education": {
+    "minimum_level": "licenta",
+    "eqf_level": 6,
+    "fields_of_study": [],
+    "specialization": null,
+    "required": true,
+    "verbatim": "copia actelor doveditoare ale studiilor (copie diplomă licență sau echivalentă/ masterat /doctotorat) după caz"
+   },
+   "experience": null,
+   "skill_list": [],
+   "credentials": [],
+   "seniority_hint": "principal"
+  },
+  {
+   "title": "Cercetător principal (R4)/ Cercetător științific gradul I (CS I)",
+   "count": 1,
+   "education": {
+    "minimum_level": "licenta",
+    "eqf_level": 6,
+    "fields_of_study": [],
+    "specialization": null,
+    "required": true,
+    "verbatim": "copia actelor doveditoare ale studiilor (copie diplomă licență sau echivalentă/ masterat /doctotorat) după caz"
+   },
+   "experience": null,
+   "skill_list": [],
+   "credentials": [],
+   "seniority_hint": "principal"
+  },
+  {
+   "title": "Cercetător recunoscut (R3)/ Cercetător științific gradul II (CS II)",
+   "count": 1,
+   "education": {
+    "minimum_level": "licenta",
+    "eqf_level": 6,
+    "fields_of_study": [],
+    "specialization": null,
+    "required": true,
+    "verbatim": "copia actelor doveditoare ale studiilor (copie diplomă licență sau echivalentă/ masterat /doctotorat) după caz"
+   },
+   "experience": null,
+   "skill_list": [],
+   "credentials": [],
+   "seniority_hint": "superior"
+  }
+ ],
+ "exam_stages": [
+  "selectie_dosare",
+  "interviu"
+ ],
+ "bibliography_topics": [],
+ "competition_calendar": {
+  "application_deadline": "2026-09-28",
+  "application_deadline_time": "16:00",
+  "events": [
+   {
+    "stage": "publicare",
+    "date": "2026-08-28",
+    "time": null,
+    "verbatim": "publicarea anunțului",
+    "relative": null
+   },
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-28",
+    "time": "16:00",
+    "verbatim": "data limită depunere dosare de concurs",
+    "relative": null
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-09-29",
+    "time": "10:00",
+    "verbatim": "analiza dosarului de înscriere",
+    "relative": null
+   },
+   {
+    "stage": "altele",
+    "date": "2026-09-29",
+    "time": "14:00",
+    "verbatim": "avizul Compartimentului Juridic",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-09-29",
+    "time": "15:00",
+    "verbatim": "afișarea rezultatului examenului",
+    "relative": null
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-09-30",
+    "time": "14:00",
+    "verbatim": "depunerea contestațiilor",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-10-01",
+    "time": "14:00",
+    "verbatim": "soluționarea contestațiilor",
+    "relative": null
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": "2026-10-01",
+    "time": "16:00",
+    "verbatim": "comunicarea rezultatului final",
+    "relative": null
+   }
+  ]
+ },
+ "funding": null,
+ "employer_context": {
+  "sector": "cercetare",
+  "parent_institution": null,
+  "uat_type": null,
+  "uat_name": null,
+  "subordinated_to": null
+ },
+ "note_suplimentare": "- Dosarul se depune atât în format fizic la sediul institutului, cât și în format electronic la adresa de e-mail incdbh.stefanesti_ro@yahoo.com.\n- Candidații trebuie să îndeplinească standardele minimale și specifice gradului profesional pentru promovare.",
+ "recruitment": {
+  "kind": "promovare",
+  "internal_only": true
+ },
+ "vacancies_total": 3,
+ "application": {
+  "channels": [
+   "sediu",
+   "email"
+  ],
+  "window_start": null
+ },
+ "age_limit": null,
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "cv",
+   "declaratie_conformitate",
+   "cazier_judiciar",
+   "adeverinta_medicala"
+  ],
+  "specific": [
+   {
+    "label": "opisul documentelor din dosar",
+    "evidence": "opisul documentelor din dosar",
+    "roles": []
+   },
+   {
+    "label": "fișa de verificare a îndeplinirii standardelor minimale și specifice gradului profesional",
+    "evidence": "fișa de verificare a îndeplinirii standardelor minimale și specifice gradului profesional",
+    "roles": []
+   },
+   {
+    "label": "lista publicațiilor științifice",
+    "evidence": "Lista prublicațiilor științifice pecategorii, a lucrărilor, articolelor/studiilor, brevetelor considerate de candidat a fi relevante",
+    "roles": []
+   }
+  ]
+ }
+}

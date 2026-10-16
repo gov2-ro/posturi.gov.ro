@@ -408,6 +408,17 @@ class TestEvidenceRows:
         stray = rows_of({"credentials": [{"label": "X", "kind": "altele", "evidence": "permis de conducere categoria B"}]})
         assert stray[0]["status"] == "absent"
 
+    def test_v5_credentials_are_checked_against_the_source(self):
+        """BETA-V5: a v5 answer (it always carries `recruitment`) quotes its credentials."""
+        rows = rows_of({"recruitment": None, "credentials": [
+            {"label": "permis B", "kind": "permis_conducere", "evidence": "să dețină permis de conducere categoria B"},
+            {"label": "inventat", "kind": "altele", "evidence": "o frază care nu apare nicăieri în anunț"},
+            {"label": "fără citat", "kind": "altele", "evidence": None}]})
+        creds = [r for r in rows if r["fact_kind"] == "credential"]
+        assert [r["status"] for r in creds] == ["verified", "unverified", "absent"]
+        assert creds[0]["part"] == "anexe"
+        assert creds[1]["reason"] == "not_found" and creds[2]["reason"] is None
+
     def test_languages_are_not_requirement_evidence(self):
         assert "language" not in {r["fact_kind"] for r in rows_of(FLAT_SCHEMA)}
 

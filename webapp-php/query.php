@@ -16,6 +16,7 @@ const QUERY_SCALARS = [
     'q', 'sort', 'status', 'page', 'employer', 'employer_id',
     'remote', 'computer', 'salary_bucket', 'schema', 'shift', 'has_salary',
     'expires_after', 'expires_before', 'title', 'skill_mode', 'published',
+    'parttime', 'temp_vacant', 'remote_apply',
 ];
 
 /**

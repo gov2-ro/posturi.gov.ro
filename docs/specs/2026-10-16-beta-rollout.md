@@ -55,7 +55,12 @@ The next scheduled run then:
 - passes `--schema-floor 95` to check-export (OPS-FLOORS);
 - deploys the data and purges Cloudflare (if `CF_*` are in the VPS `.env`).
 
-Check after that run: `/pipeline-check`; `/versiuni.json` `data.built_at` is new; the live
+The pull also brings `classify.py` (stdlib only, 2026-10-17): the export then writes
+`work_mode`, `funding_kind`, `job_regime`, `employer_kind`, `occ_group`, `med_specialty`
+and the filtered skills; until that export the site shows those groups empty (PHP shims).
+
+Check after that run: `/pipeline-check`; the "Instituție", "Tip funcție" and "Grupă
+ocupațională" groups have counts; `/?remote=1` lists a handful, not dozens; `/versiuni.json` `data.built_at` is new; the live
 `Server-Timing` `total` for `/` against the split export (expect well under a second);
 `/statistici` shows the "Istoric" section.
 

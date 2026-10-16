@@ -2,6 +2,40 @@
 
 ## 2026
 
+### 2026-10-17 — pax's 261016 filter notes: regimes, institutions, COR tree, exclusions, a tool
+
+pax's second batch of notes (backlog § 261016 Notes, "UX & Data quality"). Commits
+`c3c45b5`…`11decdc`, none deployed. Analysis on a fresh export of the Mac's stale
+September copy (9,756 postings); a read of the live export through posturi-vps was
+refused by the auto-mode classifier, so the live numbers are still to be seen.
+
+- **Text labels, not source tags or LLM guesses (`classify.py`, stdlib, shared by the
+  export and the infer step).** The "Telemuncă" filter came from a regex that matched
+  "Remote Sensing of Environment" in bibliographies, "hibridizare" and the telework law in
+  reading lists — 3 of 22 were real; `work_mode` now needs a phrase about how this job is
+  done (and `inf_remote_eligible` follows it). EU funding was the v4 field alone (2
+  postings); SMIS codes and "finanțat prin PNRR / în cadrul proiectului … POCU" find 472.
+  The source's "Funcție publică" covered muncitori and îngrijitori; `job_regime` reads the
+  class and grade in the title or the hiring wording (a bare "grad profesional" is not
+  enough — contractual nurses have grades too). `employer_kind` names 18 institution types.
+- **Occupations as the COR tree.** COR shares ISCO-08's codes; the occupation dictionary
+  codes 63% of postings and is inconsistent across spellings of one title, so the export
+  borrows the code a title usually has — only a clear majority (5+ postings, 60%+):
+  "Muncitor calificat" has 4 postings coded 8342 (earth-moving), and borrowing that for 474
+  would be worse than the fallback's honest "7". 98% get a group. Doctors' specialties
+  (43) come from titles.
+- **Exclusions.** `?<group>_not[]=v` negates the group's own positive clause as a
+  posting-id set, so role groups exclude a posting if any role holds the value. UI: a small
+  "fără" beside the count, revealed on hover with a mouse, always on touch.
+- **"Pot aplica?" became `/pot-aplica/`.** A browser-local profile turned into the list's
+  exclusion filters (so postings that state nothing stay in); the per-posting panel is off.
+- **Smaller:** status is a select; empty URL parameters stripped; Program/Ture/Telemuncă
+  one group; home lists below the results; closed-applications notice; structured
+  requirements after the announcement; pay meter 1–5 against the open postings' quintiles;
+  soft skills out of the Competențe facet (half of all extracted skills), Excel spellings
+  merged; v5 prompt asks for specific skills (not run yet).
+- Suites: PHP all green, pytest 1,362, browser 344 (320/375/1280).
+
 ### 2026-10-17 — Reader notes on postings, CSV export from Salvate
 
 pax wants to browse postings and note what the extraction got wrong before the next LLM

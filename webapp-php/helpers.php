@@ -1350,6 +1350,8 @@ const FILTER_CHIP_GROUPS = [
     'status'         => 'Stare',
     'family'         => 'Domeniu profesional',
     'judet'          => 'Județ',
+    'loc'            => 'Localitate',
+    'published'      => 'Publicat',
     'level'          => '',
     'type'           => 'Tip',
     'categorie'      => '',
@@ -1393,7 +1395,7 @@ const MULTI_PARAMS = [
     'judet', 'level', 'type', 'categorie', 'employer_cat',
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
-    'occupation', 'funding', 'sector', 'duration', 'schedule',
+    'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc',
 ];
 
 /** Form field name for a filter param. */
@@ -1450,7 +1452,7 @@ function filter_value_label(string $key, string $value): string {
         'work_type'                        => WORK_TYPE_LABELS[$value] ?? $value,
         'exp_level'                        => bucket_label(EXP_BUCKETS, $value),
         'salary_bucket'                    => bucket_label(SALARY_BUCKETS, $value),
-        'status'                           => STATUS_LABELS[$value] ?? $value,
+        'status'                           => STATUS_LABELS[$value] ?? ($value === 'all' ? 'Toate' : $value),
         'remote'                           => 'Telemuncă',
         'schema'                           => $value === 'yes' ? 'Structurată' : 'Text brut',
         'isced'                            => isced_label($value),
@@ -1466,7 +1468,7 @@ function filter_value_label(string $key, string $value): string {
         'shift'                            => 'Lucru în ture / gărzi',
         'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
         'has_salary'                       => 'Cu salariu estimat',
-        'expires_after', 'expires_before'  => fmt_date($value),
+        'expires_after', 'expires_before', 'published' => fmt_date($value),
         'family'                           => family_label($value),
         'seniority'                        => seniority_label($value),
         'level'                            => job_level_label($value),
@@ -1781,6 +1783,19 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         $ph = implode(',', array_fill(0, count($judets), '?'));
         $where[] = "j.judet_slug IN ($ph)";
         array_push($binds, ...$judets);
+    }
+    // UX-02 (D16): localities, offered once a county is chosen (list.php).
+    $locs = array_values(array_filter(array_map('strval', (array)($p['loc'] ?? [])), fn($v) => $v !== ''));
+    if ($locs && $excl !== 'locs') {
+        $ph = implode(',', array_fill(0, count($locs), '?'));
+        $where[] = "j.locality IN ($ph)";
+        array_push($binds, ...$locs);
+    }
+    // D15: one publication day (the home page's "Noi azi" link).
+    $published = (string)($p['published'] ?? '');
+    if ($published !== '' && $excl !== 'published' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $published)) {
+        $where[] = "substr(j.published_at, 1, 10) = ?";
+        $binds[] = $published;
     }
     if ($levels && $excl !== 'levels') {
         $ph = implode(',', array_fill(0, count($levels), '?'));

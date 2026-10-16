@@ -89,7 +89,9 @@ $chips = $active_chips ?? [];
         $days = days_until($dl['date']);
         $est  = $dl['source'] === 'expirare';
     ?>
-    <li class="pg-row group hover:bg-sunken data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
+    <?php /* 261016: the whole row is the link (.pg-link's ::after covers the row);
+       the employer link and the save/hide buttons sit above it (assets/app.css). */ ?>
+    <li class="pg-row group relative data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p) ?> data-pref-hideable>
       <div class="flex items-start justify-between gap-4">
         <div class="min-w-0 flex-1">
           <?php $dt = display_title($p); ?>
@@ -97,7 +99,7 @@ $chips = $active_chips ?? [];
              with the title's last word). The <h2> is inline so they can; the
              buttons stay outside it and outside the link. */ ?>
           <div class="pg-title leading-snug">
-            <h2 class="font-display inline text-lg font-semibold italic text-ink"><a href="<?= e(job_url($p)) ?>" class="transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"><?= e($dt['primary']) ?></a></h2><?= pref_controls($p) ?>
+            <h2 class="font-display inline text-lg font-semibold italic text-ink"><a href="<?= e(job_url($p)) ?>" class="pg-link transition-colors group-hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"><?= e($dt['primary']) ?></a></h2><?= pref_controls($p) ?>
           </div>
           <?php if ($dt['secondary']): ?>
             <p class="pg-sub truncate text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></p>
@@ -111,57 +113,38 @@ $chips = $active_chips ?? [];
               <span aria-hidden="true" class="text-ink-muted">·</span>
               <span class="pg-place"><?= e($place) ?></span>
             <?php endif; ?>
-            <?php if ($p['published_at']): ?>
-              <span aria-hidden="true" class="pg-pub text-ink-muted">·</span>
-              <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>" class="pg-pub font-mono"><?= fmt_date($p['published_at']) ?></time>
-            <?php endif; ?>
           </div>
 
-          <?php /* Pay: the stated salary, else the draft-grid estimate, always labelled
-             (list_salary()). In the table view this is the Salariu column. */ ?>
-          <?php if ($sal = list_salary($p)): ?>
-            <p class="pg-salary mt-1 text-xs text-ink-muted">
-              <span class="pg-salary-label"><?= e($sal['label']) ?></span>
-              <span class="pg-salary-amount whitespace-nowrap"><span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span>
-              <span class="pg-salary-unit">brut</span></span>
-              <span class="pg-salary-kind"><?= $sal['estimated'] ? 'estimare' : 'din anunț' ?></span>
-            </p>
-          <?php endif; ?>
-
-          <?php /* Badges */ ?>
-          <div class="pg-badges mt-2 flex flex-wrap gap-1.5">
-            <?php if ($p['job_level']): ?>
-              <span class="px-1.5 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'border border-info-line bg-info text-info-ink' : 'border border-neutral-line bg-neutral text-neutral-ink' ?>">
-                <?= e($p['job_level']) ?>
+          <?php /* One line of facts, no boxes (261016): pay first — 💰, the amount and,
+             for the draft-grid estimate, "(estimat)" (list_salary(): the stated
+             salary wins) — then the source's own labels, then the inferred ones
+             behind the "auto" marker. In the table view the line dissolves
+             (display: contents): pay becomes the Salariu column, the rest hides. */ ?>
+          <?php $sal = list_salary($p); $meta = inferred_meta($p);
+                $labels = array_values(array_filter([
+                    $p['job_level'] ? job_level_label((string)$p['job_level']) : '',
+                    (string)($p['job_type'] ?? ''),
+                    (string)($p['categorie'] ?? ''),
+                    ($p['nr_posturi'] ?? 0) > 1 ? $p['nr_posturi'] . ' posturi' : '',
+                ], fn($v) => $v !== '')); ?>
+          <?php if ($sal || $labels || $meta): ?>
+          <p class="pg-facts mt-1 text-xs leading-relaxed text-ink-muted">
+            <?php if ($sal): ?>
+              <span class="pg-salary whitespace-nowrap" title="<?= e($sal['label']) ?> (brut lunar)">
+                <span class="pg-salary-label" role="img" aria-label="<?= e($sal['label']) ?>">💰</span>
+                <span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
+                <span class="pg-salary-kind">(estimat)</span><?php endif; ?>
               </span>
             <?php endif; ?>
-            <?php if ($p['job_type']): ?>
-              <span class="border border-neutral-line bg-neutral px-1.5 py-0.5 text-xs text-neutral-ink"><?= e($p['job_type']) ?></span>
+            <?php if ($labels): ?>
+              <span class="pg-badges"><?php foreach ($labels as $i => $l): ?><?php if ($i || $sal): ?><span aria-hidden="true" class="pg-sep"> · </span><?php endif; ?><span><?= e($l) ?></span><?php endforeach; ?></span>
             <?php endif; ?>
-            <?php if ($p['categorie']): ?>
-              <span class="px-1.5 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'border border-ok-line bg-ok text-ok-ink' : 'border border-note-line bg-note text-note-ink' ?>">
-                <?= e($p['categorie']) ?>
-              </span>
+            <?php if ($meta): ?>
+              <span class="pg-auto"><?php if ($sal || $labels): ?><span aria-hidden="true" class="pg-sep"> · </span><?php endif; ?><abbr title="Atribute deduse automat din textul anunțului — pot fi incomplete sau greșite. Vezi metodologia."
+                  class="cursor-help font-mono text-[10px] uppercase tracking-wider no-underline decoration-dotted underline-offset-2 [text-decoration:underline]">auto</abbr>
+                <?php foreach ($meta as $k => $item): ?><?php if ($k): ?><span aria-hidden="true" class="pg-sep"> · </span><?php endif; ?><span><?= e($item) ?></span><?php endforeach; ?></span>
             <?php endif; ?>
-            <?php if (($p['nr_posturi'] ?? 0) > 1): ?>
-              <span class="border border-info-line bg-gov-light px-1.5 py-0.5 font-mono text-xs text-gov">
-                <?= $p['nr_posturi'] ?> posturi
-              </span>
-            <?php endif; ?>
-          </div>
-
-          <?php /* Derived attributes. Visually separated from the badges above,
-               which come straight from the source; these are inferred. */ ?>
-          <?php $meta = inferred_meta($p); ?>
-          <?php if ($meta): ?>
-          <div class="pg-auto mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
-            <abbr title="Atribute deduse automat din textul anunțului — pot fi incomplete sau greșite. Vezi metodologia."
-                  class="cursor-help font-mono text-[10px] uppercase tracking-wider text-ink-muted no-underline decoration-dotted underline-offset-2 [text-decoration:underline]">auto</abbr>
-            <?php foreach ($meta as $k => $item): ?>
-              <?php if ($k): ?><span aria-hidden="true" class="text-line">·</span><?php endif; ?>
-              <span><?= e($item) ?></span>
-            <?php endforeach; ?>
-          </div>
+          </p>
           <?php endif; ?>
         </div>
 

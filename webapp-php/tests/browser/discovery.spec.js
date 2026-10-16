@@ -135,112 +135,104 @@ test('deadline wording is visible without hovering', async ({ page }, testInfo) 
   await noOverflow(page, 'detail page');
 });
 
-test('bookmarked advanced and diagnostic selections open every ancestor and are removable', async ({ page }, testInfo) => {
+test('bookmarked selections open their own group; legacy params ride along and are removable', async ({ page }, testInfo) => {
+  // BETA-FILTERS: one flat list. anomaly and type lost their controls but still filter.
   await page.goto('/?status=all&anomaly%5B%5D=missing_contact&type%5B%5D=Temporar&exp_level%5B%5D=5plus');
   const open = await openKeys(page);
-  for (const k of ['more', 'diagnostics', 'anomaly', 'legacy', 'type', 'experienta', 'exp_level']) {
-    expect(open, k).toContain(k);
-  }
+  expect(open).toContain('exp_level');
   for (const k of ['family', 'judet']) {
     if (isNarrow(page)) expect(open, k).toContain(k); else expect(open, k).not.toContain(k);
   }
-  expect(open).not.toContain('contract');
-  expect(open).not.toContain('studii');
-  await noOverflow(page, 'advanced selection');
+  expect(open.filter((k) => !['exp_level', 'family', 'judet'].includes(k))).toEqual([]);
+  await expect(page.locator('input[type="hidden"][name="anomaly[]"][value="missing_contact"]')).toHaveCount(1);
+  await noOverflow(page, 'selection with legacy params');
   await openPanel(page);
   await shot(page, testInfo, 'selected-advanced');
 
   await closePanel(page);
-  // Remove the diagnostic one through its chip: it leaves the URL and the form.
   await page.locator('[data-chip-param="anomaly"]').click();
   await expect(page).not.toHaveURL(/anomaly/);
-  await expect(page.locator('input[name="anomaly[]"][value="missing_contact"]')).toHaveCount(0)
-    .catch(() => {}); // the group may disappear with its last value
-  // Ancestors of the still-selected values are still open after the OOB swap.
-  const after = await openKeys(page);
-  for (const k of ['legacy', 'type', 'more', 'experienta', 'exp_level']) expect(after, k).toContain(k);
-  expect(after).not.toContain('diagnostics');
+  await expect(page).toHaveURL(/type%5B%5D=Temporar/);   // the other hidden one survives the swap
+  await expect(page.locator('input[name="anomaly[]"]')).toHaveCount(0);
+  expect(await openKeys(page)).toContain('exp_level');
 });
 
 test('nested disclosures, focus and reader preferences survive an OOB swap', async ({ page }) => {
   await page.goto('/?status=all');
   await openPanel(page);
-  await openFacet(page, 'studii');
-  await openFacet(page, 'eqf');
-  const box = page.locator('input[name="eqf[]"][value="4"]');
+  await openFacet(page, 'studies_level');
+  const box = page.locator('input[name="studies_level[]"][value="licenta"]');
   await box.focus();
   await box.press('Space');
-  await expect(page).toHaveURL(/eqf%5B%5D=4/);
+  await expect(page).toHaveURL(/studies_level%5B%5D=licenta/);
   await expect(box).toBeChecked();
   await expect(box).toBeFocused();
-  // Reader opened Studii and Nivel de studii: both stay open after the swap.
-  expect(await isOpen(page, 'studii')).toBe(true);
-  expect(await isOpen(page, 'eqf')).toBe(true);
+  expect(await isOpen(page, 'studies_level')).toBe(true);
   // A group the reader opened by hand (and that holds no selection) stays open…
-  await openFacet(page, 'contract');
-  await page.locator('[name="status"][value="active"]').check({ force: true });
+  await openFacet(page, 'duration');
+  // ?status=all leaves no tab current (UX-01B), so this is a real change and a real
+  // swap: click the tab (the drawer covers it on phones, so close it first).
+  await closePanel(page);
+  await page.locator('label:has([name="status"][value="active"])').click();
   await expect(page).toHaveURL(/status=active/);
-  expect(await isOpen(page, 'contract')).toBe(true);
-  // …and one the reader closed stays closed, while selected ancestors cannot be closed.
-  await page.locator('details[data-facet="contract"] > summary').click();
+  await openPanel(page);
+  await expect.poll(() => isOpen(page, 'duration')).toBe(true);
+  // …and one the reader closed stays closed, while a group with a selection stays open.
+  await page.locator('details[data-facet="duration"] > summary').click();
   await page.selectOption('#sort', 'employer');
   await expect(page).toHaveURL(/sort=employer/);
-  expect(await isOpen(page, 'contract')).toBe(false);
-  expect(await isOpen(page, 'studii')).toBe(true);
+  expect(await isOpen(page, 'duration')).toBe(false);
+  expect(await isOpen(page, 'studies_level')).toBe(true);
   await noOverflow(page, 'after swaps');
 });
 
 test('selection survives reload and history; ancestors reopen', async ({ page }) => {
   await page.goto('/?status=all');
   await openPanel(page);
-  await openFacet(page, 'experienta');
   await openFacet(page, 'skill');
   await page.locator('input[name="skill[]"][value="Excel"]').check();
   await expect(page).toHaveURL(/skill%5B%5D=Excel/);
   await page.reload();
   await expect(page.locator('input[name="skill[]"][value="Excel"]')).toBeChecked();
-  expect(await isOpen(page, 'experienta')).toBe(true);
   expect(await isOpen(page, 'skill')).toBe(true);
   const countAfter = (await page.locator('#results .font-mono.font-medium').first().textContent()).trim();
 
   await openPanel(page);
-  await openFacet(page, 'studii');
-  await openFacet(page, 'eqf');
-  await page.locator('input[name="eqf[]"][value="4"]').check();
-  await expect(page).toHaveURL(/eqf%5B%5D=4/);
+  await openFacet(page, 'studies_level');
+  await page.locator('input[name="studies_level[]"][value="licenta"]').check();
+  await expect(page).toHaveURL(/studies_level%5B%5D=licenta/);
   await page.goBack();
-  await expect(page).not.toHaveURL(/eqf/);
+  await expect(page).not.toHaveURL(/studies_level/);
   await expect(page.locator('input[name="skill[]"][value="Excel"]')).toBeChecked();
-  await expect(page.locator('input[name="eqf[]"][value="4"]')).not.toBeChecked();
+  await expect(page.locator('input[name="studies_level[]"][value="licenta"]')).not.toBeChecked();
   expect((await page.locator('#results .font-mono.font-medium').first().textContent()).trim()).toBe(countAfter);
   await page.goForward();
-  await expect(page).toHaveURL(/eqf%5B%5D=4/);
-  await expect(page.locator('input[name="eqf[]"][value="4"]')).toBeChecked();
-  expect(await isOpen(page, 'studii')).toBe(true);
+  await expect(page).toHaveURL(/studies_level%5B%5D=licenta/);
+  await expect(page.locator('input[name="studies_level[]"][value="licenta"]')).toBeChecked();
+  expect(await isOpen(page, 'studies_level')).toBe(true);
 });
 
 test('Escape closes the drawer and keeps selections (mobile)', async ({ page }) => {
   test.skip(!isNarrow(page), 'drawer is mobile-only');
   await page.goto('/?status=all');
   await openPanel(page);
-  await openFacet(page, 'studii');
-  await openFacet(page, 'eqf');
-  await page.locator('input[name="eqf[]"][value="4"]').check();
-  await expect(page).toHaveURL(/eqf%5B%5D=4/);
+  await openFacet(page, 'studies_level');
+  await page.locator('input[name="studies_level[]"][value="licenta"]').check();
+  await expect(page).toHaveURL(/studies_level%5B%5D=licenta/);
   // Let the swap settle (it hands focus back to the checkbox) before Escape.
-  await expect(page.locator('input[name="eqf[]"][value="4"]')).toBeFocused();
-  await expect(page.locator('#filter-count')).toHaveText('1');   // the EQF chip (status falls back to the default)
+  await expect(page.locator('input[name="studies_level[]"][value="licenta"]')).toBeFocused();
+  await expect(page.locator('#filter-count')).toHaveText('1');   // the study-level chip (status falls back to the default)
   await page.keyboard.press('Escape');
   await expect(page.locator('#filter-toggle')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#filter-toggle')).toBeFocused();
-  await expect(page.locator('input[name="eqf[]"][value="4"]')).toBeChecked();
+  await expect(page.locator('input[name="studies_level[]"][value="licenta"]')).toBeChecked();
 });
 
 test('unfamiliar and employer-scope values keep their controls', async ({ page }) => {
   await page.goto('/?status=all&duration%5B%5D=zz_nou');
   await openPanel(page);
   await expect(page.locator('input[name="duration[]"][value="zz_nou"]')).toBeChecked();
-  expect(await isOpen(page, 'contract')).toBe(true);
+  expect(await isOpen(page, 'duration')).toBe(true);
 
   await page.goto('/?employer=spitalul-clinic-judetean-cluj');
   await expect(page.locator('#results li')).toHaveCount(3);
@@ -263,7 +255,6 @@ test('feed links follow filters through HTMX, chips, pagination and history', as
   await expectFeedsKeep(page, { judet: ['ilfov'] });
 
   await openPanel(page);
-  await openFacet(page, 'experienta');
   await openFacet(page, 'skill');
   await page.locator('input[name="skill[]"][value="Excel"]').check();
   await expect(page).toHaveURL(/skill%5B%5D=Excel/);

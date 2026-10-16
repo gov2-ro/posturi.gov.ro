@@ -119,171 +119,81 @@
             <?php
         }
 
-        /**
-         * A parent disclosure: groups related controls under one heading.
-         * Open when any control inside it holds a selection (the same rule as a
-         * single group, applied to every ancestor), never otherwise by default.
-         * Renders nothing when it has no content and no selection, so the
-         * v3/v4 groups still stay invisible until their data exists.
-         *
-         * @param string[] $params   query parameters living anywhere inside it
-         */
-        function facet_parent(string $key, string $label, array $params, callable $body, string $note = '', bool $nested = false): void {
-            global $facet_sel;
-            $on = false;
-            foreach ($params as $param) {
-                foreach ((array)($facet_sel[$param] ?? []) as $v) {
-                    if ((string)$v !== '') { $on = true; break 2; }
-                }
-            }
-            ob_start();
-            $body();
-            $html = ob_get_clean();
-            if (trim($html) === '' && !$on) return;
-            ?>
-            <details class="facet-group facet-parent <?= $nested ? 'mt-1 border-l border-line pl-2' : 'mt-2 border-t border-line pt-2' ?>"
-                     data-facet="<?= e($key) ?>"<?= $on ? ' data-selected="1" open' : '' ?>>
-              <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest <?= $nested ? 'text-ink-muted hover:text-ink' : 'text-gov' ?> marker:content-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-                <span><?= e($label) ?></span>
-                <span aria-hidden="true" class="facet-caret transition-transform">▾</span>
-              </summary>
-              <div class="facet-body">
-              <?php if ($note !== ''): ?>
-                <p class="facet-help mb-1.5 text-[11px] leading-snug text-ink-muted"><?= e($note) ?></p>
-              <?php endif; ?>
-              <div class="pt-1"><?= $html ?></div>
-              </div>
-            </details>
-            <?php
+        // BETA-FILTERS (D4, UX-01, 261016): every group at the top level, nothing
+        // behind "Mai multe filtre", the salary included; overlapping controls
+        // merged (see list.php). Parameters that lost their control still filter:
+        // they ride along as hidden fields, so the next change keeps them, and
+        // their chip removes them.
+        foreach (['type' => $types, 'seniority' => $seniorities, 'work_type' => $work_types,
+                  'anomaly' => $anomaly_flags, 'stage' => $stage_sel, 'eqf' => $eqf_sel] as $param => $vals) {
+            foreach ((array)$vals as $v) {
+                if ((string)$v === '') continue; ?>
+        <input type="hidden" name="<?= e(param_field($param)) ?>" value="<?= e((string)$v) ?>">
+        <?php }
         }
-
-        // Selections by query parameter, so a parent can tell whether anything
-        // inside it is switched on (`facet_parent()` reads this).
-        $facet_sel = [
-            'judet' => $judet_slugs, 'family' => $families, 'occupation' => $occ_sel,
-            'eqf' => $eqf_sel, 'isced' => $isced_sel, 'studies_level' => $studies_lvls,
-            'exp_level' => $exp_levels, 'skill' => $skill_sel, 'lang' => $lang_sel, 'credential' => $cred_sel,
-            'duration' => $duration_sel, 'schedule' => $schedule_sel,
-            'shift' => $shift ? ['1'] : [], 'remote' => $remote ? ['1'] : [],
-            'salary_bucket' => $sal_bucket ? [$sal_bucket] : [], 'sector' => $sector_sel, 'funding' => $funding_sel,
-            'domain' => $domain_sel, 'stage' => $stage_sel,
-            'expires_after' => [$exp_after], 'expires_before' => [$exp_before],
-            'has_salary' => $has_salary ? ['1'] : [], 'computer' => $computer ? [$computer] : [],
-            'level' => $levels, 'type' => $types, 'categorie' => $categories, 'seniority' => $seniorities,
-            'work_type' => $work_types, 'employer_cat' => $emp_cats,
-            'anomaly' => $anomaly_flags, 'schema' => $schema_filter ? [$schema_filter] : [],
-        ];
+        foreach (['schema' => $schema_filter, 'has_salary' => $has_salary, 'computer' => $computer, 'published' => $published] as $param => $v) {
+            if ((string)$v === '') continue; ?>
+        <input type="hidden" name="<?= e($param) ?>" value="<?= e((string)$v) ?>">
+        <?php }
 
         $auto_help = 'Clasificare automată din textul anunțului; poate fi incompletă. Cerințele valabile sunt cele din anunțul oficial.';
 
-        // --- Location and profession. Every group starts collapsed on desktop;
-        //     in the small-screen drawer Județ and Domeniu profesional start
-        //     open (data-default-open), Ocupație, the finer cut, closed.
-        facet_group('Județ',                $judet_options,      'judet',      $judet_slugs, true);
-        facet_group('Domeniu profesional',  $family_options,     'family',     $families,    true, $auto_help);
-        facet_group('Ocupație',             $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
-
-        // --- Education. EQF is a nominal exact level per posting, the ISCED
-        //     field is a different axis, and the text-derived level is the
-        //     legacy field: three controls, none merged in SQL.
-        facet_parent('studii', 'Studii', ['eqf', 'isced', 'studies_level'], function () use ($eqf_options, $eqf_sel, $isced_options, $isced_sel, $studies_options, $studies_lvls) {
-            facet_group('Nivel de studii (EQF)',        $eqf_options,     'eqf',           $eqf_sel);
-            facet_group('Domeniu de studii',            $isced_options,   'isced',         $isced_sel);
-            facet_group('Studii identificate în text',  $studies_options, 'studies_level', $studies_lvls);
-        }, 'Nivelurile filtrează cerințele anunțului, nu stabilesc dacă te califici.');
-
-        // --- Experience, skills and documents.
-        facet_parent('experienta', 'Experiență și cerințe', ['exp_level', 'skill', 'lang', 'credential'], function () use ($exp_options, $exp_levels, $skill_options, $skill_sel, $lang_options, $lang_sel, $cred_options, $cred_sel, $auto_help) {
-            facet_group('Experiență minimă',  $exp_options,   'exp_level',  $exp_levels, false,
-                        $auto_help . ' Unele intervale includ anunțuri fără experiență precizată.');
-            facet_group('Competențe',         $skill_options, 'skill',      $skill_sel);
-            facet_group('Limbi străine',      $lang_options,  'lang',       $lang_sel);
-            facet_group('Documente necesare', $cred_options,  'credential', $cred_sel);
-        });
-
-        // --- Contract and working pattern.
-        facet_parent('contract', 'Contract și program', ['duration', 'schedule', 'shift', 'remote'], function () use ($duration_options, $duration_sel, $schedule_options, $schedule_sel, $shift_count, $shift, $remote_count, $remote) {
-            facet_group('Contract', $duration_options, 'duration', $duration_sel);
-            facet_group('Program',  $schedule_options, 'schedule', $schedule_sel);
-            if ($shift_count || $shift) {
-                facet_group('Lucru în ture', [['val' => '1', 'label' => 'Ture, gărzi sau weekend', 'cnt' => $shift_count]],
-                            'shift', $shift ? ['1'] : []);
-            }
-            if ($remote_count || $remote) {
-                facet_group('Telemuncă', [['val' => '1', 'label' => 'Disponibil remote', 'cnt' => $remote_count]],
-                            'remote', $remote ? ['1'] : []);
-            }
-        });
+        // Every group starts collapsed on desktop; in the small-screen drawer
+        // Județ and Domeniu profesional start open (data-default-open).
+        facet_group('Județ',               $judet_options,      'judet',      $judet_slugs, true);
+        facet_group('Localitate',          $loc_options,        'loc',        $loc_sel);
+        facet_group('Domeniu profesional', $family_options,     'family',     $families,    true, $auto_help);
+        facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
+        // Estimated from the 2026 draft grid unless the posting states a salary.
+        facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket ? [$sal_bucket] : [], false,
+                    'Salariul anunțat, altfel cel estimat din grila de salarizare propusă (brut lunar).');
+        facet_group('Nivel de studii',     $studies_options,    'studies_level', $studies_lvls, false,
+                    'Nivelul cerut de anunț; nu stabilește dacă vă calificați.');
+        facet_group('Domeniu de studii',   $isced_options,      'isced',      $isced_sel);
+        facet_group('Experiență minimă',   $exp_options,        'exp_level',  $exp_levels, false,
+                    $auto_help . ' Unele intervale includ anunțuri fără experiență precizată.');
+        facet_group('Funcție',             $level_options,      'level',      $levels);
+        facet_group('Categorie',           $cat_options,        'categorie',  $categories);
+        facet_group('Tip angajator',       $emp_cat_options,    'employer_cat', $emp_cats, false,
+                    'Eticheta din sursă (posturi.gov.ro).');
+        facet_group('Contract',            $duration_options,   'duration',   $duration_sel);
+        facet_group('Program',             $schedule_options,   'schedule',   $schedule_sel);
+        if ($shift_count || $shift) {
+            facet_group('Ture', [['val' => '1', 'label' => 'Ture, gărzi sau weekend', 'cnt' => $shift_count]],
+                        'shift', $shift ? ['1'] : []);
+        }
+        if ($remote_count || $remote) {
+            facet_group('Telemuncă', [['val' => '1', 'label' => 'Disponibil remote', 'cnt' => $remote_count]],
+                        'remote', $remote ? ['1'] : []);
+        }
+        facet_group('Limbi străine',       $lang_options,       'lang',       $lang_sel);
+        facet_group('Competențe',          $skill_options,      'skill',      $skill_sel);
+        facet_group('Documente necesare',  $cred_options,       'credential', $cred_sel);
+        facet_group('Finanțare',           $funding_options,    'funding',    $funding_sel);
+        facet_group('Sector angajator',    $sector_options,     'sector',     $sector_sel);
+        facet_group('Domeniu de activitate', $domain_options,   'domain',     $domain_sel);
+        $dates_on = $exp_after !== '' || $exp_before !== '';
         ?>
-
-        <!-- More filters -->
-        <?php
-        facet_parent('more', 'Mai multe filtre',
-            ['salary_bucket', 'has_salary', 'sector', 'funding', 'domain', 'stage', 'expires_after', 'expires_before',
-             'level', 'type', 'categorie', 'seniority', 'work_type', 'employer_cat', 'computer', 'anomaly', 'schema'],
-            function () use ($salary_options, $sal_bucket, $has_salary, $sector_options, $sector_sel, $funding_options, $funding_sel,
-                             $domain_options, $domain_sel, $stage_options, $stage_sel, $exp_after, $exp_before, $computer,
-                             $level_options, $levels, $type_options, $types, $cat_options, $categories,
-                             $seniority_options, $seniorities, $work_type_options, $work_types, $emp_cat_options, $emp_cats,
-                             $anomaly_options, $anomaly_flags, $schema_options, $schema_filter) {
-            // Estimated from the 2026 draft grid, not announced — postings
-            // essentially never state a salary. See pages/detail.php for the
-            // per-posting breakdown and the legal-status disclaimer.
-            facet_group('Salariu estimat', $salary_options, 'salary_bucket', $sal_bucket ? [$sal_bucket] : []);
-            // Legacy links only: `?has_salary=1` (a landing shortcut) and
-            // `?computer=` have no sidebar control of their own, so an active
-            // one is shown as a removable checkbox instead of being dropped by
-            // the next unrelated form change.
-            if ($has_salary) {
-                facet_group('Cu salariu estimat', [['val' => '1', 'label' => 'Doar cu salariu estimat', 'cnt' => '']], 'has_salary', ['1']);
-            }
-            if ($computer) {
-                facet_group('Calculator', [['val' => $computer, 'label' => filter_value_label('computer', $computer), 'cnt' => '']], 'computer', [$computer]);
-            }
-            facet_group('Sector angajator',     $sector_options,  'sector',  $sector_sel);
-            facet_group('Finanțare',            $funding_options, 'funding', $funding_sel);
-            facet_group('Domeniu de activitate', $domain_options, 'domain',  $domain_sel);
-            facet_group('Etape concurs',        $stage_options,   'stage',   $stage_sel);
-            ?>
-            <fieldset class="mb-4 pt-2">
-              <legend class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Termen limită exact</legend>
-              <div class="space-y-1.5">
-                <div>
-                  <label for="expires_after" class="text-xs text-ink-muted">De la</label>
-                  <input type="date" id="expires_after" name="expires_after" value="<?= e($exp_after) ?>"
-                         class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-                </div>
-                <div>
-                  <label for="expires_before" class="text-xs text-ink-muted">Până la</label>
-                  <input type="date" id="expires_before" name="expires_before" value="<?= e($exp_before) ?>"
-                         class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-                </div>
+        <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="termen"<?= $dates_on ? ' data-selected="1" open' : '' ?>>
+          <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-ink-muted marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+            <span>Termen limită</span>
+            <span aria-hidden="true" class="facet-caret text-ink-muted transition-transform">▾</span>
+          </summary>
+          <div class="facet-body">
+            <div class="space-y-1.5 pb-2">
+              <div>
+                <label for="expires_after" class="text-xs text-ink-muted">De la</label>
+                <input type="date" id="expires_after" name="expires_after" value="<?= e($exp_after) ?>"
+                       class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
               </div>
-            </fieldset>
-            <?php
-            // The source's own labels sit beside the automatic ones, which is
-            // easy to read as one list. They stay separate controls (no SQL is
-            // merged), together under a heading that says where they come from.
-            facet_parent('legacy', 'Clasificări din sursă și text',
-                ['level', 'type', 'categorie', 'seniority', 'work_type', 'employer_cat'],
-                function () use ($level_options, $levels, $type_options, $types, $cat_options, $categories,
-                                 $seniority_options, $seniorities, $work_type_options, $work_types, $emp_cat_options, $emp_cats) {
-                    facet_group('Nivel',        $level_options,     'level',        $levels);
-                    facet_group('Tip',          $type_options,      'type',         $types);
-                    facet_group('Categorie',    $cat_options,       'categorie',    $categories);
-                    facet_group('Grad/funcție', $seniority_options, 'seniority',    $seniorities);
-                    facet_group('Tip normă',    $work_type_options, 'work_type',    $work_types);
-                    facet_group('Angajator',    $emp_cat_options,   'employer_cat', $emp_cats);
-                },
-                'Unele etichete vin direct din anunț, altele sunt deduse automat din text; nu sunt echivalente.', true);
-
-            facet_parent('diagnostics', 'Diagnostic date', ['anomaly', 'schema'],
-                function () use ($anomaly_options, $anomaly_flags, $schema_options, $schema_filter) {
-                    facet_group('Anomalii', $anomaly_options, 'anomaly', $anomaly_flags);
-                    facet_group('Descriere', $schema_options, 'schema', $schema_filter ? [$schema_filter] : []);
-                }, '', true);
-        });
-        ?>
+              <div>
+                <label for="expires_before" class="text-xs text-ink-muted">Până la</label>
+                <input type="date" id="expires_before" name="expires_before" value="<?= e($exp_before) ?>"
+                       class="mt-0.5 w-full rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+              </div>
+            </div>
+          </div>
+        </details>
 
         <?php if ($active_chips): ?>
           <a href="/" class="pg-clear mt-2 block py-1 text-center text-xs text-gov hover:underline">✕ Șterge filtrele</a>

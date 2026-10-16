@@ -116,25 +116,23 @@ run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the 
     foreach (xpath_for($home)->query('//details[contains(@class,"facet-group") and @data-default-open]') as $d) $defaults[] = $d->getAttribute('data-facet');
     sort($defaults);
     assert_same(['family', 'judet'], $defaults, 'the small-screen drawer opens these two (list.php script)');
-    // The grouping that replaces the flat list.
+    // BETA-FILTERS (D4, 261016): one flat list, nothing nested, nothing behind "Mai multe filtre".
     $anc = facet_ancestors($home);
-    foreach (['eqf', 'isced', 'studies_level'] as $k) assert_same(['studii'], $anc[$k] ?? null, "$k is under Studii");
-    foreach (['exp_level', 'skill', 'lang', 'credential'] as $k) assert_same(['experienta'], $anc[$k] ?? null, "$k is under Experiență și cerințe");
-    foreach (['duration', 'schedule', 'shift', 'remote'] as $k) assert_same(['contract'], $anc[$k] ?? null, "$k is under Contract și program");
-    foreach (['level', 'type', 'categorie', 'seniority', 'work_type', 'employer_cat'] as $k) {
-        assert_same(['legacy', 'more'], $anc[$k] ?? null, "$k is under Clasificări din sursă și text");
+    foreach ($anc as $k => $parents) assert_same([], $parents, "$k is a top-level group");
+    foreach (['judet', 'family', 'occupation', 'studies_level', 'isced', 'exp_level', 'level', 'categorie',
+              'employer_cat', 'duration', 'schedule', 'shift', 'remote', 'lang', 'skill', 'credential',
+              'funding', 'sector', 'domain', 'termen'] as $k) {
+        assert_true(array_key_exists($k, $anc), "group $k is offered");
     }
-    foreach (['anomaly', 'schema'] as $k) assert_same(['diagnostics', 'more'], $anc[$k] ?? null, "$k is under Diagnostic date");
-    // salary_bucket is gated on >= 100 estimated rows, which the fixture lacks.
-    foreach (['sector', 'funding', 'domain', 'stage'] as $k) assert_same(['more'], $anc[$k] ?? null, "$k is under Mai multe filtre");
-    assert_same([], $anc['judet'] ?? null, 'Județ is top level');
-    assert_same([], $anc['occupation'] ?? null, 'Ocupație is top level');
-    foreach (['Studii', 'Experiență și cerințe', 'Contract și program', 'Mai multe filtre',
-              'Clasificări din sursă și text', 'Diagnostic date', 'Domeniu profesional', 'Nivel de studii (EQF)',
-              'Studii identificate în text', 'Domeniu de activitate'] as $label) {
+    foreach (['eqf', 'type', 'seniority', 'work_type', 'anomaly', 'schema', 'stage', 'more', 'studii', 'legacy', 'diagnostics'] as $k) {
+        assert_false(array_key_exists($k, $anc), "no $k group (merged or dropped)");
+    }
+    assert_false(array_key_exists('loc', $anc), 'Localitate waits for a county');
+    assert_not_contains('Mai multe filtre', $home, 'no "more filters" bundle');
+    foreach (['Domeniu profesional', 'Nivel de studii', 'Experiență minimă', 'Contract', 'Termen limită', 'Domeniu de activitate'] as $label) {
         assert_contains($label, $home, "heading $label");
     }
-    assert_contains('Nivelurile filtrează cerințele anunțului, nu stabilesc dacă te califici.', $home, 'education explanation');
+    assert_contains('nu stabilește dacă vă calificați', $home, 'education explanation');
     assert_contains('Unele intervale includ anunțuri fără experiență precizată.', $home, 'experience bucket explanation');
     assert_contains('Clasificare automată din textul anunțului', $home, 'automatic-classification help');
     assert_contains('anunțul oficial', $home, 'help points to the official announcement');
@@ -155,78 +153,83 @@ run_suite('no input appears under two headings', function () use ($base) {
     foreach (['expires_after', 'expires_before'] as $n) {
         assert_same(1, substr_count($home, 'name="' . $n . '"'), "$n field exists once");
     }
-    // Every parameter the old sidebar exposed still has a control.
-    foreach (['judet[]', 'family[]', 'occupation[]', 'eqf[]', 'isced[]', 'studies_level[]', 'exp_level[]', 'skill[]',
-              'lang[]', 'credential[]', 'duration[]', 'schedule[]', 'shift', 'remote', 'salary_bucket[]', 'sector[]',
-              'funding[]', 'domain[]', 'stage[]', 'level[]', 'type[]', 'categorie[]', 'seniority[]', 'work_type[]',
-              'employer_cat[]', 'anomaly[]', 'schema[]'] as $name) {
-        if ($name === 'salary_bucket[]') continue;   // gated: see above
-        $field = $name === 'schema[]' ? 'schema' : $name;
-        assert_true(str_contains($home, 'name="' . $field . '"'), "control for $name");
+    foreach (['judet[]', 'family[]', 'occupation[]', 'isced[]', 'studies_level[]', 'exp_level[]', 'skill[]',
+              'lang[]', 'credential[]', 'duration[]', 'schedule[]', 'shift', 'remote', 'sector[]',
+              'funding[]', 'domain[]', 'level[]', 'categorie[]', 'employer_cat[]'] as $name) {
+        assert_true(str_contains($home, 'name="' . $name . '"'), "control for $name");
     }
 });
 
-run_suite('a bookmarked selection opens every ancestor and stays removable', function () use ($base) {
+run_suite('a bookmarked selection opens its group and stays removable', function () use ($base) {
     $cases = [
-        'eqf[]=4'                       => [['eqf', 'studii'], 'eqf[]', '4'],
-        'isced[]=04_afaceri_administratie_drept' => [['isced', 'studii'], 'isced[]', '04_afaceri_administratie_drept'],
-        'studies_level[]=licenta'       => [['studies_level', 'studii'], 'studies_level[]', 'licenta'],
-        'skill[]=Excel'                 => [['skill', 'experienta'], 'skill[]', 'Excel'],
-        'exp_level[]=1-2'               => [['exp_level', 'experienta'], 'exp_level[]', '1-2'],
-        'duration[]=determinata'        => [['duration', 'contract'], 'duration[]', 'determinata'],
-        'shift=1'                       => [['shift', 'contract'], 'shift', '1'],
-        'funding[]=buget_local'         => [['funding', 'more'], 'funding[]', 'buget_local'],
-        'type[]=Permanent'              => [['type', 'legacy', 'more'], 'type[]', 'Permanent'],
-        'level[]=executie'              => [['level', 'legacy', 'more'], 'level[]', 'executie'],
-        'employer_cat[]=' . rawurlencode('Funcție publică') => [['employer_cat', 'legacy', 'more'], 'employer_cat[]', 'Funcție publică'],
-        'anomaly[]=missing_contact'     => [['anomaly', 'diagnostics', 'more'], 'anomaly[]', 'missing_contact'],
-        'schema=yes'                    => [['schema', 'diagnostics', 'more'], 'schema', 'yes'],
-        'computer=nesolicitat'          => [['computer', 'more'], 'computer', 'nesolicitat'],
-        'salary_bucket=3000-4000'       => [['salary_bucket', 'more'], 'salary_bucket', '3000-4000'],
-        'has_salary=1'                  => [['has_salary', 'more'], 'has_salary', '1'],
+        'isced[]=04_afaceri_administratie_drept' => ['isced', 'isced[]', '04_afaceri_administratie_drept'],
+        'studies_level[]=licenta'       => ['studies_level', 'studies_level[]', 'licenta'],
+        'skill[]=Excel'                 => ['skill', 'skill[]', 'Excel'],
+        'exp_level[]=1-2'               => ['exp_level', 'exp_level[]', '1-2'],
+        'duration[]=determinata'        => ['duration', 'duration[]', 'determinata'],
+        'shift=1'                       => ['shift', 'shift', '1'],
+        'funding[]=buget_local'         => ['funding', 'funding[]', 'buget_local'],
+        'level[]=executie'              => ['level', 'level[]', 'executie'],
+        'employer_cat[]=' . rawurlencode('Funcție publică') => ['employer_cat', 'employer_cat[]', 'Funcție publică'],
+        'salary_bucket=3000-4000'       => ['salary_bucket', 'salary_bucket', '3000-4000'],
     ];
-    foreach ($cases as $qs => [$must_open, $field, $value]) {
+    foreach ($cases as $qs => [$group, $field, $value]) {
         $html = get_html($base, '/?status=all&' . str_replace(['[', ']'], ['%5B', '%5D'], $qs));
-        $open = open_facets($html);
-        foreach ($must_open as $k) assert_true(in_array($k, $open, true), "$qs opens $k");
-        assert_same([], array_values(array_diff($open, $must_open)), "$qs opens nothing else");
+        assert_same([$group], open_facets($html), "$qs opens its own group, nothing else");
         $x = xpath_for($html)->query('//input[@name="' . $field . '" and @value="' . $value . '" and @checked]');
         assert_same(1, $x->length, "$qs: control checked and present");
-        // Removable: a chip whose no-JS href drops the value.
         assert_contains('data-chip-param="' . preg_replace('/\[\]$/', '', explode('=', $qs)[0]) . '"', $html, "$qs has a chip");
     }
-    // Date bounds are plain inputs, still opening Mai multe filtre.
+    // Parameters without a control any more ride along hidden and keep their chip.
+    foreach (['eqf[]=4' => ['eqf[]', '4'], 'type[]=Permanent' => ['type[]', 'Permanent'],
+              'anomaly[]=missing_contact' => ['anomaly[]', 'missing_contact'], 'schema=yes' => ['schema', 'yes'],
+              'computer=nesolicitat' => ['computer', 'nesolicitat'], 'has_salary=1' => ['has_salary', '1']] as $qs => [$field, $value]) {
+        $html = get_html($base, '/?status=all&' . str_replace(['[', ']'], ['%5B', '%5D'], $qs));
+        assert_same(1, xpath_for($html)->query('//input[@type="hidden" and @name="' . $field . '" and @value="' . $value . '"]')->length,
+            "$qs survives the next form change as a hidden field");
+        assert_contains('data-chip-param="' . preg_replace('/\[\]$/', '', explode('=', $qs)[0]) . '"', $html, "$qs has a chip");
+    }
     $d = get_html($base, '/?status=all&expires_before=2026-10-21');
-    assert_true(in_array('more', open_facets($d), true), 'date bound opens Mai multe filtre');
+    assert_same(['termen'], open_facets($d), 'a date bound opens Termen limită');
     assert_contains('value="2026-10-21"', $d, 'date bound value kept');
 });
 
 run_suite('selected values outside the options survive as pinned checkboxes', function () use ($base) {
-    $html = get_html($base, '/?status=all&skill%5B%5D=Nu-exista&skill_mode=all&eqf%5B%5D=8&occupation%5B%5D=Ocupatie+inexistenta');
-    foreach ([['skill[]', 'Nu-exista'], ['eqf[]', '8'], ['occupation[]', 'Ocupatie inexistenta']] as [$n, $v]) {
+    $html = get_html($base, '/?status=all&skill%5B%5D=Nu-exista&skill_mode=all&occupation%5B%5D=Ocupatie+inexistenta');
+    foreach ([['skill[]', 'Nu-exista'], ['occupation[]', 'Ocupatie inexistenta']] as [$n, $v]) {
         $x = xpath_for($html)->query('//input[@name="' . $n . '" and @value="' . $v . '" and @checked]');
         assert_same(1, $x->length, "orphan $n=$v pinned and checked");
     }
     assert_contains('name="skill_mode" value="all"', $html, 'AND switch stays');
-    // The orphan is shown without a misleading "0" count.
     assert_true(preg_match('#value="Nu-exista"[^>]*checked[^>]*>.*?<span[^>]*>\s*</span>#s', $html) === 1, 'orphan count blank, not 0');
 });
 
 run_suite('facet counts, chips and result IDs agree', function () use ($base) {
     $home = get_html($base, '/');
-    foreach ([['eqf[]', '4', 'eqf%5B%5D=4'], ['judet[]', 'cluj', 'judet%5B%5D=cluj'], ['skill[]', 'Excel', 'skill%5B%5D=Excel']] as [$n, $v, $qs]) {
+    foreach ([['studies_level[]', 'licenta', 'studies_level%5B%5D=licenta'], ['judet[]', 'cluj', 'judet%5B%5D=cluj'], ['skill[]', 'Excel', 'skill%5B%5D=Excel']] as [$n, $v, $qs]) {
         $x = xpath_for($home)->query('//input[@name="' . $n . '" and @value="' . $v . '"]/following-sibling::span[2]');
         $facet = (int)trim($x->item(0)?->textContent ?? '-1');
         assert_same($facet, count(result_ids($base, $qs)), "facet count for $n=$v equals the result count");
     }
-    // Removing one of two chips leaves the other group's results.
     $both = get_html($base, '/?status=all&eqf%5B%5D=4&judet%5B%5D=cluj');
-    assert_contains('data-chip-param="eqf"', $both, 'eqf chip');
+    assert_contains('data-chip-param="eqf"', $both, 'eqf chip (legacy link)');
     assert_contains('data-chip-param="judet"', $both, 'judet chip');
     assert_contains('href="?status=all&amp;judet%5B0%5D=cluj"', $both, 'no-JS chip href drops only its value');
-    // Same facet, one value fewer: the EQF-4 set within Cluj is what the chips describe.
     assert_same([1001], result_ids($base, 'status=all&eqf%5B%5D=4&judet%5B%5D=cluj'), 'chips + facets = intersection of groups');
     assert_same([1001, 1006], result_ids($base, 'status=all&judet%5B%5D=cluj&eqf%5B%5D=4&eqf%5B%5D=7'), 'multiple EQF levels are OR within the group');
+});
+
+run_suite('UX-02: a county opens its localities, which filter and stay removable', function () use ($base) {
+    $cluj = get_html($base, '/?status=all&judet%5B%5D=cluj');
+    $locs = [];
+    foreach (xpath_for($cluj)->query('//input[@name="loc[]"]') as $i) $locs[] = $i->getAttribute('value');
+    assert_true(count($locs) >= 1, 'Localitate offered once a county is chosen');
+    $loc = $locs[0];
+    $ids = result_ids($base, 'status=all&judet%5B%5D=cluj&loc%5B%5D=' . rawurlencode($loc));
+    assert_true(count($ids) >= 1, 'the locality filter returns postings');
+    $html = get_html($base, '/?status=all&judet%5B%5D=cluj&loc%5B%5D=' . rawurlencode($loc));
+    assert_contains('data-chip-param="loc"', $html, 'locality chip');
+    assert_contains('Localitate:', preg_replace('/\s+/', ' ', strip_tags($html)), 'chip names the group');
 });
 
 run_suite('status labels, help copy and announcement counts', function () use ($base) {
@@ -289,8 +292,7 @@ run_suite('deadline wording: confirmed, fallback, unknown, closed', function () 
 run_suite('labels: Romanian for known values, unfamiliar values kept visible', function () use ($base) {
     $html = get_html($base, '/?status=all');
     $flat = preg_replace('/\s+/', ' ', strip_tags($html));
-    foreach (['Normă întreagă', 'Consilier', 'Conducere superioară', 'Master / Magistru', 'Licență', 'Funcții de conducere',
-              'Sănătate', 'Perioadă determinată'] as $l) {
+    foreach (['Master / Magistru', 'Licență', 'Funcții de conducere', 'Sănătate', 'Perioadă determinată'] as $l) {
         assert_contains($l, $flat, "option label $l");
     }
     assert_not_contains('conducere_superioara', $flat, 'no raw snake_case seniority');
@@ -305,7 +307,7 @@ run_suite('labels: Romanian for known values, unfamiliar values kept visible', f
     assert_contains('Funcții de conducere', $chips, 'level chip label');
     assert_contains('Domeniu profesional: Sănătate', $chips, 'family chip label');
     assert_contains('zz_nou', $chips, 'unmapped chip value kept');
-    assert_contains('Salariu estimat', get_html($base, '/?status=all&salary_bucket=3000-4000'), 'salary stays labelled as an estimate');
+    assert_contains('(estimat)', get_html($base, '/?status=all&salary_bucket=3000-4000'), 'salary stays labelled as an estimate');
 });
 
 run_suite('result rows show pay: the stated salary first, else the labelled estimate', function () use ($base) {
@@ -322,10 +324,12 @@ run_suite('result rows show pay: the stated salary first, else the labelled esti
 
     $html = get_html($base, '/?status=all');
     $x = xpath_for($html);
-    $row = $x->query('//li[@data-pref-id="1001"]//p[contains(@class,"pg-salary")]');
-    assert_same(1, $row->length, 'posting 1001 has a pay line');
+    $row = $x->query('//li[@data-pref-id="1001"]//span[contains(@class,"pg-salary") and not(contains(@class,"pg-salary-"))]');
+    assert_same(1, $row->length, 'posting 1001 has a pay item');
     $text = preg_replace('/\s+/', ' ', trim($row->item(0)->textContent));
-    assert_contains('Salariu estimat 4.100–5.200 lei brut', $text, 'labelled estimate in the row');
+    assert_contains('💰 4.100–5.200 lei (estimat)', $text, '261016: 💰, the amount, "(estimat)" after it');
+    assert_same('Salariu estimat', $x->query('//li[@data-pref-id="1001"]//span[contains(@class,"pg-salary-label")]')->item(0)?->getAttribute('aria-label'),
+        'the icon carries the words for screen readers');
     assert_same(1, $x->query('//div[contains(@class,"pg-thead")]')->length, 'table heads ship with the rows (shown only in the table view)');
 });
 

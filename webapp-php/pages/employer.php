@@ -54,7 +54,7 @@ $head_extra =
 
 require __DIR__ . '/../inc/header.php';
 ?>
-<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
+<div class="w-full px-4 sm:px-6 py-6">
 
   <div class="mb-4 text-sm">
     <a href="/angajatori/" class="text-gov hover:underline">← Angajatori</a>

@@ -209,10 +209,13 @@ run_suite('an announcement is returned once however many of its roles match', fu
         assert_same(count($ids), $json['count'] ?? -1, "total counts announcements, not roles: $qs");
     }
     $home = rget($base, '/?' . Q_ALL);
-    $eqf = facet_numbers($home, 'eqf[]');
+    // The EQF control left the page (BETA-FILTERS); its parameter still filters, and the
+    // study-level facet that replaced it counts announcements the same way.
+    $lvl = facet_numbers($home, 'studies_level[]');
+    assert_true(count($lvl) > 0, 'study-level facet has values');
     $by_value = [];
-    foreach ($eqf as $v => $n) $by_value[$v] = count(role_result_ids($base, Q_ALL . '&eqf%5B%5D=' . $v));
-    assert_same($by_value, $eqf, 'each EQF count is an announcement count (1010 counted under 6 and under 7, once each)');
+    foreach ($lvl as $v => $n) $by_value[$v] = count(role_result_ids($base, Q_ALL . '&studies_level%5B%5D=' . rawurlencode((string)$v)));
+    assert_same($by_value, $lvl, 'each study-level count is an announcement count');
 });
 
 /** Selections for the facet-parity checks: query string => groups it uses (so those are skipped). */
@@ -398,7 +401,7 @@ run_suite('old export (no posting_roles): renders, and every requirement filter 
         $want = flat_ids($old_db, $flat);
         assert_same($want, role_result_ids($ob, Q_ALL . '&' . $qs), "old export: $label = the flat predicate");
     }
-    assert_true(count(facet_numbers(rget($ob, '/?' . Q_ALL), 'eqf[]')) > 0, 'old export: EQF facet has counts');
+    assert_true(count(facet_numbers(rget($ob, '/?' . Q_ALL), 'studies_level[]')) > 0, 'old export: study-level facet has counts');
     assert_true(count(facet_numbers(rget($ob, '/?' . Q_ALL), 'exp_level[]')) > 0, 'old export: experience facet has counts');
     // The multi-role fixture posting is one posting here: the contrasting search matches it, as it always did.
     assert_true(in_array(1009, role_result_ids($ob, Q_ALL . '&eqf%5B%5D=6&exp_level%5B%5D=fara'), true), 'old export: no role decomposition, no role scope');

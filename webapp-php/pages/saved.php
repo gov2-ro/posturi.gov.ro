@@ -18,7 +18,7 @@ $btn = 'inline-flex min-h-[2.5rem] items-center border border-line bg-surface px
 
 require __DIR__ . '/../inc/header.php';
 ?>
-<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6" data-saved-page>
+<div class="w-full px-4 sm:px-6 py-6" data-saved-page>
   <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic leading-tight text-ink">Salvate</h1>
 
   <p class="mt-3 max-w-2xl border border-info-line bg-info px-3 py-2 text-sm leading-snug text-info-ink">

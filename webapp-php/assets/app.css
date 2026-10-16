@@ -134,19 +134,13 @@
   #results { transition: opacity 160ms ease; }
   #results.htmx-request { opacity: 0.65; }
 
-  /* Quiet surfaces make each result easier to scan without adding height. */
+  /* 261016: no boxes. Rows are separated by a hairline and whitespace, and the
+     whole row is the link: .pg-link's ::after covers the row (li is relative),
+     and the controls that lead elsewhere sit above it. */
   .pg-results { border-top: 0; }
-  .pg-row {
-    margin: 0 0 0.625rem;
-    padding: 1rem;
-    border: 1px solid rgb(var(--c-line));
-    border-radius: var(--radius-lg);
-    background: rgb(var(--c-surface));
-    transition: border-color 160ms ease, background-color 160ms ease;
-  }
-  .pg-results > .pg-row { border-top-width: 1px; border-bottom-width: 1px; }
-  .pg-row:hover, .pg-row:focus-within { border-color: rgb(var(--c-line-strong)); }
-  .pg-badges > span { border-radius: var(--radius); }
+  .pg-row { margin: 0; padding: 0.875rem 0; }
+  .pg-link::after { content: ""; position: absolute; inset: 0; }
+  .pg-employer, .pref-group, .pg-facts abbr, .pg-row .pref-flag { position: relative; z-index: 1; }
   .pref-btn:hover { background: rgb(var(--c-gov-light)); }
   .pg-pagination a, .pg-pagination [aria-current="page"] {
     display: inline-flex;
@@ -158,7 +152,7 @@
   }
 
   @media (max-width: 639px) {
-    .pg-row > div:first-child { flex-direction: column; gap: 0.75rem; }
+    .pg-row > div:first-child { flex-direction: column; gap: 0.25rem; }
     .pg-row > div:first-child > div:first-child { width: 100%; }
     .pg-deadline {
       display: flex;
@@ -168,8 +162,7 @@
       min-width: 0;
       max-width: none;
       width: 100%;
-      padding-top: 0.625rem;
-      border-top: 1px solid rgb(var(--c-line));
+      padding-top: 0.125rem;
       text-align: left;
     }
     .pg-deadline time { margin-top: 0; }
@@ -250,7 +243,7 @@
  * the attribute is never set. Unlayered on purpose: these rules have to outrank
  * the lg: utilities on the same elements. Colours and radii are tokens only.
  */
-.pg-thead, .pg-salary-kind { display: none; }
+.pg-thead { display: none; }
 
 /* List view, lg and up: the rows in two 22rem+ columns beside the sidebar (from
    about 1050px; one column below that). A half-width
@@ -259,9 +252,9 @@
    employer line, pay, badges and the auto line take the full width below. */
 @media (min-width: 1024px) {
   html:not([data-layout]) ul.pg-results {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 0.625rem; border-top: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr)); gap: 0 2rem; border-top: 0;
   }
-  html:not([data-layout]) ul.pg-results > li.pg-row { margin: 0; }
+  html:not([data-layout]) ul.pg-results > li.pg-row { margin: 0; border-top: 1px solid rgb(var(--c-line)); }
   html:not([data-layout]) .pg-row > div:first-child {
     display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 1rem; align-items: start;
   }
@@ -277,9 +270,7 @@
   html:not([data-layout]) .pg-deadline time { display: inline; margin-top: 0; white-space: nowrap; }
   html:not([data-layout]) .pg-deadline .deadline-fallback { flex-basis: 100%; }
   html:not([data-layout]) .pg-meta,
-  html:not([data-layout]) .pg-salary,
-  html:not([data-layout]) .pg-badges,
-  html:not([data-layout]) .pg-auto { grid-column: 1 / -1; }
+  html:not([data-layout]) .pg-facts { grid-column: 1 / -1; }
 }
 
 @media (min-width: 1024px) {
@@ -298,18 +289,17 @@
   html[data-layout] .pg-search input { height: var(--pg-bar-h); padding-top: 0; padding-bottom: 0; }
 
   /* Each top-level group is a pill; its body becomes the dropdown. */
+  /* 261016: plain text, no boxes — a selected group reads in the accent colour. */
   html[data-layout] #facet-list > .facet-group {
-    position: relative; margin: 0; padding: 0;
-    border: 1px solid rgb(var(--c-line-strong)); border-radius: var(--radius-md);
-    background: rgb(var(--c-surface));
+    position: relative; margin: 0; padding: 0; border: 0; background: transparent;
   }
-  html[data-layout] #facet-list > .facet-group[data-selected] { border-color: rgb(var(--c-gov)); }
+  html[data-layout] #facet-list > .facet-group[data-selected] > summary { color: rgb(var(--c-gov)); }
   html[data-layout] #facet-list > .facet-group > summary {
-    height: calc(var(--pg-bar-h) - 2px); padding: 0 0.75rem; gap: 0.5rem; white-space: nowrap;
+    height: var(--pg-bar-h); padding: 0 0.375rem; gap: 0.25rem; white-space: nowrap;
   }
   html[data-layout] #facet-list > .facet-group[open] > summary .facet-caret { transform: none; }
   html[data-layout] #facet-list > .facet-group[data-pg-open] > summary .facet-caret { transform: rotate(180deg); }
-  html[data-layout] #facet-list > .facet-group[data-pg-open] { border-color: rgb(var(--c-gov)); }
+  html[data-layout] #facet-list > .facet-group[data-pg-open] > summary { color: rgb(var(--c-ink)); }
   html[data-layout] #facet-list > .facet-group > .facet-body { display: none; }
   html[data-layout] #facet-list > .facet-group[data-pg-open] > .facet-body {
     display: block; position: absolute; z-index: 30; top: calc(100% + 0.25rem); left: 0;
@@ -337,14 +327,12 @@
      page width), and four lines a card: title; employer · place; pay with the
      deadline on its right; badges at the card's foot. */
   html[data-layout="compact"] ul.pg-results {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 0.75rem; border-top: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: 0 1.5rem; border-top: 0;
   }
   html[data-layout="compact"] ul.pg-results > li.pg-row {
-    display: flex; flex-direction: column; margin: 0; padding: 0.75rem 0.875rem;
-    border: 1px solid rgb(var(--c-line)); border-radius: var(--radius-lg);
-    background: rgb(var(--c-surface));
+    display: flex; flex-direction: column; margin: 0; padding: 0.75rem 0;
+    border-top: 1px solid rgb(var(--c-line));
   }
-  html[data-layout="compact"] ul.pg-results > li.pg-row:hover { border-color: rgb(var(--c-gov)); background: rgb(var(--c-surface)); }
   html[data-layout="compact"] .pg-row > div:first-child {
     flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto auto 1fr; gap: 0 0.75rem;
@@ -353,9 +341,7 @@
   html[data-layout="compact"] .pg-title { grid-column: 1 / -1; grid-row: 1; }
   html[data-layout="compact"] .pg-meta { grid-column: 1 / -1; grid-row: 2; margin-top: 0.125rem; }
   html[data-layout="compact"] .pg-meta > a { padding-top: 0; padding-bottom: 0; }
-  html[data-layout="compact"] .pg-salary { grid-column: 1; grid-row: 3; align-self: baseline; margin-top: 0.25rem; }
-  html[data-layout="compact"] .pg-badges { grid-column: 1 / -1; grid-row: 4; align-self: end; margin-top: 0.5rem; }
-  html[data-layout="compact"] .pg-badges > * { white-space: nowrap; }
+  html[data-layout="compact"] .pg-facts { grid-column: 1; grid-row: 3; align-self: baseline; margin-top: 0.25rem; }
   html[data-layout="compact"] .pg-row h2 { font-size: 1rem; }
   html[data-layout="compact"] .pg-sub,
   html[data-layout="compact"] .pg-auto,
@@ -397,14 +383,14 @@
   html[data-layout="table"] ul.pg-results > li.pg-row:hover { background: rgb(var(--c-sunken)); }
   html[data-layout="table"] .pg-row > div:first-child,
   html[data-layout="table"] .pg-row > div:first-child > div:first-child,
-  html[data-layout="table"] .pg-meta { display: contents; }
+  html[data-layout="table"] .pg-meta,
+  html[data-layout="table"] .pg-facts { display: contents; }
   html[data-layout="table"] .pg-title { grid-column: 1; grid-row: 1; }
   html[data-layout="table"] .pg-row h2 { font-size: 0.9375rem; }
   html[data-layout="table"] .pg-employer { grid-column: 2; grid-row: 1; max-width: none; padding: 0; white-space: normal; }
   html[data-layout="table"] .pg-place { grid-column: 3; grid-row: 1; font-size: 0.8125rem; }
   html[data-layout="table"] .pg-salary { grid-column: 4; grid-row: 1; margin: 0; }
-  html[data-layout="table"] .pg-salary-label,
-  html[data-layout="table"] .pg-salary-unit { display: none; }
+  html[data-layout="table"] .pg-salary-label { display: none; }
   html[data-layout="table"] .pg-salary-value { display: block; }
   html[data-layout="table"] .pg-salary-kind { display: block; font-size: 0.6875rem; }
   html[data-layout="table"] .pg-deadline {
@@ -417,7 +403,7 @@
   html[data-layout="table"] .pg-sub,
   html[data-layout="table"] .pg-badges,
   html[data-layout="table"] .pg-auto,
-  html[data-layout="table"] .pg-pub,
+  html[data-layout="table"] .pg-sep,
   html[data-layout="table"] .pg-meta > [aria-hidden="true"] { display: none; }
 }
 

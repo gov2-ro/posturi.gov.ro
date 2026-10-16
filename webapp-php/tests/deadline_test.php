@@ -100,7 +100,8 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
     // The rest of the row from its title link: up to the row's own </li> (a row holds
     // no nested list), not a fixed byte count that every new row line would outgrow.
     $row = function (string $html, string $anchor) {
-        $pos = strpos($html, $anchor);
+        // Inside the results list: the home page's "Noi azi" list links the same postings.
+        $pos = strpos($html, $anchor, (int)strpos($html, 'class="pg-results'));
         if ($pos === false) return '';
         $end = strpos($html, '</li>', $pos);
         return substr($html, $pos, $end === false ? 3000 : $end - $pos);

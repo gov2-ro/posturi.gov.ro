@@ -38,9 +38,14 @@ $has_salary    = $_GET['has_salary'] ?? '';
 $duration_sel  = (array)($_GET['duration'] ?? []);
 $schedule_sel  = (array)($_GET['schedule'] ?? []);
 $shift         = $_GET['shift'] ?? '';
+$loc_sel       = (array)($_GET['loc'] ?? []);
+$published     = $_GET['published'] ?? '';
 $sort         = $_GET['sort']          ?? '';
 $page         = max(1, (int)($_GET['page'] ?? 1));
 
+// UX-01B: a legacy `?status=all` keeps its meaning (no status clause in
+// build_filters) and no tab claims to be current; anything else unknown is the default.
+$status_tab = isset(STATUS_LABELS[$status]) ? $status : ($status === 'all' ? '' : DEFAULT_STATUS);
 if (!isset(STATUS_LABELS[$status])) $status = DEFAULT_STATUS;
 
 // ---- Check if HTMX partial request ----
@@ -75,6 +80,10 @@ if ($match_expr !== '' && !$sort) {
     $order = "ORDER BY " . DEADLINE_COL . " ASC, j.published_at DESC";
 } elseif ($sort === 'employer') {
     $order = "ORDER BY j.employer_name ASC, j.published_at DESC";
+} elseif ($sort === 'salary') {
+    // 261016: highest pay first, stated or estimated (the same SALARY_EXPR the
+    // salary filter and every row's 💰 use); postings without one go last.
+    $order = "ORDER BY " . SALARY_EXPR . " IS NULL, " . SALARY_EXPR . " DESC, j.published_at DESC";
 } else {
     $order = "ORDER BY j.published_at DESC, j.id DESC";
 }
@@ -116,30 +125,64 @@ $is_unfiltered = $page === 1 && !$active_chips;
 // computed here rather than read off $..._options so capping and ordering in
 // the facet lists cannot quietly change what the landing offers.
 $shortcuts = [];
+$home_new = $home_soon = [];
+$home_new_day = '';
 if ($is_unfiltered) {
-    $live  = "application_status IN (" . OPEN_STATUS_SQL . ")";
-
+    // 261016: the ways in are the jobs most on offer (the occupations with the
+    // most open postings) and a few cuts that need several filters' worth of
+    // knowledge to find — no experience, secondary studies, high pay, a civil
+    // service post. Each count is what the link will show: the same
+    // build_filters() predicate, under the default "Active" status.
+    $count_for = function (array $params): int {
+        $f = build_filters($params + ['status' => DEFAULT_STATUS]);
+        $w = $f['where'] ? 'WHERE ' . implode(' AND ', $f['where']) : '';
+        $st = db()->prepare("SELECT COUNT(*) FROM job_postings j $w");
+        $st->execute($f['binds']);
+        return (int)$st->fetchColumn();
+    };
+    $live = "application_status IN (" . OPEN_STATUS_SQL . ")";
     foreach (db()->query(
-        "SELECT inf_profession_family AS v, COUNT(*) AS c FROM job_postings
-         WHERE inf_profession_family <> '' AND $live
-         GROUP BY 1 ORDER BY 2 DESC LIMIT 3") as $r) {
-        $shortcuts[] = ['param' => 'family', 'value' => $r['v'],
-                        'label' => mb_convert_case($r['v'], MB_CASE_TITLE, 'UTF-8'), 'count' => (int)$r['c']];
+        "SELECT occ_canonical AS v, COUNT(*) AS c FROM job_postings
+         WHERE occ_canonical <> '' AND $live
+         GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 6") as $r) {
+        $shortcuts[] = ['href' => '/?occupation%5B%5D=' . rawurlencode($r['v']),
+                        'label' => $r['v'], 'count' => (int)$r['c']];
+    }
+    foreach ([
+        ['Fără experiență',     ['exp_level' => ['fara']]],
+        ['Studii medii',        ['studies_level' => ['liceala']]],
+        ['Salariu peste 7.000', ['salary_bucket' => 'peste-7000']],
+        ['Funcție publică',     ['categorie' => ['Funcție publică']]],
+        ['Fonduri europene',    ['funding' => ['fonduri_europene']]],
+        ['Telemuncă',           ['remote' => '1']],
+    ] as [$label, $params]) {
+        $c = $count_for($params);
+        if ($c > 0) $shortcuts[] = ['href' => '/?' . http_build_query($params), 'label' => $label, 'count' => $c];
     }
 
-    $probes = [
-        ['type',         'Temporar',             'Temporar',             "job_type = 'Temporar'"],
-        ['employer_cat', 'Funcție publică',      'Funcție publică',      "employer_category = 'Funcție publică'"],
-        ['employer_cat', 'Funcție contractuală', 'Funcție contractuală', "employer_category = 'Funcție contractuală'"],
-        ['remote',       '1',                    'Telemuncă',            "inf_remote_eligible = 1"],
-        // Two of the backlog's "260911 Notes": a way into EU-funded posts, and
-        // into the ones we can put a number on.
-        ['funding',      'fonduri_europene',     'Fonduri europene',     "v4_funding_source = 'fonduri_europene'"],
-        ['has_salary',   '1',                    'Cu salariu estimat',   "COALESCE(inf_salary_min, sal_min) IS NOT NULL"],
-    ];
-    foreach ($probes as [$param, $value, $label, $clause]) {
-        $c = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE $clause AND $live")->fetchColumn();
-        if ($c > 0) $shortcuts[] = compact('param', 'value', 'label') + ['count' => $c];
+    // D15: "Noi azi" and "Se închid curând" above the results, on the bare home
+    // page only (any parameter — a sort, a status — means a list is wanted). New = the latest
+    // publication day in the data (named "azi" when it is today), so the section
+    // is not empty every morning before the first run.
+    if (!$_GET) {
+        $home_new_day = (string)db()->query(
+            "SELECT MAX(substr(published_at, 1, 10)) FROM job_postings WHERE $live")->fetchColumn();
+        if ($home_new_day !== '') {
+            $st = db()->prepare("SELECT j.*, e.slug AS employer_slug_display FROM job_postings j
+                LEFT JOIN employers e ON e.id = j.employer_id
+                WHERE j.$live AND substr(j.published_at, 1, 10) = ?
+                ORDER BY j.published_at DESC, j.id DESC LIMIT 6");
+            $st->execute([$home_new_day]);
+            $home_new = $st->fetchAll();
+        }
+        $today = ro_today();
+        $in3 = (new DateTimeImmutable($today, new DateTimeZone('Europe/Bucharest')))->modify('+3 days')->format('Y-m-d');
+        $st = db()->prepare("SELECT j.*, e.slug AS employer_slug_display FROM job_postings j
+            LEFT JOIN employers e ON e.id = j.employer_id
+            WHERE j.application_status = 'confirmed_open' AND " . DEADLINE_COL . " >= ? AND " . DEADLINE_COL . " <= ?
+            ORDER BY " . DEADLINE_COL . " ASC, j.published_at DESC LIMIT 6");
+        $st->execute([$today, $in3]);
+        $home_soon = $st->fetchAll();
     }
 }
 
@@ -234,9 +277,18 @@ $judet_options = [];
     $st->execute($s['binds']);
     $judet_options = $st->fetchAll();
 }
+// UX-02 (D16): localities of the chosen counties. Offered only once a county is
+// chosen — across the whole country the list is thousands long and means
+// little — or while a locality is selected, so its checkbox stays removable.
+$loc_options = ($judet_slugs || $loc_sel) ? get_facet('locality', 'locs', 80) : [];
 timing_mark('f-judet');
+
+// BETA-FILTERS (D4, UX-01): one control per question. Dropped from the page
+// (their URL parameters still filter and show as removable chips): the source
+// job_type (Contract covers it, finer), the text-derived grade and work type,
+// the EQF number (Nivel de studii says it in words), exam stages, and the
+// pipeline diagnostics (anomalies, structured-or-not).
 $level_options    = get_facet('job_level',            'levels');
-$type_options     = get_facet('job_type',             'types');
 $cat_options      = get_facet('categorie',            'categories');
 $emp_cat_options  = get_facet('employer_category',    'employer_cats',  20);
 
@@ -256,8 +308,6 @@ $family_options = [];
     $family_options = $stmt2->fetchAll();
 }
 
-$seniority_options = get_facet('inf_seniority',       'seniorities');
-$work_type_options = get_facet('inf_work_type',        'work_types');
 // Minimum study level is a role fact (DATA-04): counted over posting_roles.
 $studies_options   = role_value_facet('study_level', 'studies_levels');
 
@@ -266,8 +316,6 @@ timing_mark('f-basic');
 // unfamiliar value keeps its raw spelling so it stays visible, not guessed at).
 foreach ($family_options    as &$o) { $o['label'] = family_label((string)$o['val']); } unset($o);
 foreach ($level_options     as &$o) { $o['label'] = job_level_label((string)$o['val']); } unset($o);
-foreach ($seniority_options as &$o) { $o['label'] = seniority_label((string)$o['val']); } unset($o);
-foreach ($work_type_options as &$o) { $o['label'] = WORK_TYPE_LABELS[$o['val']] ?? $o['val']; } unset($o);
 foreach ($studies_options   as &$o) { $o['label'] = STUDIES_LABELS[$o['val']] ?? $o['val']; } unset($o);
 
 // Status counts — one pass instead of three
@@ -368,8 +416,6 @@ function role_array_facet(string $role_col, string $excl_key, callable $label, i
 // the ones that would empty the list. Counted like the rest, the values that
 // would zero out simply stop being offered.
 timing_mark('f-status');
-$anomaly_options = v3_facet('inf_anomaly_flags', 'anomaly',
-                            fn ($v) => ANOMALY_LABELS[$v] ?? $v);
 
 // Field of study, skills and credentials are role facts (DATA-04): counted per
 // role, announcements counted once. Language, domain and exam stage describe the
@@ -379,29 +425,7 @@ $skill_options  = role_array_facet('skills',       'skill',      fn($v) => $v, 4
 $lang_options   = v3_facet('v3_languages',      'lang',       'language_token_label');
 $cred_options   = role_array_facet('credentials',  'credential', 'credential_kind_label');
 $domain_options = v3_facet('v3_policy_domains', 'domain',     'policy_domain_label');
-$stage_options  = v3_facet('v3_exam_stages',    'stage',      'exam_stage_label');
-
-// Minimum study level a posting requires, as EQF. Counts are per exact level
-// and so is the filter — see the `eqf` block in build_filters(). Counted over
-// roles: a posting whose roles need EQF 6 and EQF 4 shows under both, once each.
 timing_mark('f-json');
-$eqf_options = [];
-foreach (role_value_facet('eqf_level', 'eqf', 'r.eqf_level') as $r) {
-    $eqf_options[] = ['val' => (string)$r['val'],
-                      'label' => EQF_LABELS[(int)$r['val']] ?? ('EQF ' . $r['val']),
-                      'cnt' => (int)$r['cnt']];
-}
-
-timing_mark('f-eqf');
-// Structured-description counts (LLM schema present vs raw body)
-$schema_options = [];
-{
-    $sc = facet_scope('schema');
-    $yes = scope_count($sc, ["j.has_schema = 1"]);
-    $no  = scope_count($sc, ["j.has_schema = 0"]);
-    if ($yes) $schema_options[] = ['val' => 'yes', 'label' => 'Structurată (LLM)', 'cnt' => $yes];
-    if ($no)  $schema_options[] = ['val' => 'no',  'label' => 'Doar text brut',    'cnt' => $no];
-}
 
 // Remote count
 {
@@ -409,7 +433,7 @@ $schema_options = [];
     $remote_count = scope_count($s, ["j.inf_remote_eligible = 1"]);
 }
 
-timing_mark('f-schema');
+timing_mark('f-remote');
 // Experience buckets. A role fact (DATA-04): each bucket counts the announcements
 // that have a role in it which also satisfies the other role groups, built from
 // the same exp_bucket_condition() the filter uses.
@@ -523,7 +547,7 @@ if (!$is_htmx) {
 }
 
 if (!$is_htmx): ?>
-<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
+<div class="w-full px-4 sm:px-6 py-6">
 
   <?php /* The visible title and the "N anunțuri indexate · sursă" line were removed
      2026-09-08: both restated the masthead, and they pushed the filters — the
@@ -629,17 +653,48 @@ if (!$is_htmx): ?>
     <?php if ($shortcuts): ?>
     <?php /* In the grid and table views the script moves this block into the filter
        bar, where it is the bar's last row, on a line of its own. */ ?>
-    <div id="shortcuts" class="pg-shortcuts mb-5 border-b border-line pb-4">
-      <div class="flex flex-wrap items-center gap-2">
+    <div id="shortcuts" class="pg-shortcuts mb-4">
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 text-sm">
         <span class="text-xs uppercase tracking-widest text-ink-muted">Începe cu</span>
         <?php foreach ($shortcuts as $sc): ?>
-        <a href="/?<?= e($sc['param']) ?>=<?= rawurlencode($sc['value']) ?>"
-           class="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs text-ink transition-colors hover:border-gov hover:text-gov">
-          <?= e($sc['label']) ?>
-          <span class="font-mono text-ink-muted"><?= number_format($sc['count'], 0, ',', '.') ?></span>
-        </a>
+        <a href="<?= e($sc['href']) ?>" class="whitespace-nowrap text-gov hover:underline"><?= e($sc['label']) ?>
+          <span class="font-mono text-xs text-ink-muted"><?= number_format($sc['count'], 0, ',', '.') ?></span></a>
         <?php endforeach; ?>
       </div>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($home_new || $home_soon): ?>
+    <?php /* D15: two short lists on the unfiltered first page. Each title links to the
+       posting; the heading links to the full list behind it. */ ?>
+    <div class="pg-home mb-5 grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-4 border-y border-line py-4 md:grid-cols-2">
+      <?php
+        $new_word = $home_new_day === ro_today() ? 'azi' : ($home_new_day !== '' ? fmt_date($home_new_day) : '');
+        foreach ([
+          ['Noi ' . $new_word, '/?published=' . rawurlencode($home_new_day), $home_new, false],
+          ['Se închid în 3 zile', '/?status=soon&sort=deadline', $home_soon, true],
+        ] as [$htitle, $hhref, $hrows, $show_deadline]):
+          if (!$hrows) continue; ?>
+      <section class="min-w-0">
+        <h2 class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
+          <a href="<?= e($hhref) ?>" class="hover:text-gov"><?= e($htitle) ?> <span aria-hidden="true">→</span></a>
+        </h2>
+        <ul class="space-y-1 text-sm">
+          <?php foreach ($hrows as $hp):
+              $hdt = display_title($hp); $hdl = posting_deadline($hp); ?>
+          <li class="flex items-baseline justify-between gap-3">
+            <span class="min-w-0 truncate"><a href="<?= e(job_url($hp)) ?>" class="font-medium text-ink hover:text-gov"><?= e($hdt['primary']) ?></a>
+              <span class="text-xs text-ink-muted">· <?= e($hp['employer_name']) ?></span></span>
+            <?php if ($show_deadline && $hdl['date']): ?>
+              <span class="shrink-0 font-mono text-xs text-alert-ink"><?php $hd = (int)days_until($hdl['date']); ?><?= e($hd === 0 ? 'azi' : days_label($hd)) ?></span>
+            <?php elseif ($place = place_label($hp)): ?>
+              <span class="max-w-[40%] shrink-0 truncate text-xs text-ink-muted"><?= e($place) ?></span>
+            <?php endif; ?>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+      </section>
+      <?php endforeach; ?>
     </div>
     <?php endif; ?>
 
@@ -649,7 +704,7 @@ if (!$is_htmx): ?>
       <div role="group" aria-label="Stare anunț" class="flex flex-wrap gap-1.5">
         <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
         <label class="relative">
-          <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status === $sval) ?>>
+          <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status_tab === $sval) ?>>
           <span class="block cursor-pointer rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-muted transition-colors hover:text-gov sm:text-sm peer-checked:border-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-focus">
             <?= e($slabel) ?>
             <span class="ml-1 font-mono text-xs opacity-70"><?= $status_counts[$sval] ?></span>
@@ -696,6 +751,7 @@ if (!$is_htmx): ?>
               <option value=""<?= selected_if(!$sort) ?>><?= $q ? 'Relevanță' : 'Cele mai noi' ?></option>
               <option value="deadline"<?= selected_if($sort === 'deadline') ?>>Termen limită</option>
               <option value="employer"<?= selected_if($sort === 'employer') ?>>Angajator A–Z</option>
+              <option value="salary"<?= selected_if($sort === 'salary') ?>>Salariu (mare → mic)</option>
             </select>
           </div>
     </div>

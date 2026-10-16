@@ -38,7 +38,7 @@ test('freshness stamps separate build from source check', async ({ page }) => {
 // ---- Every width: countdown and printed date agree on the result row ----
 test('result row shows one deadline', async ({ page }) => {
   await page.goto('/');
-  const row = page.locator('li', { has: page.locator(ROW_1001) });
+  const row = page.locator('ul.pg-results > li', { has: page.locator(ROW_1001) });
   await expect(row).toContainText('13 zile');
   // The row also carries the published-date <time>; this is the deadline one.
   await expect(row.locator('time[datetime="2026-10-16"]')).toHaveText('16.10.2026');

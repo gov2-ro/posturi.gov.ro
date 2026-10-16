@@ -262,11 +262,11 @@ test('list view: two columns beside the sidebar, the deadline beside the title o
   expect(dl.height, 'days and date on one line').toBeLessThanOrEqual(22);
   expect(meta.y, 'employer line below the title block').toBeGreaterThanOrEqual(title.y + title.height);
   expect(meta.x + meta.width, 'employer line runs under the deadline too').toBeGreaterThan(dl.x);
-  await expect(li.locator('.pg-salary')).toContainText('Salariu estimat 4.100–5.200 lei brut');
+  await expect(li.locator('.pg-salary')).toContainText('💰 4.100–5.200 lei (estimat)');
   await noOverflow(page, 'two-column list');
 });
 
-test('grid cards: three columns, four lines: title, employer, pay beside the deadline, badges', async ({ page, viewport }) => {
+test('grid cards: columns, title, employer, pay beside the deadline with the labels on its line', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'the grid is lg+ only');
   await setLayout(page, 'compact');
   await page.goto('/');
@@ -277,8 +277,9 @@ test('grid cards: three columns, four lines: title, employer, pay beside the dea
   expect(dl.x, 'deadline right of the pay').toBeGreaterThan(pay.x + pay.width);
   expect(meta.y - (title.y + title.height), 'employer line right under the title').toBeLessThanOrEqual(6);
   expect(pay.y - (meta.y + meta.height), 'pay right under the employer').toBeLessThanOrEqual(6);
-  expect(badges.y, 'badges under the pay').toBeGreaterThanOrEqual(pay.y + pay.height);
-  await expect(li.locator('.pg-salary')).toContainText('Salariu estimat 4.100–5.200 lei brut');
+  // 261016: no boxed badges; the source labels follow the pay on the same line of facts.
+  expect(badges.y, 'labels start on the pay line').toBeLessThanOrEqual(pay.y + pay.height);
+  await expect(li.locator('.pg-salary')).toContainText('💰 4.100–5.200 lei (estimat)');
   // The three cards of the first row sit side by side.
   const ys = await page.locator('ul.pg-results > li.pg-row').evaluateAll((els) => els.slice(0, 3).map((e) => Math.round(e.getBoundingClientRect().y)));
   expect(new Set(ys).size).toBe(1);
@@ -301,7 +302,7 @@ test('table view: one line per posting, cells in their columns, pay labelled', a
   // One line: every cell starts on the row's first line.
   for (const k of Object.keys(cells)) expect(Math.abs(cells[k].y - cells.title.y), `${k} on the row line`).toBeLessThanOrEqual(8);
   await expect(li.locator('.pg-salary')).toContainText('4.100–5.200 lei');
-  await expect(li.locator('.pg-salary-kind')).toHaveText('estimare');
+  await expect(li.locator('.pg-salary-kind')).toHaveText('(estimat)');
   await expect(li.locator('.pg-salary-label')).toBeHidden();
   await expect(li.locator('.pg-badges')).toBeHidden();
   await expect(li.locator('[data-pref="save"]')).toBeVisible();
@@ -315,7 +316,7 @@ test('pay is on every result view, labelled as an estimate', async ({ page, view
     const sal = row(page, 1001).locator('.pg-salary');
     await expect(sal, mode).toBeVisible();
     await expect(sal, mode).toContainText('4.100–5.200 lei');
-    await expect(sal, mode).toContainText(mode === 'table' ? 'estimare' : 'Salariu estimat');
+    await expect(sal, mode).toContainText('(estimat)');
   }
 });
 
@@ -360,7 +361,7 @@ test('bar facet panels: one open at a time, Escape and outside click close, list
   await expect(judet.locator('> .facet-body')).toBeHidden();
 
   // Keyboard: Enter on a focused summary opens, and the last pill's panel stays inside the viewport.
-  const lastSel = '#facet-list > [data-facet="more"]';
+  const lastSel = '#facet-list > [data-facet="termen"]';
   const last = page.locator(lastSel + ' > .facet-body');
   await page.locator(lastSel + ' > summary').focus();
   await page.keyboard.press('Enter');

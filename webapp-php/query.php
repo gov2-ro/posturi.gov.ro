@@ -15,7 +15,7 @@
 const QUERY_SCALARS = [
     'q', 'sort', 'status', 'page', 'employer', 'employer_id',
     'remote', 'computer', 'salary_bucket', 'schema', 'shift', 'has_salary',
-    'expires_after', 'expires_before', 'title', 'skill_mode',
+    'expires_after', 'expires_before', 'title', 'skill_mode', 'published',
 ];
 
 /**
@@ -57,9 +57,12 @@ function validated_query(array $get): array {
     foreach ($get as $key => $value) {
         if (!is_string($key) || $key === '') continue;
         if (is_array($value)) {
-            if (!query_is_facet($key)) {
+            if (in_array($key, QUERY_SCALARS, true)) {
                 return [null, "parametrul „{$key}” nu acceptă valori multiple"];
             }
+            // REV-10: an unknown parameter is ignored in either shape, as the
+            // header says — `?x[]=1` no longer earns a 400.
+            if (!query_is_facet($key)) continue;
             $flat = [];
             foreach ($value as $v) {
                 if (is_array($v)) {

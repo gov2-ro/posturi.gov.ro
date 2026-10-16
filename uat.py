@@ -11,17 +11,24 @@ administrative type settles it (a comună is under 10.000), the set has one
 member. Where it does not (an `oraș` may be either side of 10.000), the set has
 two and the estimate widens across them and says so.
 
-A real population table would collapse most of that uncertainty. Drop a CSV at
-`data/uat-populatie.csv` with `nume,judet,populatie` and `load_populations()`
-picks it up; everything below is the fallback for when it is absent.
+A real population table collapses most of that uncertainty. `data/uat-populatie.csv`
+(`nume,judet,tip,populatie`, built by `ops/build-uat-population.py`) holds every
+town and every commune from the 2021 census. A name is not a key — Slatina is a
+municipiu in Olt and a comună in Suceava, Ștefănești is a town in two counties —
+so rows are matched on the unit type (`oras` / `comuna`) and, when the employer
+string or the posting says which county, on the county too. A name that still
+matches rows in different bands is ambiguous and falls back to the type rules
+below, which are also what applies when the table is absent.
 """
 from __future__ import annotations
 
 import csv
+import importlib.util
 import re
 import unicodedata
 from functools import lru_cache
 from pathlib import Path
+from typing import NamedTuple
 
 DATA_DIR = Path(__file__).parent.resolve() / "data"
 POPULATION_CSV = DATA_DIR / "uat-populatie.csv"
@@ -68,14 +75,77 @@ def norm(s) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", s)).strip()
 
 
+class PopulationRow(NamedTuple):
+    tip: str          # "oras" (municipiu or oraș) or "comuna"
+    county: str       # norm()ed canonical county
+    population: int
+
+
 @lru_cache(maxsize=1)
-def load_populations() -> dict[str, int]:
-    """Optional `nume,judet,populatie` table. Absent by default."""
+def load_populations() -> dict[str, tuple[PopulationRow, ...]]:
+    """`data/uat-populatie.csv` as `norm(name) -> rows`. Empty when absent.
+
+    One name can carry several rows (Slatina: a municipiu in Olt, communes
+    elsewhere), which is why this maps to a tuple. A file without a `tip` column
+    is read as towns only, which is what it held before communes were added.
+    """
     if not POPULATION_CSV.exists():
         return {}
+    table: dict[str, list[PopulationRow]] = {}
     with POPULATION_CSV.open(encoding="utf-8") as fh:
-        return {norm(r["nume"]): int(r["populatie"])
-                for r in csv.DictReader(fh) if r.get("populatie", "").isdigit()}
+        for r in csv.DictReader(fh):
+            if not (r.get("populatie") or "").isdigit():
+                continue
+            tip = (r.get("tip") or "oras").strip().lower()
+            table.setdefault(norm(r["nume"]), []).append(
+                PopulationRow(tip, norm(r.get("judet")), int(r["populatie"])))
+    return {k: tuple(v) for k, v in table.items()}
+
+
+@lru_cache(maxsize=1)
+def _judete():
+    """`webapp/apps/jobs/judete.py`, the one module that knows the 42 counties.
+
+    Loaded by path: it is stdlib-only, and this script runs outside Django.
+    """
+    path = Path(__file__).parent.resolve() / "webapp" / "apps" / "jobs" / "judete.py"
+    spec = importlib.util.spec_from_file_location("judete_ref", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def canonical_county(text, *, prefix: bool = False) -> str:
+    """Canonical county for `"Timiş"`, `"TIMIŞOARA, Timiș"`, `"judetul prahova"`; else `""`.
+
+    `prefix=True` also accepts a unique prefix of at least three letters, because
+    the source truncates ("județul Timi;").
+    """
+    judete = _judete()
+    county = judete.normalize_judet(str(text or "")).judet
+    if county or not prefix:
+        return county or ""
+    key = judete.fold(str(text or ""))
+    hits = [c for c in judete.COUNTIES if judete.fold(c).startswith(key)]
+    return hits[0] if len(key) >= 3 and len(hits) == 1 else ""
+
+
+_COUNTY_WORD = re.compile(r"\bjude[tțţ]ul\.?\s+([^,()]+)|\bjud\.\s*([^,()]+)", re.I)
+
+
+def employer_county(employer: str) -> str:
+    """The county an employer string names, or `""`.
+
+    "Comuna Matca, județul Galați" -> "Galați"; "PRIMARIA COMUNA X,JUDETUL PRAHOVA" ->
+    "Prahova". A bare trailing county ("Primăria Corod, Galați") counts too.
+    """
+    text = employer or ""
+    m = _COUNTY_WORD.search(text)
+    if m:
+        return canonical_county(m.group(1) or m.group(2), prefix=True)
+    if "," in text:
+        return canonical_county(text.rpartition(",")[2])
+    return ""
 
 
 def band_for_population(people: int) -> str:
@@ -105,29 +175,66 @@ def parse_employer(employer: str) -> tuple[str, str]:
     return uat_type, rest.strip(" .-–—")
 
 
-def bands_for(employer: str) -> tuple[frozenset[str], str]:
+def _population_bands(key: str, uat_type: str, county: str) -> frozenset[str] | None:
+    """Band set from the census table, or None when the table cannot decide.
+
+    Rows are filtered by unit type (a commune never borrows a town's population),
+    then by county when one is known. If the survivors still span several bands
+    the name is ambiguous (Ștefănești without a county) and the caller falls back
+    to the type rules rather than guess.
+    """
+    rows = load_populations().get(key, ())
+    if not rows:
+        return None
+    if uat_type == "comuna":
+        tip_groups = [("comuna",)]
+    elif uat_type:  # municipiu, oraș, and sector/județ (only towns share those names)
+        tip_groups = [("oras",)]
+    elif county:
+        tip_groups = [("oras", "comuna")]
+    else:
+        # Type unknown and no county: a town is the likelier reading of a bare
+        # name, a commune only if no town has it.
+        tip_groups = [("oras",), ("comuna",)]
+
+    for tips in tip_groups:
+        cands = [r for r in rows if r.tip in tips]
+        if not cands:
+            continue
+        if county:
+            in_county = [r for r in cands if r.county == norm(county)]
+            cands = in_county or cands
+        bands = frozenset(band_for_population(r.population) for r in cands)
+        return bands if len(bands) == 1 else None
+    return None
+
+
+def bands_for(employer: str, county: str | None = None) -> tuple[frozenset[str], str]:
     """Plausible population bands for an employer, plus how they were decided.
 
-    Returns `(bands, basis)`. An empty set means "no idea, do not narrow".
-    A set with more than one member is a genuine ambiguity that the estimate
-    must carry as a wider range, not resolve by guessing.
+    `county` is the posting's own county, used only when the employer string does
+    not name one. Returns `(bands, basis)`. An empty set means "no idea, do not
+    narrow". A set with more than one member is a genuine ambiguity that the
+    estimate must carry as a wider range, not resolve by guessing.
     """
     uat_type, name = parse_employer(employer)
     key = norm(name)
 
-    # The table lists towns only (data/uat-populatie.csv, 2021 census) and is
-    # keyed on the name alone, so a comună that shares a town's name (Slatina in
-    # Suceava, Satu Mare in Harghita) must not borrow that town's population.
-    populations = load_populations()
-    if key and key in populations and uat_type != "comuna":
-        return frozenset({band_for_population(populations[key])}), "populație"
+    # data/uat-populatie.csv (2021 census): towns and communes, matched on unit
+    # type and, when known, county. A comună that shares a town's name (Slatina
+    # in Suceava, Satu Mare in Harghita) must not borrow that town's population.
+    if key:
+        known = _population_bands(key, uat_type, employer_county(employer) or canonical_county(county))
+        if known:
+            return known, "populație"
 
     if uat_type == "sector" or key in OVER_200K:
         return frozenset({BAND_OVER_200K}), "listă orașe peste 200.000"
 
     if uat_type == "comuna":
-        # Romania's communes are rural by definition; the handful near the
-        # threshold are a rounding error next to the ~2,800 that are not.
+        # Reached only when the table has no row for this name or the name is
+        # ambiguous across bands. Communes are rural by definition and ~2,800 of
+        # ~2,860 are under 10.000, so this is the safe reading of a bare name.
         return frozenset({BAND_UNDER_10K}), "tip UAT: comună"
 
     if uat_type == "municipiu":

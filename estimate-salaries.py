@@ -66,10 +66,12 @@ EMPLOYER_TO_LEVEL = {
 SELECT_POSTINGS = """
     SELECT p.id, p.title, p.job_level, p.employer_category, p.schema_json,
            COALESCE(e.name, '')      AS employer_name,
+           COALESCE(j.name, '')      AS judet_name,
            o.grid_selector, o.study_level, o.canonical, o.match_confidence
       FROM jobs_jobposting p
       JOIN jobs_occupation o ON o.id = p.occupation_id
       LEFT JOIN jobs_employer e ON e.id = p.employer_id
+      LEFT JOIN jobs_judet j ON j.id = p.judet_id
      WHERE p.occupation_id IS NOT NULL
 """
 
@@ -122,7 +124,7 @@ def build_selector(posting: dict) -> tuple[dict, dict]:
     # The band only exists on Anexa VIII local sheets; asking elsewhere just
     # narrows to nothing.
     if selector.get("nivel_administrativ") == "local" or selector.get("anexa") == "VIII":
-        bands, basis = uat.bands_for(posting["employer_name"])
+        bands, basis = uat.bands_for(posting["employer_name"], posting.get("judet_name"))
         if bands:
             selector["banda_populatie"] = bands
             why["banda_populatie"] = basis

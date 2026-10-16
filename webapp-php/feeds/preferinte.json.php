@@ -99,6 +99,32 @@ if ($ids) {
             'deadline_source' => $dl['source'],
         ];
     }
+    // UX-03 (D14): ids that left the list in the last 90 days answer from the archive,
+    // with their state, so a saved posting reads "expirat"/"anulat" and links to its
+    // archived page instead of "no longer available". Older ones stay absent, as before.
+    $found = array_column($items, 'id');
+    $missing = array_values(array_diff($ids, $found));
+    if ($missing) {
+        $ph = implode(',', array_fill(0, count($missing), '?'));
+        $st = db()->prepare("SELECT id, url, title, employer_name, judet_name, locality, apply_deadline,
+                                    expires_at, cancelled
+                               FROM archived_postings WHERE id IN ($ph) ORDER BY id");
+        $st->execute($missing);
+        foreach ($st->fetchAll() as $r) {
+            $items[] = [
+                'id'              => (int)$r['id'],
+                'url'             => (string)$r['url'],
+                'path'            => job_url($r),
+                'title'           => (string)$r['title'],
+                'employer'        => (string)$r['employer_name'],
+                'location'        => place_label($r),
+                'status'          => $r['cancelled'] ? 'cancelled' : 'expired',
+                'deadline'        => $r['apply_deadline'] ? substr((string)$r['apply_deadline'], 0, 10) : null,
+                'deadline_source' => $r['apply_deadline'] ? 'anunt' : '',
+            ];
+        }
+        usort($items, fn($a, $b) => $a['id'] <=> $b['id']);
+    }
 }
 
 http_response_code(200);

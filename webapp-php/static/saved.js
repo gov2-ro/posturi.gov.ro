@@ -27,7 +27,10 @@
     confirmed_open: 'Înscrieri deschise',
     unconfirmed: 'Termen neconfirmat',
     unknown: 'Termen neprecizat',
-    closed: 'Înscrieri închise'
+    closed: 'Înscrieri închise',
+    // UX-03: answered from archived_postings for 90 days after a posting left the list.
+    expired: 'Anunț expirat · înscrierile s-au încheiat',
+    cancelled: 'Anunț anulat de instituție'
   };
   var SESSION_ONLY = 'Disponibil doar în această sesiune; browserul nu a putut salva preferințele.';
 

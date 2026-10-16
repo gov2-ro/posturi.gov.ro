@@ -69,6 +69,19 @@ run_suite('archived postings stay out of lists, feeds and the sitemap', function
     }
 });
 
+run_suite('a saved posting that was archived answers with its state, not "unavailable"', function () use ($base) {
+    $ctx = stream_context_create(['http' => ['method' => 'POST', 'ignore_errors' => true,
+        'header' => 'Content-Type: application/json', 'content' => '{"ids":[1001,9001,9002,987654]}']]);
+    $j = json_decode((string)@file_get_contents($base . '/preferinte-posturi.json', false, $ctx), true);
+    $by = [];
+    foreach ($j['items'] ?? [] as $i) $by[$i['id']] = $i;
+    assert_same(['1001', '9001', '9002'], array_map('strval', array_keys($by)), 'live and archived answer; unknown stays absent');
+    assert_same('expired', $by[9001]['status'] ?? null, 'expired state');
+    assert_same('cancelled', $by[9002]['status'] ?? null, 'cancelled state');
+    assert_same('/job/9001-asistent-medical-principal/', $by[9001]['path'] ?? null, 'links the archived page');
+    assert_same('https://posturi.gov.ro/anunt/fixture-9001', $by[9001]['url'] ?? null, 'identity is the source url');
+});
+
 run_suite('an export without the archive table: every missing id is a plain 404', function () use ($db_path) {
     $old = sys_get_temp_dir() . '/posturi-archive-old-' . getmypid() . '.sqlite';
     copy($db_path, $old);

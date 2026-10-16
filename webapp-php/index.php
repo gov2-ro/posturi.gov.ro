@@ -122,6 +122,8 @@ if ($uri === '/' || $uri === '') {
     require __DIR__ . '/pages/stats.php';
 } elseif ($uri === '/salvate' || $uri === '/salvate/') {
     require __DIR__ . '/pages/saved.php';
+} elseif ($uri === '/pot-aplica' || $uri === '/pot-aplica/') {
+    require __DIR__ . '/pages/eligibility_tool.php';
 } elseif ($uri === '/despre' || $uri === '/despre/') {
     require __DIR__ . '/pages/about.php';
 } else {

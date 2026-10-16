@@ -1592,6 +1592,8 @@ const FILTER_CHIP_GROUPS = [
     'credential_not' => 'Fără',
     'domain_not'     => 'Fără',
     'cor_not'        => 'Fără',
+    'studies_level_not' => 'Fără studii',
+    'exp_level_not'  => 'Fără experiență',
     'funding'        => 'Finanțare',
     'sector'         => 'Sector',
     'has_salary'     => '',
@@ -1612,7 +1614,7 @@ const NEGATABLE_PARAMS = [
     'family' => 'families', 'occupation' => 'occupation', 'inst' => 'inst', 'sector' => 'sector',
     'regime' => 'regime', 'funding' => 'funding', 'duration' => 'duration', 'isced' => 'isced',
     'skill' => 'skill', 'lang' => 'lang', 'credential' => 'credential', 'domain' => 'domain',
-    'cor' => 'cor',
+    'cor' => 'cor', 'studies_level' => 'studies_levels', 'exp_level' => 'exp_levels',
 ];
 
 /**
@@ -1630,6 +1632,7 @@ const MULTI_PARAMS = [
     // NEGATABLE_PARAMS' exclusion lists
     'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
     'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not', 'cor_not',
+    'studies_level_not', 'exp_level_not',
 ];
 
 /** Form field name for a filter param. */

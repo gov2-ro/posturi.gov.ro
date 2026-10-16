@@ -412,8 +412,8 @@ run_suite('styles are tokens: no raw palette class and no colour literal in the 
     }
 });
 
-run_suite('release gate: the panel ships on (D18) and POSTURI_ELIGIBILITY_PANEL=0 hides it', function () use ($db_path) {
-    assert_same(true, ELIGIBILITY_PANEL_ENABLED, 'released for the beta on 2026-10-16');
+run_suite('release gate: the panel ships off (261016: a tool instead) and POSTURI_ELIGIBILITY_PANEL=0 hides it', function () use ($db_path) {
+    assert_same(false, ELIGIBILITY_PANEL_ENABLED, 'replaced by /pot-aplica/ on 2026-10-17');
     putenv('POSTURI_ELIGIBILITY_PANEL=0');
     $s = start_fixture_server($db_path);
     putenv('POSTURI_ELIGIBILITY_PANEL=1');

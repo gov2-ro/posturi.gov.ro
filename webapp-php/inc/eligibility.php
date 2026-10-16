@@ -22,7 +22,9 @@ declare(strict_types=1);
  * of the comparison rules. Set it back to false to withdraw the panel.
  * `POSTURI_ELIGIBILITY_PANEL=1` (or `=0`) overrides it per process.
  */
-const ELIGIBILITY_PANEL_ENABLED = true;
+// 261016 (pax): "Pot aplica?" is a tool (/pot-aplica/), not a panel on every
+// posting. Off; the panel code stays, one constant away.
+const ELIGIBILITY_PANEL_ENABLED = false;
 
 function eligibility_panel_enabled(): bool {
     $env = getenv('POSTURI_ELIGIBILITY_PANEL');

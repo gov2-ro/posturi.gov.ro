@@ -125,6 +125,9 @@ if (!isset($_build_stamp)) {
     <nav aria-label="Navigare principală" class="shrink-0 flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
       <?php /* UX-09: the count is the browser-local number of saved items; it
          stays hidden until saved.js has read the state. */ ?>
+      <?php /* 261016: the "Pot aplica?" tool. No room below sm; the landing's
+         "Începe cu" row links it there. */ ?>
+      <a href="/pot-aplica/" class="hidden py-2 hover:text-on-bar transition-colors sm:inline">Pot aplica?</a>
       <a href="/salvate/" class="py-2 hover:text-on-bar transition-colors">Salvate<span data-saved-count hidden class="ml-1 font-mono text-xs"></span></a>
       <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>
     </nav>

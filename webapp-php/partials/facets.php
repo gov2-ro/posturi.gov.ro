@@ -108,10 +108,6 @@
          */
         function facet_group(string $label, array $items, string $name, array $active, bool $open = false, string $help = ''): void {
             $active = array_values(array_filter(array_map('strval', $active), fn($v) => $v !== ''));
-            // An empty group with a live selection (a bookmarked value whose
-            // options vanished) is still rendered: its pinned orphan keeps the
-            // selection in the form and removable.
-            if (!$items && !$active) return;
             // An item may carry its own `param` (a yes/no switch such as shift=1)
             // so one group can merge several parameters (261016: Program de lucru).
             $own_on = count(array_filter($items, fn($i) => isset($i['param']) && !empty($i['on'])));
@@ -120,6 +116,10 @@
             $negatable = isset(NEGATABLE_PARAMS[$name]);
             $not = $negatable ? array_values(array_filter(array_map('strval', (array)($_GET[$name . '_not'] ?? [])),
                                                           fn($v) => trim($v) !== '')) : [];
+            // An empty group with a live selection (a bookmarked value whose
+            // options vanished) is still rendered: its pinned orphan keeps the
+            // selection (or exclusion) in the form and removable.
+            if (!$items && !$active && !$not) return;
 
             // Facets are capped (județ shows the top 25 of ~197 slugs). A selected
             // value outside that window has no checkbox, so the next HTMX submit

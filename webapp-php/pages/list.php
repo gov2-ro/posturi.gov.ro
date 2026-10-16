@@ -762,6 +762,7 @@ if (!$is_htmx): ?>
     <div id="shortcuts" class="pg-shortcuts mb-4">
       <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 text-sm">
         <span class="text-xs uppercase tracking-widest text-ink-muted">Începe cu</span>
+        <a href="/pot-aplica/" class="whitespace-nowrap font-medium text-gov hover:underline">Pot aplica? <span aria-hidden="true">→</span></a>
         <?php foreach ($shortcuts as $sc): ?>
         <a href="<?= e($sc['href']) ?>" class="whitespace-nowrap text-gov hover:underline"><?= e($sc['label']) ?>
           <span class="font-mono text-xs text-ink-muted"><?= number_format($sc['count'], 0, ',', '.') ?></span></a>

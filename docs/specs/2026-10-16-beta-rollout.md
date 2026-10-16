@@ -65,9 +65,32 @@ Check after that run: `/pipeline-check`; `/versiuni.json` `data.built_at` is new
 pipeline does (step `estimate-salaries` in `pipeline.py`) — the next scheduled run does it.
 Spot-check a town posting (e.g. a Primăria Orașului … in a small town) for a single band.
 
-## 5. v5 extraction (BETA-V5) — see docs/specs/2026-10-16-v5-extraction/README.md § 6
+## 5. v5 extraction (BETA-V5) — details in docs/specs/2026-10-16-v5-extraction/README.md § 6–7
 
-Filled in by the v5 implementation; the paid run is ~200 postings, about $0.45, off-peak.
+After steps 1 and 3 (the code knows the v5 columns, the VPS export writes them), off-peak
+(weekends are off-peak all day; weekdays avoid 01–04 and 06–10 UTC):
+
+```
+.venv/bin/python llm-schema.py --active-only --force --prompt-version v5 --limit 200 --dry-run
+.venv/bin/python llm-schema.py --active-only --force --prompt-version v5 --limit 200 --workers 4   # ≈ $0.45
+```
+
+Then make v5 the intake version without re-extracting the v4 rows — in the VPS `.env`:
+
+```
+LLM_PROMPT_VERSION=v5
+LLM_ACCEPT_PROMPT_VERSIONS=v4,v5
+```
+
+and check `.venv/bin/python llm-schema.py --active-only --resume --prompt-version v5 --dry-run`
+selects only new or changed postings. The four v5 filters (Tip concurs, Normă parțială,
+Post temporar vacant, Depunere fără deplasare) appear on the site once v5 rows are exported.
+
+## 6. Archive pages (UX-03)
+
+Nothing to do: the next `--active-only` export writes `archived_postings` (≈ the last 90
+days of expired/cancelled postings, a few MB). Check a recently expired posting's old URL:
+"Anunț expirat" and similar open jobs, `noindex`.
 
 ## Deferred by pax
 

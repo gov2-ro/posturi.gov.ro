@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-10-16 — Beta weekend, fourth slice: v5, archive pages, net pay, communes
+
+None deployed.
+- **v5 (`4655c2d`, fork of this session).** The prompt and schema the v5 report proposed,
+  with v5-shaped examples, null-when-silent rules and 5–20-word quotes; new closed lists
+  coerce instead of voiding an answer (the calendar stage list stays strict, per the
+  2026-10-11 decision). `LLM_ACCEPT_PROMPT_VERSIONS` keeps v4 rows current until their
+  source changes, so pinning v5 costs only the 200 newest plus new intake. Body paragraphs
+  the attachments repeat are dropped from v5 inputs only, and only when every number in the
+  paragraph is in the attachment too (the trial found a body that had lost an exam date).
+  Promotions are a filterable fact, not hidden by default — a product call left to pax.
+  /statistici's Active count went back through `OPEN_STATUS_SQL` (a source check caught it).
+- **Archive pages (UX-03, `beac230`).** A separate slim table rather than keeping expired
+  rows in `job_postings`: every count, facet, feed and sitemap reads `job_postings`, and
+  each would otherwise need a new exclusion. The detail page alone falls back to it.
+- **Net pay (`9e496f2`).** Arithmetic on the shown gross; 5.000 → 2.981 matches published
+  calculators; the minimum-wage facility is deliberately left out and the figure is
+  labelled an estimate.
+- **Communes (`4c7dbf8`, agent).** All 2,862 from Wikidata with SIRUTA, keyed on type and
+  county; checked against ro.wikipedia for the 68 largest.
+- Rollout order and the v5 commands: docs/specs/2026-10-16-beta-rollout.md.
+
 ### 2026-10-16 — Beta weekend, third slice: the 6 s found, filters flattened, stats scoped, pipeline chores
 
 Commits `49f87d2`…`efecb33`, none deployed. Several were delegated to Sonnet agents with

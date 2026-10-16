@@ -5,9 +5,12 @@ $id = (int)($_GET['id'] ?? 0);
 if (!$id) { http_response_code(404); echo "Not found"; exit; }
 
 $stmt = db()->prepare("
-    SELECT j.*, e.name AS employer_name, e.slug AS employer_slug,
+    SELECT j.*, t.body_markdown, t.schema_json, t.sal_json, t.attachment_meta,
+           t.other_links, t.detalii_raw, t.v3_bibliography,
+           e.name AS employer_name, e.slug AS employer_slug,
            jd.name AS judet_name, jd.slug AS judet_slug_val
     FROM job_postings j
+    LEFT JOIN posting_text t ON t.posting_id = j.id
     LEFT JOIN employers e ON e.id = j.employer_id
     LEFT JOIN judete jd ON jd.id = j.judet_id
     WHERE j.id = ?

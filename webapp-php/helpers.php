@@ -1923,7 +1923,7 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // it is useful to readers too, not just for measuring backfill coverage.
     $schema = $p['schema'] ?? '';
     if ($schema && $excl !== 'schema') {
-        $where[] = $schema === 'yes' ? "j.schema_json IS NOT NULL" : "j.schema_json IS NULL";
+        $where[] = $schema === 'yes' ? "j.has_schema = 1" : "j.has_schema = 0";
     }
     // Salary buckets read the ESTIMATE, not the announced figure. Only 44 of
     // 9,757 postings state a salary in the text, so the old `inf_salary_min`

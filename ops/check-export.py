@@ -118,8 +118,16 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
     def one(sql: str, *args):
         return con.execute(sql, args).fetchone()[0]
 
-    today = date.today()
+    # Bucharest, like intake_fresh and the export itself: the host is UTC, and a
+    # run between 21:00 and 24:00 UTC is already tomorrow here (OPS-TRIGGER).
+    today = datetime.now(ZoneInfo("Europe/Bucharest")).date()
     today_s = today.isoformat()
+    # PERF-SPLIT: the long texts live in posting_text on current exports. Read them
+    # through one joined row source so the checks work on either layout.
+    has_text = one("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'posting_text'")
+    texts = ("(SELECT j.id, j.title, j.employer_name, t.body_markdown, t.schema_json, t.attachment_meta "
+             "FROM job_postings j JOIN posting_text t ON t.posting_id = j.id)"
+             if has_text else "job_postings")
     recent_cutoff = (today - timedelta(days=RECENT_WINDOW_DAYS)).isoformat()
     # Not today.replace(year=…): that raises on 29 February.
     max_expiry = (today + timedelta(days=730)).isoformat()
@@ -150,7 +158,7 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
         "SELECT COUNT(*) FROM job_postings WHERE published_at IS NOT NULL "
         "AND published_at != ''"), total)
     m["body_fill_pct"] = _pct(one(
-        "SELECT COUNT(*) FROM job_postings WHERE body_markdown != ''"), total)
+        f"SELECT COUNT(*) FROM {texts} WHERE body_markdown != ''"), total)
 
     # Intake freshness — how recently the source actually produced something,
     # independent of when this file was built.
@@ -182,15 +190,15 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
 
     # Extraction coverage ---------------------------------------------------
     schema_rows = one(
-        "SELECT COUNT(*) FROM job_postings WHERE schema_json IS NOT NULL "
+        f"SELECT COUNT(*) FROM {texts} WHERE schema_json IS NOT NULL "
         "AND schema_json NOT IN ('', 'null', '{}')")
     v3_rows = one(
         "SELECT COUNT(*) FROM job_postings WHERE v3_eqf_level IS NOT NULL "
         "OR v3_study_level != '' OR v3_skills != '[]'")
     attach_rows = one(
-        "SELECT COUNT(*) FROM job_postings WHERE attachment_meta NOT IN ('', '[]')")
+        f"SELECT COUNT(*) FROM {texts} WHERE attachment_meta NOT IN ('', '[]')")
     short_body = one(
-        "SELECT COUNT(*) FROM job_postings WHERE length(body_markdown) < ?",
+        f"SELECT COUNT(*) FROM {texts} WHERE length(body_markdown) < ?",
         SHORT_BODY_CHARS)
     m["schema_coverage_pct"] = _pct(schema_rows, total)
     m["v3_coverage_pct"] = _pct(v3_rows, total)
@@ -232,13 +240,13 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
 
     # Encoding --------------------------------------------------------------
     m["mojibake_rows"] = one(
-        "SELECT COUNT(*) FROM job_postings WHERE "
+        f"SELECT COUNT(*) FROM {texts} WHERE "
         "title LIKE '%Ã%' OR title LIKE '%â€%' OR title LIKE '%�%' OR "
         "employer_name LIKE '%Ã%' OR employer_name LIKE '%â€%' OR "
         "body_markdown LIKE '%â€%' OR body_markdown LIKE '%�%'")
     # A literal backslash-n, i.e. a newline that was escaped instead of written.
     m["literal_newline_rows"] = one(
-        r"SELECT COUNT(*) FROM job_postings WHERE body_markdown LIKE '%\n%'")
+        f"SELECT COUNT(*) FROM {texts} WHERE body_markdown LIKE '%\\n%'")
 
     # build_meta ------------------------------------------------------------
     try:

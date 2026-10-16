@@ -130,7 +130,7 @@ function eligibility_fixture_postings(): array {
 }
 
 function build_eligibility_db(string $path): void {
-    build_fixture_db($path, true, true);
+    build_fixture_db($path, true, true, false);   // rows are added below, then split
     $db = new PDO('sqlite:' . $path);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
@@ -156,4 +156,5 @@ function build_eligibility_db(string $path): void {
                 $part, $section, $occ, $row['schema_source_revision'], $row['schema_source_revision'], str_repeat('c', 64), 'fold-alnum-v1']);
         }
     }
+    fixture_split_posting_text($db);
 }

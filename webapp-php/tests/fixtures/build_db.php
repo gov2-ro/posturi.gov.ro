@@ -27,7 +27,11 @@
  * shape the export writes.
  */
 
-function build_fixture_db(string $path, bool $role_cases = false, bool $evidence_cases = false): void {
+/**
+ * $split = false builds the layout of exports before PERF-SPLIT (long texts as
+ * job_postings columns, FTS with stored content), for the compatibility suite.
+ */
+function build_fixture_db(string $path, bool $role_cases = false, bool $evidence_cases = false, bool $split = true): void {
     if ($evidence_cases && !$role_cases) {
         throw new InvalidArgumentException('evidence cases are built on the role cases');
     }
@@ -517,6 +521,39 @@ SQL);
         ['2026-10-04', 'openrouter', 'fixture-model', 'occupation_v1', 2, 3000, 400, 0.002, 'occupations', 'ledger', 0, 0],
     ] as $row) {
         $llm->execute($row);
+    }
+
+    if ($split) fixture_split_posting_text($db);
+}
+
+/**
+ * The export's split_posting_text() (PERF-SPLIT): the long texts move to posting_text,
+ * has_schema stands in for `schema_json IS NOT NULL`, and the FTS index is rebuilt
+ * contentless. Columns the fixture does not carry are written as their empty value.
+ */
+function fixture_split_posting_text(PDO $db): void {
+    $have = array_flip($db->query("SELECT name FROM pragma_table_info('job_postings')")->fetchAll(PDO::FETCH_COLUMN));
+    $text = ['body_markdown' => "''", 'schema_json' => 'NULL', 'sal_json' => 'NULL', 'attachment_meta' => "'[]'",
+             'other_links' => "'[]'", 'detalii_raw' => "''", 'v3_bibliography' => "'[]'"];
+    $db->exec("CREATE TABLE posting_text (
+        posting_id INTEGER PRIMARY KEY REFERENCES job_postings(id) ON DELETE CASCADE,
+        body_markdown TEXT NOT NULL DEFAULT '', schema_json TEXT, sal_json TEXT,
+        attachment_meta TEXT NOT NULL DEFAULT '[]', other_links TEXT NOT NULL DEFAULT '[]',
+        detalii_raw TEXT NOT NULL DEFAULT '', v3_bibliography TEXT NOT NULL DEFAULT '[]')");
+    $sel = implode(', ', array_map(fn($c, $e) => isset($have[$c]) ? $c : $e, array_keys($text), $text));
+    $db->exec("INSERT INTO posting_text (posting_id, " . implode(', ', array_keys($text)) . ") SELECT id, $sel FROM job_postings");
+    $db->exec("ALTER TABLE job_postings ADD COLUMN has_schema INTEGER NOT NULL DEFAULT 0");
+    $db->exec("UPDATE job_postings SET has_schema = (schema_json IS NOT NULL)");
+    foreach (array_keys($text) as $c) {
+        if (isset($have[$c])) $db->exec("ALTER TABLE job_postings DROP COLUMN $c");
+    }
+    $db->exec("DROP TABLE job_postings_fts");
+    $db->exec("CREATE VIRTUAL TABLE job_postings_fts USING fts5(title, employer_name, judet_name, body_text,
+        content='', tokenize='unicode61 remove_diacritics 2')");
+    $fts = $db->prepare("INSERT INTO job_postings_fts (rowid, title, employer_name, judet_name, body_text) VALUES (?, ?, ?, ?, ?)");
+    foreach ($db->query("SELECT j.id, j.title, j.employer_name, j.judet_name, t.body_markdown
+                         FROM job_postings j JOIN posting_text t ON t.posting_id = j.id")->fetchAll() as $r) {
+        $fts->execute([$r['id'], $r['title'], $r['employer_name'], $r['judet_name'], strip_tags($r['body_markdown'])]);
     }
 }
 

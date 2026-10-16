@@ -38,8 +38,12 @@ putenv('POSTURI_TODAY=' . COMPAT_TODAY);
 $tmp = sys_get_temp_dir() . '/posturi-compat-' . getmypid();
 $current = "$tmp-current.sqlite";
 $legacy  = "$tmp-legacy.sqlite";
+$unsplit = "$tmp-unsplit.sqlite";
 build_fixture_db($current, true);
-copy($current, $legacy);
+// Exports from before PERF-SPLIT kept the long texts in job_postings; the column-drop
+// variants below are all of that era, so they start from that layout.
+build_fixture_db($unsplit, true, false, false);
+copy($unsplit, $legacy);
 
 // The live export at 2c5e480 lacked these; older ones lack more (see the shim).
 $dropped = [
@@ -63,11 +67,11 @@ $ldb = null;
 // An export from after FIX-05 but before prompt v4: application_status is there,
 // the v4_* columns are not. The first shim returned as soon as it saw the status.
 $nov4 = "$tmp-nov4.sqlite";
-copy($current, $nov4);
+copy($unsplit, $nov4);
 // The bundled 2026-09-09 export, reduced to what PHP queries: no status, no
 // resolved deadline, none of the later extraction columns.
 $oldest = "$tmp-oldest.sqlite";
-copy($current, $oldest);
+copy($unsplit, $oldest);
 $strip = [
     $nov4   => ['v4_funding_source', 'v4_funding_programme', 'v4_employer_sector',
                 'v4_parent_institution', 'v4_application_deadline'],
@@ -163,7 +167,7 @@ run_suite('shim covers each missing column on its own', function () use ($curren
     assert_true(in_array('application_status', $have, true) && !array_intersect($v4, $have),
         'fixture has application_status and no v4_* columns');
     shim_legacy_export($pdo);
-    assert_same(1, $views($pdo), 'v4-less export is wrapped in a view');
+    assert_same(2, $views($pdo), 'v4-less export is wrapped in a view (plus the posting_text stand-in)');
     $row = $pdo->query("SELECT " . implode(', ', $v4) . " FROM job_postings LIMIT 1")->fetch(PDO::FETCH_ASSOC);
     assert_same(['v4_funding_source' => '', 'v4_funding_programme' => '', 'v4_employer_sector' => '',
                  'v4_parent_institution' => '', 'v4_application_deadline' => null], $row, 'v4_* defaults');
@@ -176,7 +180,7 @@ run_suite('shim covers each missing column on its own', function () use ($curren
     // The oldest shape: every queried column is available through the view.
     $pdo = $open($oldest);
     shim_legacy_export($pdo);
-    assert_same(1, $views($pdo), 'oldest export is wrapped in a view');
+    assert_same(2, $views($pdo), 'oldest export is wrapped in a view (plus the posting_text stand-in)');
     foreach (['application_status', 'apply_deadline', 'deadline_source', 'v3_contract_duration',
               'v3_schedule', 'v3_shift_work', 'occ_canonical', 'sal_min'] as $col) {
         $pdo->query("SELECT $col FROM job_postings LIMIT 1")->fetchAll();
@@ -212,7 +216,7 @@ run_suite('a missing posting_roles table is stood in for by one implicit role pe
     // Reading through the job_postings view of the oldest shape.
     $old = $open($oldest_noroles);
     shim_legacy_export($old);
-    assert_same(['job_postings', 'posting_roles'], $views($old), 'oldest shape: both stand-ins');
+    assert_same(['job_postings', 'posting_roles', 'posting_text'], $views($old), 'oldest shape: every stand-in');
     $on = (int)$old->query('SELECT COUNT(*) FROM job_postings')->fetchColumn();
     assert_same($on, (int)$old->query('SELECT COUNT(*) FROM posting_roles')->fetchColumn(), 'oldest shape: one row per posting');
     $old->query("SELECT COUNT(*) FROM job_postings j WHERE EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND r.eqf_level IN (4) AND r.exp_years < CAST(1 AS REAL))")->fetchAll();
@@ -231,7 +235,7 @@ run_suite('a missing requirement_evidence table is stood in for by an empty view
     assert_true(count($want) >= 15, 'the table has its columns');
 
     foreach (['an export with every column but no evidence table' => [$noevidence, ['requirement_evidence']],
-              'the oldest shape, no roles and no evidence'        => [$oldest_noevidence, ['job_postings', 'posting_roles', 'requirement_evidence']]] as $label => [$file, $expect]) {
+              'the oldest shape, no roles and no evidence'        => [$oldest_noevidence, ['job_postings', 'posting_roles', 'posting_text', 'requirement_evidence']]] as $label => [$file, $expect]) {
         $pdo = $open($file);
         shim_legacy_export($pdo);
         assert_same($expect, $views($pdo), "$label: the missing tables are stood in for");
@@ -345,4 +349,5 @@ foreach ($shapes as $label => $file) {
     stop_fixture_server($srv, $file);
 }
 @unlink($current);
+@unlink($unsplit);
 finish();

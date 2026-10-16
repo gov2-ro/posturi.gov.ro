@@ -261,7 +261,7 @@ run_suite('rebuilt dataset: new slug and deadline, removed id, id reused by anot
     $w->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $w->exec("UPDATE job_postings SET title='ASISTENT MEDICAL PRINCIPAL', occ_canonical='', apply_deadline='2026-10-30' WHERE id=1001");
     $w->exec("UPDATE job_postings SET url='https://posturi.gov.ro/anunt/alt-anunt-1002' WHERE id=1002");
-    $w->exec("PRAGMA foreign_keys=OFF; DELETE FROM calendar_events WHERE posting_id=1006; DELETE FROM job_postings_fts WHERE rowid=1006; DELETE FROM job_postings WHERE id=1006");
+    $w->exec("PRAGMA foreign_keys=OFF; DELETE FROM calendar_events WHERE posting_id=1006; DELETE FROM posting_text WHERE posting_id=1006; DELETE FROM job_postings WHERE id=1006");
     $j = json_decode(lookup($base, '{"ids":[1001,1002,1006]}')[2], true);
     $by = [];
     foreach ($j['items'] as $i) $by[$i['id']] = $i;

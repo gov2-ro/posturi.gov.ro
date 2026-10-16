@@ -392,11 +392,32 @@ CREATE TABLE build_meta (
     detail_fetched_rows     INTEGER
 );
 
+-- PERF-SPLIT: the long texts of a posting, one row per job_postings row. They
+-- were columns of job_postings (body ~5 KB, schema_json, sal_json …), so every
+-- facet count, a full scan of job_postings, read ~75% dead weight; the list page
+-- runs ~40 of those per uncached request. Only the detail page and the feeds read
+-- these, by posting_id. `job_postings.has_schema` stands in for the old
+-- `schema_json IS NOT NULL` test. PHP shims this table on older exports (db.php).
+CREATE TABLE posting_text (
+    posting_id        INTEGER PRIMARY KEY REFERENCES job_postings(id) ON DELETE CASCADE,
+    body_markdown     TEXT NOT NULL DEFAULT '',
+    schema_json       TEXT,
+    sal_json          TEXT,
+    attachment_meta   TEXT NOT NULL DEFAULT '[]',
+    other_links       TEXT NOT NULL DEFAULT '[]',
+    detalii_raw       TEXT NOT NULL DEFAULT '',
+    v3_bibliography   TEXT NOT NULL DEFAULT '[]'
+);
+
+-- Contentless (content=''): PHP only matches and ranks (bm25), it never reads a
+-- column back, so storing a second copy of every body (~60 MB of a 190 MB file)
+-- bought nothing.
 CREATE VIRTUAL TABLE job_postings_fts USING fts5(
     title,
     employer_name,
     judet_name,
     body_text,
+    content='',
     tokenize='unicode61 remove_diacritics 2'
 );
 """)
@@ -642,6 +663,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     """)
     print("done")
 
+    split_posting_text(con)
+
     export_llm_costs(cur, con)
 
     # Source-freshness aggregates for build_meta, over the SAME slice the
@@ -661,6 +684,28 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
                                if agg["max_fetched"] else None),
         detail_fetched_rows=agg["fetched_rows"] or 0,
     )
+
+
+#: Columns moved from job_postings to posting_text (PERF-SPLIT), in table order.
+TEXT_COLUMNS = ("body_markdown", "schema_json", "sal_json", "attachment_meta",
+                "other_links", "detalii_raw", "v3_bibliography")
+
+
+def split_posting_text(con: sqlite3.Connection) -> None:
+    """Move the long texts out of job_postings once everything that reads them ran.
+
+    The rows are written whole (the insert, the FTS body) and then split here, so the
+    export code above stays one row = one posting. DROP COLUMN rewrites the table;
+    the VACUUM at the end of main() compacts what that leaves behind.
+    """
+    print("Splitting posting texts...", end=" ", flush=True)
+    cols = ", ".join(TEXT_COLUMNS)
+    con.execute(f"INSERT INTO posting_text(posting_id, {cols}) SELECT id, {cols} FROM job_postings")
+    con.execute("ALTER TABLE job_postings ADD COLUMN has_schema INTEGER NOT NULL DEFAULT 0")
+    con.execute("UPDATE job_postings SET has_schema = (schema_json IS NOT NULL)")
+    for c in TEXT_COLUMNS:
+        con.execute(f"ALTER TABLE job_postings DROP COLUMN {c}")
+    print("done")
 
 
 def export_llm_costs(cur, con: sqlite3.Connection) -> None:

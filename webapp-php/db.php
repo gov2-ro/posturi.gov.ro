@@ -96,12 +96,45 @@ function shim_legacy_export(PDO $pdo): void {
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";
     }
+    // PERF-SPLIT: a current export says "structured" with has_schema and keeps the
+    // long texts in posting_text; an older one has them as columns here.
+    if (!isset($cols['has_schema'])) {
+        $extra[] = isset($cols['schema_json'])
+            ? "(schema_json IS NOT NULL) AS has_schema" : "0 AS has_schema";
+    }
     if ($extra) {
         $pdo->exec("CREATE TEMP VIEW job_postings AS SELECT *, " . implode(', ', $extra)
             . " FROM main.job_postings");
     }
     shim_posting_roles($pdo, $cols);
     shim_requirement_evidence($pdo);
+    shim_posting_text($pdo, $cols);
+}
+
+/**
+ * PERF-SPLIT: an export that predates `posting_text` still has the long texts as
+ * job_postings columns, so a TEMP view of that name reads them from there and the
+ * detail page's join works on either layout. A column the export is too old to
+ * have reads as its empty value.
+ *
+ * @param array<string,int> $cols  job_postings column names, as keys
+ */
+function shim_posting_text(PDO $pdo, array $cols): void {
+    $has = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'posting_text'")
+        ->fetchColumn();
+    if ($has) {
+        return;
+    }
+    $c = static fn(string $name, string $empty): string => isset($cols[$name]) ? $name : $empty;
+    $pdo->exec("CREATE TEMP VIEW posting_text AS SELECT id AS posting_id,
+            {$c('body_markdown', "''")} AS body_markdown,
+            {$c('schema_json', 'NULL')} AS schema_json,
+            {$c('sal_json', 'NULL')} AS sal_json,
+            {$c('attachment_meta', "'[]'")} AS attachment_meta,
+            {$c('other_links', "'[]'")} AS other_links,
+            {$c('detalii_raw', "''")} AS detalii_raw,
+            {$c('v3_bibliography', "'[]'")} AS v3_bibliography
+        FROM main.job_postings");
 }
 
 /**

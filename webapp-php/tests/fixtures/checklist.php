@@ -24,7 +24,7 @@ require_once __DIR__ . '/build_db.php';
 
 function build_checklist_fixture(string $path, string $variant = 'a'): void {
     if (!in_array($variant, ['a', 'b'], true)) throw new InvalidArgumentException('variant must be a or b');
-    build_fixture_db($path);
+    build_fixture_db($path, false, false, false);   // rows are added below, then split
     $db = new PDO('sqlite:' . $path);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $b = $variant === 'b';
@@ -106,4 +106,5 @@ function build_checklist_fixture(string $path, string $variant = 'a'): void {
     $n = (int)$db->query('SELECT COUNT(*) FROM job_postings')->fetchColumn();
     $ev = (int)$db->query('SELECT COUNT(*) FROM calendar_events')->fetchColumn();
     $db->exec("UPDATE build_meta SET job_postings = $n, calendar_events = $ev WHERE id = 1");
+    fixture_split_posting_text($db);
 }

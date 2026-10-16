@@ -397,8 +397,8 @@ timing_mark('f-eqf');
 $schema_options = [];
 {
     $sc = facet_scope('schema');
-    $yes = scope_count($sc, ["j.schema_json IS NOT NULL"]);
-    $no  = scope_count($sc, ["j.schema_json IS NULL"]);
+    $yes = scope_count($sc, ["j.has_schema = 1"]);
+    $no  = scope_count($sc, ["j.has_schema = 0"]);
     if ($yes) $schema_options[] = ['val' => 'yes', 'label' => 'Structurată (LLM)', 'cnt' => $yes];
     if ($no)  $schema_options[] = ['val' => 'no',  'label' => 'Doar text brut',    'cnt' => $no];
 }

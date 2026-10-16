@@ -339,7 +339,9 @@ test('bar facet panels: one open at a time, Escape and outside click close, list
   expect(Math.abs(q.y - g0.y)).toBeLessThan(60);
 
   const judet = page.locator('#facet-list > [data-facet="judet"]');
-  const family = page.locator('#facet-list > [data-facet="family"]');
+  // The pill right after Județ, on the same row: one further along may wrap under
+  // Județ's open panel on wider (CI) fonts, where no reader could click it either.
+  const family = page.locator('#facet-list > [data-facet="inst"]');
   await judet.locator('> summary').click();
   await expect(judet.locator('> .facet-body')).toBeVisible();
   await expect(judet.locator('> summary')).toHaveAttribute('aria-expanded', 'true');

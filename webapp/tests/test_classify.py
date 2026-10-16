@@ -87,3 +87,33 @@ def test_regime(title, body, regime):
 def test_employer_kind(name, kind):
     assert classify.employer_kind(name) == kind
     assert kind in classify.EMPLOYER_KIND_LABELS
+
+
+@pytest.mark.parametrize("code,out", [
+    ("en", "en"), ("hu", "hu"),
+    ("o limbă străină", "straina"), ("Limba de circulație internațională", "straina"),
+    ("limbi străine", "straina"), ("A doua limbă străină", "straina"),
+    ("Limba Semnelor Române", "Limba Semnelor Române"), ("limba locală", "limba locală"),
+])
+def test_language_code_folds_any_foreign_language(code, out):
+    assert classify.language_code(code) == out
+
+
+@pytest.mark.parametrize("title,specs", [
+    ("Medic specialist, specialitatea Neurologie", ["Neurologie"]),
+    ("MEDIC SPECIALIST RADIOLOGIE ȘI IMAGISTICĂ MEDICALĂ – COMPETENȚĂ CT", ["Radiologie și imagistică"]),
+    ("medic primar – specialitatea medicină de familie", ["Medicină de familie"]),
+    ("Medic veterinar", []),
+    ("Asistent medical generalist", []),
+])
+def test_medical_specialties(title, specs):
+    assert classify.medical_specialties(title) == specs
+
+
+@pytest.mark.parametrize("names,code", [
+    (("Muncitor calificat", ""), "7"), (("Muncitor necalificat", ""), "9"),
+    (("Medic specialist", ""), "221"), (("", "Șofer autoturism"), "83"),
+    (("Membru în Consiliul de Administrație", ""), ""),
+])
+def test_occupation_fallback(names, code):
+    assert classify.occupation_fallback(*names) == code

@@ -184,6 +184,18 @@
   .facet-not:focus-within { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
   .facet-not:has(input:checked) { color: rgb(var(--c-alert-ink)); background: rgb(var(--c-alert-bg)); border-color: rgb(var(--c-alert-line)); font-weight: 600; }
   .facet-not:has(input:disabled) { visibility: hidden; }
+  /* Tree groups (COR, languages): a twisty before a node, a pad of the same width
+     before a leaf, and each level indented under its parent's checkbox. */
+  .facet-twisty, .facet-twisty-pad { flex: 0 0 1.25rem; width: 1.25rem; }
+  .facet-twisty {
+    display: inline-flex; align-items: center; justify-content: center; height: 1.5rem;
+    border-radius: var(--radius-sm, 0.25rem); color: rgb(var(--c-ink-muted)); font-size: 0.75rem;
+  }
+  .facet-twisty:hover { color: rgb(var(--c-gov)); }
+  .facet-twisty:focus-visible { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
+  .facet-twisty span { transition: transform 0.15s; }
+  .facet-twisty[aria-expanded="true"] span { transform: rotate(90deg); }
+  .facet-children { padding-left: 1.25rem; }
   .facet-row-not .facet-check + span { text-decoration: line-through; color: rgb(var(--c-alert-ink)); }
   @media (hover: hover) {
     .facet-row:not(:hover) .facet-not:not(:focus-within):not(:has(input:checked)) { opacity: 0; }

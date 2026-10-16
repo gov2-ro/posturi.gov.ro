@@ -22,6 +22,80 @@
 <div id="facet-list"<?= $is_htmx ? ' hx-swap-oob="true"' : '' ?>>
         <?php
         /**
+         * The value rows of a group. An item with `children` is a tree node
+         * (261016: occupation groups, languages): its children sit under a
+         * twisty, shown when the reader opens it or when something under it is
+         * on. Parent and children are values of the same parameter.
+         */
+        function facet_rows(array $items, string $name, array $active, array $not, bool $negatable, int $depth = 0): void {
+            foreach ($items as $item):
+                $val = (string)($item['val'] ?? $item['value'] ?? '');
+                $lbl = $item['label'] ?? $val;
+                $cnt = $item['cnt'] ?? $item['count'] ?? 0;
+                $field = isset($item['param']) ? (string)$item['param'] : param_field($name);
+                $on  = isset($item['param']) ? !empty($item['on']) : in_array($val, array_map('strval', $active), true);
+                // A count of 0 is a dead end: checking it can only empty the
+                // result list. Disable it rather than let it look like any
+                // other option — but never disable a *checked* one, or the
+                // filter could not be taken off again. Some groups (Anomalii)
+                // pass '' for "no count available", which is not a zero.
+                $dead = !$on && $cnt !== '' && (int)$cnt === 0;
+                $neg = $negatable && !isset($item['param']) && in_array($val, $not, true);
+                $dead = $dead && !$neg;
+                $kids = $item['children'] ?? [];
+                $kids_on = $kids && facet_tree_has($kids, array_merge($active, $not));
+                $tree_key = $name . ':' . $val; ?>
+              <div class="facet-row flex items-center gap-1<?= $neg ? ' facet-row-not' : '' ?>"<?= $depth ? ' data-depth="' . $depth . '"' : '' ?>>
+                <?php if ($kids): ?>
+                <button type="button" class="facet-twisty" data-tree-key="<?= e($tree_key) ?>" aria-expanded="<?= $kids_on ? 'true' : 'false' ?>"
+                        aria-label="Subgrupe: <?= e($lbl) ?>"><span aria-hidden="true">▸</span></button>
+                <?php elseif ($depth || !empty($item['tree'])): ?>
+                <span class="facet-twisty-pad" aria-hidden="true"></span>
+                <?php endif; ?>
+                <label class="group flex min-w-0 flex-1 items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>">
+                  <input type="checkbox" name="<?= e($field) ?>" value="<?= e($val) ?>"
+                         class="facet-check accent-gov shrink-0"<?= checked_if($on) ?><?= $dead ? ' disabled' : '' ?>>
+                  <span class="flex-1 truncate text-sm text-ink <?= $dead ? '' : 'transition-colors group-hover:text-gov' ?>"><?= e($lbl) ?></span>
+                  <span class="shrink-0 font-mono text-xs text-ink-muted"><?= $cnt === '' ? '' : $cnt ?></span>
+                </label>
+                <?php if ($negatable && !isset($item['param'])): ?>
+                <?php /* "Fără": excludes the value. A real checkbox (sr-only) inside
+                   its own label, so it is one Tab stop and announces its state. */ ?>
+                <label class="facet-not" title="Exclude: <?= e($lbl) ?>">
+                  <input type="checkbox" name="<?= e($name) ?>_not[]" value="<?= e($val) ?>" class="sr-only"<?= checked_if($neg) ?><?= $dead ? ' disabled' : '' ?>>
+                  <span aria-hidden="true">fără</span><span class="sr-only">Exclude: <?= e($lbl) ?></span>
+                </label>
+                <?php endif; ?>
+              </div>
+              <?php if ($kids): ?>
+              <div class="facet-children" data-tree-children="<?= e($tree_key) ?>"<?= $kids_on ? '' : ' hidden' ?>>
+                <?php facet_rows($kids, $name, $active, $not, $negatable, $depth + 1); ?>
+              </div>
+              <?php endif;
+            endforeach;
+        }
+
+        /** Whether any value in a subtree is among $vals. */
+        function facet_tree_has(array $items, array $vals): bool {
+            foreach ($items as $i) {
+                if (in_array((string)($i['val'] ?? ''), $vals, true)) return true;
+                if (!empty($i['children']) && facet_tree_has($i['children'], $vals)) return true;
+            }
+            return false;
+        }
+
+        /** Every value in a tree, flattened. */
+        function facet_tree_values(array $items): array {
+            $out = [];
+            foreach ($items as $i) {
+                if (isset($i['param'])) continue;
+                $out[] = (string)($i['val'] ?? $i['value'] ?? '');
+                if (!empty($i['children'])) array_push($out, ...facet_tree_values($i['children']));
+            }
+            return $out;
+        }
+
+        /**
          * A facet as a <details> disclosure: native keyboard + screen-reader
          * behaviour for free. The open/closed state is client state and this
          * markup is swapped on every filter change, so it is re-applied from
@@ -41,8 +115,7 @@
             // An item may carry its own `param` (a yes/no switch such as shift=1)
             // so one group can merge several parameters (261016: Program de lucru).
             $own_on = count(array_filter($items, fn($i) => isset($i['param']) && !empty($i['on'])));
-            $values = array_map(fn($i) => (string)($i['val'] ?? $i['value'] ?? ''),
-                                array_filter($items, fn($i) => !isset($i['param'])));
+            $values = facet_tree_values($items);
             // 261016: an excludable group carries a second, "fără" switch per value.
             $negatable = isset(NEGATABLE_PARAMS[$name]);
             $not = $negatable ? array_values(array_filter(array_map('strval', (array)($_GET[$name . '_not'] ?? [])),
@@ -104,37 +177,7 @@
                  switch above is also a direct child, and being first it is what
                  a `querySelector` would return. */ ?>
               <div class="facet-options space-y-0.5 pb-2 pr-1 lg:max-h-56 lg:overflow-y-auto">
-                <?php foreach ($items as $item):
-                    $val = (string)($item['val'] ?? $item['value'] ?? '');
-                    $lbl = $item['label'] ?? $val;
-                    $cnt = $item['cnt'] ?? $item['count'] ?? 0;
-                    $field = isset($item['param']) ? (string)$item['param'] : param_field($name);
-                    $on  = isset($item['param']) ? !empty($item['on']) : in_array($val, array_map('strval', $active), true);
-                    // A count of 0 is a dead end: checking it can only empty the
-                    // result list. Disable it rather than let it look like any
-                    // other option — but never disable a *checked* one, or the
-                    // filter could not be taken off again. Some groups (Anomalii)
-                    // pass '' for "no count available", which is not a zero.
-                    $dead = !$on && $cnt !== '' && (int)$cnt === 0; ?>
-                  <?php $neg = $negatable && !isset($item['param']) && in_array($val, $not, true);
-                        $dead = $dead && !$neg; ?>
-                  <div class="facet-row flex items-center gap-1<?= $neg ? ' facet-row-not' : '' ?>">
-                  <label class="group flex min-w-0 flex-1 items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>">
-                    <input type="checkbox" name="<?= e($field) ?>" value="<?= e($val) ?>"
-                           class="facet-check accent-gov shrink-0"<?= checked_if($on) ?><?= $dead ? ' disabled' : '' ?>>
-                    <span class="flex-1 truncate text-sm text-ink <?= $dead ? '' : 'transition-colors group-hover:text-gov' ?>"><?= e($lbl) ?></span>
-                    <span class="shrink-0 font-mono text-xs text-ink-muted"><?= $cnt === '' ? '' : $cnt ?></span>
-                  </label>
-                  <?php if ($negatable && !isset($item['param'])): ?>
-                  <?php /* "Fără": excludes the value. A real checkbox (sr-only) inside
-                     its own label, so it is one Tab stop and announces its state. */ ?>
-                  <label class="facet-not" title="Exclude: <?= e($lbl) ?>">
-                    <input type="checkbox" name="<?= e($name) ?>_not[]" value="<?= e($val) ?>" class="sr-only"<?= checked_if($neg) ?><?= $dead ? ' disabled' : '' ?>>
-                    <span aria-hidden="true">fără</span><span class="sr-only">Exclude: <?= e($lbl) ?></span>
-                  </label>
-                  <?php endif; ?>
-                  </div>
-                <?php endforeach; ?>
+                <?php facet_rows($items, $name, $active, $not, $negatable); ?>
               </div>
               </div>
             </details>
@@ -171,8 +214,14 @@
         facet_group('Sector angajator',    $sector_options,     'sector',     $sector_sel);
         facet_group('Nivel angajator',     $emp_cat_options,    'employer_cat', $emp_cats, false,
                     'Eticheta din sursă (posturi.gov.ro): local, județean, național.');
-        facet_group('Domeniu profesional', $family_options,     'family',     $families,    true, $auto_help);
+        // 261016: occupations as the COR tree (Clasificarea Ocupațiilor din România):
+        // Muncitori calificați › Electricieni; Specialiști › Sănătate › Medici.
+        facet_group('Grupă ocupațională',  $cor_options,        'cor',        $cor_sel,     true,
+                    'După Clasificarea Ocupațiilor din România (COR), dedusă din titlul postului. ▸ deschide subgrupele.');
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
+        facet_group('Specialitate medicală', $medspec_options,  'medspec',    $medspec_sel, false,
+                    'Specialitatea numită în titlul anunțului.');
+        facet_group('Domeniu profesional', $family_options,     'family',     $families,    false, $auto_help);
         // Estimated from the 2026 draft grid unless the posting states a salary.
         facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket ? [$sal_bucket] : [], false,
                     'Salariul anunțat, altfel cel estimat din grila de salarizare propusă (brut lunar).');

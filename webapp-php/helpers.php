@@ -949,6 +949,48 @@ const EMPLOYER_KIND_LABELS = [
     'justitie'          => 'Instanțe și parchete',
 ];
 
+/**
+ * 261016: the occupation tree. COR (Clasificarea Ocupațiilor din România) uses
+ * ISCO-08's codes for its first four digits; these are its major and sub-major
+ * groups, plus the minor groups that answer "what kind of doctor / engineer /
+ * teacher". A code with no label here is not offered as a tree level.
+ */
+const ISCO_GROUP_LABELS = [
+    '1' => 'Conducători', '2' => 'Specialiști', '3' => 'Tehnicieni și asimilați',
+    '4' => 'Funcționari administrativi', '5' => 'Lucrători în servicii',
+    '6' => 'Agricultură, silvicultură, pescuit', '7' => 'Muncitori calificați',
+    '8' => 'Operatori de mașini și șoferi', '9' => 'Muncitori necalificați', '0' => 'Forțe armate',
+    '11' => 'Conducători în administrație', '12' => 'Conducători administrativi și comerciali',
+    '13' => 'Conducători în producție și servicii specializate', '14' => 'Conducători în servicii și comerț',
+    '21' => 'Științe și inginerie', '22' => 'Sănătate', '23' => 'Învățământ',
+    '24' => 'Afaceri și administrație', '25' => 'IT și comunicații', '26' => 'Juridic, social și cultural',
+    '31' => 'Tehnicieni în științe și inginerie', '32' => 'Tehnicieni în sănătate',
+    '33' => 'Tehnicieni în afaceri și administrație', '34' => 'Tehnicieni în domeniul juridic, social, cultural',
+    '35' => 'Tehnicieni IT și comunicații',
+    '41' => 'Funcționari de birou', '42' => 'Funcționari cu publicul', '43' => 'Evidență date și materiale',
+    '44' => 'Alți funcționari administrativi',
+    '51' => 'Servicii personale (bucătari, administratori, îngrijitori de clădiri)', '52' => 'Vânzări',
+    '53' => 'Îngrijire personală (infirmieri, îngrijitori)', '54' => 'Pază și protecție',
+    '61' => 'Agricultori și lucrători calificați', '62' => 'Silvicultură și pescuit', '63' => 'Agricultură de subzistență',
+    '71' => 'Construcții (zidari, instalatori, zugravi)', '72' => 'Metalurgie, mecanici, lăcătuși',
+    '73' => 'Meșteșugari și tipografi', '74' => 'Electricieni și electroniști',
+    '75' => 'Alimentație, lemn, textile',
+    '81' => 'Operatori la instalații fixe', '82' => 'Asamblori', '83' => 'Șoferi și operatori de utilaje',
+    '91' => 'Curățenie și ajutor', '92' => 'Agricultură și silvicultură (necalificați)',
+    '93' => 'Construcții, industrie, transport (necalificați)', '94' => 'Ajutori în bucătărie',
+    '95' => 'Vânzători ambulanți', '96' => 'Salubritate și alte munci elementare',
+    '211' => 'Fizicieni, chimiști, geologi', '212' => 'Matematicieni, statisticieni',
+    '213' => 'Biologi, agronomi, specialiști în mediu', '214' => 'Ingineri (construcții, mecanică, chimie …)',
+    '215' => 'Ingineri electrotehnici și electroniști', '216' => 'Arhitecți, urbaniști, topografi',
+    '221' => 'Medici', '222' => 'Asistenți medicali și moașe', '224' => 'Paramedici',
+    '225' => 'Medici veterinari', '226' => 'Farmaciști, stomatologi, kinetoterapeuți, alți specialiști',
+    '231' => 'Profesori universitari', '232' => 'Formatori profesionali', '233' => 'Profesori de liceu și gimnaziu',
+    '234' => 'Învățători și educatori', '235' => 'Alți specialiști în învățământ',
+    '241' => 'Finanțe și contabilitate', '242' => 'Administrație și politici publice', '243' => 'Vânzări, marketing, PR',
+    '261' => 'Juriști', '262' => 'Arhiviști, bibliotecari, muzeografi', '263' => 'Psihologi, asistenți sociali, economiști',
+    '264' => 'Autori, jurnaliști, traducători', '265' => 'Artiști',
+];
+
 const EMPLOYER_SECTOR_LABELS = [
     'administratie_locala'   => 'Administrație locală',
     'administratie_centrala' => 'Administrație centrală',
@@ -1334,7 +1376,9 @@ function has_v3(array $p): bool {
  */
 const LANGUAGE_NAMES = [
     'en' => 'Engleză', 'fr' => 'Franceză', 'de' => 'Germană', 'it' => 'Italiană',
-    'es' => 'Spaniolă', 'ru' => 'Rusă', 'hu' => 'Maghiară',
+    'es' => 'Spaniolă', 'ru' => 'Rusă', 'hu' => 'Maghiară', 'ro' => 'Română', 'uk' => 'Ucraineană',
+    'de-at' => 'Germană', 'pt' => 'Portugheză', 'tr' => 'Turcă', 'ar' => 'Arabă', 'zh' => 'Chineză',
+    'straina' => 'O limbă străină (oricare)',
 ];
 
 function language_token_label(string $token): string {
@@ -1488,6 +1532,8 @@ const FILTER_CHIP_GROUPS = [
     'occupation'     => 'Ocupație',
     'regime'         => 'Tip funcție',
     'inst'           => 'Instituție',
+    'cor'            => 'Grupă ocupațională',
+    'medspec'        => 'Specialitate medicală',
     'family_not'     => 'Fără',
     'occupation_not' => 'Fără',
     'inst_not'       => 'Fără',
@@ -1500,6 +1546,7 @@ const FILTER_CHIP_GROUPS = [
     'lang_not'       => 'Fără',
     'credential_not' => 'Fără',
     'domain_not'     => 'Fără',
+    'cor_not'        => 'Fără',
     'funding'        => 'Finanțare',
     'sector'         => 'Sector',
     'has_salary'     => '',
@@ -1520,6 +1567,7 @@ const NEGATABLE_PARAMS = [
     'family' => 'families', 'occupation' => 'occupation', 'inst' => 'inst', 'sector' => 'sector',
     'regime' => 'regime', 'funding' => 'funding', 'duration' => 'duration', 'isced' => 'isced',
     'skill' => 'skill', 'lang' => 'lang', 'credential' => 'credential', 'domain' => 'domain',
+    'cor' => 'cor',
 ];
 
 /**
@@ -1533,10 +1581,10 @@ const MULTI_PARAMS = [
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
-    'regime', 'inst',
+    'regime', 'inst', 'cor', 'medspec',
     // NEGATABLE_PARAMS' exclusion lists
     'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
-    'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not',
+    'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not', 'cor_not',
 ];
 
 /** Form field name for a filter param. */
@@ -1617,6 +1665,7 @@ function filter_value_label(string $key, string $value): string {
         'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
         'regime'                           => JOB_REGIME_LABELS[$value] ?? $value,
         'inst'                             => EMPLOYER_KIND_LABELS[$value] ?? $value,
+        'cor'                              => ISCO_GROUP_LABELS[$value] ?? $value,
         'has_salary'                       => 'Cu salariu estimat',
         'expires_after', 'expires_before', 'published' => fmt_date($value),
         'family'                           => family_label($value),
@@ -2046,6 +2095,7 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
         'domain'     => 'v3_policy_domains',
         'stage'      => 'v3_exam_stages',
         'anomaly'    => 'inf_anomaly_flags',
+        'medspec'    => 'med_specialty',
     ] as $param => $column) {
         $values = array_filter((array)($p[$param] ?? []), fn ($v) => (string)$v !== '');
         if (!$values || $excl === $param) continue;
@@ -2058,8 +2108,16 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
             // ESCAPE is required: these vocabularies are full of underscores
             // ("09_sanatate_asistenta_sociala"), and `_` is a LIKE wildcard.
             // Escaping without declaring the escape character matched nothing.
+            $esc = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value);
+            if ($param === 'lang' && !str_contains((string)$value, ':')) {
+                // 261016 language tree: a bare language ("en") is every level of it.
+                $probes[] = "($target LIKE ? ESCAPE '\\' OR $target LIKE ? ESCAPE '\\')";
+                $pb[]     = '%"' . $esc . '"%';
+                $pb[]     = '%"' . $esc . ':%';
+                continue;
+            }
             $probes[] = "$target LIKE ? ESCAPE '\\'";
-            $pb[]     = '%"' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string)$value) . '"%';
+            $pb[]     = '%"' . $esc . '"%';
         }
         $glue = facet_mode($param, $p) === 'all' ? ' AND ' : ' OR ';
         if ($on_role) {
@@ -2178,6 +2236,14 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // the planner guesses those equality indexes are the most selective and
     // rescans every EQF-6 role once per posting — 250 ms per query on 1,848
     // postings, against 1 ms probing by posting_id (the primary key's prefix).
+    // 261016: occupation group (COR = ISCO-08), by code prefix: ?cor[]=22 is every
+    // health professional, ?cor[]=221 the doctors.
+    $cor = array_values(array_filter(array_map('strval', (array)($p['cor'] ?? [])), fn($v) => preg_match('/^\d{1,4}$/', $v)));
+    if ($cor && $excl !== 'cor') {
+        $where[] = '(' . implode(' OR ', array_fill(0, count($cor), 'j.occ_group LIKE ?')) . ')';
+        foreach ($cor as $c) $binds[] = $c . '%';
+    }
+
     // 261016: exclusions. The positive clause for the excluded values, built by
     // this same function (so a role group excludes postings with ANY role
     // holding the value), negated as a posting-id set. Any-of: excluding two

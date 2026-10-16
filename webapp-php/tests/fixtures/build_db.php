@@ -142,6 +142,8 @@ CREATE TABLE job_postings (
     funding_kind            TEXT NOT NULL DEFAULT '',
     job_regime              TEXT NOT NULL DEFAULT '',
     employer_kind           TEXT NOT NULL DEFAULT '',
+    occ_group               TEXT NOT NULL DEFAULT '',
+    med_specialty           TEXT NOT NULL DEFAULT '[]',
     apply_deadline          TEXT,
     deadline_source         TEXT NOT NULL DEFAULT '',
     application_status      TEXT NOT NULL DEFAULT ''
@@ -520,6 +522,11 @@ SQL);
         UPDATE job_postings SET funding_kind=v4_funding_source;
         UPDATE job_postings SET work_mode='telemunca' WHERE inf_remote_eligible=1;
         UPDATE job_postings SET employer_category='Instituții locale' WHERE id IN (1004, 1005);
+        UPDATE job_postings SET occ_group='2221' WHERE id=1001;
+        UPDATE job_postings SET occ_group='2422' WHERE id IN (1002, 1003);
+        UPDATE job_postings SET occ_group='9' WHERE id=1005;
+        UPDATE job_postings SET occ_group='2212', med_specialty='[\"Cardiologie\"]' WHERE id=1006;
+        UPDATE job_postings SET occ_group='5153' WHERE id=1004;
     ");
 
     $db->exec("INSERT INTO calendar_events VALUES

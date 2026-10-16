@@ -81,9 +81,9 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => { try { localStorage.removeItem('posturi.facets'); } catch (e) {} });
 });
 
-test('fresh load: desktop starts with every group collapsed, the drawer with Județ and Domeniu open; no overflow', async ({ page }, testInfo) => {
+test('fresh load: desktop starts with every group collapsed, the drawer with Județ and Grupă ocupațională open; no overflow', async ({ page }, testInfo) => {
   await page.goto('/');
-  expect(await openKeys(page)).toEqual(isNarrow(page) ? ['family', 'judet'] : []);
+  expect(await openKeys(page)).toEqual(isNarrow(page) ? ['cor', 'judet'] : []);
   // Server-rendered open state is not a reader preference: nothing is stored.
   await page.waitForTimeout(100);
   expect(await page.evaluate(() => localStorage.getItem('posturi.facets'))).toBeNull();
@@ -147,10 +147,10 @@ test('bookmarked selections open their own group; legacy params ride along and a
   await page.goto('/?status=all&anomaly%5B%5D=missing_contact&type%5B%5D=Temporar&exp_level%5B%5D=5plus');
   const open = await openKeys(page);
   expect(open).toContain('exp_level');
-  for (const k of ['family', 'judet']) {
+  for (const k of ['cor', 'judet']) {
     if (isNarrow(page)) expect(open, k).toContain(k); else expect(open, k).not.toContain(k);
   }
-  expect(open.filter((k) => !['exp_level', 'family', 'judet'].includes(k))).toEqual([]);
+  expect(open.filter((k) => !['exp_level', 'cor', 'judet'].includes(k))).toEqual([]);
   await expect(page.locator('input[type="hidden"][name="anomaly[]"][value="missing_contact"]')).toHaveCount(1);
   await noOverflow(page, 'selection with legacy params');
   await openPanel(page);
@@ -321,4 +321,21 @@ test('a value can be excluded ("fără"), and wanting it clears the exclusion', 
   await expect(page).not.toHaveURL(/skill_not/);
   await expect(page.locator('input[name="skill_not[]"][value="Excel"]')).not.toBeChecked();
   await noOverflow(page, 'exclusion switch');
+});
+
+test('occupation tree: a twisty opens subgroups, and an open branch survives a filter change', async ({ page }) => {
+  await page.goto('/?status=all');
+  await openPanel(page);
+  await openFacet(page, 'cor');
+  const twisty = page.locator('.facet-twisty[data-tree-key="cor:2"]');
+  const kids = page.locator('[data-tree-children="cor:2"]');
+  await expect(kids).toBeHidden();
+  await twisty.click();
+  await expect(twisty).toHaveAttribute('aria-expanded', 'true');
+  await expect(kids).toBeVisible();
+  await page.locator('label:has(> input[name="cor[]"][value="22"])').click();
+  await expect(page).toHaveURL(/cor%5B%5D=22/);
+  await expect(page.locator('[data-tree-children="cor:2"]')).toBeVisible();
+  await expect(page.locator('input[name="cor[]"][value="22"]')).toBeChecked();
+  await noOverflow(page, 'occupation tree');
 });

@@ -115,7 +115,7 @@ run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the 
     $defaults = [];
     foreach (xpath_for($home)->query('//details[contains(@class,"facet-group") and @data-default-open]') as $d) $defaults[] = $d->getAttribute('data-facet');
     sort($defaults);
-    assert_same(['family', 'judet'], $defaults, 'the small-screen drawer opens these two (list.php script)');
+    assert_same(['cor', 'judet'], $defaults, 'the small-screen drawer opens these two (list.php script)');
     // BETA-FILTERS (D4, 261016): one flat list, nothing nested, nothing behind "Mai multe filtre".
     $anc = facet_ancestors($home);
     foreach ($anc as $k => $parents) assert_same([], $parents, "$k is a top-level group");
@@ -424,6 +424,23 @@ run_suite('exclusions: "fără" drops postings with the value, chips and control
     $home = get_html($base, '/?status=all');
     assert_true(xpath_for($home)->query('//details[@data-facet="credential"]//input[@name="credential_not[]"]')->length > 0, 'credential values are excludable');
     assert_same(0, xpath_for($home)->query('//details[@data-facet="schedule"]//input[contains(@name,"_not")]')->length, 'Program is not');
+});
+
+run_suite('occupation tree (COR) and medical specialty filter by prefix', function () use ($base) {
+    assert_same([1001, 1006], result_ids($base, 'status=all&cor%5B%5D=22'), 'Sănătate: nurse and doctor');
+    assert_same([1006], result_ids($base, 'status=all&cor%5B%5D=221'), 'Medici only');
+    assert_same([1005], result_ids($base, 'status=all&cor%5B%5D=9'), 'a posting coded only as major group 9');
+    assert_same([1006], result_ids($base, 'status=all&medspec%5B%5D=Cardiologie'), 'specialty');
+    $html = get_html($base, '/?status=all&cor%5B%5D=221');
+    $x = xpath_for($html);
+    assert_same(1, $x->query('//details[@data-facet="cor"]//input[@name="cor[]" and @value="221" and @checked]')->length, 'the minor group is checked');
+    assert_same(0, $x->query('//div[@data-tree-children="cor:22"][@hidden]')->length, 'its branch is open');
+    assert_same(1, $x->query('//div[@data-tree-children="cor:2"][not(@hidden)]')->length, 'and its parent branch');
+    assert_contains('data-chip-param="cor"', $html, 'chip');
+    assert_contains('Medici', $html, 'labelled');
+    $home = get_html($base, '/?status=all');
+    assert_true(xpath_for($home)->query('//details[@data-facet="cor"]//button[contains(@class,"facet-twisty")]')->length > 0, 'twisties on the tree');
+    assert_true(xpath_for($home)->query('//div[@data-tree-children][@hidden]')->length > 0, 'branches start closed');
 });
 
 stop_fixture_server($srv, $db_path);

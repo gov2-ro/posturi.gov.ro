@@ -253,6 +253,13 @@ CREATE TABLE job_postings (
     funding_kind            TEXT NOT NULL DEFAULT '',
     job_regime              TEXT NOT NULL DEFAULT '',
     employer_kind           TEXT NOT NULL DEFAULT '',
+    -- Occupation group (COR = ISCO-08 codes): the dictionary's code, else the code
+    -- most postings with the same canonical title carry, else a prefix from
+    -- classify.OCCUPATION_FALLBACK ("Muncitor calificat" is group 7, nothing
+    -- finer). Filtered by prefix: ?cor[]=22 is every health professional.
+    occ_group               TEXT NOT NULL DEFAULT '',
+    -- Doctors' specialties named in the title (classify.MEDICAL_SPECIALTIES).
+    med_specialty           TEXT NOT NULL DEFAULT '[]',
     -- The date after which nobody can apply any more, and therefore the one the
     -- site treats as "active". NOT `expires_at`: that is when the competition
     -- ends, which on a 20-posting sample ran a median of 15 days — up to 52 —
@@ -511,6 +518,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     active_filter = (
         "WHERE jp.expires_at >= CURRENT_DATE AND NOT jp.cancelled" if active_only else ""
     )
+    occ_majority = _occupation_majority(cur)
     label = "active " if active_only else ""
     print(f"Exporting {label}job_postings...", end=" ", flush=True)
     cur.execute(f"""
@@ -552,12 +560,13 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         ORDER BY jp.id
     """)
 
+    rows_cur = cur
     batch = []
     role_batch = []
     evidence_batch = []
     total = 0
     decomposed_postings = 0
-    for r in cur:
+    for r in rows_cur:
         inferred = {}
         try:
             inferred = json.loads(r["inferred"] or "{}")
@@ -660,6 +669,9 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             work_mode, funding_kind,
             classify.regime(r["title"], r["body_markdown"]),
             classify.employer_kind(r["employer_name"]),
+            r["occ_isco_group"] or occ_majority.get(r["occ_canonical"])
+                or classify.occupation_fallback(r["occ_canonical"], r["title"]),
+            json.dumps(classify.medical_specialties(r["title"]), ensure_ascii=False),
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
         ))
@@ -1210,8 +1222,11 @@ def _v3_columns(schema_json_text) -> dict:
         "study_labels": dumps(f.get("label_ro") for f in fields),
         "skills": dumps(k.get("label") for k in (s.get("skill_list") or [])),
         # "en:B2" keeps language and level together for a single LIKE probe.
+        # 261016: "o limbă de circulație internațională", "limbi străine" … are one
+        # answer — any foreign language — and become `straina`, so the language
+        # tree has one node for it instead of a dozen spellings.
         "languages": dumps(
-            f"{l.get('iso_code') or l.get('language')}:{l.get('cefr') or ''}".rstrip(":")
+            f"{classify.language_code(l.get('iso_code') or l.get('language'))}:{l.get('cefr') or ''}".rstrip(":")
             for l in langs
         ),
         "credentials": dumps(c.get("kind") for c in (s.get("credentials") or [])),
@@ -1228,6 +1243,34 @@ def _v3_columns(schema_json_text) -> dict:
         "seniority_hint": s.get("seniority_hint") or "",
         "bibliography": dumps(s.get("bibliography_topics") or []),
     }
+
+
+def _occupation_majority(cur) -> dict:
+    """canonical title -> the ISCO code most of its coded postings carry.
+
+    The occupation dictionary codes some spellings of a title and not others
+    ("Medic specialist": 274 coded 2212, 85 not), so an uncoded posting borrows
+    the code its title usually has.
+    """
+    cur.execute("""
+        SELECT o.canonical, o.isco_group, COUNT(*) AS n
+        FROM jobs_jobposting jp JOIN jobs_occupation o ON o.id = jp.occupation_id
+        WHERE COALESCE(o.isco_group, '') <> '' AND COALESCE(o.canonical, '') <> ''
+        GROUP BY o.canonical, o.isco_group
+        ORDER BY o.canonical, n DESC, o.isco_group
+    """)
+    # Only a clear majority: "Muncitor calificat" has 4 postings coded 8342
+    # (earth-moving operator) and a scatter of 7xxx — borrowing 8342 for all 474
+    # would be worse than the fallback's honest "7".
+    seen: dict = {}
+    for row in cur.fetchall():
+        seen.setdefault(row["canonical"], []).append((row["isco_group"], row["n"]))
+    best = {}
+    for canonical, codes in seen.items():
+        top, n = codes[0]
+        if n >= 5 and n >= 0.6 * sum(c for _, c in codes):
+            best[canonical] = top
+    return best
 
 
 def _insert_postings(con: sqlite3.Connection, batch: list):
@@ -1259,7 +1302,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         v4_employer_sector, v4_parent_institution, v4_application_deadline,
         v5_recruitment_kind, v5_internal_only, v5_vacancies_total, v5_fte,
         v5_post_status, v5_end_date, v5_channels, v5_work_localities,
-        work_mode, funding_kind, job_regime, employer_kind,
+        work_mode, funding_kind, job_regime, employer_kind, occ_group, med_specialty,
         apply_deadline, deadline_source, application_status"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart

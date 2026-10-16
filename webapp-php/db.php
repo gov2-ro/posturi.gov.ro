@@ -108,6 +108,8 @@ function shim_legacy_export(PDO $pdo): void {
             ? "CASE WHEN v4_funding_source = 'nespecificat' THEN '' ELSE v4_funding_source END" : "''",
         'job_regime'             => "''",
         'employer_kind'          => "''",
+        'occ_group'              => isset($cols['occ_isco_group']) ? 'occ_isco_group' : "''",
+        'med_specialty'          => "'[]'",
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

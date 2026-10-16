@@ -36,6 +36,8 @@ $funding_sel   = (array)($_GET['funding']    ?? []);
 $sector_sel    = (array)($_GET['sector']     ?? []);
 $regime_sel    = (array)($_GET['regime']     ?? []);
 $inst_sel      = (array)($_GET['inst']       ?? []);
+$cor_sel       = (array)($_GET['cor']        ?? []);
+$medspec_sel   = (array)($_GET['medspec']    ?? []);
 $has_salary    = $_GET['has_salary'] ?? '';
 $duration_sel  = (array)($_GET['duration'] ?? []);
 $schedule_sel  = (array)($_GET['schedule'] ?? []);
@@ -387,6 +389,74 @@ function v3_facet(string $column, string $excl_key, callable $label, int $limit 
 }
 
 /**
+ * 261016: languages as a tree — the language, then the levels asked for it.
+ * Counted per posting (a posting listing "en" and "en:B1" counts once for
+ * English). The bare language value filters every level (build_filters).
+ */
+function lang_tree_facet(): array {
+    $s = facet_scope('lang');
+    $where = $s['where'] ? 'WHERE ' . implode(' AND ', $s['where']) . " AND j.v3_languages != '[]'"
+                        : "WHERE j.v3_languages != '[]'";
+    $st = db()->prepare("SELECT j.v3_languages AS vals FROM job_postings j {$s['join']} $where");
+    $st->execute($s['binds']);
+    $lang = $lvl = [];
+    foreach ($st->fetchAll() as $row) {
+        $seen = [];
+        foreach ((array)(json_decode($row['vals'] ?: '[]', true) ?: []) as $tok) {
+            $tok = (string)$tok;
+            if ($tok === '') continue;
+            [$code, $cefr] = array_pad(explode(':', $tok, 2), 2, '');
+            if (!isset($seen[$code])) { $lang[$code] = ($lang[$code] ?? 0) + 1; $seen[$code] = true; }
+            if ($cefr !== '' && !isset($seen[$tok])) { $lvl[$code][$tok] = ($lvl[$code][$tok] ?? 0) + 1; $seen[$tok] = true; }
+        }
+    }
+    arsort($lang);
+    $out = [];
+    foreach (array_slice($lang, 0, 25, true) as $code => $n) {
+        $kids = [];
+        $levels = $lvl[$code] ?? [];
+        ksort($levels);
+        foreach ($levels as $tok => $m) $kids[] = ['val' => $tok, 'label' => explode(':', $tok, 2)[1], 'cnt' => $m];
+        $out[] = ['val' => (string)$code, 'label' => language_token_label((string)$code), 'cnt' => $n,
+                  'children' => $kids, 'tree' => true];
+    }
+    return $out;
+}
+
+/**
+ * 261016: the COR / ISCO-08 occupation tree — major group, sub-major group and,
+ * where ISCO_GROUP_LABELS names it, the minor group (doctors, engineers,
+ * teachers). Counted by prefix of `occ_group`; a posting coded only as "7"
+ * counts for its major group and nothing below it.
+ */
+function cor_tree_facet(): array {
+    $s = facet_scope('cor');
+    $where = $s['where'] ? 'WHERE ' . implode(' AND ', $s['where']) . " AND j.occ_group != ''"
+                        : "WHERE j.occ_group != ''";
+    $st = db()->prepare("SELECT j.occ_group AS g, COUNT(*) AS n FROM job_postings j {$s['join']} $where GROUP BY j.occ_group");
+    $st->execute($s['binds']);
+    $cnt = [];
+    foreach ($st->fetchAll() as $r) {
+        $g = (string)$r['g'];
+        for ($k = 1; $k <= min(3, strlen($g)); $k++) $cnt[substr($g, 0, $k)] = ($cnt[substr($g, 0, $k)] ?? 0) + (int)$r['n'];
+    }
+    $node = function (string $code) use (&$node, $cnt): array {
+        $kids = [];
+        foreach ($cnt as $c => $n) {
+            $c = (string)$c;   // numeric keys come back as ints
+            if (strlen($c) === strlen($code) + 1 && str_starts_with($c, $code) && isset(ISCO_GROUP_LABELS[$c])) $kids[] = $node($c);
+        }
+        usort($kids, fn($a, $b) => $b['cnt'] <=> $a['cnt']);
+        return ['val' => $code, 'label' => ISCO_GROUP_LABELS[$code] ?? $code, 'cnt' => $cnt[$code] ?? 0,
+                'children' => $kids, 'tree' => true];
+    };
+    $out = [];
+    foreach ($cnt as $c => $n) if (strlen((string)$c) === 1 && isset(ISCO_GROUP_LABELS[$c])) $out[] = $node((string)$c);
+    usort($out, fn($a, $b) => $b['cnt'] <=> $a['cnt']);
+    return $out;
+}
+
+/**
  * Facet options for a role-scoped JSON-array column (`posting_roles.<col>`).
  *
  * Same scope rules as v3_facet() — an OR group drops its own selection, an AND
@@ -428,9 +498,10 @@ timing_mark('f-status');
 // competition and stay posting-level.
 $isced_options  = role_array_facet('isced_fields', 'isced',      'isced_label');
 $skill_options  = role_array_facet('skills',       'skill',      fn($v) => $v, 40);
-$lang_options   = v3_facet('v3_languages',      'lang',       'language_token_label');
+$lang_options   = lang_tree_facet();
 $cred_options   = role_array_facet('credentials',  'credential', 'credential_kind_label');
 $domain_options = v3_facet('v3_policy_domains', 'domain',     'policy_domain_label');
+$medspec_options = v3_facet('med_specialty',   'medspec',    fn($v) => $v, 45);
 timing_mark('f-json');
 
 // Remote count
@@ -489,6 +560,7 @@ $salary_options = [];
 // `îngrijitor` were three separate values of the free-text title.
 timing_mark('f-salary');
 $occupation_options = get_facet('occ_canonical',      'occupation', 40);
+$cor_options        = cor_tree_facet();
 // Contract terms: extracted by v3 all along, exported and browsable from
 // 2026-09-13. `duration` is finer than the scraped `job_type` (Permanent /
 // Temporar) — it distinguishes a fixed-term post from one that runs only as
@@ -1074,6 +1146,29 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   // group like Județ was scrolled, and the panel's own scroll offset.
   // <details> open/closed is restored by applyFacetState() above.
   var pending = null;
+
+  // 261016: tree groups (COR, languages). A twisty shows a node's children; which
+  // ones the reader opened is kept across the facet swaps of this page view.
+  var openTrees = {};
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest && ev.target.closest('.facet-twisty');
+    if (!btn) return;
+    ev.preventDefault();
+    var key = btn.getAttribute('data-tree-key');
+    var open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    var kids = document.querySelector('[data-tree-children="' + key.replace(/"/g, '\\"') + '"]');
+    if (kids) kids.hidden = !open;
+    if (open) openTrees[key] = true; else delete openTrees[key];
+  });
+  document.body.addEventListener('htmx:afterSettle', function () {
+    Object.keys(openTrees).forEach(function (key) {
+      var esc = key.replace(/"/g, '\\"');
+      var btn = document.querySelector('.facet-twisty[data-tree-key="' + esc + '"]');
+      var kids = document.querySelector('[data-tree-children="' + esc + '"]');
+      if (btn && kids) { btn.setAttribute('aria-expanded', 'true'); kids.hidden = false; }
+    });
+  });
 
   // 261016: a value is either wanted or excluded, never both. Capture phase, so the
   // other box is cleared before the form's own `change` serialises the query.

@@ -229,3 +229,143 @@ def employer_kind(name) -> str:
         if pattern.search(t):
             return key
     return ""
+
+
+# ---- Occupation group (COR / ISCO-08) ----------------------------------------
+
+#: When the occupation dictionary left a posting without an ISCO code, the
+#: export first borrows the code most postings with the same canonical title
+#: carry, then falls back to these. A prefix is an honest answer: "Muncitor
+#: calificat" is major group 7 and nothing finer. COR shares ISCO-08's codes
+#: down to four digits. First match wins.
+OCCUPATION_FALLBACK: list[tuple[re.Pattern, str]] = [(re.compile(p), code) for p, code in [
+    (r"^muncitor\s+necalificat|^ajutor\s+de\s+bucatar|^spalator", "9"),
+    (r"^muncitor", "7"),
+    (r"^(sofer|conducator\s+auto)|buldoexcavator|^tractorist|^mecanic\s+utilaj", "83"),
+    (r"^ingrijitor\s+(la\s+domiciliu|batrani|bolnavi|persoane|copii)", "532"),
+    (r"^ingrijitor|^femeie\s+de\s+serviciu|^personal\s+de\s+curatenie", "91"),
+    (r"^infirmier|^brancardier|^baies", "532"),
+    (r"^medic\s+veterinar", "225"),
+    (r"^medic\s+(stomatolog|dentist)", "2261"),
+    (r"^medic|^director\s+medical|^sef\s+sectie", "221"),
+    (r"^asistent\s+medical|^moasa|^sora\s+medicala", "222"),
+    (r"^farmacist", "2262"),
+    (r"^asistent\s+social|^pedagog\s+social", "2635"),
+    (r"^psiholog|^consilier\s+psihologic", "2634"),
+    (r"^kinetoterapeut|^fizioterapeut|^fiziokinetoterapeut", "2264"),
+    (r"^logoped", "2266"),
+    (r"^(sub)?inginer", "214"),
+    (r"^informatician|^administrator\s+(de\s+)?(sistem|retea)|^analist\s+programator|^programator", "25"),
+    (r"^contabil", "3313"),
+    (r"^economist|^administrator\s+financiar|^responsabil\s+financiar|^auditor", "241"),
+    (r"^cercetator|^asistent\s+de\s+cercetare", "2"),
+    (r"^profesor", "23"),
+    (r"^educator(?!\s+muzeal)|^educatoare|^invatator", "234"),
+    (r"^instructor\s+de\s+educatie|^consilier\s+(scolar|educational)|^mediator\s+scolar", "235"),
+    (r"^bucatar", "512"),
+    (r"^electrician|^electromecanic", "741"),
+    (r"^fochist", "818"),
+    (r"^sudor|^lacatus", "721"),
+    (r"^instalator", "712"),
+    (r"^zidar|^dulgher|^tamplar|^zugrav", "71"),
+    (r"^mecanic", "723"),
+    (r"^(paznic|agent\s+de\s+paza|guard|politist\s+local)", "541"),
+    (r"^portar", "9629"),
+    (r"^secretar\s*-?\s*sef|^secretar\s+(institutie|unitate)", "334"),
+    (r"^secretar", "412"),
+    (r"^bibliotecar", "2622"),
+    (r"^(muzeograf|restaurator|educator\s+muzeal|conservator)", "2621"),
+    (r"^consilier\s+juridic|^jurist", "261"),
+    (r"^(laborant|tehnician)", "3"),
+    (r"^magaziner|^gestionar", "432"),
+    (r"^casier", "421"),
+    (r"^registrator\s+medical|^functionar|^arhivar", "4"),
+    (r"^(director|sef\b|coordonator\s+(centru|serviciu)|manager)", "1"),
+    (r"^(inspector|referent|consilier|expert)", "242"),
+    (r"^administrator(\s+de)?\s+patrimoniu|^administrator$", "33"),
+]]
+
+
+def occupation_fallback(*names) -> str:
+    """An ISCO prefix for the first name (canonical title, then the raw title) a rule knows."""
+    for name in names:
+        t = fold(name).strip(" -–—(")
+        if not t:
+            continue
+        for pattern, code in OCCUPATION_FALLBACK:
+            if pattern.search(t):
+                return code
+    return ""
+
+
+# ---- Medical specialty ---------------------------------------------------------
+
+#: The specialties as the titles write them ("Medic specialist ATI",
+#: "medic primar specialitatea radiologie-imagistică medicală"). Label, pattern.
+MEDICAL_SPECIALTIES: list[tuple[str, re.Pattern]] = [(label, re.compile(p)) for label, p in [
+    ("Medicină de familie", r"medicin\w*\s+de\s+familie"),
+    ("Medicină generală", r"medicin\w*\s+general"),
+    ("Medicină internă", r"medicin\w*\s+interne?"),
+    ("Medicină de urgență", r"medicin\w*\s+de\s+urgent"),
+    ("Pediatrie", r"pediatri(e|c)(?!\w*\s+(chirurg|psihiatr|neurolog|cardiolog|nefrolog))|\bpediatru"),
+    ("Neonatologie", r"neonatolog"),
+    ("Obstetrică-ginecologie", r"obstetric|ginecolog"),
+    ("ATI (anestezie și terapie intensivă)", r"\bati\b|anestezi"),
+    ("Chirurgie generală", r"chirurgi\w*\s+general"),
+    ("Chirurgie (alte specialități)", r"chirurgi\w*\s+(pediatric|plastic|cardio|toracic|vascular|orala|maxilo|oncologic)"),
+    ("Ortopedie și traumatologie", r"ortoped"),
+    ("Neurochirurgie", r"neurochirurg"),
+    ("Urologie", r"\burolog"),
+    ("Cardiologie", r"cardiolog"),
+    ("Neurologie", r"neurolog"),
+    ("Psihiatrie", r"psihiatr"),
+    ("Radiologie și imagistică", r"radiolog|imagistic"),
+    ("Radioterapie / Medicină nucleară", r"radioterap|medicin\w*\s+nuclear"),
+    ("Medicină de laborator", r"medicin\w*\s+de\s+laborator|laborator\s+clinic"),
+    ("Anatomie patologică", r"anatomi\w*\s+patolog"),
+    ("Microbiologie", r"microbiolog"),
+    ("Boli infecțioase", r"boli\w*\s+infect"),
+    ("Dermatovenerologie", r"dermato"),
+    ("Oftalmologie", r"oftalmolog"),
+    ("ORL", r"\borl\b|otorinolaringolog"),
+    ("Gastroenterologie", r"gastroenterolog"),
+    ("Diabet, nutriție și boli metabolice", r"diabet|nutriti"),
+    ("Endocrinologie", r"endocrinolog"),
+    ("Nefrologie", r"nefrolog"),
+    ("Pneumologie", r"pneumolog|pneumoftiziolog"),
+    ("Reumatologie", r"reumatolog"),
+    ("Hematologie", r"hematolog"),
+    ("Oncologie", r"oncolog"),
+    ("Recuperare / reabilitare medicală", r"reabilitar|recuperar|balneo|medicin\w*\s+fizic"),
+    ("Geriatrie", r"geriatri"),
+    ("Epidemiologie", r"epidemiolog"),
+    ("Igienă / sănătate publică", r"\bigien|sanatate\s+publica"),
+    ("Medicina muncii", r"medicin\w*\s+(a\s+)?muncii"),
+    ("Medicină legală", r"medicin\w*\s+legal"),
+    ("Genetică medicală", r"genetic"),
+    ("Alergologie și imunologie", r"alergolog|imunolog"),
+    ("Medicină sportivă", r"medicin\w*\s+sportiv"),
+    ("Medicină dentară", r"stomatolog|dentar"),
+]]
+
+
+def medical_specialties(title) -> list[str]:
+    """The specialties a doctor's posting names in its title, in list order; [] for others."""
+    t = fold(title)
+    if not re.search(r"\bmedic", t) or re.search(r"\bmedic\w*\s+veterinar", t):
+        return []
+    return [label for label, pattern in MEDICAL_SPECIALTIES if pattern.search(t)]
+
+
+# ---- Language ------------------------------------------------------------------
+
+_ANY_FOREIGN = re.compile(r"strain|circulatie|international|oricare|o\s+limba\b|limbi\b")
+
+
+def language_code(code) -> str:
+    """The extraction's language code, with every "any foreign language" phrasing as `straina`."""
+    c = str(code or "").strip()
+    folded = fold(c)
+    if len(folded) > 3 and _ANY_FOREIGN.search(folded) and "semnelor" not in folded and "izvoare" not in folded:
+        return "straina"
+    return c

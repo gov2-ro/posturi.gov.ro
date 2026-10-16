@@ -5,7 +5,6 @@ from django.test import Client
 from apps.jobs.models import Employer, JobPosting, JobPostingSchemaVariant
 from apps.jobs.views import _section_status
 
-
 # ---------------------------------------------------------------------------
 # Unit tests for _section_status
 # ---------------------------------------------------------------------------

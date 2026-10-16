@@ -68,7 +68,7 @@ def failure_block(slug, stages, *, cls="ValidationError", other_error=False):
     if other_error:
         lines += [
             "positions.0.education.minimum_level",
-            f"  Input should be 'licenta' or 'master' [type=literal_error, input_value='liceu', input_type=str]",
+            "  Input should be 'licenta' or 'master' [type=literal_error, input_value='liceu', input_type=str]",
             "    For further information visit https://errors.pydantic.dev/2.13/v/literal_error",
         ]
     return "\n".join(lines) + "\n"

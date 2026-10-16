@@ -1,5 +1,6 @@
 """Tests for work-condition inference helpers and new view filter params."""
 import pytest
+
 from apps.jobs.management.commands.infer_postings import (
     _extract_salary_range,
     _infer_computer,
@@ -7,7 +8,6 @@ from apps.jobs.management.commands.infer_postings import (
     _infer_remote,
     _infer_work_type,
 )
-
 
 # ---------------------------------------------------------------------------
 # _infer_work_type
@@ -225,7 +225,7 @@ class TestConditionFilters:
             inferred={"work_type": "norma_partiala"},
             url="https://example.com/p1",
         )
-        p2 = self._make_posting(
+        self._make_posting(
             inferred={"work_type": "norma_intreaga"},
             url="https://example.com/p2",
         )

@@ -1,10 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import (
-    CalendarEvent, Employer, EmployerAlias, JobPosting, JobPostingUpdate,
-    JobPostingSchemaVariant, Judet
-)
+from .models import CalendarEvent, Employer, EmployerAlias, JobPosting, JobPostingSchemaVariant, JobPostingUpdate, Judet
 
 
 @admin.register(Judet)

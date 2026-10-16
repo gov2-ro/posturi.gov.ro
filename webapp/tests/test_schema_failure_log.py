@@ -653,7 +653,7 @@ class TestDryRun:
 
     def test_it_reports_the_real_selection_and_stops(self, llm, monkeypatch, tmp_path, capsys):
         self._corpus()
-        conn = self._dry(llm, monkeypatch, tmp_path)
+        self._dry(llm, monkeypatch, tmp_path)
         out = capsys.readouterr().out
         assert "no API calls, no database writes" in out
         assert "selected:       27 postings (25 of them active)" in out

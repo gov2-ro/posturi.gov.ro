@@ -5,9 +5,9 @@ the renderer must handle both so postings extracted before the v1→v2 cutover
 keep displaying correctly during the transition.
 """
 import pytest
-from apps.jobs.models import Employer, JobPosting
 from django.test import Client
 
+from apps.jobs.models import Employer, JobPosting
 
 # ---------------------------------------------------------------------------
 # Unit tests for _render_schema_sections — v2 shape

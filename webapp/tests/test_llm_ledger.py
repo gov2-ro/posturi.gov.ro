@@ -9,7 +9,6 @@ runs the real INSERT against the test Postgres. What is pinned:
   * a broken sink or pricer never reaches the caller, and totals do not depend on it.
 """
 
-import importlib.util
 import sys
 import threading
 from datetime import datetime, timedelta, timezone

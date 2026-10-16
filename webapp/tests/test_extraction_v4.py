@@ -113,7 +113,8 @@ class TestCompetitionCalendar:
         Hence a rule rather than another one-off patch.
         """
         import typing
-        from schema_models import CalendarStage, EVALUATION_STAGES
+
+        from schema_models import EVALUATION_STAGES, CalendarStage
         stages = set(typing.get_args(CalendarStage))
         missing = [f"{prefix}_{base}"
                    for base in EVALUATION_STAGES
@@ -147,7 +148,9 @@ class TestCompetitionCalendar:
         from 18-in-100 to 111-in-200. A template invites composition; a list
         does not.
         """
-        import json, typing
+        import json
+        import typing
+
         from schema_models import CalendarStage
         prompt = json.loads((REPO_ROOT / "models_config.json").read_text(encoding="utf-8"))["prompts"]["v4"]
         missing = [s for s in typing.get_args(CalendarStage) if f"`{s}`" not in prompt]

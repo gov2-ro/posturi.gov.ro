@@ -15,18 +15,16 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import time
 import unicodedata
-
-from tqdm import tqdm
 from collections import defaultdict
 from datetime import datetime, timezone
-
 from pathlib import Path
-import sys
 
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+from tqdm import tqdm
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(REPO_ROOT))

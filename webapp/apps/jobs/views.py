@@ -1,7 +1,7 @@
 import json
 import re
 import unicodedata
-from datetime import date, datetime, timedelta, time
+from datetime import date, datetime, time, timedelta
 from datetime import timezone as dt_timezone
 from typing import Literal
 
@@ -1049,7 +1049,6 @@ def _build_employer_stats():
 
 def employers_dashboard(request):
     data = _build_employer_stats()
-    max_employer = max((x.get('posting_count') or x.get('active_count') for x in data['top_employers']), default=1)
     max_active = max((x['active_count'] for x in data['top_active']), default=1)
     max_distribution = max((x['count'] for x in data['distribution']), default=1)
 
@@ -1152,7 +1151,6 @@ def _compute_variant_quality() -> dict:
 
     # ----- disagreement + solo per model key -----
     # group variants by (posting_id, prompt_version)
-    from itertools import groupby
     posting_groups: dict[tuple, list] = defaultdict(list)
     for v in all_variants:
         posting_groups[(v["posting_id"], v["prompt_version"])].append(v)
@@ -1165,7 +1163,6 @@ def _compute_variant_quality() -> dict:
     for (posting_id, pv), group in posting_groups.items():
         if len(group) < 2:
             continue
-        model_keys_in_group = [(g["provider"], g["model"], g["prompt_version"]) for g in group]
         for f in _QUALITY_FIELDS:
             presences = {
                 (g["provider"], g["model"], g["prompt_version"]): _is_field_present((g["schema_json"] or {}).get(f))

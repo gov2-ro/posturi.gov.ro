@@ -96,7 +96,6 @@ def test_anthropic_folds_cache_reads_into_the_billable_input(nt, monkeypatch):
 
 def test_the_step_has_a_run_log_option_like_the_schema_step(nt):
     # --run-log / --no-run-log let a hand-run keep out of the pipeline's log.
-    import argparse
     parser = nt.build_parser() if hasattr(nt, "build_parser") else None
     assert parser is not None, "main() builds its parser inline; expose build_parser()"
     args = parser.parse_args([])

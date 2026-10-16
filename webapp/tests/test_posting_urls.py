@@ -14,7 +14,6 @@ dates. Fetching them successfully turned 15 withdrawn competitions into
 apparently open jobs, so "active" has to mean open *and* not withdrawn.
 """
 
-import importlib.util
 import sys
 from pathlib import Path
 

@@ -1,17 +1,21 @@
 name: CI
 
-# Manual only for now (CI-01 in docs/backlog.md): the pushed workflow started
-# running on every push and failed on pre-existing ruff findings before the tests
-# ran. Run it from the Actions tab ("Run workflow") until the lint baseline is
-# clean and a trigger policy (releases/tags, PRs) is decided.
+# Runs on every push to main and on pull requests targeting main (CI-01 in
+# docs/backlog.md, decided 2026-10-16). It can still be started by hand from the
+# Actions tab ("Run workflow"). The Python lint baseline is clean, so a red run
+# means a new finding or a failing test.
 on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   python-tests:
     # Django suite against a real PostgreSQL, isolated from the PHP jobs.
     # Shape adapted from the workflow archived under _OBSOLETE/.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -37,10 +41,10 @@ jobs:
         working-directory: webapp
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -62,9 +66,9 @@ jobs:
     # Lint plus the fixture-based suites. Each test script builds its own
     # SQLite fixture and serves the app on the built-in PHP router — no
     # database service, no network, no paid APIs.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -124,9 +128,9 @@ jobs:
   browser-tests:
     # Playwright against the fixture-served app at 320/375/1280, including the
     # no-execution proof for sanitized Markdown.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -135,7 +139,7 @@ jobs:
           coverage: none
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -151,7 +155,7 @@ jobs:
 
       - name: Upload traces on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-traces
           path: test-results/

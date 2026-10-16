@@ -36,6 +36,8 @@ StandardError=append:/home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log
 # ops/env.sh; both parse it properly.
 Environment=TZ=Europe/Bucharest
 Environment=PYTHONUNBUFFERED=1
+# A timer-started run is a scheduled slot; ops/run-pipeline.sh defaults to "manual" (OPS-TRIGGER).
+Environment=POSTURI_RUN_TRIGGER=cron
 
 # The scrape sleeps between pages and the LLM step waits on the network, so the run
 # is long and mostly idle. Let anything else on the box go first.

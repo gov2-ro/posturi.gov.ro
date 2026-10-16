@@ -27,8 +27,11 @@ invalid files in ``legacy-invalid.json`` — neither deletes anything.
 Validation
 ----------
 A cache hit is a file that exists *and* passes ``validate_file``: non-empty,
-magic bytes matching one of the supported formats (ZIP/DOCX, OLE2/DOC, PDF)
-and — on deep checks — an intact DOCX container or a PDF end marker. Downloads get the same checks plus a
+magic bytes matching one of the supported formats (ZIP/DOCX, OLE2/DOC, PDF).
+A DOCX must open as a ZIP (the central directory sits at the end, so a truncated
+transfer fails here) and carry ``word/document.xml`` — a ``PK`` zip is not
+necessarily a Word file; a PDF must end in ``%%EOF``. Both are cheap and run on
+the hot path. Deep checks add reading every DOCX member (CRC). Downloads get the same checks plus a
 Content-Length comparison where the server sends one, and HTML error pages
 served with HTTP 200 are rejected by sniffing, not by trusting Content-Type.
 
@@ -121,6 +124,31 @@ def sniff_kind(head: bytes) -> str | None:
     return None
 
 
+#: The one member every Word document has. A `PK` zip without it (an xlsx, an
+#: ordinary archive, a portal's bundle) is not something python-docx can open.
+DOCX_MAIN_PART = "word/document.xml"
+
+
+def _check_docx(source, deep: bool) -> tuple[bool, str]:
+    """`source` is a path or a binary file object. Opening the archive reads the
+    central directory (cheap, and absent from a truncated transfer); `deep`
+    also CRC-checks every member."""
+    try:
+        with zipfile.ZipFile(source) as zf:
+            if DOCX_MAIN_PART not in zf.namelist():
+                return False, f"not a docx: no {DOCX_MAIN_PART}"
+            bad = zf.testzip() if deep else None
+    except Exception as exc:
+        return False, f"corrupt docx: {exc}"
+    if bad is not None:
+        return False, f"corrupt docx member: {bad}"
+    return True, "docx"
+
+
+def _pdf_has_eof(tail: bytes) -> bool:
+    return b"%%EOF" in tail.rstrip()
+
+
 def validate_bytes(data: bytes) -> tuple[bool, str]:
     """Validate a fully received body. Returns (ok, reason)."""
     if len(data) == 0:
@@ -132,15 +160,11 @@ def validate_bytes(data: bytes) -> tuple[bool, str]:
             return False, "HTML error page served as the document"
         return False, "unsupported format"
     if kind == "docx":
-        try:
-            with zipfile.ZipFile(io.BytesIO(data)) as zf:
-                bad = zf.testzip()
-        except Exception as exc:
-            return False, f"corrupt docx: {exc}"
-        if bad is not None:
-            return False, f"corrupt docx member: {bad}"
+        ok, reason = _check_docx(io.BytesIO(data), deep=True)
+        if not ok:
+            return False, reason
     if kind == "pdf":
-        if b"%%EOF" not in data[-1024:].rstrip():
+        if not _pdf_has_eof(data[-1024:]):
             return False, "truncated pdf (no %%EOF)"
     return True, kind
 
@@ -149,10 +173,10 @@ def validate_file(path: Path, deep: bool = False) -> tuple[bool, str]:
     """Validate a file already on disk. Returns (ok, reason).
 
     Shallow (the hot path — every cache resolution): non-empty, magic bytes
-    match a supported format, HTML error pages are rejected. Deep adds DOCX
-    ZIP-container integrity (reads every member) and the PDF end-of-file marker
-    — the two ways an interrupted transfer still passes the magic-byte check —
-    for adoption, audits and repairs.
+    match a supported format, HTML error pages are rejected, a DOCX opens as a
+    ZIP and has `word/document.xml`, a PDF ends in `%%EOF` (the two ways an
+    interrupted transfer still passes the magic-byte check; REV-06 c). Deep adds
+    the CRC check of every DOCX member, for adoption, audits and repairs.
     """
     try:
         size = path.stat().st_size
@@ -171,22 +195,18 @@ def validate_file(path: Path, deep: bool = False) -> tuple[bool, str]:
         if stripped.startswith(b"<!doctype html") or stripped.startswith(b"<html"):
             return False, "HTML error page served as the document"
         return False, "unsupported format"
-    if kind == "docx" and deep:
-        try:
-            with zipfile.ZipFile(path) as zf:
-                bad = zf.testzip()
-        except Exception as exc:
-            return False, f"corrupt docx: {exc}"
-        if bad is not None:
-            return False, f"corrupt docx member: {bad}"
-    if kind == "pdf" and deep:
+    if kind == "docx":
+        ok, reason = _check_docx(path, deep)
+        if not ok:
+            return False, reason
+    if kind == "pdf":
         try:
             with open(path, "rb") as fh:
                 fh.seek(max(0, size - 1024))
                 tail = fh.read()
         except OSError as exc:
             return False, f"unreadable: {exc}"
-        if b"%%EOF" not in tail.rstrip():
+        if not _pdf_has_eof(tail):
             return False, "truncated pdf (no %%EOF)"
     return True, kind
 
@@ -235,6 +255,13 @@ class Resolved:
     path: Path | None
     status: str = ""      # "cached" | "cached-legacy" | "invalid" | "missing"
     reason: str = ""      # why, when not a clean hit
+
+    @property
+    def usable(self) -> bool:
+        """True only for a file a reader may open. `invalid` keeps its `path`
+        (the downloader needs to know what to replace, the audit what to
+        report) but is not a hit: extraction and quality checks must not read it."""
+        return self.path is not None and self.status in ("cached", "cached-legacy")
 
 
 def resolve_local_path(downloads_dir: Path, url: str) -> Resolved:

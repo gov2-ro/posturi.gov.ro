@@ -36,7 +36,7 @@ def _local_path(url: str, downloads_dir: Path) -> tuple[Path | None, str]:
     if not url:
         return None, "empty url"
     resolved = resolve_local_path(downloads_dir, url)
-    if resolved.path is not None:
+    if resolved.usable:        # an `invalid` entry has a path but is not a hit
         return resolved.path, ""
     return None, resolved.reason
 

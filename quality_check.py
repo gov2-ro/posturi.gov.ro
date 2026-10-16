@@ -335,8 +335,9 @@ def check_attachment(row: dict) -> dict:
     from download_manifest import resolve_local_path
 
     resolved = resolve_local_path(DOWNLOADS_DIR, announce_url)
-    path = resolved.path
-    filename = path.name if path else Path(announce_url).name
+    # An invalid entry keeps its path (for the name) but must not be read.
+    path = resolved.path if resolved.usable else None
+    filename = resolved.path.name if resolved.path else Path(announce_url).name
 
     if path is None:
         readability = "invalid_file" if resolved.status == "invalid" else "missing_file"

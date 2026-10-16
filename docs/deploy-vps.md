@@ -291,6 +291,13 @@ whether the file ships. It has two severities:
   proceeds. `--strict` makes them fatal; leave it off until the thresholds have a
   few weeks of runs behind them.
 
+Flags worth knowing: `--schema-floor PCT` warns (always soft, even when set) when
+`schema_json` coverage is under PCT; `ops/run-pipeline.sh` passes `95` (env
+`SCHEMA_FLOOR` overrides it) since the `*_sustained` checks only watch the slope, not
+the level (OPS-FLOORS). `--v3-floor PCT` is left unset: it is skipped under the v4
+pin anyway. `--sustained-drop`, `--max-age-hours` and `--intake-max-age-days` tune the
+other thresholds; `--help` lists them all.
+
 It reuses `import_csvs.py`'s `expiry_sanity_warnings()` and `judet_sanity_warnings()`
 rather than restating their thresholds, so there is one definition of "too many
 counties" in the tree. Those two need Django importable; without it that one check
@@ -430,9 +437,15 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 MAILTO=pax@mioritics.ro
 
 # DST-safe: each slot is listed at both UTC hours; the guard runs only at 13:15 / 18:33 Europe/Bucharest (OPS-01, COST-01)
-15 10,11 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "13" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
-33 15,16 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "18" ] && /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+15 10,11 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "13" ] && POSTURI_RUN_TRIGGER=cron /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
+33 15,16 * * * [ "$(TZ=Europe/Bucharest date +\%H)" = "18" ] && POSTURI_RUN_TRIGGER=cron /home/pax/g2-dev/posturi.gov.ro/ops/run-pipeline.sh >> /home/pax/g2-dev/posturi.gov.ro/logs/pipeline.log 2>&1
 ```
+
+**The crontab lines must set `POSTURI_RUN_TRIGGER=cron` themselves** (OPS-TRIGGER):
+`ops/run-pipeline.sh` defaults to `manual`, so a line without it records every
+scheduled run as a hand-run and `/pipeline-check` will count the slot as missed.
+Update the crontab in the same step as the `git pull` that brings the new default
+(the systemd service sets it in its `Environment=`).
 
 Healthchecks.io: with two runs a day, set the check's **period to 20 h** (grace 1 h): the overnight gap is 18h42m (below).
 A 1-day period never notices a single missed run — the next run pings first.
@@ -477,7 +490,7 @@ crontab -l
 ./ops/run-pipeline.sh             # hand-run once; watch: tail -f logs/pipeline.log
 ```
 
-A hand-run is recorded as `trigger: "manual"` rather than `"cron"`, so
+A hand-run is recorded as `trigger: "manual"` (the script's default) rather than `"cron"`, so
 `/pipeline-check` will not mistake a debugging session for a slot that fired. To
 label one explicitly: `POSTURI_RUN_TRIGGER=backfill ./ops/run-pipeline.sh`.
 

@@ -136,6 +136,49 @@ class TestValidation:
         assert not ok and reason == "empty file"
 
 
+class TestHotPathDepth:
+    """REV-06(c): the shallow check every resolution runs is not magic-bytes only."""
+
+    @staticmethod
+    def make_zip(members: dict[str, str]) -> bytes:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            for name, text in members.items():
+                zf.writestr(name, text)
+        return buf.getvalue()
+
+    def test_a_zip_without_word_document_is_not_a_docx(self, tmp_path):
+        xlsx = self.make_zip({"[Content_Types].xml": "<Types/>", "xl/workbook.xml": "<w/>"})
+        f = tmp_path / "a.docx"
+        f.write_bytes(xlsx)
+        ok, reason = validate_file(f)                  # shallow
+        assert not ok and "word/document.xml" in reason
+        assert validate_file(f, deep=True)[0] is False
+        assert validate_bytes(xlsx)[0] is False
+
+    def test_a_truncated_docx_fails_the_hot_path(self, tmp_path):
+        f = tmp_path / "a.docx"
+        f.write_bytes(make_docx()[:-40])               # central directory gone
+        ok, reason = validate_file(f)
+        assert not ok and "docx" in reason
+
+    def test_a_real_docx_still_passes_shallow(self, tmp_path):
+        f = tmp_path / "a.docx"
+        f.write_bytes(make_docx())
+        assert validate_file(f) == (True, "docx")
+
+    def test_pdf_with_trailing_whitespace_after_eof_passes(self, tmp_path):
+        f = tmp_path / "a.pdf"
+        f.write_bytes(make_pdf() + b"\r\n\n  ")
+        assert validate_file(f) == (True, "pdf")
+
+    def test_a_non_docx_zip_does_not_resolve_as_a_hit(self, tmp_path):
+        url = "http://x.ro/doc.docx"
+        legacy_path(tmp_path, url).write_bytes(self.make_zip({"readme.txt": "hi"}))
+        r = resolve_local_path(tmp_path, url)
+        assert r.status == "invalid" and not r.usable
+
+
 # ─── resolution ──────────────────────────────────────────────────────────────
 
 
@@ -153,6 +196,18 @@ class TestResolution:
         legacy_path(tmp_path, "http://x.ro/doc.docx").write_bytes(b"truncated")
         r = resolve_local_path(tmp_path, "http://x.ro/doc.docx")
         assert r.path is not None and r.status == "invalid" and "invalid" in r.reason
+
+    def test_usable_only_for_hits(self, tmp_path):
+        """REV-06(b): `invalid` keeps its path (the downloader replaces it, the
+        audit reports it) but is not a file a reader may open."""
+        legacy_path(tmp_path, "http://x.ro/bad.docx").write_bytes(b"truncated")
+        legacy_path(tmp_path, "http://x.ro/ok.docx").write_bytes(make_docx())
+        bad = resolve_local_path(tmp_path, "http://x.ro/bad.docx")
+        ok = resolve_local_path(tmp_path, "http://x.ro/ok.docx")
+        gone = resolve_local_path(tmp_path, "http://x.ro/gone.docx")
+        assert bad.path is not None and bad.status == "invalid" and not bad.usable
+        assert ok.usable
+        assert not gone.usable
 
     def test_hashed_entry_with_manifest_wins(self, tmp_path):
         url = "http://x.ro/doc.docx"
@@ -382,5 +437,44 @@ class TestLegacyHitOnDownload:
     def test_deep_validation_catches_truncated_pdf(self, tmp_path):
         p = tmp_path / "x.pdf"
         p.write_bytes(b"%PDF-1.4\nhalf a document")
-        assert validate_file(p)[0] is True            # the hot path cannot tell
+        # REV-06(c): the hot path catches it too; the end marker read is one seek.
+        assert validate_file(p) == (False, "truncated pdf (no %%EOF)")
         assert validate_file(p, deep=True) == (False, "truncated pdf (no %%EOF)")
+
+
+class TestInvalidIsNotReadByConsumers:
+    """REV-06(b): extraction and the quality check act on `usable`, not on `path`."""
+
+    URL = "http://x.ro/doc.docx"
+
+    def test_extract_attachments_local_path_rejects_invalid(self, tmp_path):
+        from apps.jobs.management.commands.extract_attachments import _local_path
+
+        legacy_path(tmp_path, self.URL).write_bytes(b"truncated")
+        path, reason = _local_path(self.URL, tmp_path)
+        assert path is None and "invalid" in reason
+
+    def test_extract_attachments_local_path_accepts_a_hit(self, tmp_path):
+        from apps.jobs.management.commands.extract_attachments import _local_path
+
+        legacy_path(tmp_path, self.URL).write_bytes(make_docx())
+        path, reason = _local_path(self.URL, tmp_path)
+        assert path is not None and reason == ""
+
+    def test_quality_check_reports_invalid_file(self, tmp_path, monkeypatch):
+        import quality_check
+
+        monkeypatch.setattr(quality_check, "DOWNLOADS_DIR", tmp_path)
+        monkeypatch.setattr(quality_check, "extract_text",
+                            lambda p: pytest.fail("an invalid file must not be extracted"))
+        legacy_path(tmp_path, self.URL).write_bytes(b"truncated")
+        out = quality_check.check_attachment({"Announcement URL": self.URL})
+        assert out["readability"] == "invalid_file"
+        assert out["file"] == "doc.docx" and out["reason"]
+
+    def test_quality_check_still_reports_missing_file(self, tmp_path, monkeypatch):
+        import quality_check
+
+        monkeypatch.setattr(quality_check, "DOWNLOADS_DIR", tmp_path)
+        out = quality_check.check_attachment({"Announcement URL": self.URL})
+        assert out["readability"] == "missing_file"

@@ -48,9 +48,11 @@ DOWNLOAD_SINCE="${DOWNLOAD_SINCE:-7}"
 
 # One id ties the pipeline record and the export-check record together in
 # data/pipeline-runs.jsonl. `trigger` separates the timer's runs from hand-runs so
-# /pipeline-check does not read a debugging session as a missed slot.
+# /pipeline-check does not read a debugging session as a missed slot. The default is
+# `manual` (OPS-TRIGGER): the scheduler must say `cron` itself -- the crontab lines
+# set POSTURI_RUN_TRIGGER=cron and the systemd service has Environment= for it.
 export POSTURI_RUN_ID="${POSTURI_RUN_ID:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-export POSTURI_RUN_TRIGGER="${POSTURI_RUN_TRIGGER:-cron}"
+export POSTURI_RUN_TRIGGER="${POSTURI_RUN_TRIGGER:-manual}"
 
 ping_health() {          # $1: "" (success) | /start | /fail
     [ -n "${HEALTHCHECK_URL:-}" ] || return 0
@@ -151,7 +153,8 @@ fi
 # data. Soft warnings print and are recorded but do not block; add --strict once the
 # thresholds have a few weeks of runs behind them.
 check_status=0
-"$PYTHON" ops/check-export.py --prompt-version "$PROMPT_VERSION" || check_status=$?
+"$PYTHON" ops/check-export.py --prompt-version "$PROMPT_VERSION" \
+    --schema-floor "${SCHEMA_FLOOR:-95}" || check_status=$?
 
 if [ "$check_status" -ne 0 ]; then
     echo "ABORT: the export failed its hard checks and was NOT deployed. The shared"

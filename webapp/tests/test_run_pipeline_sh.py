@@ -217,3 +217,38 @@ def test_a_crashing_notifier_never_changes_the_exit_status(root):
     assert run(root, STUB_NTFY=1, STUB_PIPELINE=2)[0] == 2
     code, out, calls = run(root, STUB_NTFY=1, STUB_MIGRATE=1)
     assert code == 78 and "FAILED (exit" not in out, "not routed through the crash handler"
+
+
+def test_export_check_gets_the_soft_schema_floor(root):
+    """OPS-FLOORS: the level is gated (as a warn -- check-export keeps floors soft),
+    not just the slope. --v3-floor stays unset under the v4 pin."""
+    code, out, calls = run(root)
+    check = next(c for c in calls if c.startswith("ops/check-export.py"))
+    assert "--schema-floor 95" in check
+    assert "--v3-floor" not in check
+    assert "--strict" not in check
+
+
+def test_schema_floor_can_be_overridden_from_the_environment(root):
+    code, out, calls = run(root, SCHEMA_FLOOR=90)
+    check = next(c for c in calls if c.startswith("ops/check-export.py"))
+    assert "--schema-floor 90" in check
+
+
+def test_a_bare_run_is_recorded_as_manual(root):
+    """OPS-TRIGGER: only the scheduler may claim to be a scheduled slot."""
+    code, out, calls = run(root)
+    assert "(manual)" in out
+
+
+def test_the_scheduler_sets_cron_explicitly(root):
+    code, out, calls = run(root, POSTURI_RUN_TRIGGER="cron")
+    assert "(cron)" in out
+
+
+def test_systemd_unit_and_docs_crontab_set_the_trigger():
+    unit = (REPO_ROOT / "ops" / "systemd" / "posturi-pipeline.service").read_text()
+    assert "Environment=POSTURI_RUN_TRIGGER=cron" in unit
+    doc = (REPO_ROOT / "docs" / "deploy-vps.md").read_text()
+    lines = [ln for ln in doc.splitlines() if ln.rstrip().endswith("2>&1") and "ops/run-pipeline.sh" in ln]
+    assert len(lines) == 2 and all("POSTURI_RUN_TRIGGER=cron" in ln for ln in lines)

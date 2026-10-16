@@ -2063,3 +2063,127 @@ function fts_query(string $q): string {
 
 /** Rank title matches above body matches. Column order matches the FTS5 DDL. */
 const FTS_RANK = 'bm25(job_postings_fts, 10.0, 3.0, 1.0, 1.0)';
+
+// ---- Statistics scope (FIX-09) ----
+
+/** The publication_monthly layout this code reads (export-to-sqlite.py PUBLICATION_AGG_VERSION). */
+const PUBLICATION_AGG_VERSION = 1;
+
+/** How many months /statistici draws; older intake is one summed line. */
+const PUBLICATION_MONTHS_SHOWN = 24;
+
+/**
+ * The historical publication aggregates of the export: announcements the source published
+ * per month and per county, over the WHOLE database whatever `--active-only` left in
+ * job_postings (see the table definition in export-to-sqlite.py). null = this export has
+ * none (an older file, db.php's shim answers with an empty view) or only a layout this
+ * code does not know: the page then says "indisponibil" and shows the current export only,
+ * never history inferred from the surviving rows.
+ *
+ * `months` is a continuous series, so a month with no announcements is a zero bar rather
+ * than a silent gap; `older` sums what falls before the window. `unknown_date` is the
+ * explicit missing-date bucket. All counts include cancelled announcements (`cancelled`
+ * says how many of them).
+ *
+ * @return array{total:int, cancelled:int, unknown_date:int, first:?string, last:?string,
+ *               older:int, older_before:?string, months:list<array{month:string,postings:int,cancelled:int,partial:bool}>,
+ *               counties:list<array{name:string,slug:string,postings:int}>, no_county:int}|null
+ */
+function publication_history(): ?array {
+    static $hist = false;          // false = not looked up
+    if ($hist !== false) {
+        return $hist;
+    }
+    $hist = null;
+    try {
+        $st = db()->prepare("SELECT month, SUM(postings) AS postings, SUM(cancelled) AS cancelled
+                             FROM publication_monthly WHERE agg_version = ? GROUP BY month ORDER BY month");
+        $st->execute([PUBLICATION_AGG_VERSION]);
+        $rows = $st->fetchAll();
+        if (!$rows) {
+            return $hist;
+        }
+        $by_month = [];
+        $unknown = 0;
+        $total = 0;
+        $cancelled = 0;
+        foreach ($rows as $r) {
+            $total += (int)$r['postings'];
+            $cancelled += (int)$r['cancelled'];
+            if (preg_match('/^\d{4}-\d{2}$/', (string)$r['month'])) {
+                $by_month[$r['month']] = ['postings' => (int)$r['postings'], 'cancelled' => (int)$r['cancelled']];
+            } else {
+                $unknown += (int)$r['postings'];     // 'unknown' = published_at was NULL
+            }
+        }
+        ksort($by_month);
+        $first = $by_month ? array_key_first($by_month) : null;
+        $last  = $by_month ? array_key_last($by_month) : null;
+
+        $months = [];
+        $older = 0;
+        $older_before = null;
+        if ($first !== null) {
+            $tz = new DateTimeZone('Europe/Bucharest');
+            $end = new DateTimeImmutable($last . '-01', $tz);
+            $start = $end->modify('-' . (PUBLICATION_MONTHS_SHOWN - 1) . ' months');
+            $window_start = max($start->format('Y-m'), $first);
+            if ($first < $window_start) {
+                $older_before = $window_start;
+                foreach ($by_month as $m => $v) {
+                    if ($m < $window_start) $older += $v['postings'];
+                }
+            }
+            // The build month is still filling up: its bar is a partial month.
+            $build = build_meta();
+            $build_month = null;
+            if (!empty($build['built_at'])) {
+                $build_month = (new DateTimeImmutable($build['built_at']))->setTimezone($tz)->format('Y-m');
+            }
+            for ($d = new DateTimeImmutable($window_start . '-01', $tz); $d->format('Y-m') <= $last; $d = $d->modify('+1 month')) {
+                $m = $d->format('Y-m');
+                $v = $by_month[$m] ?? ['postings' => 0, 'cancelled' => 0];
+                $months[] = ['month' => $m, 'postings' => $v['postings'], 'cancelled' => $v['cancelled'],
+                             'partial' => $m === $build_month];
+            }
+        }
+
+        $st = db()->prepare("SELECT p.judet_id, j.name, j.slug, SUM(p.postings) AS postings
+                             FROM publication_monthly p LEFT JOIN judete j ON j.id = p.judet_id
+                             WHERE p.agg_version = ? AND p.judet_id != 0
+                             GROUP BY p.judet_id ORDER BY postings DESC, p.judet_id LIMIT 10");
+        $st->execute([PUBLICATION_AGG_VERSION]);
+        $counties = [];
+        foreach ($st->fetchAll() as $r) {
+            $counties[] = ['name' => (string)($r['name'] ?? ('Județ #' . $r['judet_id'])),
+                           'slug' => (string)($r['slug'] ?? ''), 'postings' => (int)$r['postings']];
+        }
+        $st = db()->prepare("SELECT COALESCE(SUM(postings), 0) FROM publication_monthly WHERE agg_version = ? AND judet_id = 0");
+        $st->execute([PUBLICATION_AGG_VERSION]);
+
+        $hist = ['total' => $total, 'cancelled' => $cancelled, 'unknown_date' => $unknown,
+                 'first' => $first, 'last' => $last, 'older' => $older, 'older_before' => $older_before,
+                 'months' => $months, 'counties' => $counties, 'no_county' => (int)$st->fetchColumn()];
+    } catch (Exception $e) {
+        $hist = null;
+    }
+    return $hist;
+}
+
+/**
+ * What the current export holds, as a sentence for /statistici: what it contains
+ * (`active_only` = only announcements still open at build time; otherwise every row of the
+ * database) and when it was built. Without build_meta the build date is said to be unknown.
+ */
+function stats_scope_sentence(): string {
+    $meta = build_meta();
+    $when = build_time('d.m.Y, H:i');
+    if (empty($meta) || !isset($meta['active_only'])) {
+        $what = 'anunțurile din acest fișier de date (nu se știe dacă include și anunțuri expirate)';
+    } else {
+        $what = (int)$meta['active_only'] === 1
+            ? 'doar anunțurile încă neexpirate și neanulate la data generării'
+            : 'toate anunțurile din baza de date, inclusiv cele expirate';
+    }
+    return "Conține $what; generat " . ($when !== '' ? "la $when" : 'la o dată necunoscută') . '.';
+}

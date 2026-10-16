@@ -134,6 +134,18 @@ $ndb = new PDO("sqlite:$nollm", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_E
 $ndb->exec('DROP TABLE llm_costs');
 $ndb = null;
 
+// FIX-09: exports from before publication_monthly. `nohistory` has every other table;
+// `oldest-nohistory` is the oldest shape (no status, no roles, no evidence) without it too.
+$nohistory = "$tmp-nohistory.sqlite";
+copy($current, $nohistory);
+$oldest_nohistory = "$tmp-oldest-nohistory.sqlite";
+copy($oldest_noevidence, $oldest_nohistory);
+foreach ([$nohistory, $oldest_nohistory] as $file) {
+    $hdb = new PDO("sqlite:$file", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $hdb->exec('DROP TABLE publication_monthly');
+    $hdb = null;
+}
+
 run_suite('shim reproduces the exported status vocabulary row for row', function () use ($current, $legacy) {
     $want = (new PDO("sqlite:$current"))
         ->query("SELECT id, application_status FROM job_postings ORDER BY id")
@@ -293,6 +305,8 @@ $shapes = [
     'the oldest export without roles or requirement_evidence' => $oldest_noevidence,
     'an export from before the LLM call ledger (llm_costs without step/source)' => $preledger,
     'an export with no llm_costs table'                       => $nollm,
+    'an export with no publication_monthly (FIX-09)'          => $nohistory,
+    'the oldest export without roles, evidence or publication_monthly' => $oldest_nohistory,
 ];
 // Requirement filters on an export without posting_roles = the posting-level predicates.
 $flat_cases = [
@@ -324,6 +338,16 @@ foreach ($shapes as $label => $file) {
             assert_contains('02.10.2026 · 3 anunțuri (estimare)', $body, 'old export: every row is an estimate');
             assert_contains('Estimare incompletă', $body, 'old export: says the figure is incomplete');
             assert_not_contains('Pe etape', $body, 'old export: no per-step breakdown it cannot support');
+        });
+    }
+    if (in_array($file, [$nohistory, $oldest_nohistory], true)) {
+        run_suite("the history section says indisponibil, with scoped current data, against $label", function () use ($srv) {
+            $body = (string)@file_get_contents($srv['base'] . '/statistici/');
+            assert_contains('Istoric indisponibil', $body, 'no aggregate: history is said to be unavailable');
+            assert_contains('Luna publicării, doar în exportul curent', $body, 'the monthly chart is scoped to the export');
+            assert_not_contains('Anunțuri publicate, în total', $body, 'no all-history total is inferred from the slice');
+            assert_not_contains('Pe luna publicării (toată baza de date)', $body, 'no history chart');
+            assert_contains('Export curent', $body, 'the current export is labelled');
         });
     }
     if ($file === $nollm) {

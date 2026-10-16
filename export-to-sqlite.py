@@ -25,6 +25,8 @@ Output: posturi.sqlite with tables:
   job_postings_fts — FTS5 virtual table (rowid = job_posting id)
   llm_costs       — daily LLM spend by step, for /statistici: the call ledger since it began,
                     the variant-table estimate before (not sliced by --active-only)
+  publication_monthly — historical publication counts by month and county, from ALL of
+                    Postgres whatever --active-only does to job_postings (FIX-09)
   build_meta      — one row: when this file was built, from which commit and host
 """
 
@@ -666,6 +668,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     split_posting_text(con)
 
     export_llm_costs(cur, con)
+    export_publication_monthly(cur, con)
 
     # Source-freshness aggregates for build_meta, over the SAME slice the
     # export just wrote — MAX(detail_fetched_at) is the last real successful
@@ -770,6 +773,61 @@ def export_llm_costs(cur, con: sqlite3.Connection) -> None:
         "output_tokens, cost_usd, step, source, unpriced_calls, postings) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", legacy + ledger)
     print(f"{len(legacy)} legacy + {len(ledger)} ledger rows")
+
+
+PUBLICATION_AGG_VERSION = 1
+
+PUBLICATION_MONTHLY_DDL = """
+DROP TABLE IF EXISTS publication_monthly;
+-- FIX-09: how many announcements the SOURCE PUBLISHED in each month, counted over every
+-- row of jobs_jobposting, whatever --active-only left in job_postings. Deleting expired
+-- rows from this file therefore never changes these numbers. Contract (agg_version 1):
+--   month        'YYYY-MM' of JobPosting.published_at ("publicat_in"). That is a calendar
+--                DATE the source prints in local time, so no time-zone conversion applies
+--                and a posting dated 30 Sep is September in any session zone. 'unknown' =
+--                published_at IS NULL (a missing date is a row of its own, never dropped,
+--                never guessed from first_seen/created_at).
+--   judet_id     jobs_judet.id, the same stable id as judete.id in this file; 0 = the
+--                posting has no county.
+--   postings     announcements (rows), cancelled ones INCLUDED, unknown dates included.
+--                Not distinct jobs: a repost is a second row. SUM(postings) = every
+--                announcement ever scraped into the database, the denominator of every
+--                historical figure.
+--   cancelled    the subset of `postings` the source marks cancelled (net intake of
+--                announcements that went ahead = postings - cancelled).
+-- Window: first scrape to the build (build_meta.built_at); earlier months are only as
+-- complete as the scraper's history, so the earliest months are partial. This is intake
+-- per month, NOT how many jobs were open on a past date (that needs observations).
+CREATE TABLE publication_monthly (
+    agg_version INTEGER NOT NULL,
+    month       TEXT    NOT NULL,
+    judet_id    INTEGER NOT NULL DEFAULT 0,
+    postings    INTEGER NOT NULL,
+    cancelled   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (month, judet_id)
+) WITHOUT ROWID;
+"""
+
+
+def export_publication_monthly(cur, con: sqlite3.Connection) -> None:
+    """Build `publication_monthly` straight from Postgres (see PUBLICATION_MONTHLY_DDL)."""
+    print("Exporting publication_monthly...", end=" ", flush=True)
+    con.executescript(PUBLICATION_MONTHLY_DDL)
+    cur.execute("""
+        SELECT COALESCE(to_char(published_at, 'YYYY-MM'), 'unknown') AS month,
+               COALESCE(judet_id, 0)                                 AS judet_id,
+               COUNT(*)                                              AS postings,
+               COUNT(*) FILTER (WHERE cancelled)                     AS cancelled
+        FROM jobs_jobposting
+        GROUP BY 1, 2
+        ORDER BY 1, 2
+    """)
+    rows = [(PUBLICATION_AGG_VERSION, r["month"], r["judet_id"], r["postings"], r["cancelled"])
+            for r in cur.fetchall()]
+    con.executemany(
+        "INSERT INTO publication_monthly(agg_version, month, judet_id, postings, cancelled) "
+        "VALUES (?,?,?,?,?)", rows)
+    print(f"{len(rows)} rows, {sum(r[3] for r in rows)} announcements")
 
 
 def git_sha() -> str:

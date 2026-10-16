@@ -109,6 +109,25 @@ function shim_legacy_export(PDO $pdo): void {
     shim_posting_roles($pdo, $cols);
     shim_requirement_evidence($pdo);
     shim_posting_text($pdo, $cols);
+    shim_publication_monthly($pdo);
+}
+
+/**
+ * FIX-09: an export that predates `publication_monthly` has no historical aggregates.
+ * An EMPTY temp view of the same name (same columns, no rows) answers the stats query, and
+ * publication_history() reads "no rows" as "indisponibil". History is never rebuilt from
+ * job_postings: on a production export that table holds only the surviving, unexpired
+ * announcements, so counting it by month would present a slice as the past.
+ */
+function shim_publication_monthly(PDO $pdo): void {
+    $has = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'publication_monthly'")
+        ->fetchColumn();
+    if ($has) {
+        return;
+    }
+    $pdo->exec("CREATE TEMP VIEW publication_monthly AS SELECT
+            0 AS agg_version, '' AS month, 0 AS judet_id, 0 AS postings, 0 AS cancelled
+        WHERE 0");
 }
 
 /**

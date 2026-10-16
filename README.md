@@ -554,6 +554,21 @@ makes the section read "Date indisponibile" instead of failing; one that predate
 columns renders with its old, "estimare incompletă" copy. See docs/deploy-vps.md § LLM call
 ledger.
 
+`/statistici` keeps two scopes apart (FIX-09). "Export curent" counts the rows of the served
+file (on the host: only announcements still open at build time), split into exported /
+confirmed open / uncertain (`unconfirmed` + `unknown`) / closed, with the build date.
+"Istoric" reads `publication_monthly(agg_version, month, judet_id, postings, cancelled)`,
+which `export_publication_monthly()` computes from every `jobs_jobposting` row, so
+`--active-only` and deleting expired rows never change it. `month` is the `YYYY-MM` of
+`published_at` (a source calendar date; no time-zone conversion) or `unknown` when it is
+NULL; `judet_id` is `jobs_judet.id` (0 = no county); `postings` includes cancelled rows
+(`cancelled` is the subset) and counts announcements, not distinct jobs. It is intake per
+month, not a curve of how many jobs were open. An export without the table (or with another
+`agg_version`) shows "Istoric indisponibil" and a monthly chart labelled as current-export
+only; db.php stands in an empty view. Reconciliation: `SELECT COALESCE(to_char(published_at,
+'YYYY-MM'),'unknown'), COUNT(*) FROM jobs_jobposting GROUP BY 1` must equal
+`SELECT month, SUM(postings) FROM publication_monthly GROUP BY 1`.
+
 `posting_roles` (DATA-04) is the role read model: one row per advertised role, so a
 requirement search can demand that *one* role satisfies every condition. A posting whose
 extraction lists `positions[]` gets one `decomposed = 1` row per entry (values from that

@@ -1,16 +1,35 @@
 <?php
 declare(strict_types=1);
 
-$today = ro_today();
+// FIX-09: every figure here is labelled with the dataset it describes. The first block
+// ("Export curent") counts the rows of THIS sqlite file, which on the public host holds only
+// the announcements still open at build time; the second ("Istoric") reads the
+// publication_monthly aggregate the export computes from all of PostgreSQL. The two are never
+// added together or shown under one unlabeled total.
+
 $seven_ago = date('Y-m-d', strtotime('-7 days'));
 
-$total    = (int)db()->query("SELECT COUNT(*) FROM job_postings")->fetchColumn();
-$active   = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE application_status IN (" . OPEN_STATUS_SQL . ")")->fetchColumn();
+$total = (int)db()->query("SELECT COUNT(*) FROM job_postings")->fetchColumn();
+
+// FIX-05 status vocabulary. "Active" (the search default) is confirmed open + the two
+// uncertain states; a closed row is one whose resolved deadline has passed.
+$by_status = array_fill_keys(['confirmed_open', 'unconfirmed', 'unknown', 'closed'], 0);
+foreach (db()->query("SELECT application_status AS s, COUNT(*) AS n FROM job_postings GROUP BY application_status")->fetchAll() as $r) {
+    if (isset($by_status[$r['s']])) $by_status[$r['s']] = (int)$r['n'];
+}
+$confirmed_open = $by_status['confirmed_open'];
+$uncertain      = $by_status['unconfirmed'] + $by_status['unknown'];
+$closed         = $by_status['closed'];
+$active         = $confirmed_open + $uncertain;
+
 $inferred_cnt = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inferred != '{}'")->fetchColumn();
 $unique_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn();
 $unique_judete    = (int)db()->query("SELECT COUNT(DISTINCT judet_id) FROM job_postings WHERE judet_id IS NOT NULL")->fetchColumn();
 $new_7days = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE published_at >= '$seven_ago'")->fetchColumn();
-$with_salary = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inf_salary_min IS NOT NULL")->fetchColumn();
+// Pay: what the announcement states and what the draft salary grid estimates are different
+// facts, so they are counted apart (an estimate is only counted where no pay is announced).
+$sal_announced = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inf_salary_min > 0")->fetchColumn();
+$sal_estimated = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE COALESCE(inf_salary_min, 0) <= 0 AND sal_min > 0")->fetchColumn();
 
 // Avg deadline
 $avg_deadline = null;
@@ -33,14 +52,26 @@ $max_seniority = $by_seniority ? $by_seniority[0]['cnt'] : 1;
 $by_studies = db()->query("SELECT inf_studies_required AS studies, COUNT(*) AS cnt FROM job_postings WHERE inf_studies_required IS NOT NULL AND inf_studies_required != '' GROUP BY inf_studies_required ORDER BY cnt DESC LIMIT 10")->fetchAll();
 $max_studies = $by_studies ? $by_studies[0]['cnt'] : 1;
 
-// By employer category
+// `employer_category` is the source's own category badge. It is NOT a classification of the
+// employer: it mixes position/contract labels ("Funcție contractuală", "Funcție publică")
+// with institution-style labels ("Primării", "Instituții locale") depending on how the
+// source filled it, and is empty on a share of rows. It is shown as the source states it,
+// the empty rows are counted as unknown, and nothing is mapped to an institution type (that
+// needs its own classifier, see the backlog).
 $by_emp_cat = db()->query("SELECT employer_category AS category, COUNT(*) AS cnt FROM job_postings WHERE employer_category != '' GROUP BY employer_category ORDER BY cnt DESC LIMIT 10")->fetchAll();
-$max_emp_cat = $by_emp_cat ? $by_emp_cat[0]['cnt'] : 1;
+$emp_cat_unknown = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE employer_category = ''")->fetchColumn();
+$max_emp_cat = max($by_emp_cat ? (int)$by_emp_cat[0]['cnt'] : 0, $emp_cat_unknown, 1);
 
-// Monthly trends (last 12 months)
-$by_month = db()->query("SELECT strftime('%Y-%m', published_at) AS month, COUNT(*) AS cnt FROM job_postings WHERE published_at IS NOT NULL GROUP BY month ORDER BY month DESC LIMIT 12")->fetchAll();
-$by_month = array_reverse($by_month);
-$max_monthly = $by_month ? max(array_column($by_month, 'cnt')) : 1;
+// Publication month of the rows IN THIS EXPORT. Only shown (as such) when the export has no
+// historical aggregate; with one, the history section answers the question properly.
+$hist = publication_history();
+$by_month = [];
+$max_monthly = 1;
+if ($hist === null) {
+    $by_month = db()->query("SELECT strftime('%Y-%m', published_at) AS month, COUNT(*) AS cnt FROM job_postings WHERE published_at IS NOT NULL GROUP BY month ORDER BY month DESC LIMIT 12")->fetchAll();
+    $by_month = array_reverse($by_month);
+    $max_monthly = $by_month ? max(array_column($by_month, 'cnt')) : 1;
+}
 
 // Anomaly counts
 $anomaly_counts = [];
@@ -104,29 +135,47 @@ require __DIR__ . '/../inc/header.php';
 
   <h1 class="font-display text-[2rem] italic font-semibold text-ink mb-1">Statistici</h1>
   <p class="text-ink-muted text-sm mb-2 font-mono">Distribuție agregată a anunțurilor de angajare din sectorul public</p>
-  <p class="text-sm mb-8"><a href="/angajatori/" class="text-gov hover:underline">Mergi la statistici Angajatori →</a></p>
+  <p class="text-sm mb-6"><a href="/angajatori/" class="text-gov hover:underline">Mergi la statistici Angajatori →</a></p>
 
-  <!-- KPI row 1 -->
-  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-    <div class="bg-surface border border-line rounded-lg p-5">
-      <div class="text-3xl font-display font-semibold text-gov"><?= $total ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri totale</div>
-    </div>
-    <div class="bg-surface border border-line rounded-lg p-5">
-      <div class="text-3xl font-display font-semibold text-ok-ink"><?= $active ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri active</div>
-      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $active / $ttl) ?>% din total</div>
-      <?php if ($avg_deadline): ?><div class="text-xs text-ink-faint mt-1">avg <?= $avg_deadline ?> zile</div><?php endif; ?>
-    </div>
-    <div class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">
-      <div class="text-3xl font-display font-semibold text-ink"><?= $inferred_cnt ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Clasificate automat</div>
-      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $inferred_cnt / $ttl) ?>% din total</div>
-    </div>
+  <!-- Which numbers describe what -->
+  <div class="bg-neutral border border-neutral-line rounded-lg p-4 mb-8 text-sm text-neutral-ink" id="domeniu">
+    <p class="font-semibold mb-1">Ce descriu cifrele de pe această pagină</p>
+    <ul class="list-disc pl-5 space-y-1">
+      <li><a href="#export-curent" class="underline">Export curent</a>: fișierul de date servit acum. <?= e(stats_scope_sentence()) ?> Nu este arhiva sursei.</li>
+      <li><a href="#istoric" class="underline">Istoric</a>: câte anunțuri a publicat sursa în fiecare lună, din toată baza de date, inclusiv anunțurile expirate care nu mai sunt în exportul curent.<?= $hist === null ? ' Indisponibil în acest export.' : '' ?></li>
+    </ul>
   </div>
 
-  <!-- KPI row 2 -->
-  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+  <section id="export-curent" aria-labelledby="h-export-curent" class="mb-12">
+  <h2 id="h-export-curent" class="font-display text-2xl italic font-semibold text-ink mb-1">Export curent</h2>
+  <p class="text-xs text-ink-faint mb-5">Numărătoare peste anunțurile din acest export: <?= (int)$total ?> în total. Procentele sunt din acest total.</p>
+
+  <!-- Status of the announcements in the export (FIX-05 vocabulary) -->
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-gov"><?= $total ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri în export</div>
+      <div class="text-xs text-ink-faint mt-0.5">toate stările de mai jos</div>
+    </div>
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-ok-ink"><?= $confirmed_open ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Deschise, termen confirmat</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $confirmed_open / $ttl) ?>% din export</div>
+    </div>
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-note-ink"><?= $uncertain ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Termen neconfirmat</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= $by_status['unconfirmed'] ?> cu termen estimat din expirare · <?= $by_status['unknown'] ?> fără termen</div>
+    </div>
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-3xl font-display font-semibold text-ink"><?= $closed ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Închise</div>
+      <div class="text-xs text-ink-faint mt-0.5">termen depășit, încă în export</div>
+    </div>
+  </div>
+  <p class="text-sm text-ink-muted mb-8">Active în căutare (deschise confirmate + cu termen neconfirmat): <strong class="text-ink"><?= $active ?></strong> din <?= $total ?> (<?= round(100 * $active / $ttl) ?>%). „Neconfirmat” înseamnă că data de expirare a anunțului ține loc de termen de înscriere; verifică termenul în anunțul oficial.</p>
+
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
     <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $unique_employers ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Angajatori unici</div>
@@ -137,14 +186,35 @@ require __DIR__ . '/../inc/header.php';
     </div>
     <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $new_7days ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Noi (7 zile)</div>
-      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $new_7days / $ttl) ?>% din total</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Publicate în 7 zile</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $new_7days / $ttl) ?>% din export</div>
     </div>
     <div class="bg-surface border border-line rounded-lg p-5">
-      <div class="text-2xl font-display font-semibold text-ink"><?= $with_salary ?></div>
-      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Cu salariu</div>
-      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $with_salary / $ttl) ?>% din total</div>
+      <div class="text-2xl font-display font-semibold text-ink"><?= $inferred_cnt ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Clasificate automat</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $inferred_cnt / $ttl) ?>% din export</div>
     </div>
+  </div>
+
+  <!-- Pay: announced and estimated are different facts -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink"><?= $sal_announced ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Cu salariu anunțat</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $sal_announced / $ttl) ?>% din export · declarat de angajator</div>
+    </div>
+    <div class="bg-surface border border-line rounded-lg p-5">
+      <div class="text-2xl font-display font-semibold text-ink"><?= $sal_estimated ?></div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Doar salariu estimat</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $sal_estimated / $ttl) ?>% din export · calculat din proiectul grilei salariale, nu oferit de angajator</div>
+    </div>
+    <?php if ($avg_deadline): ?>
+    <div class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">
+      <div class="text-2xl font-display font-semibold text-ink"><?= $avg_deadline ?> zile</div>
+      <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Publicare → expirare</div>
+      <div class="text-xs text-ink-faint mt-0.5">medie în export, pe expirarea anunțului</div>
+    </div>
+    <?php endif; ?>
   </div>
 
   <?php
@@ -173,14 +243,14 @@ require __DIR__ . '/../inc/header.php';
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
     <section class="bg-surface border border-line rounded-lg p-6">
-      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top domenii profesionale</h2>
+      <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Top domenii profesionale</h3>
       <div class="space-y-2">
         <?php bar_chart($by_family, 'family', 'cnt', $max_family, 'family'); ?>
       </div>
     </section>
 
     <section class="bg-surface border border-line rounded-lg p-6">
-      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Top județe</h2>
+      <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Top județe</h3>
       <div class="space-y-2">
         <?php foreach ($by_judet as $item): ?>
         <div>
@@ -197,14 +267,14 @@ require __DIR__ . '/../inc/header.php';
     </section>
 
     <section class="bg-surface border border-line rounded-lg p-6">
-      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Grad/funcție</h2>
+      <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Grad/funcție</h3>
       <div class="space-y-2">
         <?php bar_chart($by_seniority, 'seniority', 'cnt', $max_seniority, 'seniority'); ?>
       </div>
     </section>
 
     <section class="bg-surface border border-line rounded-lg p-6">
-      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Studii minime</h2>
+      <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Studii minime</h3>
       <div class="space-y-2">
         <?php
         $mapped = array_map(fn($x) => ['studies' => STUDIES_LABELS[$x['studies']] ?? $x['studies'], 'cnt' => $x['cnt']], $by_studies);
@@ -213,16 +283,20 @@ require __DIR__ . '/../inc/header.php';
       </div>
     </section>
 
-    <section class="bg-surface border border-line rounded-lg p-6">
-      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Tip angajator</h2>
+    <section class="bg-surface border border-line rounded-lg p-6" id="categorie-sursa">
+      <h3 class="font-display text-lg italic font-semibold text-ink mb-1">Categoria din anunț (câmp al sursei)</h3>
+      <p class="text-xs text-ink-faint mb-4">Eticheta pe care o afișează sursa, nu un tip de angajator: amestecă tipul funcției (contractuală, publică) cu categorii de instituții și poate lipsi. Nu este o clasificare a instituțiilor.</p>
       <div class="space-y-2">
         <?php bar_chart($by_emp_cat, 'category', 'cnt', $max_emp_cat, 'employer_cat'); ?>
+        <?php if ($emp_cat_unknown > 0) bar_chart([['category' => 'Necunoscut (necompletat în sursă)', 'cnt' => $emp_cat_unknown]], 'category', 'cnt', $max_emp_cat); ?>
       </div>
     </section>
 
-    <!-- Monthly trend -->
-    <section class="bg-surface border border-line rounded-lg p-6">
-      <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Tendință lunară (12 luni)</h2>
+    <?php if ($hist === null): ?>
+    <!-- No historical aggregate in this export: the monthly chart can only describe the rows in the file. -->
+    <section class="bg-surface border border-line rounded-lg p-6" id="luna-export">
+      <h3 class="font-display text-lg italic font-semibold text-ink mb-1">Luna publicării, doar în exportul curent</h3>
+      <p class="text-xs text-ink-faint mb-4">Nu este istoric: numără doar anunțurile păstrate în acest export (<?= (int)$total ?>), după luna publicării. Anunțurile expirate și scoase din export lipsesc, deci lunile vechi apar subestimate.</p>
       <div class="space-y-1.5">
         <?php foreach ($by_month as $item): ?>
         <div>
@@ -237,18 +311,19 @@ require __DIR__ . '/../inc/header.php';
         <?php endforeach; ?>
       </div>
     </section>
+    <?php endif; ?>
   </div>
 
   <!-- Anomalies -->
-  <section class="bg-surface border border-line rounded-lg p-6 mb-8">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-4">Anomalii detectate</h2>
+  <section class="bg-surface border border-line rounded-lg p-6">
+    <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Anomalii detectate în exportul curent</h3>
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
       <?php foreach (ANOMALY_LABELS as $flag => $alabel): ?>
       <?php $cnt = $anomaly_counts[$flag] ?? 0; $pct = round(100 * $cnt / $ttl); ?>
       <div class="border border-note-line bg-note/40 rounded p-3">
         <div class="text-xl font-display font-semibold text-note-ink"><?= $cnt ?></div>
         <div class="text-xs text-note-ink mt-0.5"><?= e($alabel) ?></div>
-        <div class="text-xs text-ink-faint mt-0.5"><?= $pct ?>% din total</div>
+        <div class="text-xs text-ink-faint mt-0.5"><?= $pct ?>% din export</div>
         <?php if ($cnt): ?>
           <a href="/?anomaly=<?= urlencode($flag) ?>" class="text-xs text-gov hover:underline mt-1 block">Explorează →</a>
         <?php endif; ?>
@@ -256,11 +331,79 @@ require __DIR__ . '/../inc/header.php';
       <?php endforeach; ?>
     </div>
   </section>
+  </section>
+
+  <!-- Historical publication intake (publication_monthly) -->
+  <section id="istoric" aria-labelledby="h-istoric" class="mb-12">
+    <h2 id="h-istoric" class="font-display text-2xl italic font-semibold text-ink mb-1">Istoric: anunțuri publicate pe lună</h2>
+    <?php if ($hist === null): ?>
+      <p class="text-ink-muted text-sm italic" id="istoric-indisponibil">Istoric indisponibil: acest export nu conține agregatele istorice. Cifrele de mai sus descriu doar exportul curent și nu se pot folosi ca istoric.</p>
+    <?php else: ?>
+      <?php $max_hist = $hist['months'] ? max(1, ...array_column($hist['months'], 'postings')) : 1; ?>
+      <p class="text-xs text-ink-faint mb-5">Număr de anunțuri apărute în sursă, după luna publicării, din toată baza de date: includ anunțurile expirate și anulate, care nu sunt în exportul curent. Este intrarea lunară de anunțuri, nu câte posturi erau deschise la o anumită dată. Un anunț republicat se numără din nou.</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+        <div class="bg-surface border border-line rounded-lg p-5">
+          <div class="text-2xl font-display font-semibold text-ink"><?= (int)$hist['total'] ?></div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Anunțuri publicate, în total</div>
+          <div class="text-xs text-ink-faint mt-0.5"><?= $hist['first'] ? 'din ' . e($hist['first']) . ' până în ' . e($hist['last']) : 'fără lună cunoscută' ?></div>
+        </div>
+        <div class="bg-surface border border-line rounded-lg p-5">
+          <div class="text-2xl font-display font-semibold text-ink"><?= (int)$hist['cancelled'] ?></div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Din care anulate</div>
+          <div class="text-xs text-ink-faint mt-0.5">incluse în totalul de mai sus</div>
+        </div>
+        <div class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">
+          <div class="text-2xl font-display font-semibold text-ink"><?= (int)$hist['unknown_date'] ?></div>
+          <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Fără dată de publicare</div>
+          <div class="text-xs text-ink-faint mt-0.5">incluse în total, în nicio lună</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <section class="bg-surface border border-line rounded-lg p-6" id="luna-istoric">
+          <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Pe luna publicării (toată baza de date)</h3>
+          <div class="space-y-1.5">
+            <?php foreach ($hist['months'] as $item): ?>
+            <div>
+              <div class="flex justify-between text-xs mb-0.5">
+                <span class="font-mono text-ink-muted"><?= e($item['month']) ?><?= $item['partial'] ? ' (în curs)' : '' ?></span>
+                <span class="text-ink-muted font-mono"><?= (int)$item['postings'] ?></span>
+              </div>
+              <div class="h-1.5 bg-sunken rounded-full overflow-hidden">
+                <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $item['postings'] / $max_hist) ?>%"></div>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <?php if ($hist['older'] > 0): ?>
+          <p class="text-xs text-ink-faint mt-3">Înainte de <?= e($hist['older_before']) ?>: <?= (int)$hist['older'] ?> anunțuri.</p>
+          <?php endif; ?>
+        </section>
+        <section class="bg-surface border border-line rounded-lg p-6" id="judete-istoric">
+          <h3 class="font-display text-lg italic font-semibold text-ink mb-4">Top județe, toată baza de date</h3>
+          <div class="space-y-2">
+            <?php $max_hc = $hist['counties'] ? $hist['counties'][0]['postings'] : 1; ?>
+            <?php foreach ($hist['counties'] as $c): ?>
+            <div>
+              <div class="flex justify-between text-sm mb-0.5">
+                <span class="text-ink"><?= e($c['name']) ?></span>
+                <span class="text-ink-muted font-mono text-xs"><?= (int)$c['postings'] ?></span>
+              </div>
+              <div class="h-2 bg-sunken rounded-full overflow-hidden">
+                <div class="h-full bg-gov rounded-full" style="width:<?= round(100 * $c['postings'] / $max_hc) ?>%"></div>
+              </div>
+            </div>
+            <?php endforeach; ?>
+          </div>
+          <p class="text-xs text-ink-faint mt-3">Anunțuri cu județ cunoscut, inclusiv anulate și fără dată<?= $hist['no_county'] > 0 ? '; fără județ: ' . (int)$hist['no_county'] : '' ?>.</p>
+        </section>
+      </div>
+    <?php endif; ?>
+  </section>
 
   <!-- LLM extraction spend -->
   <section class="bg-surface border border-line rounded-lg p-6 mb-8">
     <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Costuri inferență</h2>
-    <p class="text-xs text-ink-faint mb-4">Apelurile către modelul LLM, în USD, pe zile.</p>
+    <p class="text-xs text-ink-faint mb-4">Apelurile către modelul LLM, în USD, pe zile. Cuprinde toate apelurile din baza de date, nu doar anunțurile din exportul curent.</p>
     <?php if ($llm === null): ?>
       <p class="text-ink-muted text-sm italic">Date indisponibile.</p>
     <?php else: ?>

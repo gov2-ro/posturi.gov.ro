@@ -198,6 +198,15 @@ CREATE TABLE llm_costs (
     postings        INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (day, provider, model, prompt_version, step, source)
 );
+-- FIX-09: historical publication intake, over ALL of Postgres (the export's table).
+CREATE TABLE publication_monthly (
+    agg_version INTEGER NOT NULL,
+    month       TEXT    NOT NULL,
+    judet_id    INTEGER NOT NULL DEFAULT 0,
+    postings    INTEGER NOT NULL,
+    cancelled   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (month, judet_id)
+) WITHOUT ROWID;
 CREATE TABLE build_meta (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
     built_at        TEXT NOT NULL,
@@ -523,8 +532,33 @@ SQL);
         $llm->execute($row);
     }
 
+    // FIX-09: what the source published, including announcements long expired and not in
+    // job_postings above. 2026-09 is 70 announcements here against 37 in the slice; the
+    // 3 undated rows and the county-less one are explicit buckets. Months with nothing
+    // (2026-01..07) are absent, as in the export.
+    $hist = $db->prepare('INSERT INTO publication_monthly (agg_version, month, judet_id, postings, cancelled) VALUES (1,?,?,?,?)');
+    foreach (FIXTURE_PUBLICATION_MONTHLY as $row) {
+        $hist->execute($row);
+    }
+
     if ($split) fixture_split_posting_text($db);
 }
+
+/** [month, judet_id, postings, cancelled] — SUM(postings) = 152, cancelled 8, undated 3. */
+const FIXTURE_PUBLICATION_MONTHLY = [
+    ['2025-11', 1, 4, 0],
+    ['2025-12', 1, 6, 1],
+    ['2025-12', 3, 5, 0],
+    ['2026-08', 1, 20, 2],
+    ['2026-08', 2, 15, 0],
+    ['2026-08', 3, 28, 1],
+    ['2026-09', 1, 30, 1],
+    ['2026-09', 2, 12, 0],
+    ['2026-09', 3, 27, 2],
+    ['2026-09', 0, 1, 0],
+    ['2026-10', 3, 1, 0],
+    ['unknown', 0, 3, 1],
+];
 
 /**
  * The export's split_posting_text() (PERF-SPLIT): the long texts move to posting_text,

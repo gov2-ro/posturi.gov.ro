@@ -113,8 +113,9 @@
   /* UX-01A: the "Include și date estimate…" sentence under the status tabs is
      shown only while "Termen în 7 zile" is checked. CSS, not server state: the
      status control lives outside the HTMX-swapped region. */
-  .status-soon-note { display: none; }
-  .status-block:has(input[name="status"][value="soon"]:checked) .status-soon-note { display: inline; }
+  .status-soon-note, .status-help { display: none; }
+  body:has(#status option:checked:not([value="active"])) .status-help { display: block; }
+  body:has(#status option[value="soon"]:checked) .status-soon-note { display: inline; }
 
   /* Save / hide icon buttons (helpers.php pref_controls): inline after the
      title, 20px glyph in a 32px hit area; the negative block margin keeps the

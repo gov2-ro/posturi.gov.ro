@@ -120,10 +120,17 @@ run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the 
     $anc = facet_ancestors($home);
     foreach ($anc as $k => $parents) assert_same([], $parents, "$k is a top-level group");
     foreach (['judet', 'family', 'occupation', 'studies_level', 'isced', 'exp_level', 'level', 'categorie',
-              'employer_cat', 'duration', 'schedule', 'shift', 'remote', 'lang', 'skill', 'credential',
+              'employer_cat', 'duration', 'schedule', 'lang', 'skill', 'credential',
               'funding', 'sector', 'domain', 'termen'] as $k) {
         assert_true(array_key_exists($k, $anc), "group $k is offered");
     }
+    // 261016: Ture and Telemuncă are switches inside "Program de lucru", not groups.
+    foreach (['shift', 'remote'] as $k) {
+        assert_false(array_key_exists($k, $anc), "no separate $k group");
+        assert_same(1, xpath_for($home)->query('//details[@data-facet="schedule"]//input[@name="' . $k . '"]')->length,
+            "$k switch sits in Program de lucru");
+    }
+    assert_contains('Program de lucru', $home, 'merged group heading');
     foreach (['eqf', 'type', 'seniority', 'work_type', 'anomaly', 'schema', 'stage', 'more', 'studii', 'legacy', 'diagnostics'] as $k) {
         assert_false(array_key_exists($k, $anc), "no $k group (merged or dropped)");
     }
@@ -167,7 +174,7 @@ run_suite('a bookmarked selection opens its group and stays removable', function
         'skill[]=Excel'                 => ['skill', 'skill[]', 'Excel'],
         'exp_level[]=1-2'               => ['exp_level', 'exp_level[]', '1-2'],
         'duration[]=determinata'        => ['duration', 'duration[]', 'determinata'],
-        'shift=1'                       => ['shift', 'shift', '1'],
+        'shift=1'                       => ['schedule', 'shift', '1'],
         'funding[]=buget_local'         => ['funding', 'funding[]', 'buget_local'],
         'level[]=executie'              => ['level', 'level[]', 'executie'],
         'employer_cat[]=' . rawurlencode('Funcție publică') => ['employer_cat', 'employer_cat[]', 'Funcție publică'],
@@ -241,15 +248,20 @@ run_suite('status labels, help copy and announcement counts', function () use ($
     assert_contains('Include și date estimate din expirarea anunțului.', $flat, '7-day note present (shown by CSS for that tab)');
     assert_contains('class="status-soon-note"', $home, '7-day note is the CSS-toggled element');
     // URL values unchanged.
-    foreach (['active', 'soon', 'closed', 'unknown'] as $v) assert_contains('name="status" value="' . $v . '"', $home, "status value $v");
+    foreach (['active', 'soon', 'closed', 'unknown'] as $v) {
+        assert_same(1, xpath_for($home)->query('//select[@name="status"]/option[@value="' . $v . '"]')->length, "status value $v");
+    }
+    // 261016: a select beside the sort, not a row of buttons; the help shows once a non-default is picked.
+    assert_same(0, xpath_for($home)->query('//input[@name="status"]')->length, 'no status radio buttons');
+    assert_contains('class="status-help', $home, 'help is the CSS-toggled element');
     // Counts are of announcements.
     assert_true(preg_match('#<span class="font-mono font-medium text-ink">\d+</span>\s*anunțuri găsite#u', $home) === 1, 'plural count wording');
     $one = get_html($base, '/?status=closed');
     assert_true(preg_match('#<span class="font-mono font-medium text-ink">1</span>\s*anunț găsit#u', $one) === 1, 'singular count wording');
     assert_not_contains('posturi găsite', $home, 'old count wording gone');
     assert_true(preg_match('#id="drawer-count">\d+</span>\s*anunțuri#u', $home) === 1, 'drawer apply wording');
-    // Wrapping, not overflow: the tab group may wrap.
-    assert_true(preg_match('#aria-label="Stare anunț" class="[^"]*flex-wrap#', $home) === 1, 'status tabs wrap on small screens');
+    // Wrapping, not overflow: the options row (view, status, sort) may wrap.
+    assert_true(preg_match('#id="result-options"[^>]*class="[^"]*flex-wrap#', $home) === 1, 'options row wraps on small screens');
 });
 
 run_suite('deadline wording: confirmed, fallback, unknown, closed', function () use ($base) {
@@ -384,12 +396,11 @@ run_suite('no-JS: the form submits by GET with selections intact', function () u
     assert_contains('hx-get="/"', $html, 'form targets the list');
     assert_same(1, xpath_for($html)->query('//form[@id="filter-form"]')->length, 'one filter form');
     assert_same(0, xpath_for($html)->query('//form[@id="filter-form"][@method="post"]')->length, 'GET, not POST');
-    foreach ([['judet[]', 'cluj', 'checkbox'], ['status', 'soon', 'radio']] as [$n, $v, $t]) {
-        $x = xpath_for($html)->query('//input[@type="' . $t . '" and @name="' . $n . '" and @value="' . $v . '" and @checked]');
-        assert_same(1, $x->length, "$n=$v selected");
-    }
+    $x = xpath_for($html)->query('//input[@type="checkbox" and @name="judet[]" and @value="cluj" and @checked]');
+    assert_same(1, $x->length, 'judet[]=cluj selected');
+    assert_same(1, xpath_for($html)->query('//select[@name="status"]/option[@value="soon" and @selected]')->length, 'status=soon selected');
     assert_contains('value="spital"', $html, 'search text kept');
-    assert_contains('Termen în 7 zile', $html, 'status tabs render without JS');
+    assert_contains('Termen în 7 zile', $html, 'status options render without JS');
 });
 
 stop_fixture_server($srv, $db_path);

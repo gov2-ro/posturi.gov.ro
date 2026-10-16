@@ -217,6 +217,42 @@ $chips = $active_chips ?? [];
   </nav>
   <?php endif; ?>
 
+
+    <?php if ($home_new || $home_soon): ?>
+    <?php /* D15: two short lists on the unfiltered first page — below the results
+       since 261016 ("people come for something specific"). Each title links to the
+       posting; the heading links to the full list behind it. */ ?>
+    <div class="pg-home mt-8 grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-4 border-y border-line py-4 md:grid-cols-2">
+      <?php
+        $new_word = $home_new_day === ro_today() ? 'azi' : ($home_new_day !== '' ? fmt_date($home_new_day) : '');
+        foreach ([
+          ['Noi ' . $new_word, '/?published=' . rawurlencode($home_new_day), $home_new, false],
+          ['Se închid în 3 zile', '/?status=soon&sort=deadline', $home_soon, true],
+        ] as [$htitle, $hhref, $hrows, $show_deadline]):
+          if (!$hrows) continue; ?>
+      <section class="min-w-0">
+        <h2 class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
+          <a href="<?= e($hhref) ?>" class="hover:text-gov"><?= e($htitle) ?> <span aria-hidden="true">→</span></a>
+        </h2>
+        <ul class="space-y-1 text-sm">
+          <?php foreach ($hrows as $hp):
+              $hdt = display_title($hp); $hdl = posting_deadline($hp); ?>
+          <li class="flex items-baseline justify-between gap-3">
+            <span class="min-w-0 truncate"><a href="<?= e(job_url($hp)) ?>" class="font-medium text-ink hover:text-gov"><?= e($hdt['primary']) ?></a>
+              <span class="text-xs text-ink-muted">· <?= e($hp['employer_name']) ?></span></span>
+            <?php if ($show_deadline && $hdl['date']): ?>
+              <span class="shrink-0 font-mono text-xs text-alert-ink"><?php $hd = (int)days_until($hdl['date']); ?><?= e($hd === 0 ? 'azi' : days_label($hd)) ?></span>
+            <?php elseif ($place = place_label($hp)): ?>
+              <span class="max-w-[40%] shrink-0 truncate text-xs text-ink-muted"><?= e($place) ?></span>
+            <?php endif; ?>
+          </li>
+          <?php endforeach; ?>
+        </ul>
+      </section>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
 <?php else: ?>
   <div class="py-12 text-center">
     <div class="mb-3 font-display text-4xl italic text-ink-muted">—</div>

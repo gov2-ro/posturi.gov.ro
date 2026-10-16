@@ -103,7 +103,7 @@ test.describe('mobile drawer', () => {
     await page.goBack();
     await expect(page).not.toHaveURL(/judet%5B%5D=cluj/);
     await expect(page.locator('#results')).toContainText('anunțuri găsite');
-    await expect(page.locator('#results a[href="/job/1002-referent-debutant/"]')).toBeVisible();
+    await expect(page.locator('#results .pg-results a[href="/job/1002-referent-debutant/"]')).toBeVisible();
   });
 });
 
@@ -123,6 +123,6 @@ test.describe('desktop chips', () => {
     await expect(page).not.toHaveURL(/judet/);
     await expect(page.locator('input[name="judet[]"][value="cluj"]')).not.toBeChecked();
     // The unfiltered list includes a non-Cluj row again.
-    await expect(page.locator('#results a[href="/job/1002-referent-debutant/"]')).toBeVisible();
+    await expect(page.locator('#results .pg-results a[href="/job/1002-referent-debutant/"]')).toBeVisible();
   });
 });

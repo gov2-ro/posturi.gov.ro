@@ -76,7 +76,7 @@ test('subscription links follow filters through HTMX, chips, pagination and hist
   await expectFeeds(page, { judet: ['ilfov'] });
 
   // Status through the control, then history back twice.
-  await page.locator('label:has(input[name="status"][value="closed"])').click();
+  await page.locator('select#status').selectOption('closed');
   await expect(page).toHaveURL(/status=closed/);
   await expectFeeds(page, { judet: ['ilfov'], status: ['closed'] });
   await page.goBack();

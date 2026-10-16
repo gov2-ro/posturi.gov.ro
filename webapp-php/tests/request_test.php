@@ -325,7 +325,7 @@ run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', fu
     // REV-04a: status control carries counts for all four options.
     [, $home] = fetch_page($base, '/?status=all');
     foreach (['Înscrieri închise' => $closed, 'Termen neprecizat' => $unk, 'Active' => $open] as $label => $n) {
-        assert_true(preg_match('#' . preg_quote($label, '#') . '\s*<span[^>]*>' . $n . '</span>#u', $home) === 1,
+        assert_true(preg_match('#>' . preg_quote($label, '#') . ' \(' . $n . '\)</option>#u', $home) === 1,
                     "status control: $label = $n");
     }
     // REV-04b: landing quick stat uses the same vocabulary as the Active count.

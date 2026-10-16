@@ -199,9 +199,10 @@ test('filter bar: search, filters, view and sort are one row of equal controls',
     });
     if (Math.abs(prev.y - sw.y) < 2) expect(sw.x - prev.right, `${mode}: gap before the view switch`).toBeLessThanOrEqual(9);
     else expect(Math.abs(sw.x - b.x), `${mode}: the view switch starts a line`).toBeLessThanOrEqual(1);
-    // The status tabs start below the bar.
-    const tabs = await page.locator('.status-block').boundingBox();
-    expect(tabs.y, mode).toBeGreaterThanOrEqual(b.y + b.height + 8);
+    // The results start below the bar; the status select is in the bar.
+    const res = await page.locator('#results').boundingBox();
+    expect(res.y, mode).toBeGreaterThanOrEqual(b.y + b.height + 8);
+    expect(await page.locator('select#status').evaluate((el) => !!el.closest('.pg-side')), `${mode}: status in the bar`).toBe(true);
     await noOverflow(page, `bar ${mode}`);
   }
 });
@@ -223,13 +224,13 @@ test('home shortcuts close the bar on a row of their own in the grid and table v
     const bb = await el.boundingBox();
     expect(bb.y + bb.height, 'chip inside the bar').toBeLessThanOrEqual(bar.y + bar.height + 1);
   }
-  const tabs = await page.locator('.status-block').boundingBox();
-  expect(tabs.y).toBeGreaterThanOrEqual(bar.y + bar.height + 8);
+  const res = await page.locator('#results').boundingBox();
+  expect(res.y).toBeGreaterThanOrEqual(bar.y + bar.height + 8);
   await noOverflow(page, 'shortcuts in the bar');
   await view(page, 'list').click();
   expect(await sc.evaluate((el) => !!el.closest('.pg-main'))).toBe(true);
-  // In the list view the shortcuts precede the status tabs, as before.
-  expect(await sc.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('.status-block')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  // In the list view the shortcuts precede the options row, as before.
+  expect(await sc.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('#result-options')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 });
 
 test('the total is said once, just before the results', async ({ page }) => {
@@ -359,7 +360,7 @@ test('bar facet panels: one open at a time, Escape and outside click close, list
 
   await judet.locator('> summary').click();                        // click outside closes
   await expect(judet.locator('> .facet-body')).toBeVisible();
-  await page.locator('#status-help').click();
+  await page.locator('#results > div').first().click({ position: { x: 2, y: 2 } });
   await expect(judet.locator('> .facet-body')).toBeHidden();
 
   // Keyboard: Enter on a focused summary opens, and the last pill's panel stays inside the viewport.

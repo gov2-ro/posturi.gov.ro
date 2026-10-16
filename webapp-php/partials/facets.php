@@ -38,7 +38,11 @@
             // options vanished) is still rendered: its pinned orphan keeps the
             // selection in the form and removable.
             if (!$items && !$active) return;
-            $values = array_map(fn($i) => (string)($i['val'] ?? $i['value'] ?? ''), $items);
+            // An item may carry its own `param` (a yes/no switch such as shift=1)
+            // so one group can merge several parameters (261016: Program de lucru).
+            $own_on = count(array_filter($items, fn($i) => isset($i['param']) && !empty($i['on'])));
+            $values = array_map(fn($i) => (string)($i['val'] ?? $i['value'] ?? ''),
+                                array_filter($items, fn($i) => !isset($i['param'])));
 
             // Facets are capped (județ shows the top 25 of ~197 slugs). A selected
             // value outside that window has no checkbox, so the next HTMX submit
@@ -57,6 +61,7 @@
             }
 
             $selected = array_intersect($active, $values);
+            for ($k = 0; $k < $own_on; $k++) $selected[] = '';
             $is_open  = (bool)$selected;      // never hide a filter that is switched on
             $mode     = facet_mode($name);
             ?>
@@ -99,7 +104,8 @@
                     $val = (string)($item['val'] ?? $item['value'] ?? '');
                     $lbl = $item['label'] ?? $val;
                     $cnt = $item['cnt'] ?? $item['count'] ?? 0;
-                    $on  = in_array($val, array_map('strval', $active), true);
+                    $field = isset($item['param']) ? (string)$item['param'] : param_field($name);
+                    $on  = isset($item['param']) ? !empty($item['on']) : in_array($val, array_map('strval', $active), true);
                     // A count of 0 is a dead end: checking it can only empty the
                     // result list. Disable it rather than let it look like any
                     // other option — but never disable a *checked* one, or the
@@ -107,7 +113,7 @@
                     // pass '' for "no count available", which is not a zero.
                     $dead = !$on && $cnt !== '' && (int)$cnt === 0; ?>
                   <label class="group flex items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>">
-                    <input type="checkbox" name="<?= e(param_field($name)) ?>" value="<?= e($val) ?>"
+                    <input type="checkbox" name="<?= e($field) ?>" value="<?= e($val) ?>"
                            class="facet-check accent-gov shrink-0"<?= checked_if($on) ?><?= $dead ? ' disabled' : '' ?>>
                     <span class="flex-1 truncate text-sm text-ink <?= $dead ? '' : 'transition-colors group-hover:text-gov' ?>"><?= e($lbl) ?></span>
                     <span class="shrink-0 font-mono text-xs text-ink-muted"><?= $cnt === '' ? '' : $cnt ?></span>
@@ -140,8 +146,13 @@
 
         // Every group starts collapsed on desktop; in the small-screen drawer
         // Județ and Domeniu profesional start open (data-default-open).
+        // Order (261016): where, who employs, what job, pay, what it asks, how it
+        // runs, then the long tail — skills and documents last, they are mostly fluff.
         facet_group('Județ',               $judet_options,      'judet',      $judet_slugs, true);
         facet_group('Localitate',          $loc_options,        'loc',        $loc_sel);
+        facet_group('Sector angajator',    $sector_options,     'sector',     $sector_sel);
+        facet_group('Tip angajator',       $emp_cat_options,    'employer_cat', $emp_cats, false,
+                    'Eticheta din sursă (posturi.gov.ro).');
         facet_group('Domeniu profesional', $family_options,     'family',     $families,    true, $auto_help);
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
         // Estimated from the 2026 draft grid unless the posting states a salary.
@@ -154,33 +165,36 @@
                     $auto_help . ' Unele intervale includ anunțuri fără experiență precizată.');
         facet_group('Funcție',             $level_options,      'level',      $levels);
         facet_group('Categorie',           $cat_options,        'categorie',  $categories);
-        facet_group('Tip angajator',       $emp_cat_options,    'employer_cat', $emp_cats, false,
-                    'Eticheta din sursă (posturi.gov.ro).');
         facet_group('Contract',            $duration_options,   'duration',   $duration_sel);
-        facet_group('Program',             $schedule_options,   'schedule',   $schedule_sel);
+        // 261016: Program, Ture, Telemuncă and Normă parțială were four groups
+        // about one question. One group now; each switch keeps its own parameter.
+        $program_items = $schedule_options;
         if ($shift_count || $shift) {
-            facet_group('Ture', [['val' => '1', 'label' => 'Ture, gărzi sau weekend', 'cnt' => $shift_count]],
-                        'shift', $shift ? ['1'] : []);
+            $program_items[] = ['val' => '1', 'param' => 'shift', 'on' => (bool)$shift,
+                                'label' => 'Ture, gărzi sau weekend', 'cnt' => $shift_count];
         }
         if ($remote_count || $remote) {
-            facet_group('Telemuncă', [['val' => '1', 'label' => 'Disponibil remote', 'cnt' => $remote_count]],
-                        'remote', $remote ? ['1'] : []);
+            $program_items[] = ['val' => '1', 'param' => 'remote', 'on' => (bool)$remote,
+                                'label' => 'Telemuncă sau hibrid', 'cnt' => $remote_count];
         }
+        if ($parttime_count || $parttime) {
+            $program_items[] = ['val' => '1', 'param' => 'parttime', 'on' => (bool)$parttime,
+                                'label' => 'Fracțiune de normă precizată', 'cnt' => $parttime_count];
+        }
+        facet_group('Program de lucru',    $program_items,      'schedule',   $schedule_sel);
         // BETA-V5 facts — offered once v5 extractions exist (a v4 row was never asked).
         facet_group('Tip concurs', $recr_options, 'recruitment', $recr_sel, false,
                     'Promovarea este un examen doar pentru angajații instituției.');
-        foreach ([['parttime', 'Normă', 'Normă parțială', $parttime_count, $parttime],
-                  ['temp_vacant', 'Statutul postului', 'Post temporar vacant', $temp_vacant_count, $temp_vacant],
+        foreach ([['temp_vacant', 'Statutul postului', 'Post temporar vacant', $temp_vacant_count, $temp_vacant],
                   ['remote_apply', 'Depunere', 'Fără deplasare (e-mail, poștă, online)', $remote_apply_count, $remote_apply]]
                  as [$param, $group, $label, $cnt, $on]) {
             if ($cnt || $on) facet_group($group, [['val' => '1', 'label' => $label, 'cnt' => $cnt]], $param, $on ? ['1'] : []);
         }
+        facet_group('Finanțare',           $funding_options,    'funding',    $funding_sel);
+        facet_group('Domeniu de activitate', $domain_options,   'domain',     $domain_sel);
         facet_group('Limbi străine',       $lang_options,       'lang',       $lang_sel);
         facet_group('Competențe',          $skill_options,      'skill',      $skill_sel);
         facet_group('Documente necesare',  $cred_options,       'credential', $cred_sel);
-        facet_group('Finanțare',           $funding_options,    'funding',    $funding_sel);
-        facet_group('Sector angajator',    $sector_options,     'sector',     $sector_sel);
-        facet_group('Domeniu de activitate', $domain_options,   'domain',     $domain_sel);
         $dates_on = $exp_after !== '' || $exp_before !== '';
         ?>
         <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="termen"<?= $dates_on ? ' data-selected="1" open' : '' ?>>

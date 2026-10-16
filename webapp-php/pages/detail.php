@@ -230,6 +230,19 @@ require __DIR__ . '/../inc/header.php';
   <?php /* D9: the same sentence opens and closes every posting. */ ?>
   <?= robots_disclaimer((string)$p['url'], 'mb-4') ?>
 
+  <?php /* 261016: a posting whose submission date has passed says so first, in bold.
+     A confirmed date is a fact; the expiry fallback only makes it likely. */
+  if ($deadline && $days !== null && $days < 0): ?>
+  <div role="note" data-closed-notice class="mb-5 rounded-md border-2 border-alert-line bg-alert px-4 py-3 text-alert-ink">
+    <p class="text-base font-bold">
+      <?= $est ? 'Înscrierile sunt probabil închise' : 'Înscrierile s-au închis' ?> — termenul a fost <?= fmt_date($deadline) ?>.
+    </p>
+    <p class="mt-0.5 text-sm"><?= $est
+        ? 'Data este expirarea anunțului, nu un termen confirmat. Verificați în anunțul oficial.'
+        : 'Anunțul rămâne afișat pentru calendarul concursului și rezultate.' ?></p>
+  </div>
+  <?php endif; ?>
+
   <!-- Title block -->
   <?php $dt = display_title($p); ?>
   <div class="border-b border-line pb-5 mb-6"<?= pref_attrs($p) ?>>
@@ -657,7 +670,98 @@ require __DIR__ . '/../inc/header.php';
       </section>
       <?php endif; ?>
 
-      <!-- Prompt-v3 structured requirements. Absent until a v3 extraction has
+
+      <!-- Structured schema sections OR body fallback -->
+      <?php if ($schema_sections): ?>
+        <?php
+        // These three are ours; everything else is a Schema.org JobPosting property.
+        $ro_specific = ['application_docs', 'application_fee', 'application_contact'];
+        ?>
+        <?php foreach ($schema_sections as $section): ?>
+        <section class="mb-6">
+          <h2 class="mb-3 flex items-baseline gap-2 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
+            <?= e($section['label']) ?>
+            <?php if (!in_array($section['key'], $ro_specific, true)): ?>
+              <a href="https://schema.org/JobPosting" target="_blank" rel="noopener"
+                 title="Proprietate Schema.org JobPosting: <?= e($section['key']) ?>"
+                 class="font-mono text-[10px] font-normal not-italic text-ink-muted hover:text-gov"><?= e($section['key']) ?></a>
+            <?php endif; ?>
+          </h2>
+          <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
+            <?= $section['html'] ?>
+          </div>
+        </section>
+        <?php endforeach; ?>
+      <?php elseif ($body_html): ?>
+      <section class="mb-6">
+        <h2 class="mb-3 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
+          Detalii post
+        </h2>
+        <p class="mb-3 rounded border border-line bg-surface/50 px-3 py-2 text-xs text-ink-muted">
+          Textul de mai jos este preluat ca atare de pe posturi.gov.ro. Pentru acest anunț nu există încă
+          o versiune structurată pe secțiuni (studii, experiență, atribuții, dosar) —
+          <a href="/despre/" class="text-gov hover:underline">vezi metodologia</a>.
+        </p>
+        <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
+          <?= $body_html ?>
+        </div>
+      </section>
+      <?php endif; ?>
+
+      <!-- Calendar timeline. BETA-V5 (261016 "render tables, normalised"): the
+           calendar the extraction typed (v4 and v5) is the one table, stage names from
+           one vocabulary; the scraped calendar_events rows are the fallback for a
+           posting with no extracted calendar. -->
+      <?php $llm_cal = llm_calendar_rows($schema); ?>
+      <?php if ($llm_cal || $events): ?>
+      <section class="mb-8">
+        <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-line">
+          Calendar concurs
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border-collapse" data-calendar="<?= $llm_cal ? 'extras' : 'tabel' ?>">
+            <thead>
+              <tr class="border-b border-line">
+                <th scope="col" class="text-left py-1.5 pr-4 text-xs font-medium uppercase tracking-widest text-ink-muted w-32 font-sans">Data</th>
+                <th scope="col" class="text-left py-1.5 text-xs font-medium uppercase tracking-widest text-ink-muted font-sans">Etapă</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-line">
+              <?php if ($llm_cal): ?>
+                <?php foreach ($llm_cal as $row): ?>
+                <tr class="hover:bg-sunken transition-colors">
+                  <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
+                    <?= $row['date'] !== '' ? fmt_date($row['date']) : '—' ?>
+                    <?php if ($row['time']): ?><span> <?= e($row['time']) ?></span><?php endif; ?>
+                  </td>
+                  <td class="py-2 text-ink">
+                    <?= e($row['label']) ?>
+                    <?php if ($row['detail']): ?><span class="block text-xs text-ink-muted"><?= e($row['detail']) ?></span><?php endif; ?>
+                  </td>
+                </tr>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <?php foreach ($events as $ev): ?>
+                <tr class="hover:bg-sunken transition-colors">
+                  <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
+                    <?= fmt_date($ev['data']) ?>
+                    <?php if ($ev['ora']): ?><span> <?= e($ev['ora']) ?></span><?php endif; ?>
+                  </td>
+                  <td class="py-2 text-ink"><?= e($ev['eveniment']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+        <?php if ($llm_cal): ?>
+        <p class="mt-2 text-xs text-ink-muted">Etapele sunt extrase automat din anunț; datele exacte sunt cele din anunțul oficial.</p>
+        <?php endif; ?>
+      </section>
+      <?php endif; ?>
+
+      <!-- Prompt-v3 structured requirements — after the announcement and its calendar
+           since 261016: the official text comes first, the robots' reading of it last. Absent until a v3 extraction has
            run, so this whole block simply does not render for v2 rows. -->
       <?php $v3 = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : []; ?>
       <?php if (isset($v3['education']) || !empty($v3['skill_list']) || !empty($v3['credentials']) || !empty($v3['positions'])): ?>
@@ -818,95 +922,6 @@ require __DIR__ . '/../inc/header.php';
 
       <?php /* UX-10: "Pot aplica?" preparation panel (emits nothing when no role states a comparable requirement). */ ?>
       <?php require __DIR__ . '/../partials/eligibility_panel.php'; ?>
-
-      <!-- Structured schema sections OR body fallback -->
-      <?php if ($schema_sections): ?>
-        <?php
-        // These three are ours; everything else is a Schema.org JobPosting property.
-        $ro_specific = ['application_docs', 'application_fee', 'application_contact'];
-        ?>
-        <?php foreach ($schema_sections as $section): ?>
-        <section class="mb-6">
-          <h2 class="mb-3 flex items-baseline gap-2 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
-            <?= e($section['label']) ?>
-            <?php if (!in_array($section['key'], $ro_specific, true)): ?>
-              <a href="https://schema.org/JobPosting" target="_blank" rel="noopener"
-                 title="Proprietate Schema.org JobPosting: <?= e($section['key']) ?>"
-                 class="font-mono text-[10px] font-normal not-italic text-ink-muted hover:text-gov"><?= e($section['key']) ?></a>
-            <?php endif; ?>
-          </h2>
-          <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
-            <?= $section['html'] ?>
-          </div>
-        </section>
-        <?php endforeach; ?>
-      <?php elseif ($body_html): ?>
-      <section class="mb-6">
-        <h2 class="mb-3 border-b border-line pb-2 font-display text-xl font-semibold italic text-ink">
-          Detalii post
-        </h2>
-        <p class="mb-3 rounded border border-line bg-surface/50 px-3 py-2 text-xs text-ink-muted">
-          Textul de mai jos este preluat ca atare de pe posturi.gov.ro. Pentru acest anunț nu există încă
-          o versiune structurată pe secțiuni (studii, experiență, atribuții, dosar) —
-          <a href="/despre/" class="text-gov hover:underline">vezi metodologia</a>.
-        </p>
-        <div class="prose-body text-sm leading-relaxed text-ink max-w-none">
-          <?= $body_html ?>
-        </div>
-      </section>
-      <?php endif; ?>
-
-      <!-- Calendar timeline. BETA-V5 (261016 "render tables, normalised"): the
-           calendar the extraction typed (v4 and v5) is the one table, stage names from
-           one vocabulary; the scraped calendar_events rows are the fallback for a
-           posting with no extracted calendar. -->
-      <?php $llm_cal = llm_calendar_rows($schema); ?>
-      <?php if ($llm_cal || $events): ?>
-      <section class="mb-8">
-        <h2 class="font-display text-xl italic font-semibold text-ink mb-3 pb-2 border-b border-line">
-          Calendar concurs
-        </h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm border-collapse" data-calendar="<?= $llm_cal ? 'extras' : 'tabel' ?>">
-            <thead>
-              <tr class="border-b border-line">
-                <th scope="col" class="text-left py-1.5 pr-4 text-xs font-medium uppercase tracking-widest text-ink-muted w-32 font-sans">Data</th>
-                <th scope="col" class="text-left py-1.5 text-xs font-medium uppercase tracking-widest text-ink-muted font-sans">Etapă</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-line">
-              <?php if ($llm_cal): ?>
-                <?php foreach ($llm_cal as $row): ?>
-                <tr class="hover:bg-sunken transition-colors">
-                  <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
-                    <?= $row['date'] !== '' ? fmt_date($row['date']) : '—' ?>
-                    <?php if ($row['time']): ?><span> <?= e($row['time']) ?></span><?php endif; ?>
-                  </td>
-                  <td class="py-2 text-ink">
-                    <?= e($row['label']) ?>
-                    <?php if ($row['detail']): ?><span class="block text-xs text-ink-muted"><?= e($row['detail']) ?></span><?php endif; ?>
-                  </td>
-                </tr>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <?php foreach ($events as $ev): ?>
-                <tr class="hover:bg-sunken transition-colors">
-                  <td class="py-2 pr-4 font-mono text-xs text-ink-muted whitespace-nowrap">
-                    <?= fmt_date($ev['data']) ?>
-                    <?php if ($ev['ora']): ?><span> <?= e($ev['ora']) ?></span><?php endif; ?>
-                  </td>
-                  <td class="py-2 text-ink"><?= e($ev['eveniment']) ?></td>
-                </tr>
-                <?php endforeach; ?>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
-        <?php if ($llm_cal): ?>
-        <p class="mt-2 text-xs text-ink-muted">Etapele sunt extrase automat din anunț; datele exacte sunt cele din anunțul oficial.</p>
-        <?php endif; ?>
-      </section>
-      <?php endif; ?>
 
       <?php /* UX-11: browser-local preparation checklist (documents, stages). */ ?>
       <?php require __DIR__ . '/../partials/checklist.php'; ?>

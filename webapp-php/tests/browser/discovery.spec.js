@@ -98,22 +98,29 @@ test('fresh load: desktop starts with every group collapsed, the drawer with Jud
   }
 });
 
-test('status copy is visible, wraps, and the 7-day note follows the tab', async ({ page }) => {
+test('status is a select beside the sort; its help and the 7-day note follow the choice', async ({ page }) => {
   await page.goto('/');
   const help = page.locator('#status-help');
-  await expect(help).toContainText('Active include anunțuri cu înscrieri deschise și anunțuri al căror termen nu este confirmat. Verifică termenul în anunțul oficial.');
-  await expect(help.locator('.status-soon-note')).toBeHidden();
+  const sel = page.locator('select#status');
+  await expect(sel).toBeVisible();
   for (const l of ['Active', 'Termen în 7 zile', 'Înscrieri închise', 'Termen neprecizat']) {
-    await expect(page.locator('[aria-label="Stare anunț"]')).toContainText(l);
+    await expect(sel).toContainText(l);
   }
-  await page.locator('[name="status"][value="soon"]').check({ force: true });
+  // Default (Active): the help stays out of the way.
+  await expect(help).toBeHidden();
+  await sel.selectOption('soon');
   await expect(page).toHaveURL(/status=soon/);
+  await expect(help).toBeVisible();
+  await expect(help).toContainText('Active include anunțuri cu înscrieri deschise și anunțuri al căror termen nu este confirmat. Verifică termenul în anunțul oficial.');
   await expect(help.locator('.status-soon-note')).toBeVisible();
   await expect(help).toContainText('Include și date estimate din expirarea anunțului.');
-  await noOverflow(page, 'status tabs');
+  await noOverflow(page, 'status select');
   await expect(page.locator('#results')).toContainText('anunțuri găsite');
-  await page.locator('[name="status"][value="active"]').check({ force: true });
-  await expect(help.locator('.status-soon-note')).toBeHidden();
+  await page.locator('select#status').selectOption('active');
+  await expect(help).toBeHidden();
+  // The default status is not written into the address bar, nor are empty fields.
+  await expect(page).not.toHaveURL(/status=/);
+  await expect(page).not.toHaveURL(/[?&](q|sort|expires_after|expires_before)=(&|$)/);
 });
 
 test('deadline wording is visible without hovering', async ({ page }, testInfo) => {
@@ -170,11 +177,12 @@ test('nested disclosures, focus and reader preferences survive an OOB swap', asy
   expect(await isOpen(page, 'studies_level')).toBe(true);
   // A group the reader opened by hand (and that holds no selection) stays open…
   await openFacet(page, 'duration');
-  // ?status=all leaves no tab current (UX-01B), so this is a real change and a real
-  // swap: click the tab (the drawer covers it on phones, so close it first).
+  // ?status=all leaves no option current (UX-01B), so this is a real change and a real
+  // swap: pick Active (the drawer covers the select on phones, so close it first).
+  // Active is the default, so the address bar simply loses `status`.
   await closePanel(page);
-  await page.locator('label:has([name="status"][value="active"])').click();
-  await expect(page).toHaveURL(/status=active/);
+  await page.locator('select#status').selectOption('active');
+  await expect(page).not.toHaveURL(/status=/);
   await openPanel(page);
   await expect.poll(() => isOpen(page, 'duration')).toBe(true);
   // …and one the reader closed stays closed, while a group with a selection stays open.
@@ -221,7 +229,7 @@ test('Escape closes the drawer and keeps selections (mobile)', async ({ page }) 
   await expect(page).toHaveURL(/studies_level%5B%5D=licenta/);
   // Let the swap settle (it hands focus back to the checkbox) before Escape.
   await expect(page.locator('input[name="studies_level[]"][value="licenta"]')).toBeFocused();
-  await expect(page.locator('#filter-count')).toHaveText('1');   // the study-level chip (status falls back to the default)
+  await expect(page.locator('#filter-count')).toHaveText('2');   // the study-level chip and the legacy status=all (kept: the select shows "Toate")
   await page.keyboard.press('Escape');
   await expect(page.locator('#filter-toggle')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#filter-toggle')).toBeFocused();
@@ -241,7 +249,7 @@ test('unfamiliar and employer-scope values keep their controls', async ({ page }
   await expect(page).toHaveURL(/sort=employer/);
   await expect(page).toHaveURL(/employer=spitalul-clinic-judetean-cluj/);
   await expect(page.locator('#results li')).toHaveCount(3);
-  await expectFeedsKeep(page, { employer: ['spitalul-clinic-judetean-cluj'], status: ['active'] });
+  await expectFeedsKeep(page, { employer: ['spitalul-clinic-judetean-cluj'], status: [] });
   // Its chip removes the scope.
   await page.locator('[data-chip-param="employer"]').click();
   await expect(page).not.toHaveURL(/employer=/);
@@ -273,18 +281,18 @@ test('feed links follow filters through HTMX, chips, pagination and history', as
   // Pagination (33 Ilfov rows → two pages): the page number is in the URL, not in the feeds.
   await page.locator('#results nav a[aria-label="Pagina 2"]').click();
   await expect(page).toHaveURL(/page=2/);
-  await expectFeedsKeep(page, { judet: ['ilfov'], status: ['active'] });
+  await expectFeedsKeep(page, { judet: ['ilfov'], status: [] });
 
   // Sort through the control.
   await page.selectOption('#sort', 'deadline');
   await expect(page).toHaveURL(/sort=deadline/);
-  await expectFeedsKeep(page, { judet: ['ilfov'], status: ['active'] });
+  await expectFeedsKeep(page, { judet: ['ilfov'], status: [] });
 
   // History.
   await page.goBack();
   await page.goBack();
   await expect(page).not.toHaveURL(/page=2/);
-  await expectFeedsKeep(page, { judet: ['ilfov'], status: ['active'] });
+  await expectFeedsKeep(page, { judet: ['ilfov'], status: [] });
   await page.goBack();
   await expect(page).toHaveURL(/skill%5B%5D=Excel/);
   await expectFeedsKeep(page, { judet: ['ilfov'], skill: ['Excel'] });

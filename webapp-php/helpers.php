@@ -1348,14 +1348,35 @@ function qs_without(string $key, ?string $value = null): string {
     return $q ? '?' . $q : '';
 }
 
+/**
+ * Query parameters without the noise (261016): empty values, empty arrays and
+ * the default status. `?q=&expires_after=&status=active&sort=` means the same
+ * as `/`; links and the address bar should say so. The client strips the same
+ * from HTMX requests (htmx:configRequest in list.php).
+ */
+function clean_query(array $params): array {
+    $out = [];
+    foreach ($params as $k => $v) {
+        if (is_array($v)) {
+            $v = array_values(array_filter($v, fn($x) => is_array($x) || trim((string)$x) !== ''));
+            if (!$v) continue;
+        } elseif (trim((string)$v) === '') {
+            continue;
+        }
+        if ($k === 'status' && $v === DEFAULT_STATUS) continue;
+        $out[$k] = $v;
+    }
+    return $out;
+}
+
 function qs_page(int $page): string {
-    $params = $_GET;
+    $params = clean_query($_GET);
     $params['page'] = $page;
     return '?' . http_build_query($params);
 }
 
 function current_qs(): string {
-    $q = http_build_query($_GET);
+    $q = http_build_query(clean_query($_GET));
     return $q ? '?' . $q : '';
 }
 

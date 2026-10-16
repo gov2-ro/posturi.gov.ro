@@ -508,6 +508,9 @@ $remote_apply_count = scope_count(facet_scope('remote_apply'),
     ["(j.v5_channels LIKE '%\"email\"%' OR j.v5_channels LIKE '%\"posta\"%' OR j.v5_channels LIKE '%\"online\"%')"]);
 $funding_options    = get_facet('v4_funding_source',  'funding');
 $sector_options     = get_facet('v4_employer_sector', 'sector');
+// 261016: "nespecificat" narrows nothing a reader would ask for; not offered
+// (a bookmarked ?funding[]=nespecificat still filters and keeps its chip).
+$funding_options = array_values(array_filter($funding_options, fn($o) => $o['val'] !== 'nespecificat'));
 foreach ($funding_options as &$o) { $o['label'] = FUNDING_SOURCE_LABELS[$o['val']] ?? $o['val']; }
 unset($o);
 foreach ($sector_options as &$o) { $o['label'] = EMPLOYER_SECTOR_LABELS[$o['val']] ?? $o['val']; }
@@ -554,7 +557,7 @@ if (!$is_htmx) {
     $page_title       = $q !== '' ? "Căutare: $q" : 'Posturi în sectorul public';
     $meta_description = 'Explorator independent pentru anunțurile de angajare din sectorul public românesc: '
                       . 'căutare full-text, filtre pe județ, domeniu, grad și termen limită.';
-    $canonical_path   = '/' . (($cq = http_build_query($_GET)) ? '?' . $cq : '');
+    $canonical_path   = '/' . (($cq = http_build_query(clean_query($_GET))) ? '?' . $cq : '');
     require __DIR__ . '/../inc/header.php';
 }
 
@@ -676,66 +679,12 @@ if (!$is_htmx): ?>
     </div>
     <?php endif; ?>
 
-    <?php if ($home_new || $home_soon): ?>
-    <?php /* D15: two short lists on the unfiltered first page. Each title links to the
-       posting; the heading links to the full list behind it. */ ?>
-    <div class="pg-home mb-5 grid grid-cols-[minmax(0,1fr)] gap-x-8 gap-y-4 border-y border-line py-4 md:grid-cols-2">
-      <?php
-        $new_word = $home_new_day === ro_today() ? 'azi' : ($home_new_day !== '' ? fmt_date($home_new_day) : '');
-        foreach ([
-          ['Noi ' . $new_word, '/?published=' . rawurlencode($home_new_day), $home_new, false],
-          ['Se închid în 3 zile', '/?status=soon&sort=deadline', $home_soon, true],
-        ] as [$htitle, $hhref, $hrows, $show_deadline]):
-          if (!$hrows) continue; ?>
-      <section class="min-w-0">
-        <h2 class="mb-1.5 text-xs font-semibold uppercase tracking-widest text-ink-muted">
-          <a href="<?= e($hhref) ?>" class="hover:text-gov"><?= e($htitle) ?> <span aria-hidden="true">→</span></a>
-        </h2>
-        <ul class="space-y-1 text-sm">
-          <?php foreach ($hrows as $hp):
-              $hdt = display_title($hp); $hdl = posting_deadline($hp); ?>
-          <li class="flex items-baseline justify-between gap-3">
-            <span class="min-w-0 truncate"><a href="<?= e(job_url($hp)) ?>" class="font-medium text-ink hover:text-gov"><?= e($hdt['primary']) ?></a>
-              <span class="text-xs text-ink-muted">· <?= e($hp['employer_name']) ?></span></span>
-            <?php if ($show_deadline && $hdl['date']): ?>
-              <span class="shrink-0 font-mono text-xs text-alert-ink"><?php $hd = (int)days_until($hdl['date']); ?><?= e($hd === 0 ? 'azi' : days_label($hd)) ?></span>
-            <?php elseif ($place = place_label($hp)): ?>
-              <span class="max-w-[40%] shrink-0 truncate text-xs text-ink-muted"><?= e($place) ?></span>
-            <?php endif; ?>
-          </li>
-          <?php endforeach; ?>
-        </ul>
-      </section>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- STATUS -->
-    <div class="status-block mb-5">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div role="group" aria-label="Stare anunț" class="flex flex-wrap gap-1.5">
-        <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
-        <label class="relative">
-          <input type="radio" name="status" value="<?= e($sval) ?>" class="peer sr-only"<?= checked_if($status_tab === $sval) ?>>
-          <span class="block cursor-pointer rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-muted transition-colors hover:text-gov sm:text-sm peer-checked:border-gov peer-checked:bg-gov peer-checked:text-on-gov peer-focus-visible:ring-2 peer-focus-visible:ring-focus">
-            <?= e($slabel) ?>
-            <span class="ml-1 font-mono text-xs opacity-70"><?= $status_counts[$sval] ?></span>
-          </span>
-        </label>
-        <?php endforeach; ?>
-      </div>
-
-    </div>
-    <?php /* Persistent, not a tooltip: "Active" means "not known to be closed". The
-       7-day line is shown by CSS while that tab is checked (the control sits
-       outside the swapped region, so server-side state would go stale). */ ?>
-    <p id="status-help" class="mt-2 text-xs leading-snug text-ink-muted">
-      <?= e(STATUS_HELP) ?>
-      <span class="status-soon-note"><?= e(STATUS_HELP_SOON) ?></span>
-    </p>
-
-        <?php /* View switch and sort. In the list view this row sits under the status
-           tabs; in the grid and table views (lg+) the script moves it to the end of
+    <!-- STATUS + view + sort. 261016: the status used to be a row of four buttons
+         above the results; it is now a select beside the sort — the default
+         (Active) is what nearly everyone wants, and the row was noise on the landing. -->
+    <div class="status-block mb-4">
+        <?php /* View switch and sort. In the list view this row sits above the results;
+           in the grid and table views (lg+) the script moves it to the end of
            the filter bar, so search, filters, view and sort read as one row. It stays
            inside the form either way, so `sort` is serialised as before. */ ?>
         <div id="result-options" role="group" aria-label="Opțiuni rezultate" class="pg-options mb-3 mt-3 flex flex-wrap items-center gap-2">
@@ -757,6 +706,15 @@ if (!$is_htmx): ?>
             </button>
             <?php endforeach; ?>
           </div>
+          <div class="pg-status inline-flex h-10 items-center gap-2 rounded-md border border-line-strong bg-surface pl-3 focus-within:border-gov focus-within:ring-1 focus-within:ring-focus">
+            <label for="status" class="text-xs uppercase tracking-widest text-ink-muted">Stare</label>
+            <select id="status" name="status" title="<?= e(STATUS_HELP) ?>" class="h-full rounded-md border-0 bg-transparent py-0 pl-1 pr-2 text-sm text-ink focus:outline-none">
+              <?php if ($status_tab === ''): ?><option value="all" selected>Toate</option><?php endif; ?>
+              <?php foreach (STATUS_LABELS as $sval => $slabel): ?>
+              <option value="<?= e($sval) ?>"<?= selected_if($status_tab === $sval) ?>><?= e($slabel) ?> (<?= number_format((int)$status_counts[$sval], 0, ',', '.') ?>)</option>
+              <?php endforeach; ?>
+            </select>
+          </div>
           <div class="pg-sort inline-flex h-10 items-center gap-2 rounded-md border border-line-strong bg-surface pl-3 focus-within:border-gov focus-within:ring-1 focus-within:ring-focus">
             <label for="sort" class="text-xs uppercase tracking-widest text-ink-muted">Sortare</label>
             <select id="sort" name="sort" class="h-full rounded-md border-0 bg-transparent py-0 pl-1 pr-2 text-sm text-ink focus:outline-none">
@@ -766,6 +724,13 @@ if (!$is_htmx): ?>
               <option value="salary"<?= selected_if($sort === 'salary') ?>>Salariu (mare → mic)</option>
             </select>
           </div>
+    </div>
+    <?php /* "Active" is not "confirmed open" (UX-01A). Shown once a status other than
+       the default is picked (CSS :has on the select), with the 7-day caveat. */ ?>
+    <p id="status-help" class="status-help mb-3 text-xs leading-snug text-ink-muted">
+      <?= e(STATUS_HELP) ?>
+      <span class="status-soon-note"><?= e(STATUS_HELP_SOON) ?></span>
+    </p>
     </div>
 
         <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
@@ -1096,6 +1061,20 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   // group like Județ was scrolled, and the panel's own scroll offset.
   // <details> open/closed is restored by applyFacetState() above.
   var pending = null;
+
+  // 261016: no empty parameters in requests or the address bar. A key is dropped
+  // only when every value it carries is empty (FormData.delete removes them all);
+  // `status=active` is the default and says nothing. Mirrors clean_query().
+  document.body.addEventListener('htmx:configRequest', function (ev) {
+    var fd = ev.detail.formData;
+    if (!fd || ev.detail.verb !== 'get') return;
+    var keys = {};
+    fd.forEach(function (v, k) {
+      var empty = typeof v === 'string' && (v.trim() === '' || (k === 'status' && v === 'active'));
+      keys[k] = (keys[k] === undefined ? true : keys[k]) && empty;
+    });
+    Object.keys(keys).forEach(function (k) { if (keys[k]) delete ev.detail.parameters[k]; });
+  });
 
   document.body.addEventListener('htmx:beforeRequest', function () {
     var list = document.getElementById('facet-list');

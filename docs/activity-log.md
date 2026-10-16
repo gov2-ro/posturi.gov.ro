@@ -2,6 +2,42 @@
 
 ## 2026
 
+### 2026-10-16 — Beta weekend, third slice: the 6 s found, filters flattened, stats scoped, pipeline chores
+
+Commits `49f87d2`…`efecb33`, none deployed. Several were delegated to Sonnet agents with
+bounded briefs and checked here (tests re-run, diffs read); two agents ran `git stash`/`pop`
+on the shared tree once each, and one agent's staged deletions landed in another's commit,
+which was split back apart before anything was pushed.
+
+- **Where the 6 s went (BETA-CACHE / PERF-SPLIT, `0db8c5f`).** A current-schema export of the
+  local database (9,756 rows) reproduced it: 944 ms for `/` locally, spread over ~40 facet
+  queries, each a full scan of `job_postings`. Rows averaged ~10 KB, three quarters of it
+  body, schema_json, sal_json. Moving the columns to the end of the table changed nothing
+  (the record header and small columns still spill onto the first overflow page);
+  moving them OUT did: `posting_text` (one row per posting, read by the detail page only),
+  `has_schema` for the one test PHP made on them, contentless FTS (bm25 still ranks; the
+  index stored a second copy of every body). `job_postings` 95 → 14 MB, file 191 → 132 MB,
+  `/` 944 → 240 ms, and with the flattened filters ~185 ms. PHP shims both layouts, so
+  **the code deploy must come before the VPS pulls the export change**.
+- **Filters (BETA-FILTERS, `efecb33`).** One flat list (21 groups), salary visible, nothing
+  nested; dropped controls keep working as hidden fields with chips. Grid filters are plain
+  text; rows have no boxes and one line of facts (💰 … (estimat) · labels · auto …); the
+  whole row is the link (stretched `::after`; employer link and buttons above it). Full
+  width. Sort by salary. "Începe cu" = top occupations + compound cuts, each count computed
+  with the same `build_filters()` predicate the link will run. D15 home lists, D16 locality
+  facet, `?published=`. UX-01B labels. REV-10: unknown array params ignored. The home lists
+  appear only on a bare `/` (a sort or status means a list is wanted) — the first version
+  showed them on `/?sort=deadline` too and overflowed 320px (grid item `min-width:auto`).
+  Tests: the discovery suites were rewritten for the flat list (ancestor checks became
+  "every group top-level"); one browser test had passed vacuously for months — the status
+  "change" it made was a no-op — and now makes a real change.
+- **FIX-09 (`21b1260`, agent).** /statistici separates current-export figures from history;
+  `publication_monthly` is exported from all of Postgres so expiry no longer erases history.
+- **FIX-12 (`18e65e5`, agent).** Django public UI retired.
+- **Ops (`49f87d2`, agent).** `--schema-floor 95`; trigger defaults to manual (the VPS crontab
+  must set `cron` when it pulls); REV-06 (b)(c).
+- **LATER-05 (`186897c`, agent).** Incremental parse, byte-identical to a full one.
+
 ### 2026-10-16 — Beta weekend, second slice: masthead, disclaimer, [?!], welcome, privacy, share image
 
 D9–D13 in the PHP webapp, not deployed:

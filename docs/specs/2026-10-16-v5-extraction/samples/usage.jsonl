@@ -1,0 +1,8 @@
+{"at": "2026-10-16T17:55:59+00:00", "posting": "40-multirol-14025", "prompt": "v4", "in": 12615, "cached": 7296, "out": 3059, "cost_usd": 0.002655, "latency_s": 10.5, "finish": "stop"}
+{"at": "2026-10-16T17:56:09+00:00", "posting": "40-multirol-14025", "prompt": "v5", "in": 14134, "cached": 128, "out": 3076, "cost_usd": 0.003947, "latency_s": 9.9, "finish": "stop"}
+{"at": "2026-10-16T17:56:16+00:00", "posting": "17-educatie-12753", "prompt": "v4", "in": 11523, "cached": 7296, "out": 2221, "cost_usd": 0.001989, "latency_s": 7.9, "finish": "stop"}
+{"at": "2026-10-16T17:56:22+00:00", "posting": "17-educatie-12753", "prompt": "v5", "in": 13042, "cached": 8832, "out": 1432, "cost_usd": 0.001517, "latency_s": 5.9, "finish": "stop"}
+{"at": "2026-10-16T17:56:35+00:00", "posting": "12-primarie-13542", "prompt": "v4", "in": 13342, "cached": 7296, "out": 3748, "cost_usd": 0.003178, "latency_s": 12.5, "finish": "stop"}
+{"at": "2026-10-16T17:56:44+00:00", "posting": "12-primarie-13542", "prompt": "v5", "in": 14861, "cached": 8832, "out": 2623, "cost_usd": 0.002505, "latency_s": 8.9, "finish": "stop"}
+{"at": "2026-10-16T17:56:54+00:00", "posting": "36-management-12657", "prompt": "v4", "in": 10817, "cached": 7296, "out": 2894, "cost_usd": 0.002286, "latency_s": 10.5, "finish": "stop"}
+{"at": "2026-10-16T17:57:03+00:00", "posting": "36-management-12657", "prompt": "v5", "in": 12336, "cached": 8832, "out": 2462, "cost_usd": 0.002029, "latency_s": 8.7, "finish": "stop"}

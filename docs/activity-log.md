@@ -2,6 +2,71 @@
 
 ## 2026
 
+### 2026-10-16 — Beta weekend, second slice: masthead, disclaimer, [?!], welcome, privacy, share image
+
+D9–D13 in the PHP webapp, not deployed:
+
+- **Masthead** is brand, `beta · <commit>` and one stamp, "Bază generată: azi, 16 oct, 14:00"
+  (`build_stamp_relative()`: azi / ieri / alaltăieri, else the date; 24-hour time, the Romanian
+  convention, where pax's example said 2PM). The relative word is computed per request, so a
+  cached page can be an hour behind after midnight, the same bound as the open/closed status.
+  At 320px there was no room beside the nav (screenshot: the stamp truncated to one glyph), so
+  below 640px the stamp drops out; the footer still has it.
+- **Disclaimer** at the start and end of every posting (`robots_disclaimer()`, linked to the
+  posting's official URL through `evidence_safe_url()`), replacing the old closing paragraph.
+- **[?!]**: a native `<details>` fixed bottom-right (z-30, under the save/undo notice), opens
+  without JavaScript; a footer script adds Escape (focus back) and click-outside. Form and
+  GitHub links; e-mail rendered only when `FEEDBACK_EMAIL` is set. FAQ entries live in
+  `FEEDBACK_FAQ`; each points at a new `/despre/` section.
+- **/despre/** rewritten top half: beta wording, how it works, deadlines, salaries, closed
+  postings, how to apply, privacy (no cookies, what localStorage holds, Cloudflare, Google Form,
+  public GitHub issues). Drafted for pax's review before launch.
+- **Welcome**: in every page, revealed by a pre-paint script when `posturi.lastVisit` is absent
+  or older than 90 days; every page view records the visit, so it shows once per return.
+- **Share image** (UX-04): `static/og-image.png` rendered from `assets/og-image.html`.
+
+Tests: new `chrome.spec.js` (masthead, disclaimers, panel keyboard/outside click, FAQ anchors
+exist, welcome timing incl. throwing storage, share image); `eligibility_test.php` now finds the
+page end by the last disclaimer. PHP suites pass; Playwright 316 passed / 50 width-gated skips.
+
+Also delivered by an agent: the [v5 extraction report](specs/2026-10-16-v5-extraction/README.md).
+
+### 2026-10-16 — Beta weekend, first slice: cache safety, timing, CI, populations, panel on
+
+pax answered the beta walkthrough (decisions D1–D24, recorded at the top of the backlog).
+First slice, none of it deployed or committed yet:
+
+- **Cache safety (BETA-CACHE).** Cloudflare now proxies the site (verified: `server:
+  cloudflare`, `cf-cache-status: DYNAMIC`). Before any HTML is cached, one URL had to stop
+  answering two ways: `/` returned the full page or, with `HX-Request`, the results fragment.
+  A browser (the host already sent `max-age=600`) or the edge could replay the fragment as a
+  page. htmx 2's `getCacheBusterParam` now gives every HTMX GET its own URL and htmx strips
+  it from the pushed address; the server keys the fragment on that parameter, so htmx's
+  history-restore request (header, no parameter) gets the full page it expects. One policy
+  at shutdown in `index.php`, behind an output buffer: 200/301 GET/HEAD → `public,
+  max-age=300, s-maxage=3600` plus `Expires` (the host's mod_expires only steps in when
+  Expires is absent); everything else `no-store`; a route with its own Cache-Control keeps
+  it. A 1 h edge TTL also bounds the midnight problem: open/closed status is computed
+  against today's date, which changes without a deploy.
+- **Purge on deploy.** `deploy-php.sh` purges `SITE_URL`'s hostname through the Cloudflare
+  API when `CF_ZONE_ID`/`CF_API_TOKEN` are set; a failed purge warns, never fails a deploy.
+  DEPLOY-DIRTY in the same file: the code stamp gains `-dirty` for an uncommitted
+  `webapp-php/`.
+- **Where the 6 s go.** `Server-Timing` per list-page section (`timing_mark()`), readable
+  with `curl -D -` once deployed. The local September export is no proxy: its missing
+  columns are temp-view shims, which dominate locally (166 ms total, 127 ms in the
+  shortcuts). Moving the large text columns to the end of `job_postings` was measured on
+  that export and changed nothing (1,232 vs 1,258 pages read for a full scan).
+- **CI-01** (Sonnet agent, checked: `ruff check` clean): 19 lint fixes in `webapp/`, 1,217
+  pytest pass locally, workflow on push/PR to `main`, Node-24 action majors, `ubuntu-24.04`.
+- **DATA-06** (Sonnet agent): `data/uat-populatie.csv` from the 2021 census list on
+  ro.wikipedia via `ops/build-uat-population.py`; `bands_for()` no longer lets a comună
+  borrow a same-named town's population.
+- **UX-10 released** in code: `ELIGIBILITY_PANEL_ENABLED = true` (D18).
+
+Tests: all PHP suites pass (`request_test.php` gained the cache-policy suite and the
+header-without-parameter case), Playwright 295 passed / 50 width-gated skips.
+
 ### 2026-10-16 — The total said once; "Începe cu" closes the bar; two-column list view
 
 pax's next review:

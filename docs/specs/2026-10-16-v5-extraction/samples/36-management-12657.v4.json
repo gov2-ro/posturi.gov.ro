@@ -1,0 +1,185 @@
+{
+ "responsibilities": null,
+ "educationRequirements": "Studii universitare de licență absolvite cu diplomă de licență sau echivalentă în medicină, specializarea medicină, medicină dentară, specializarea medicină dentară, științe juridice sau științe economice. Absolvent cu diplomă a studiilor universitare de master în specialitatea studiilor necesare ocupării funcției sau cu diplomă conform prevederilor art. 57 alin. (2) din Legea nr. 199/2023, cu excepția absolvenților de medicină, specializarea medicină și medicină dentară, specializarea medicină dentară.",
+ "experienceRequirements": "Cel puțin 5 ani vechime în specialitatea studiilor necesare ocupării funcției.",
+ "qualifications": "- Absolvirea unor cursuri de perfecționare în management sanitar sau management al serviciilor de sănătate, avizate de Ministerul Sănătății.\n- Apt din punct de vedere medical și psihologic să exercite funcția de manager.\n- Nu a comis infracțiunile prevăzute la art. 1 alin. (2) din Legea nr. 118/2019.\n- Nu au împlinit vârsta standard de pensionare, conform legii.",
+ "skills": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": null,
+ "jobLocation": "Sediul administrativ al Spitalului Județean de Urgență Reșița, Str. Făgărașului, nr. 18, Reșița, județul Caraș-Severin.",
+ "application_docs": "- cererea de înscriere la concurs;\n- copia actului de identitate sau orice alt document care atestă identitatea, potrivit legii, aflate în termen de valabilitate;\n- copia certificatului de căsătorie sau a altui document prin care s-a realizat schimbarea de nume, după caz;\n- copiile documentelor care atestă nivelul studiilor și ale altor acte care atestă efectuarea unor specializări, precum și copiile documentelor care atestă îndeplinirea condițiilor specifice ale postului;\n- copia carnetului de muncă, a adeverinței eliberate de angajator pentru perioada lucrată, care să ateste vechimea în muncă și în specialitatea studiilor solicitate pentru ocuparea postului;\n- certificat de cazier judiciar sau, după caz, extrasul de pe cazierul judiciar;\n- adeverință medicală care să ateste starea de sănătate corespunzătoare, eliberată de către medicul de familie al candidatului sau de către unitățile sanitare abilitate cu cel mult 6 luni anterior derulării concursului, și avizul psihologic eliberat pe baza unei evaluări psihologice organizate prin intermediul unităților specializate acreditate în condițiile legii, valabil potrivit prevederilor legale;\n- certificatul de integritate comportamentală din care să reiasă că nu a comis infracțiuni prevăzute la art. 1 alin. (2) din Legea nr. 118/2019;\n- curriculum vitae, model comun european;\n- proiectul de management;\n- declarație pe propria răspundere a candidatului că proiectul de management este conceput și realizat integral de către candidat;\n- declarație pe propria răspundere privind conformitatea cu originalul a copiilor de pe documentele depuse la dosarul de înscriere.",
+ "application_fee": null,
+ "application_contact": {
+  "name": null,
+  "phone": null,
+  "email": "sju.resita@gmail.com",
+  "address": "Spitalul Județean de Urgență Reșița, Str. Făgărașului, nr. 18, Serviciul R.U.N.O.S."
+ },
+ "education": {
+  "minimum_level": "licenta",
+  "eqf_level": 6,
+  "fields_of_study": [
+   {
+    "label_ro": "medicină",
+    "isced_field": "09_sanatate_asistenta_sociala"
+   },
+   {
+    "label_ro": "medicină dentară",
+    "isced_field": "09_sanatate_asistenta_sociala"
+   },
+   {
+    "label_ro": "științe juridice",
+    "isced_field": "04_afaceri_administratie_drept"
+   },
+   {
+    "label_ro": "științe economice",
+    "isced_field": "04_afaceri_administratie_drept"
+   }
+  ],
+  "specialization": null,
+  "required": true,
+  "verbatim": "să fie absolvent de studii universitare de licență absolvite cu diplomă de licență sau echivalentă în medicină, specializarea medicină, medicină dentară, specializarea medicină dentară, științe juridice sau științe economice; să fie absolvent cu diplomă a studiilor universitare de master în specialitatea studiilor necesare ocupării funcției sau cu diplomă conform prevederilor art. 57 alin. (2) din Legea nr. 199/2023, cu modificările și completările ulterioare, cu excepția absolvenților de medicină, specializarea medicină și medicină dentară, specializarea medicină dentară"
+ },
+ "experience": {
+  "years_minimum": 5,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "să aibă cel puțin 5 ani vechime în specialitatea studiilor necesare ocupării funcției."
+ },
+ "skill_list": [],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "cursuri de perfecționare în management sanitar sau management al serviciilor de sănătate, avizate de Ministerul Sănătății",
+   "kind": "certificat_profesional",
+   "issuer": "Ministerul Sănătății",
+   "required": true
+  },
+  {
+   "label": "adeverință medicală care să ateste starea de sănătate corespunzătoare",
+   "kind": "aviz_medical",
+   "issuer": "medicul de familie sau unitățile sanitare abilitate",
+   "required": true
+  },
+  {
+   "label": "aviz psihologic",
+   "kind": "aviz_medical",
+   "issuer": "unități specializate acreditate",
+   "required": true
+  },
+  {
+   "label": "certificat de integritate comportamentală",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true
+  }
+ ],
+ "contract": {
+  "duration": "nedeterminata",
+  "duration_months": null,
+  "schedule": "norma_intreaga",
+  "hours_per_week": null,
+  "remote_mode": "la_sediu",
+  "probation_months": null,
+  "shift_work": false
+ },
+ "positions": [],
+ "policy_domains": [
+  "sanatate_publica",
+  "administratie_publica"
+ ],
+ "occupation_title": "Manager",
+ "seniority_hint": "conducere",
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_orala"
+ ],
+ "bibliography_topics": [],
+ "competition_calendar": {
+  "application_deadline": "2026-09-28",
+  "application_deadline_time": "15:00",
+  "events": [
+   {
+    "stage": "publicare",
+    "date": "2026-08-18",
+    "time": null,
+    "verbatim": "Publicarea anunțului de organizare a concursului de manager"
+   },
+   {
+    "stage": "altele",
+    "date": "2026-08-24",
+    "time": null,
+    "verbatim": "Vizitarea spitalului de către candidații interesați, sub îndrumarea directorului medical"
+   },
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-28",
+    "time": "15:00",
+    "verbatim": "Termen de înscriere a candidaților"
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-10-01",
+    "time": "13:00",
+    "verbatim": "Verificarea dosarelor candidaților"
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-10-01",
+    "time": "15:00",
+    "verbatim": "Afișarea listei candidaților admiș"
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-10-02",
+    "time": "15:00",
+    "verbatim": "Depunerea contestațiilor față de rezultatele de verificare a dosarelor"
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-10-06",
+    "time": "15:00",
+    "verbatim": "Afișarea rezultatelor contestațiilor"
+   },
+   {
+    "stage": "proba_orala",
+    "date": "2026-10-12",
+    "time": "10:00",
+    "verbatim": "Susținerea publică a proiectului de management"
+   },
+   {
+    "stage": "rezultate_proba_orala",
+    "date": "2026-10-13",
+    "time": "10:00",
+    "verbatim": "Afișarea rezultatelor"
+   },
+   {
+    "stage": "contestatii_proba_orala",
+    "date": "2026-10-14",
+    "time": "10:00",
+    "verbatim": "Depunerea contestațiilor până la data de"
+   },
+   {
+    "stage": "rezultate_contestatii_proba_orala",
+    "date": "2026-10-16",
+    "time": "10:00",
+    "verbatim": "Rezultatul soluționării contestațiilor"
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "sanatate",
+  "parent_institution": "Ministerul Sănătății",
+  "uat_type": "judet",
+  "uat_name": "Caraș-Severin"
+ },
+ "note_suplimentare": "- Concursul se desfășoară în două etape: etapa de verificare a îndeplinirii condițiilor (eliminatorie) și etapa de susținere publică și evaluare a proiectului de management.\n- Candidații pot vizita spitalul sub îndrumarea directorului medical în data de 24 august 2026, ora 10:00.\n- Spitalul pune la dispoziția candidaților, în maximum 3 zile de la solicitare, copii ale bugetului de venituri și cheltuieli aprobat, structura organizatorică aprobată și structura de personal.\n- Mass-media și persoanele interesate să participe la susținerea publică a proiectului de management transmit solicitări până la 6 octombrie 2026, ora 15:00, pe adresa sju.resita@gmail.com."
+}

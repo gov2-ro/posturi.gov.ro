@@ -1,0 +1,185 @@
+{
+ "responsibilities": null,
+ "educationRequirements": "Nivelul studiilor: liceu cu examen de bacalaureat.",
+ "experienceRequirements": "Vechime în specialitatea studiilor necesare ocupării postului: nu se solicită.",
+ "qualifications": "- Aviz psihologic.\n- Disponibilitate la timp de lucru prelungit.",
+ "skills": "- Noțiuni de comunicare în relații publice.",
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": null,
+ "jobLocation": "Liceul Tehnologic „Alexandru Vlahuţă”, Podu Turcului, jud. Bacău",
+ "application_docs": "- Copia actului de identitate sau orice alt document care atestă identitatea, potrivit legii, aflat în termen de valabilitate.\n- Copia certificatului de căsătorie sau a altui document prin care s-a realizat schimbarea de nume, după caz.\n- Copiile documentelor care atestă nivelul studiilor și ale altor acte care atestă efectuarea unor specializări, precum și copiile documentelor care atestă îndeplinirea condițiilor specifice.\n- Copia carnetului de muncă/adeverință REVISAL/REGES conform cu originalul, sau după caz, o adeverință care să ateste vechimea în muncă și/sau în specialitatea postului.\n- Certificat de cazier judiciar care să ateste că nu are antecedente penale care să-l facă incompatibil cu funcția. Candidatul poate depune o declarație pe proprie răspundere că nu are antecedente penale, dar în cazul în care este declarat admis la selecția dosarelor, acesta are obligația de a completa dosarul de concurs cu originalul cazierului judiciar, anterior datei desfășurării primei probe a concursului.\n- Adeverință medicală care să ateste starea de sănătate corespunzătoare, eliberată cu cel mult 180 de zile anterior derulării concursului, de către medicul de familie al candidatului sau de către unitățile sanitare abilitate.\n- Certificat de integritate comportamentală din care să reiasă că nu a comis infracțiuni sexuale, de exploatare a unor persoane sau asupra minorilor.\n- Curriculum vitae, model comun european.\n- Dosar plic.",
+ "application_fee": null,
+ "application_contact": {
+  "name": "Moraru Tatiana – secretar",
+  "phone": "0234289725",
+  "email": null,
+  "address": "Liceul Tehnologic „Alexandru Vlahuţă”, Podu Turcului, jud. Bacău"
+ },
+ "education": {
+  "minimum_level": "liceala",
+  "eqf_level": 4,
+  "fields_of_study": [],
+  "specialization": null,
+  "required": true,
+  "verbatim": "nivelul studiilor: liceu cu examen de bacalaureat"
+ },
+ "experience": {
+  "years_minimum": null,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": true,
+  "verbatim": "vechime în specialitatea studiilor necesare ocupării postului: nu se solicită."
+ },
+ "skill_list": [
+  {
+   "label": "comunicare în relații publice",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "notiuni de comunicare in relatii publice"
+  },
+  {
+   "label": "disponibilitate la timp de lucru prelungit",
+   "type": "transversal",
+   "proficiency": null,
+   "required": true,
+   "evidence": "disponibilitate la timp de lucru prelungit"
+  }
+ ],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "aviz psihologic",
+   "kind": "aviz_medical",
+   "issuer": null,
+   "required": true
+  },
+  {
+   "label": "certificat de integritate comportamentală",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true
+  }
+ ],
+ "contract": {
+  "duration": "determinata",
+  "duration_months": null,
+  "schedule": "norma_partiala",
+  "hours_per_week": null,
+  "remote_mode": "la_sediu",
+  "probation_months": null,
+  "shift_work": true
+ },
+ "positions": [],
+ "policy_domains": [
+  "educatie_cercetare"
+ ],
+ "occupation_title": "Supraveghetor de noapte",
+ "seniority_hint": null,
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "Legea educației naționale",
+  "Regulamentul de organizare și funcționare a unităților de învățământ preuniversitar",
+  "Codul muncii",
+  "Statutul elevului",
+  "Norme de igienă privind unitățile pentru ocrotirea, educarea și instruirea copiilor și tinerilor",
+  "Psihologia adolescenței",
+  "Protecția și promovarea drepturilor copilului"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-08-26",
+  "application_deadline_time": "12:00",
+  "events": [
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-08-26",
+    "time": "12:00",
+    "verbatim": "Depunerea dosarelor"
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-08-26",
+    "time": "13:00",
+    "verbatim": "Verificarea şi validarea dosarelor"
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-08-26",
+    "time": "15:30",
+    "verbatim": "Depunerea contestaţiilor în urma selecţiei dosarelor"
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-08-26",
+    "time": "16:30",
+    "verbatim": "Afişarea rezultatelor în urma contestaţiilor depuse"
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-08-27",
+    "time": "09:00",
+    "verbatim": "Proba scrisă"
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": "2026-08-27",
+    "time": "14:00",
+    "verbatim": "Afişarea rezultatelor după proba scrisă"
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": "2026-08-27",
+    "time": "16:30",
+    "verbatim": "Depunerea contestaţiilor pentru proba scrisă"
+   },
+   {
+    "stage": "rezultate_contestatii_proba_scrisa",
+    "date": "2026-08-28",
+    "time": "10:00",
+    "verbatim": "Afişarea rezultatelor în urma contestaţiilor depuse"
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-08-28",
+    "time": "11:00",
+    "verbatim": "Proba de interviu"
+   },
+   {
+    "stage": "rezultate_interviu",
+    "date": "2026-08-28",
+    "time": "14:00",
+    "verbatim": "Afişarea rezultatelor"
+   },
+   {
+    "stage": "contestatii_interviu",
+    "date": "2026-08-28",
+    "time": "16:30",
+    "verbatim": "Depunerea contestaţiilor"
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": "2026-08-31",
+    "time": "16:30",
+    "verbatim": "Afişarea rezultatelor finale"
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "educatie",
+  "parent_institution": "Ministerul Educației",
+  "uat_type": "comuna",
+  "uat_name": "Podu Turcului"
+ },
+ "note_suplimentare": "- Post temporar vacant, pe perioadă determinată, până la data de 30.06.2027.\n- Post de 0,75 normă (fracțiune de normă).\n- Candidații vor susține proba de interviu în ordine alfabetică."
+}

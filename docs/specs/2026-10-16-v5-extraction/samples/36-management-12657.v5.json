@@ -1,0 +1,267 @@
+{
+ "responsibilities": null,
+ "qualifications": "- Apt din punct de vedere medical și psihologic să exercite funcția de manager.\n- Absolvirea unor cursuri de perfecționare în management sanitar sau management al serviciilor de sănătate, avizate de Ministerul Sănătății.\n- Să nu fi comis infracțiunile prevăzute la art. 1 alin. (2) din Legea nr. 118/2019.\n- Să nu fi împlinit vârsta standard de pensionare.",
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": null,
+ "jobLocation": "Sediu administrativ al Spitalului Județean de Urgență Reșița, Str. Făgărașului, nr. 18, Reșița, județul Caraș-Severin",
+ "application_fee": null,
+ "application_contact": {
+  "name": null,
+  "phone": null,
+  "email": "sju.resita@gmail.com",
+  "address": "Spitalul Județean de Urgență Reșița, Str. Făgărașului, nr. 18, la Serviciul R.U.N.O.S."
+ },
+ "education": {
+  "minimum_level": "licenta",
+  "eqf_level": 6,
+  "fields_of_study": [
+   {
+    "label_ro": "medicină",
+    "isced_field": "09_sanatate_asistenta_sociala"
+   },
+   {
+    "label_ro": "medicină dentară",
+    "isced_field": "09_sanatate_asistenta_sociala"
+   },
+   {
+    "label_ro": "științe juridice",
+    "isced_field": "04_afaceri_administratie_drept"
+   },
+   {
+    "label_ro": "științe economice",
+    "isced_field": "04_afaceri_administratie_drept"
+   }
+  ],
+  "specialization": null,
+  "required": true,
+  "verbatim": "să fie absolvent de studii universitare de licenţă absolvite cu diplomă de licenţă sau echivalentă în medicină, specializarea medicină, medicină dentară, specializarea medicină dentară, ştiinţe juridice sau ştiinţe economice"
+ },
+ "experience": {
+  "years_minimum": 5,
+  "in_specialty": true,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "să aibă cel puţin 5 ani vechime în specialitatea studiilor necesare ocupării funcţiei"
+ },
+ "skill_list": [
+  {
+   "label": "management sanitar",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "cursuri de perfecţionare în management sanitar sau management al serviciilor de sănătate"
+  }
+ ],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "aviz psihologic",
+   "kind": "aviz_medical",
+   "issuer": null,
+   "required": true,
+   "evidence": "avizul psihologic eliberat pe baza unei evaluări psihologice organizate prin intermediul unităţilor specializate acreditate",
+   "licence_category": null
+  },
+  {
+   "label": "adeverință medicală",
+   "kind": "aviz_medical",
+   "issuer": null,
+   "required": true,
+   "evidence": "adeverinţă medicală care să ateste starea de sănătate corespunzătoare",
+   "licence_category": null
+  },
+  {
+   "label": "certificat de integritate comportamentală",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true,
+   "evidence": "certificatul de integritate comportamentală din care să reiasă că nu a comis infracţiuni",
+   "licence_category": null
+  },
+  {
+   "label": "curs de perfecționare în management sanitar",
+   "kind": "certificat_profesional",
+   "issuer": "Ministerul Sănătății",
+   "required": true,
+   "evidence": "cursuri de perfecţionare în management sanitar sau management al serviciilor de sănătate, avizate de Ministerul Sănătăţii",
+   "licence_category": null
+  }
+ ],
+ "contract": {
+  "duration": "nedeterminata",
+  "duration_months": null,
+  "schedule": "norma_intreaga",
+  "hours_per_week": null,
+  "fte": null,
+  "end_date": null,
+  "post_status": "vacant",
+  "probation_months": null,
+  "shift_work": null
+ },
+ "positions": [],
+ "policy_domains": [
+  "sanatate_publica",
+  "administratie_publica"
+ ],
+ "occupation_title": "Manager",
+ "seniority_hint": "conducere",
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_orala",
+  "interviu"
+ ],
+ "bibliography_topics": [],
+ "competition_calendar": {
+  "application_deadline": "2026-09-28",
+  "application_deadline_time": "15:00",
+  "events": [
+   {
+    "stage": "publicare",
+    "date": "2026-08-18",
+    "time": null,
+    "relative": null,
+    "verbatim": "Publicarea anunțului de organizare a concursului de manager"
+   },
+   {
+    "stage": "altele",
+    "date": "2026-08-24",
+    "time": null,
+    "relative": null,
+    "verbatim": "Vizitarea spitalului de către candidații interesați"
+   },
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-28",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Termen de înscriere a candidaților"
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-10-01",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Verificarea dosarelor candidaților"
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-10-01",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Afișarea listei candidaților admiș"
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-10-02",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Depunerea contestațiilor față de rezultatele de verificare a dosarelor"
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-10-06",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor contestațiilor"
+   },
+   {
+    "stage": "altele",
+    "date": "2026-10-06",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Afișarea pe site-ul unității a proiectelor de management"
+   },
+   {
+    "stage": "proba_orala",
+    "date": "2026-10-12",
+    "time": "10:00",
+    "relative": null,
+    "verbatim": "Susținerea publică a proiectului de management"
+   },
+   {
+    "stage": "rezultate_proba_orala",
+    "date": "2026-10-13",
+    "time": "10:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor"
+   },
+   {
+    "stage": "contestatii_proba_orala",
+    "date": "2026-10-14",
+    "time": "10:00",
+    "relative": null,
+    "verbatim": "Depunerea contestațiilor până la data de"
+   },
+   {
+    "stage": "rezultate_contestatii_proba_orala",
+    "date": "2026-10-16",
+    "time": "10:00",
+    "relative": null,
+    "verbatim": "Rezultatul soluționării contestațiilor"
+   }
+  ]
+ },
+ "funding": {
+  "source": "nespecificat",
+  "programme": null,
+  "project_code": null,
+  "project_name": null
+ },
+ "employer_context": {
+  "sector": "sanatate",
+  "subordinated_to": null,
+  "uat_type": null,
+  "uat_name": null
+ },
+ "note_suplimentare": "- Candidații pot vizita spitalul sub îndrumarea directorului medical în data de 24 august 2026, ora 10:00.\n- Spitalul pune la dispoziția candidaților, în maximum 3 zile de la solicitare, copii ale bugetului, structurii organizatorice și structurii de personal pentru întocmirea proiectului de management.",
+ "recruitment": {
+  "kind": "management",
+  "internal_only": false
+ },
+ "vacancies_total": 1,
+ "application": {
+  "channels": [
+   "sediu"
+  ],
+  "window_start": "2026-08-18"
+ },
+ "age_limit": {
+  "min_years": null,
+  "max_years": null,
+  "verbatim": "Nu au împlinit vârsta standard de pensionare, conform legii."
+ },
+ "work_localities": [],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "adeverinta_medicala",
+   "certificat_integritate",
+   "cv",
+   "declaratie_conformitate",
+   "dosar_plic"
+  ],
+  "specific": [
+   {
+    "label": "proiect de management",
+    "evidence": "proiectul de management",
+    "roles": []
+   },
+   {
+    "label": "declarație pe propria răspundere că proiectul este conceput integral de candidat",
+    "evidence": "declaraţie pe propria răspundere a candidatului că proiectul de management este conceput şi realizat integral de către candidat",
+    "roles": []
+   },
+   {
+    "label": "aviz psihologic",
+    "evidence": "avizul psihologic eliberat pe baza unei evaluări psihologice organizate prin intermediul unităţilor specializate acreditate",
+    "roles": []
+   }
+  ]
+ }
+}

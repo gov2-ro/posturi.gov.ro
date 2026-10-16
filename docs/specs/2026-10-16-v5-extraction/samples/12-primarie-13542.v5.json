@@ -1,0 +1,287 @@
+{
+ "responsibilities": "- Planificarea, coordonarea și monitorizarea activităților de participare socială din cadrul Activității A3.\n- Prevenirea izolării și a instituționalizării persoanelor vârstnice vulnerabile.\n- Dezvoltarea rețelei comunitare de sprijin; colaborarea cu instituțiile publice și organizațiile locale.\n- Organizarea seminariilor tematice și a activităților de educație digitală pentru persoane vârstnice.\n- Evaluarea impactului măsurilor de sprijin asupra beneficiarilor.",
+ "qualifications": null,
+ "baseSalary": null,
+ "jobBenefits": null,
+ "workHours": "84 ore/lună, program de lucru inegal",
+ "jobLocation": "Comuna Matca, județul Galați",
+ "application_fee": null,
+ "application_contact": {
+  "name": null,
+  "phone": "0740230805",
+  "email": null,
+  "address": "sediul Primăriei Matca, județul Galați"
+ },
+ "education": {
+  "minimum_level": "licenta",
+  "eqf_level": 6,
+  "fields_of_study": [
+   {
+    "label_ro": "sociologie",
+    "isced_field": "03_stiinte_sociale"
+   },
+   {
+    "label_ro": "asistență socială",
+    "isced_field": "09_sanatate_asistenta_sociala"
+   },
+   {
+    "label_ro": "psihologie",
+    "isced_field": "03_stiinte_sociale"
+   },
+   {
+    "label_ro": "științe ale educației",
+    "isced_field": "01_educatie"
+   },
+   {
+    "label_ro": "științe administrative",
+    "isced_field": "04_afaceri_administratie_drept"
+   },
+   {
+    "label_ro": "științe ale comunicării",
+    "isced_field": "03_stiinte_sociale"
+   },
+   {
+    "label_ro": "științe politice",
+    "isced_field": "03_stiinte_sociale"
+   }
+  ],
+  "specialization": null,
+  "required": true,
+  "verbatim": "Studii superioare absolvite cu diplomă de licență în unul dintre domeniile: Sociologie, Asistență socială, Psihologie, Științe ale educației, Științe administrative, Științe ale comunicării, Științe politice"
+ },
+ "experience": {
+  "years_minimum": 3,
+  "in_specialty": false,
+  "domain": null,
+  "none_required": false,
+  "verbatim": "Experiență generală: minimum 3 ani; experiență specifică: minimum 1 an de experiență în activități sociale, comunitare, educaționale ori în lucrul cu persoane vulnerabile."
+ },
+ "skill_list": [
+  {
+   "label": "dezvoltare comunitară",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": false,
+   "evidence": "constituie avantaj deținerea sau frecventarea unui curs de facilitator de dezvoltare comunitară"
+  },
+  {
+   "label": "activități sociale",
+   "type": "knowledge",
+   "proficiency": null,
+   "required": true,
+   "evidence": "minimum 1 an de experiență în activități sociale, comunitare, educaționale"
+  },
+  {
+   "label": "lucrul cu persoane vulnerabile",
+   "type": "skill",
+   "proficiency": null,
+   "required": true,
+   "evidence": "ori în lucrul cu persoane vulnerabile"
+  }
+ ],
+ "language_list": [],
+ "credentials": [
+  {
+   "label": "certificat de integritate comportamentală",
+   "kind": "certificat_profesional",
+   "issuer": null,
+   "required": true,
+   "evidence": "certificatul de integritate comportamentală, potrivit Legii nr. 118/2019",
+   "licence_category": null
+  }
+ ],
+ "contract": {
+  "duration": "determinata",
+  "duration_months": 39,
+  "schedule": "norma_partiala",
+  "hours_per_week": 19.5,
+  "fte": null,
+  "end_date": null,
+  "post_status": "vacant",
+  "probation_months": null,
+  "shift_work": true
+ },
+ "positions": [],
+ "policy_domains": [
+  "asistenta_sociala",
+  "administratie_publica"
+ ],
+ "occupation_title": "Expert dezvoltare comunitară",
+ "seniority_hint": null,
+ "exam_stages": [
+  "selectie_dosare",
+  "proba_scrisa",
+  "interviu"
+ ],
+ "bibliography_topics": [
+  "Codul administrativ",
+  "asistența socială",
+  "asigurarea calității în domeniul serviciilor sociale",
+  "standardele minime de calitate pentru serviciile sociale destinate persoanelor vârstnice",
+  "serviciile de îngrijiri la domiciliu pentru persoane vârstnice",
+  "asistența socială a persoanelor vârstnice",
+  "managementul de caz în serviciile sociale",
+  "Programul Incluziune și Demnitate Socială 2021–2027",
+  "majorarea salarială în sectorul bugetar"
+ ],
+ "competition_calendar": {
+  "application_deadline": "2026-09-17",
+  "application_deadline_time": "15:00",
+  "events": [
+   {
+    "stage": "publicare",
+    "date": "2026-09-03",
+    "time": null,
+    "relative": null,
+    "verbatim": "Data postării/publicării anunțului"
+   },
+   {
+    "stage": "depunere_dosare",
+    "date": "2026-09-17",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Data limită de depunere a dosarelor"
+   },
+   {
+    "stage": "selectie_dosare",
+    "date": "2026-09-18",
+    "time": "09:00",
+    "relative": null,
+    "verbatim": "Selecția dosarelor"
+   },
+   {
+    "stage": "rezultate_selectie_dosare",
+    "date": "2026-09-18",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Afișarea selecției dosarelor"
+   },
+   {
+    "stage": "contestatii_selectie_dosare",
+    "date": "2026-09-21",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Termen limită contestații ref la selecția dosarelor"
+   },
+   {
+    "stage": "rezultate_contestatii_selectie_dosare",
+    "date": "2026-09-22",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor la contestații"
+   },
+   {
+    "stage": "proba_scrisa",
+    "date": "2026-09-25",
+    "time": "09:00",
+    "relative": null,
+    "verbatim": "Proba scrisă"
+   },
+   {
+    "stage": "rezultate_proba_scrisa",
+    "date": "2026-09-25",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor la proba scrisă"
+   },
+   {
+    "stage": "contestatii_proba_scrisa",
+    "date": "2026-09-28",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Termen limită contestații la proba scrisă"
+   },
+   {
+    "stage": "rezultate_contestatii_proba_scrisa",
+    "date": "2026-09-29",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor la contestații ref proba scrisă"
+   },
+   {
+    "stage": "interviu",
+    "date": "2026-09-30",
+    "time": "09:00",
+    "relative": null,
+    "verbatim": "Interviul"
+   },
+   {
+    "stage": "rezultate_interviu",
+    "date": "2026-09-30",
+    "time": "11:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor la proba de interviu"
+   },
+   {
+    "stage": "contestatii_interviu",
+    "date": "2026-09-30",
+    "time": "13:00",
+    "relative": null,
+    "verbatim": "Termen limită contestații la proba de interviu"
+   },
+   {
+    "stage": "rezultate_contestatii_interviu",
+    "date": "2026-09-30",
+    "time": "15:00",
+    "relative": null,
+    "verbatim": "Afișarea rezultatelor la contestații la proba de interviu"
+   },
+   {
+    "stage": "rezultate_finale",
+    "date": "2026-09-30",
+    "time": "15:30",
+    "relative": null,
+    "verbatim": "Afișare rezultat final"
+   }
+  ]
+ },
+ "funding": {
+  "source": "fonduri_europene",
+  "programme": null,
+  "project_code": "SMIS 353396",
+  "project_name": "Dezvoltarea și furnizarea de servicii sociale integrate de îngrijire la domiciliu pentru vârstnicii vulnerabili din comuna Matca, județul Galați"
+ },
+ "employer_context": {
+  "sector": "administratie_locala",
+  "subordinated_to": null,
+  "uat_type": "comuna",
+  "uat_name": "Matca"
+ },
+ "note_suplimentare": "- Post în cadrul proiectului „Dezvoltarea și furnizarea de servicii sociale integrate de îngrijire la domiciliu pentru vârstnicii vulnerabili din comuna Matca, județul Galați”, cod SMIS 353396.\n- Program de lucru inegal, 84 ore/lună, pe perioadă determinată de 39 luni.\n- Constituie avantaj deținerea sau frecventarea unui curs de facilitator de dezvoltare comunitară.",
+ "recruitment": {
+  "kind": "recrutare",
+  "internal_only": false
+ },
+ "vacancies_total": 1,
+ "application": {
+  "channels": [
+   "sediu",
+   "posta"
+  ],
+  "window_start": null
+ },
+ "age_limit": null,
+ "work_localities": [
+  "Matca"
+ ],
+ "documents": {
+  "standard": [
+   "formular_inscriere",
+   "act_identitate",
+   "certificat_casatorie",
+   "acte_studii",
+   "carnet_munca_adeverinta_vechime",
+   "cazier_judiciar",
+   "certificat_integritate",
+   "cv",
+   "dosar_plic"
+  ],
+  "specific": [
+   {
+    "label": "declarație de disponibilitate",
+    "evidence": "declarație de disponibilitate privind îndeplinirea cerințelor legate de timpul/programul de lucru",
+    "roles": []
+   }
+  ]
+ }
+}

@@ -369,3 +369,45 @@ def language_code(code) -> str:
     if len(folded) > 3 and _ANY_FOREIGN.search(folded) and "semnelor" not in folded and "izvoare" not in folded:
         return "straina"
     return c
+
+
+# ---- Skills ----------------------------------------------------------------------
+
+#: One spelling per common tool: the extraction writes "Excel", "Microsoft Excel"
+#: and "MS Excel" for the same thing, and the facet listed each.
+_SKILL_ALIASES: list[tuple[re.Pattern, str]] = [(re.compile(p), label) for p, label in [
+    (r"^(ms\s+|microsoft\s+)?excel$", "Microsoft Excel"),
+    (r"^(ms\s+|microsoft\s+)?word$", "Microsoft Word"),
+    (r"^(ms\s+|microsoft\s+)?power\s?point$", "Microsoft PowerPoint"),
+    (r"^(ms\s+|microsoft\s+)?office$|^pachetul\s+(microsoft\s+)?office$", "Microsoft Office"),
+    (r"^(operare|utilizare|utilizarea|lucru\s+(pe|la))\s+(pc|calculator\w*|computer\w*)$|^cunostinte\s+(de\s+)?(operare\s+)?(pc|calculator)$", "Operare PC"),
+    (r"^ssm$|^securitate\w*\s+si\s+sanatate\w*\s+in\s+munca$", "Securitate și sănătate în muncă"),
+    (r"^psi$|^prevenire\w*\s+si\s+stingere\w*\s+a?\s*incendiilor$", "PSI"),
+]]
+
+
+def skill_tags(skill_list) -> list[str]:
+    """The skills worth filtering on: no soft skills, one spelling per tool.
+
+    261016: half the extracted skills were `transversal` — "lucru în echipă",
+    "comunicare", "corectitudine" — which every posting asks for and no reader
+    filters on. They stay in the extraction (the detail page lists them); the
+    facet columns get the knowledge and skill entries only.
+    """
+    out: list[str] = []
+    for k in skill_list or []:
+        if not isinstance(k, dict):
+            continue
+        if (k.get("type") or "") in ("transversal", "language"):
+            continue
+        label = str(k.get("label") or "").strip()
+        if not label:
+            continue
+        f = fold(label).strip(" .")
+        for pattern, canonical in _SKILL_ALIASES:
+            if pattern.search(f):
+                label = canonical
+                break
+        if label not in out:
+            out.append(label)
+    return out

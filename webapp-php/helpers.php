@@ -260,9 +260,11 @@ function net_from_gross(float $gross): int {
 function pay_quintiles(): ?array {
     static $q = false;
     if ($q !== false) return $q;
-    $vals = db()->query("SELECT CAST(" . SALARY_EXPR . " AS REAL) FROM job_postings j
-        WHERE j.application_status IN (" . OPEN_STATUS_SQL . ") AND " . SALARY_EXPR . " > 0
-        ORDER BY 1")->fetchAll(PDO::FETCH_COLUMN);
+    $st = db()->prepare("SELECT CAST(" . SALARY_EXPR . " AS REAL) FROM job_postings j
+        WHERE j.application_status IN (" . OPEN_STATUS_SQL . ") AND " . SALARY_EXPR . " > CAST(? AS REAL)
+        ORDER BY 1");
+    $st->execute([0]);
+    $vals = $st->fetchAll(PDO::FETCH_COLUMN);
     $n = count($vals);
     if ($n < 20) return $q = null;
     $at = static fn(float $f): float => (float)$vals[min($n - 1, (int)floor($f * $n))];

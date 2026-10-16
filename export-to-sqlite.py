@@ -1220,7 +1220,7 @@ def _v3_columns(schema_json_text) -> dict:
         "study_level": edu.get("minimum_level") or "",
         "isced_fields": dumps(f.get("isced_field") for f in fields),
         "study_labels": dumps(f.get("label_ro") for f in fields),
-        "skills": dumps(k.get("label") for k in (s.get("skill_list") or [])),
+        "skills": dumps(classify.skill_tags(s.get("skill_list"))),   # 261016: no soft skills
         # "en:B2" keeps language and level together for a single LIKE probe.
         # 261016: "o limbă de circulație internațională", "limbi străine" … are one
         # answer — any foreign language — and become `straina`, so the language

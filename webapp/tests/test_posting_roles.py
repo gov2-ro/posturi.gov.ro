@@ -67,7 +67,7 @@ class TestOneRole:
         assert (r["study_level"], r["eqf_level"]) == ("licenta", 6)
         assert r["isced_fields"] == '["04_afaceri_administratie_drept"]'
         assert (r["exp_years"], r["exp_in_specialty"], r["exp_none_required"]) == (5.0, 1, 0)
-        assert r["skills"] == '["Contabilitate", "Excel"]'
+        assert r["skills"] == '["Contabilitate", "Microsoft Excel"]'
         assert r["credentials"] == '["autorizatie"]'
         assert r["seniority_hint"] == "principal"
         assert r["role_format"] == pr.ROLE_FORMAT == 1
@@ -84,7 +84,7 @@ class TestTwoContrastingRoles:
         assert [a["ordinal"], b["ordinal"]] == [1, 2]
         assert (a["study_level"], a["eqf_level"], a["exp_years"]) == ("licenta", 6, 5.0)
         assert (b["study_level"], b["eqf_level"], b["exp_years"]) == ("liceala", 4, 0.0)
-        assert a["skills"] == '["Contabilitate", "Excel"]' and b["skills"] == '["Word"]'
+        assert a["skills"] == '["Contabilitate", "Microsoft Excel"]' and b["skills"] == '["Microsoft Word"]'
         assert a["credentials"] == '["autorizatie"]' and b["credentials"] == '["permis_conducere"]'
         assert b["vacancy_count"] == 2
         # An empty field list is a known "any field qualifies", not "unknown".

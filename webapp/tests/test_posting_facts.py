@@ -199,7 +199,7 @@ class TestRoles:
             assert dropped not in a
         assert (a["ordinal"], a["decomposed"], a["title"], a["vacancy_count"]) == (1, True, "Expert contabil", 1)
         assert (a["study_level"], a["eqf_level"], a["exp_years"]) == ("licenta", 6, 5.0)
-        assert a["skills"] == ["Contabilitate", "Excel"]                # sorted, parsed
+        assert a["skills"] == ["Contabilitate", "Microsoft Excel"]                # sorted, parsed
         assert a["isced_fields"] == ["04_afaceri_administratie_drept"]
         assert (a["exp_in_specialty"], a["exp_none_required"]) == (True, False)
         assert b["exp_years"] == 0.0 and b["exp_none_required"] is True and b["isced_fields"] == []

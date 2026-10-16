@@ -45,7 +45,7 @@ These are the match keys. Fill them from the same sentences you used for Part A 
 - `verbatim`.
 
 ## `skill_list` — array
-One entry per distinct competence. **Normalise to a short tag, not a sentence.** A parenthesised list expands into several entries.
+One entry per distinct competence. **Normalise to a short tag, not a sentence.** A parenthesised list expands into several entries. **Prefer the specific:** a named tool, system, method, regulation or field of knowledge that narrows who can do the job ("GIS", "AutoCAD", "SICAP", "Forexebug", "legislația achizițiilor publice", "sudură MIG-MAG"). Generic soft skills ("lucru în echipă", "comunicare", "seriozitate") are `transversal`; list them only when the posting itemises them, and never invent them from the job type.
 - `label`: the tag — "GIS", "Microsoft Excel", "AutoCAD", "analiză spațială", "lucru în echipă", "achiziții publice".
 - `type`: ESCO pillar — `knowledge` (a subject or system one knows) | `skill` (an ability one performs) | `transversal` (soft/behavioural) | `language`.
 - `proficiency`: `baza` | `mediu` | `avansat`, only when stated ("cunoștințe avansate" → `avansat`).

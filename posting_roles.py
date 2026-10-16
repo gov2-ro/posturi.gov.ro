@@ -39,6 +39,8 @@ import hashlib
 import json
 from typing import Any, Iterable
 
+import classify  # stdlib-only, beside this module
+
 #: Bump when the meaning of a column changes; consumers key behaviour on it.
 ROLE_FORMAT = 1
 
@@ -133,7 +135,8 @@ def _decomposed_row(entry: dict, ordinal: int, key: str, source_revision: str | 
         years = 0.0   # "fără experiență" stated explicitly — a fact, not a guess
 
     if isinstance(entry.get("skill_list"), list):
-        skills = _dumps(_dict(k).get("label") for k in entry["skill_list"])
+        # 261016: no soft skills, one spelling per tool (classify.skill_tags).
+        skills = _dumps(classify.skill_tags(entry["skill_list"]))
     else:
         skills = None
     if isinstance(entry.get("credentials"), list):

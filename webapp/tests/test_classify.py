@@ -117,3 +117,17 @@ def test_medical_specialties(title, specs):
 ])
 def test_occupation_fallback(names, code):
     assert classify.occupation_fallback(*names) == code
+
+
+def test_skill_tags_drop_soft_skills_and_merge_spellings():
+    skills = [
+        {"label": "lucru în echipă", "type": "transversal"},
+        {"label": "Excel", "type": "knowledge"},
+        {"label": "Microsoft Excel", "type": "skill"},
+        {"label": "operare calculator", "type": "skill"},
+        {"label": "GIS", "type": "knowledge"},
+        {"label": "limba engleză", "type": "language"},
+        {"label": "Contabilitate"},
+    ]
+    assert classify.skill_tags(skills) == ["Microsoft Excel", "Operare PC", "GIS", "Contabilitate"]
+    assert classify.skill_tags(None) == []

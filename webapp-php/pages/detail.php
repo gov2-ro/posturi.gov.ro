@@ -207,6 +207,9 @@ require __DIR__ . '/../inc/header.php';
     <a href="<?= e($back_url) ?>" class="text-gov hover:underline">← <?= e($back_label) ?></a>
   </nav>
 
+  <?php /* D9: the same sentence opens and closes every posting. */ ?>
+  <?= robots_disclaimer((string)$p['url'], 'mb-4') ?>
+
   <!-- Title block -->
   <?php $dt = display_title($p); ?>
   <div class="border-b border-line pb-5 mb-6"<?= pref_attrs($p) ?>>
@@ -861,11 +864,10 @@ require __DIR__ . '/../inc/header.php';
       <?php /* UX-11: browser-local preparation checklist (documents, stages). */ ?>
       <?php require __DIR__ . '/../partials/checklist.php'; ?>
 
-      <p class="mt-8 border-t border-line pt-4 text-xs text-ink-muted">
-        Datele sunt preluate automat de pe posturi.gov.ro.
-        <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener" class="text-gov hover:underline">Verifică anunțul original ↗</a>
-        înainte de a depune dosarul. <a href="/despre/" class="text-gov hover:underline">Metodologie</a>
-      </p>
+      <div class="mt-8 border-t border-line pt-4">
+        <?= robots_disclaimer((string)$p['url']) ?>
+        <p class="mt-1 text-xs text-ink-muted"><a href="/despre/#cum-functioneaza" class="text-gov hover:underline">Cum funcționează</a></p>
+      </div>
 
     </div>
   </div>

@@ -152,7 +152,8 @@ run_suite('panel markup on a decomposed posting', function () use ($base) {
     // After the structured requirements, before the rest of the page.
     $req = strpos($h, 'Cerințe structurate');
     $panel = strpos($h, 'data-eligibility-section');
-    $cal = strpos($h, 'Datele sunt preluate automat');
+    // The closing disclaimer (the last of the two robots_disclaimer() lines) ends the page body.
+    $cal = strrpos($h, 'restructurate cu');
     assert_true($req !== false && $panel !== false && $cal !== false && $req < $panel && $panel < $cal, 'placed after the requirements');
     // The "requirements remain visible" half: the same page lists the roles and their facts outside the panel.
     assert_contains('Inspector superior', substr($h, $req, $panel - $req), 'role listed above the panel');
@@ -411,8 +412,8 @@ run_suite('styles are tokens: no raw palette class and no colour literal in the 
     }
 });
 
-run_suite('release gate: the panel ships off and POSTURI_ELIGIBILITY_PANEL=0 hides it', function () use ($db_path) {
-    assert_same(false, ELIGIBILITY_PANEL_ENABLED, 'shipped default is off until the rules are reviewed');
+run_suite('release gate: the panel ships on (D18) and POSTURI_ELIGIBILITY_PANEL=0 hides it', function () use ($db_path) {
+    assert_same(true, ELIGIBILITY_PANEL_ENABLED, 'released for the beta on 2026-10-16');
     putenv('POSTURI_ELIGIBILITY_PANEL=0');
     $s = start_fixture_server($db_path);
     putenv('POSTURI_ELIGIBILITY_PANEL=1');

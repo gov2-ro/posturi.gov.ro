@@ -244,11 +244,36 @@ run_suite('filtering, facet parity, chips, pagination, sort', function () use ($
     [, $search] = fetch_page($base, '/?q=spital');
     assert_contains('href="/job/1001-asistent-medical-generalist/"', $search, 'FTS title/body hit');
 
-    // HTMX partial: same results markup, only the results region.
+    // HTMX partial: same results markup, only the results region. The
+    // cache-buster parameter selects it (BETA-CACHE), not the header.
     $ctx = stream_context_create(['http' => ['ignore_errors' => true, 'header' => "HX-Request: true\r\n"]]);
-    $htmx_body = (string)@file_get_contents($base . '/?judet%5B%5D=cluj', false, $ctx);
+    $htmx_body = (string)@file_get_contents($base . '/?judet%5B%5D=cluj&org.htmx.cache-buster=results', false, $ctx);
     assert_not_contains('<!doctype html>', $htmx_body, 'htmx partial has no full page');
     assert_contains('anunț', $htmx_body, 'htmx partial carries the count');
+    assert_not_contains('cache-buster', $htmx_body, 'the cache-buster never leaks into links');
+    // The header alone is htmx's history-restore request: it wants the page.
+    $restore = (string)@file_get_contents($base . '/?judet%5B%5D=cluj', false, $ctx);
+    assert_contains('<!doctype html>', strtolower($restore), 'header without the parameter gets the full page');
+});
+
+run_suite('BETA-CACHE: what the edge and the browser may keep', function () use ($base) {
+    $cacheable = 'public, max-age=300, s-maxage=3600';
+    foreach (['/', '/?judet%5B%5D=cluj', '/?judet%5B%5D=cluj&org.htmx.cache-buster=results',
+              '/despre/', '/angajatori/', '/posturi.json'] as $path) {
+        [$status, , $h] = fetch_page($base, $path);
+        assert_same(200, $status, "$path answers 200");
+        assert_same($cacheable, $h['cache-control'] ?? '', "$path is cacheable");
+        assert_true(isset($h['expires']), "$path sends Expires (keeps the host's mod_expires out)");
+    }
+    foreach (['/nu-exista/', '/job/999999/', '/?q%5B%5D=medic'] as $path) {
+        [$status, , $h] = fetch_page($base, $path);
+        assert_true($status >= 400, "$path is an error");
+        assert_same('no-store', $h['cache-control'] ?? '', "$path error is never stored");
+    }
+    [, , $h] = fetch_page($base, '/versiuni.json');
+    assert_same('no-store', $h['cache-control'] ?? '', 'versiuni.json keeps its own no-store (deploy verification)');
+    [, , $h] = fetch_page($base, '/robots.txt');
+    assert_same('public, max-age=86400', $h['cache-control'] ?? '', 'a route that chose its own policy keeps it');
 });
 
 run_suite('REV-02/03/04: employers county filter, status counts, vocabulary', function () use ($base, $db_path, $srv) {

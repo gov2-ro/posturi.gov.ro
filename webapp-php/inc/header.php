@@ -41,7 +41,12 @@ if (!isset($_build_stamp)) {
   <meta property="og:title" content="<?= e($_title) ?>">
   <meta property="og:description" content="<?= e($_description) ?>">
   <meta property="og:url" content="<?= e($_canonical) ?>">
-  <meta name="twitter:card" content="summary">
+  <?php /* UX-04 (D13): one static share image for every page; per-posting cards later. */ ?>
+  <meta property="og:image" content="<?= e(site_origin()) ?>/static/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="posturi.gov2.ro — posturile din sectorul public, ușor de căutat și filtrat">
+  <meta name="twitter:card" content="summary_large_image">
 
   <link rel="alternate" type="application/rss+xml" title="posturi.gov2.ro — RSS" href="/posturi.rss">
   <link rel="alternate" type="application/atom+xml" title="posturi.gov2.ro — Atom" href="/posturi.atom">
@@ -62,6 +67,12 @@ if (!isset($_build_stamp)) {
      paint (no flash). The list page's script owns the switch; the CSS only acts on the
      list at lg+. */ ?>
   <script>try{var l=localStorage.getItem('posturi.layout');if(l==='compact'||l==='table')document.documentElement.dataset.layout=l}catch(e){}</script>
+  <?php /* D10: welcome on a first visit or after 90 days away. Every page view
+     records the visit; the close button only hides the box for this page. */ ?>
+  <script>try{var k='posturi.lastVisit',n=Date.now(),v=+localStorage.getItem(k)||0;if(!v||n-v>7776e6)document.documentElement.dataset.welcome='1';localStorage.setItem(k,String(n))}catch(e){}</script>
+  <?php /* getCacheBusterParam gives every HTMX GET its own URL, so a cached
+     results fragment can never be served as a page (index.php, BETA-CACHE). */ ?>
+  <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
   <script src="/static/htmx.min.js" defer></script>
   <script src="/static/prefs.js?v=<?= @filemtime(__DIR__ . '/../static/prefs.js') ?: '1' ?>" defer></script>
   <?php /* UX-09: one shared script for browser-local save/hide, loaded once here
@@ -80,60 +91,31 @@ if (!isset($_build_stamp)) {
   Sari la conținut
 </a>
 
-<?php /* One row: brand, disclaimer, nav.
+<?php /* One row: brand + version, the database stamp, nav (BETA-CHROME, D9).
    ────────────────────────────────────────────────────────────────────────────
-   The disclaimer used to be a dismissible amber strip above the masthead. It is
-   the first thing the site has to say and the easiest thing to lose — a band
-   above the header reads as an ad, and it was one click from being gone for
-   good — so it lives in the bar itself now, and has no close button.
-
-   Fitting three things on one 56px line down to 320px means the middle one has
-   to give. It is written at three lengths and the breakpoints pick one, so the
-   claim survives at every width even when the sentence cannot:
-
-     < 640    "Neoficial"                       ~70px
-     640–1023 "Nu este un proiect oficial"
-     ≥ 1024   the full sentence + the gForm link
-
-   The brand block sheds its own extras on the way down (the alpha/WIP marker at
-   <lg, the update stamp at <xl) so the disclaimer keeps the slack. `min-w-0` on
-   the middle is what lets it shrink at all — a flex item defaults to
-   `min-width:auto` and would otherwise push the nav off-screen rather than
-   truncate — and `truncate` is the backstop if a translation ever outgrows its
-   slot. Measured at 320/375/390/768/1024/1280/1536; see the activity log. */ ?>
+   The masthead says only what is true of the whole site right now: which
+   version this is and when its database was generated. The "not official"
+   claim moved to where it matters — the start and end of every posting
+   (robots_disclaimer()), the first-visit welcome below, the footer and /despre/
+   — and feedback to the [?!] button in the footer. Below sm the stamp and the
+   version's commit drop out; the footer still carries the stamp. */ ?>
+<?php $_stamp = build_stamp_relative(); $_code = code_version(); ?>
 <header class="bg-gov-bar text-on-bar border-b border-gov-bar">
   <div class="max-w-screen-xl mx-auto px-3 sm:px-6 flex items-center gap-2 sm:gap-4 h-14">
-    <a href="/" class="flex shrink-0 items-center gap-2 sm:gap-3 py-2 group">
+    <a href="/" class="flex shrink-0 items-baseline gap-2 py-2 group">
       <span class="font-display italic text-base sm:text-lg md:text-xl font-semibold text-on-bar leading-none tracking-tight">
         posturi<span class="text-on-bar-accent">.</span>gov<span class="text-on-bar-accent">2</span><span class="text-on-bar-accent">.</span>ro
       </span>
-      <span class="hidden lg:inline text-xs text-on-bar-muted font-mono uppercase tracking-widest mt-0.5">
-        / alpha · WIP
-      </span>
-      <?php if ($_build_stamp): ?>
-      <time datetime="<?= e($_build_stamp_iso) ?>"
-            class="hidden xl:inline text-xs text-on-bar-muted font-mono mt-0.5<?= $_build_tooltip ? ' cursor-help' : '' ?>"
-            <?= $_build_tooltip ? 'title="' . e($_build_tooltip) . '"' : '' ?>>
-        bază generată <?= $_build_stamp ?>
-      </time>
-      <?php endif; ?>
-      <?php if ($_source_label): ?>
-      <span class="hidden xl:inline text-xs text-on-bar-muted font-mono mt-0.5">
-        · <?= e($_source_label) ?>
-      </span>
-      <?php endif; ?>
+      <span class="text-[11px] text-on-bar-muted font-mono leading-none"<?= $_code !== '' ? ' title="Versiunea codului: ' . e($_code) . '"' : '' ?>>beta<?php if ($_code !== ''): ?><span class="hidden sm:inline"> · <?= e($_code) ?></span><?php endif; ?></span>
     </a>
 
-    <p class="min-w-0 flex-1 truncate text-center text-[11px] sm:text-xs leading-none text-on-bar-muted">
-      <?php /* Below sm the word alone carries it, and it points at the page that
-         explains — there is no room for a sentence, and a cryptic label with
-         nowhere to go would be worse than the short one. */ ?>
-      <a href="/despre/" class="sm:hidden font-semibold uppercase tracking-wide text-on-bar-accent hover:text-on-bar">Neoficial</a>
-      <span class="hidden sm:inline lg:hidden">Nu este un <b class="font-semibold text-on-bar">proiect oficial</b></span>
-      <span class="hidden lg:inline">Acesta <b class="font-semibold text-on-bar">nu este un proiect oficial</b> al Guvernului României.</span>
-      <a href="https://forms.gle/96WusM2qr4pbUXhW7"
-         class="hidden lg:inline underline decoration-on-bar/40 underline-offset-2 hover:text-on-bar hover:decoration-current"
-         target="_blank" rel="noopener">Acceptăm sugestii</a><span class="hidden lg:inline"> (gForm)</span>
+    <?php /* Below sm there is no room beside the nav; the footer and /despre/ carry the stamp there. */ ?>
+    <p class="min-w-0 flex-1 truncate text-center text-xs leading-none text-on-bar-muted">
+      <?php if ($_stamp): ?>
+      <a href="/despre/#versiunea-datelor" class="hover:text-on-bar"<?= $_build_tooltip ? ' title="' . e($_build_tooltip) . '"' : '' ?>>
+        <span class="hidden sm:inline">Bază generată: <time datetime="<?= e($_stamp['iso']) ?>"><?= e($_stamp['long']) ?></time></span>
+      </a>
+      <?php endif; ?>
     </p>
 
     <?php /* Statistici and Angajatori moved to /despre/ — they are things you
@@ -147,6 +129,24 @@ if (!isset($_build_stamp)) {
     </nav>
   </div>
 </header>
+
+<?php /* First-visit welcome (D10). In every cached page, shown only by the
+   pre-paint script in <head> (data-welcome on <html>), so a returning reader
+   never sees it flash. Shown on a first visit and again after 90 days away;
+   any page view counts as a visit. Browser storage, no cookie. */ ?>
+<section id="welcome" aria-labelledby="welcome-title" class="welcome border-b border-info-line bg-info text-info-ink">
+  <div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-sm leading-snug">
+    <p class="flex-1">
+      <b id="welcome-title" class="font-semibold">Bun venit!</b>
+      posturi.gov2.ro este un explorator independent, <b class="font-semibold">neoficial</b>, al anunțurilor de angajare
+      din sectorul public, preluate de pe posturi.gov.ro. Suntem în versiune beta: anunțurile sunt restructurate
+      automat și pot conține erori — verificați întotdeauna anunțul oficial înainte de a aplica.
+      <a href="/despre/" class="underline underline-offset-2 hover:no-underline">Despre site</a>
+    </p>
+    <button type="button" data-welcome-close
+            class="self-start sm:self-auto min-h-[2.5rem] shrink-0 border border-info-line bg-surface px-3 py-2 text-xs font-medium text-ink hover:border-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">Am înțeles</button>
+  </div>
+</section>
 <?php /* Storage problems (unavailable, corrupt, unknown version, nothing persisted)
    are announced here by saved.js; empty and hidden otherwise. */ ?>
 <div data-pref-status hidden role="status" class="border-b border-note-line bg-note px-4 py-2 text-center text-xs leading-snug text-note-ink"></div>

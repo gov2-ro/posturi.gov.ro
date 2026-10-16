@@ -6,12 +6,11 @@ require __DIR__ . '/../inc/header.php';
   <h1 class="font-display text-[2rem] italic font-semibold text-ink mb-6">Despre</h1>
 
   <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
-<mark>⚠️ WIP / MVP - versiune in lucru</mark>
-  <p>
-      <strong>posturi.gov2.ro</strong> este un explorator independent, fără nicio afiliere oficială cu posturi.gov.ro sau cu autoritățile publice.
+<p>
+      <strong>posturi.gov2.ro</strong> este un explorator independent al anunțurilor de angajare din sectorul
+      public, fără nicio afiliere oficială cu posturi.gov.ro sau cu autoritățile publice. Site-ul este în
+      <strong>versiune beta</strong>: funcționează, dar încă îl îmbunătățim și poate conține erori.
     </p>
-
- 
     <p>
       Datele sunt preluate periodic de pe portalul oficial <a href="https://posturi.gov.ro" class="text-gov hover:underline" target="_blank" rel="noopener">posturi.gov.ro</a>
       și procesate automat pentru a permite căutare avansată, filtrare și statistici.
@@ -25,6 +24,70 @@ require __DIR__ . '/../inc/header.php';
       <li>Calendarul iCal se poate <strong>abona</strong> (nu doar descărca): adaugă adresa <code>/posturi.ics?…</code> în Google Calendar (<em>Alte calendare → Prin URL</em>) sau într-un client care acceptă <code>webcal://</code>. Filtrează cu aceiași parametri ca lista (<code>?judet[]=cluj&amp;judet[]=timis</code>) și denumește calendarul cu <code>?title=</code> — util pentru mai multe feed-uri, câte unul pe județ</li>
     </ul>
 
+    <h2 id="cum-functioneaza">Cum funcționează</h2>
+    <p>
+      De două ori pe zi citim lista de anunțuri de pe posturi.gov.ro, descărcăm paginile noi sau modificate
+      și documentele atașate, apoi un model de inteligență artificială (un „robot”) le restructurează:
+      termene, cerințe de studii și experiență, documente de depus, etapele concursului. Textul original
+      al anunțului rămâne pe pagina fiecărui post.
+    </p>
+    <p>
+      Restructurarea automată poate greși: poate omite un detaliu, poate citi greșit un tabel sau un document
+      scanat, sau poate combina informații de la posturi diferite din același anunț. De aceea fiecare
+      pagină trimite la <strong>anunțul oficial</strong>, care este singura sursă care contează.
+      Dacă găsiți o greșeală, folosiți butonul <b>?!</b> din colțul paginii.
+    </p>
+
+    <h2 id="termene">Termene și starea înscrierilor</h2>
+    <p>
+      Pentru fiecare anunț căutăm data-limită de depunere a dosarelor. Când o găsim în anunț, postul apare
+      ca „înscrieri deschise” până la acea dată. Când anunțul nu o precizează clar, folosim data de expirare
+      a anunțului de pe posturi.gov.ro și o marcăm drept <em>estimată</em> — de obicei înscrierile se închid
+      mai devreme. Starea se calculează după data de azi (ora României), așa că poate fi depășită cu cel
+      mult o oră după miezul nopții.
+    </p>
+
+    <h2 id="salarii">Salarii</h2>
+    <p>
+      Foarte puține anunțuri menționează salariul. Când îl menționează, îl afișăm ca „salariu anunțat”.
+      Altfel afișăm un <strong>salariu estimat</strong> (brut), calculat din grila de salarizare din
+      proiectul legii salarizării, după funcție, studii, grad și mărimea localității. Este o estimare
+      orientativă, nu o ofertă: sporurile, vechimea și încadrarea exactă le stabilește angajatorul.
+    </p>
+
+    <h2 id="anunturi-inchise">Anunțuri închise sau dispărute</h2>
+    <p>
+      Păstrăm un anunț în listă cât timp este publicat pe posturi.gov.ro. După ce expiră sau este anulat,
+      dispare din căutare. Anunțurile salvate rămân în lista dvs. de <a href="/salvate/" class="text-gov hover:underline">Salvate</a>,
+      marcate ca indisponibile.
+    </p>
+
+    <h2 id="aplicare">Cum aplic?</h2>
+    <p>
+      Nu se poate aplica prin acest site. Dosarul se depune la instituția care organizează concursul,
+      exact cum cere anunțul oficial (la sediu, prin poștă sau electronic). Lista de documente și
+      verificarea „Pot aplica?” de pe pagina postului sunt doar ajutoare de pregătire: doar instituția
+      decide cine este admis.
+    </p>
+
+    <h2 id="confidentialitate">Confidențialitate</h2>
+    <p>
+      Site-ul nu are conturi și nu setează cookie-uri. Ce salvați — anunțurile salvate sau ascunse,
+      bifele din lista de pregătire, modul de afișare, stilul vizual și data ultimei vizite (pentru mesajul
+      de bun venit) — rămâne <strong>în browserul dvs.</strong> (localStorage): nu ajunge la noi, nu se
+      sincronizează între dispozitive și se pierde dacă ștergeți datele browserului. Răspunsurile din
+      verificarea „Pot aplica?” nu se salvează deloc.
+    </p>
+    <p>
+      Site-ul este servit prin Cloudflare, care vede adresa IP și cererile, ca orice rețea de livrare.
+      Folosim statisticile de trafic Cloudflare (agregate, fără cookie-uri) ca să știm câte pagini sunt
+      vizitate. Formularul de sugestii este un Google Form (se aplică politica Google), iar problemele
+      raportate pe GitHub sunt publice.
+    </p>
+    <p class="text-xs text-ink-muted">
+      Datele de contact din anunțuri (nume, telefoane, e-mailuri) sunt cele publicate de instituții pe
+      posturi.gov.ro, pentru candidați.
+    </p>
   </div>
 
   <?php /* Statistici and Angajatori used to be masthead links. They are pages
@@ -52,7 +115,7 @@ require __DIR__ . '/../inc/header.php';
   </section>
 
   <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
-    <h2>Versiunea acestor date</h2>
+    <h2 id="versiunea-datelor">Versiunea acestor date</h2>
     <p>
       Site-ul nu interoghează portalul oficial în timp real: servește o bază de date
       generată periodic din arhiva noastră. Pipeline-ul rulează de două ori pe zi, iar
@@ -115,12 +178,13 @@ require __DIR__ . '/../inc/header.php';
     </p>
 <?php endif; ?>
 
-    <hr />
-    <!-- <h2>Contact</h2> -->
+    <h2 id="contact">Contact</h2>
     <p>
-        &rarr; &nbsp; <a href="https://forms.gle/96WusM2qr4pbUXhW7" target=_blank><u>Acceptăm sugestii</u></a> (gForm) &emsp; &starf; &emsp; gh: <a href="https://github.com/gov2-ro/posturi.gov.ro"><u>gov2-ro/posturi.gov.ro</u></a> 
+      Sugestii și greșeli: <a href="https://forms.gle/96WusM2qr4pbUXhW7" target="_blank" rel="noopener">formular</a>,
+      <a href="mailto:<?= e(FEEDBACK_EMAIL) ?>"><?= e(FEEDBACK_EMAIL) ?></a>
+      sau <a href="https://github.com/gov2-ro/posturi.gov.ro/issues" target="_blank" rel="noopener">GitHub</a>.
+      Codul sursă este public: <a href="https://github.com/gov2-ro/posturi.gov.ro" target="_blank" rel="noopener">gov2-ro/posturi.gov.ro</a>.
     </p>
-    
   </div>
 </div>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

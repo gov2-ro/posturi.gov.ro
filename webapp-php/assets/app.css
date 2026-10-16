@@ -420,3 +420,23 @@
   html[data-layout="table"] .pg-pub,
   html[data-layout="table"] .pg-meta > [aria-hidden="true"] { display: none; }
 }
+
+/* BETA-CHROME (D9–D10): the welcome box, the posting disclaimer and the [?!]
+   feedback button. The welcome is in every (cached) page and shown only when the
+   pre-paint script in inc/header.php sets data-welcome on <html>. */
+@layer components {
+  .welcome { display: none; }
+  html[data-welcome] .welcome { display: block; }
+
+  .robots-disclaimer { @apply text-xs leading-snug text-ink-muted; }
+
+  .feedback { position: fixed; right: 1rem; bottom: 1rem; z-index: 30; }
+  .feedback > summary { list-style: none; }
+  .feedback > summary::-webkit-details-marker { display: none; }
+  .feedback-panel {
+    position: absolute; right: 0; bottom: 3.5rem;
+    width: min(22rem, calc(100vw - 2rem));
+    max-height: calc(100vh - 6rem); overflow-y: auto;
+  }
+  @media print { .feedback, .welcome { display: none !important; } }
+}

@@ -17,12 +17,12 @@ declare(strict_types=1);
  */
 
 /**
- * Release gate. The spec requires the comparison rules and the unresolved rule classes to
- * be reviewed before the panel goes public, and code deploys separately from that review,
- * so the panel ships OFF. Flip this constant to release it. `POSTURI_ELIGIBILITY_PANEL=1`
- * (or `=0`) overrides it per process, which is how the tests turn it on.
+ * Release gate. Shipped OFF until 2026-10-16, when pax decided to release it for the beta
+ * (D18: test experimental features with the small early audience) ahead of a formal review
+ * of the comparison rules. Set it back to false to withdraw the panel.
+ * `POSTURI_ELIGIBILITY_PANEL=1` (or `=0`) overrides it per process.
  */
-const ELIGIBILITY_PANEL_ENABLED = false;
+const ELIGIBILITY_PANEL_ENABLED = true;
 
 function eligibility_panel_enabled(): bool {
     $env = getenv('POSTURI_ELIGIBILITY_PANEL');

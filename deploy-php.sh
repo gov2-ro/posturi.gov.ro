@@ -61,6 +61,8 @@ ENV_FILE="$SCRIPT_DIR/.env"
 DEPLOY_HOST="${positional[0]:-${DEPLOY_HOST:-$(env_value DEPLOY_HOST)}}"
 DEPLOY_PATH="${positional[1]:-${DEPLOY_PATH:-$(env_value DEPLOY_PATH)}}"
 SITE_URL="${SITE_URL:-$(env_value SITE_URL)}"
+CF_ZONE_ID="${CF_ZONE_ID:-$(env_value CF_ZONE_ID)}"
+CF_API_TOKEN="${CF_API_TOKEN:-$(env_value CF_API_TOKEN)}"
 : "${DEPLOY_PATH:=public_html}"
 
 if [[ -z "$DEPLOY_HOST" ]]; then
@@ -95,8 +97,41 @@ fi
 # /versiuni.json always names the exact checkout the host is running. Data-only
 # pushes never touch it; code-only pushes never touch the data marker.
 
+# The commit the PHP tree came from, `-dirty` when webapp-php/ holds uncommitted
+# changes (DEPLOY-DIRTY): a code push from a dirty tree must not claim a clean
+# commit on /versiuni.json. Gitignored files (the database, this stamp) don't count.
 code_sha() {
-    git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo ""
+    local sha
+    sha=$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null) || { echo ""; return; }
+    if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain -- webapp-php 2>/dev/null)" ]]; then
+        sha="${sha}-dirty"
+    fi
+    echo "$sha"
+}
+
+# BETA-CACHE: Cloudflare keeps pages up to an hour (s-maxage in index.php), so
+# every push purges this site's hostname. Optional — without CF_ZONE_ID and
+# CF_API_TOKEN (a token with Zone → Cache Purge on the zone) the edge simply
+# expires on its own. A failed purge warns and does not fail the deploy: the
+# worst case is an hour of the previous version.
+purge_edge() {
+    [[ -n "$SITE_URL" ]] || return 0
+    if [[ -z "$CF_ZONE_ID" || -z "$CF_API_TOKEN" ]]; then
+        echo "    (CF_ZONE_ID / CF_API_TOKEN not set: Cloudflare cache not purged)"
+        return 0
+    fi
+    local host resp
+    host=$(printf '%s' "$SITE_URL" | sed -E 's#^[a-z]+://##; s#[/:].*$##')
+    resp=$(curl -sS --max-time 30 -X POST \
+        "https://api.cloudflare.com/client/v4/zones/${CF_ZONE_ID}/purge_cache" \
+        -H "Authorization: Bearer ${CF_API_TOKEN}" \
+        -H 'Content-Type: application/json' \
+        --data "{\"hosts\":[\"${host}\"]}" 2>&1 || true)
+    if printf '%s' "$resp" | grep -Eq '"success":[[:space:]]*true'; then
+        echo "    Cloudflare cache purged for ${host}"
+    else
+        echo "    ⚠ Cloudflare purge failed (pages may be up to 1 h old): ${resp:0:300}"
+    fi
 }
 
 local_data_built_at() {
@@ -241,6 +276,11 @@ fi
 # ---------------------------------------------------------------------------
 # Verify — the served markers, not just an HTTP 200
 # ---------------------------------------------------------------------------
+
+if [[ $dry_run -eq 0 ]]; then
+    echo "==> Purging the edge cache"
+    purge_edge
+fi
 
 if [[ $dry_run -eq 0 && -n "$SITE_URL" ]]; then
     echo "==> Checking ${SITE_URL}"

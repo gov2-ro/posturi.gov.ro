@@ -579,6 +579,61 @@ function code_version(): string {
     return $version;
 }
 
+/**
+ * The database generation time as the masthead says it (BETA-CHROME, D9):
+ * "azi, 16 oct, 14:00" / "ieri, …" / "alaltăieri, …", else the date alone.
+ * Returns ['long' => …, 'iso' => …], or null without build_meta.
+ *
+ * The day word is computed per request, so a cached page can say "azi" for up
+ * to the edge TTL past midnight (s-maxage=3600 in index.php) — the same bound
+ * the open/closed status already lives with.
+ */
+function build_stamp_relative(): ?array {
+    $meta = build_meta();
+    if (empty($meta['built_at'])) return null;
+    try {
+        $tz = new DateTimeZone('Europe/Bucharest');
+        $at = (new DateTimeImmutable($meta['built_at']))->setTimezone($tz);
+        $today = new DateTimeImmutable(ro_today(), $tz);
+    } catch (Exception $e) {
+        return null;
+    }
+    $months = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    $date = (int)$at->format('j') . ' ' . $months[(int)$at->format('n') - 1];
+    if ($at->format('Y') !== $today->format('Y')) $date .= ' ' . $at->format('Y');
+    $time = $at->format('H:i');
+    $days = (int)$today->diff(new DateTimeImmutable($at->format('Y-m-d'), $tz))->format('%r%a');
+    $word = [0 => 'azi', -1 => 'ieri', -2 => 'alaltăieri'][$days] ?? null;
+    return [
+        'long'  => ($word ? "$word, " : '') . "$date, $time",
+        'iso'   => $at->format('Y-m-d\TH:i'),
+    ];
+}
+
+/**
+ * The robots disclaimer at the start and end of every posting (D9). $url is the
+ * official announcement; without one the sentence points at the portal.
+ */
+function robots_disclaimer(string $url, string $class = ''): string {
+    $href = evidence_safe_url($url) ?? 'https://posturi.gov.ro/';
+    return '<p class="robots-disclaimer ' . e($class) . '">Datele sunt preluate de pe posturi.gov.ro și restructurate cu '
+         . '<span aria-hidden="true">🤖</span> roboți. Verificați întotdeauna '
+         . '<a href="' . e($href) . '" target="_blank" rel="noopener" class="text-gov underline underline-offset-2 hover:no-underline">anunțul oficial</a>.</p>';
+}
+
+/** Feedback address shown in the [?!] panel; empty hides the e-mail link (D9). */
+const FEEDBACK_EMAIL = 'midas@gov2.ro';
+
+/** The [?!] panel's FAQ: [anchor on /despre/, question]. Each anchor must exist there. */
+const FEEDBACK_FAQ = [
+    ['cum-functioneaza',  'De ce diferă unele informații de anunțul oficial?'],
+    ['termene',           'Termenul sau starea înscrierilor pare greșită'],
+    ['salarii',           'Salariul afișat este cel real?'],
+    ['anunturi-inchise',  'Un anunț a dispărut din listă'],
+    ['aplicare',          'Cum aplic la un post?'],
+    ['confidentialitate', 'Unde se păstrează anunțurile salvate?'],
+];
+
 /** How stale a source-verification observation is before the UI says so. */
 const SOURCE_CHECK_STALE_HOURS = 48;
 
@@ -1570,6 +1625,21 @@ function site_origin(): string {
     if (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https') $scheme = 'https';
     $host = $_SERVER['HTTP_HOST'] ?? 'posturi.gov2.ro';
     return $scheme . '://' . $host;
+}
+
+// ---- Request timing (BETA-CACHE) ----
+
+/**
+ * Close the current timed section under $name. index.php sends the sections
+ * as a Server-Timing header, so the browser's network panel (or curl -D -)
+ * shows where an uncached page spends its time on the real host.
+ */
+function timing_mark(string $name): void {
+    global $__timings, $__timing_last;
+    if (!isset($__timing_last)) return;
+    $now = microtime(true);
+    $__timings[] = [$name, ($now - $__timing_last) * 1000];
+    $__timing_last = $now;
 }
 
 // ---- HTML helpers ----

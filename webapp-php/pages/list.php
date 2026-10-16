@@ -44,7 +44,9 @@ $page         = max(1, (int)($_GET['page'] ?? 1));
 if (!isset(STATUS_LABELS[$status])) $status = DEFAULT_STATUS;
 
 // ---- Check if HTMX partial request ----
-$is_htmx = !empty($_SERVER['HTTP_HX_REQUEST']);
+// The cache-buster parameter, not the header, decides (see index.php): the
+// fragment and the full page must never share a URL.
+$is_htmx = !empty($hx_fragment);
 
 // ---- Build base filter ----
 $f = build_filters($_GET);
@@ -98,6 +100,7 @@ $stmt = db()->prepare($list_sql);
 $stmt->execute($b);
 $postings = $stmt->fetchAll();
 
+timing_mark('main');
 // ---- Active filters ----
 $active_chips  = active_filter_chips();
 $is_unfiltered = $page === 1 && !$active_chips;
@@ -140,6 +143,7 @@ if ($is_unfiltered) {
     }
 }
 
+timing_mark('shortcuts');
 // ---- Facet counts ----
 
 /**
@@ -230,6 +234,7 @@ $judet_options = [];
     $st->execute($s['binds']);
     $judet_options = $st->fetchAll();
 }
+timing_mark('f-judet');
 $level_options    = get_facet('job_level',            'levels');
 $type_options     = get_facet('job_type',             'types');
 $cat_options      = get_facet('categorie',            'categories');
@@ -256,6 +261,7 @@ $work_type_options = get_facet('inf_work_type',        'work_types');
 // Minimum study level is a role fact (DATA-04): counted over posting_roles.
 $studies_options   = role_value_facet('study_level', 'studies_levels');
 
+timing_mark('f-basic');
 // Romanian labels for the enum-valued facets (values and URLs are untouched; an
 // unfamiliar value keeps its raw spelling so it stays visible, not guessed at).
 foreach ($family_options    as &$o) { $o['label'] = family_label((string)$o['val']); } unset($o);
@@ -361,6 +367,7 @@ function role_array_facet(string $role_col, string $excl_key, callable $label, i
 // group rendered with no counts at all — every flag looked clickable, including
 // the ones that would empty the list. Counted like the rest, the values that
 // would zero out simply stop being offered.
+timing_mark('f-status');
 $anomaly_options = v3_facet('inf_anomaly_flags', 'anomaly',
                             fn ($v) => ANOMALY_LABELS[$v] ?? $v);
 
@@ -377,6 +384,7 @@ $stage_options  = v3_facet('v3_exam_stages',    'stage',      'exam_stage_label'
 // Minimum study level a posting requires, as EQF. Counts are per exact level
 // and so is the filter — see the `eqf` block in build_filters(). Counted over
 // roles: a posting whose roles need EQF 6 and EQF 4 shows under both, once each.
+timing_mark('f-json');
 $eqf_options = [];
 foreach (role_value_facet('eqf_level', 'eqf', 'r.eqf_level') as $r) {
     $eqf_options[] = ['val' => (string)$r['val'],
@@ -384,6 +392,7 @@ foreach (role_value_facet('eqf_level', 'eqf', 'r.eqf_level') as $r) {
                       'cnt' => (int)$r['cnt']];
 }
 
+timing_mark('f-eqf');
 // Structured-description counts (LLM schema present vs raw body)
 $schema_options = [];
 {
@@ -400,6 +409,7 @@ $schema_options = [];
     $remote_count = scope_count($s, ["j.inf_remote_eligible = 1"]);
 }
 
+timing_mark('f-schema');
 // Experience buckets. A role fact (DATA-04): each bucket counts the announcements
 // that have a role in it which also satisfies the other role groups, built from
 // the same exp_bucket_condition() the filter uses.
@@ -413,6 +423,7 @@ $exp_options = [];
     }
 }
 
+timing_mark('f-exp');
 // Salary buckets, over the estimate from the draft salary grid.
 //
 // The >= 100 gate that used to guard this never opened: it counted
@@ -446,6 +457,7 @@ $salary_options = [];
 // any other single-value facet. Occupation is the one that changes browsing
 // most — before the title dictionary, `Îngrijitor`, `ÎNGRIJITOR` and
 // `îngrijitor` were three separate values of the free-text title.
+timing_mark('f-salary');
 $occupation_options = get_facet('occ_canonical',      'occupation', 40);
 // Contract terms: extracted by v3 all along, exported and browsable from
 // 2026-09-13. `duration` is finer than the scraped `job_type` (Permanent /
@@ -465,6 +477,7 @@ unset($o);
 foreach ($sector_options as &$o) { $o['label'] = EMPLOYER_SECTOR_LABELS[$o['val']] ?? $o['val']; }
 unset($o);
 
+timing_mark('f-occ');
 // ---- Empty state: which single filter is over-narrowing? ----
 // Only computed on the zero-results branch, so the extra COUNT per chip is free
 // in the common case.
@@ -499,6 +512,7 @@ if ($total_count === 0 && $active_chips) {
     $relaxations = array_slice($relaxations, 0, 3);
 }
 
+timing_mark('relax');
 // ---- Render ----
 if (!$is_htmx) {
     $page_title       = $q !== '' ? "Căutare: $q" : 'Posturi în sectorul public';
@@ -1216,3 +1230,4 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 <?php
     require __DIR__ . '/../inc/footer.php';
 endif;
+timing_mark('render');

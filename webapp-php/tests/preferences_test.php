@@ -197,7 +197,7 @@ run_suite('markup: identity attributes and real buttons on list, employer and de
     assert_contains('Salvarea și ascunderea anunțurilor se păstrează în browser și necesită JavaScript', $list, 'no-JS explanation');
 
     // HTMX partial: rows carry the same hooks (re-applied after swaps).
-    [, , $part] = http($base, '/?page=2', 'GET', null, ['HX-Request: true']);
+    [, , $part] = http($base, '/?page=2&org.htmx.cache-buster=results', 'GET', null, ['HX-Request: true']);
     assert_contains('data-pref-url="https://posturi.gov.ro/anunt/fixture-2', $part, 'HTMX partial rows carry identity');
     assert_contains('data-pref="hide"', $part, 'HTMX partial rows carry buttons');
 

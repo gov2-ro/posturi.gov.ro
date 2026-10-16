@@ -187,7 +187,9 @@ test('filter bar: search, filters, view and sort are one row of equal controls',
     }
     // Every control starts on a bar line (no stray offsets): its top is the top of some line.
     const tops = [...new Set(boxes.map(([, bb]) => Math.round(bb.y)))];
-    expect(tops.length, `${mode}: rows ${tops}`).toBeLessThanOrEqual(3);
+    // BETA-FILTERS put every group in the bar (21, plus Localitate here): 3 lines at 1280px
+    // with the Mac's fonts, 4 with the CI runner's wider Linux fallback. More means a stray offset.
+    expect(tops.length, `${mode}: rows ${tops}`).toBeLessThanOrEqual(4);
     // View and sort follow the last filter with the bar's own gap: no hole before them.
     const sw = await page.locator('#layout-switch').boundingBox();
     const prev = await page.locator('#layout-switch').evaluate((el) => {

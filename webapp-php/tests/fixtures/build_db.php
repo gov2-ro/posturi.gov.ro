@@ -138,6 +138,10 @@ CREATE TABLE job_postings (
     v5_end_date             TEXT,
     v5_channels             TEXT NOT NULL DEFAULT '[]',
     v5_work_localities      TEXT NOT NULL DEFAULT '[]',
+    work_mode               TEXT NOT NULL DEFAULT '',
+    funding_kind            TEXT NOT NULL DEFAULT '',
+    job_regime              TEXT NOT NULL DEFAULT '',
+    employer_kind           TEXT NOT NULL DEFAULT '',
     apply_deadline          TEXT,
     deadline_source         TEXT NOT NULL DEFAULT '',
     application_status      TEXT NOT NULL DEFAULT ''
@@ -508,6 +512,14 @@ SQL);
         UPDATE job_postings SET inf_profession_family='tehnic' WHERE id IN (1007, 1008);
         UPDATE job_postings SET v3_isced_fields='[\"04_afaceri_administratie_drept\"]',
             v3_study_level='liceala', inf_studies_required='liceala' WHERE id=1008;
+    
+        -- 261016 text labels (classify.py): regime, institution type, funding, work mode.
+        UPDATE job_postings SET job_regime='contractuala', employer_kind='spital' WHERE employer_id=1;
+        UPDATE job_postings SET job_regime='publica', employer_kind='primarie' WHERE employer_id=2;
+        UPDATE job_postings SET employer_kind='servicii-publice' WHERE employer_id=3;
+        UPDATE job_postings SET funding_kind=v4_funding_source;
+        UPDATE job_postings SET work_mode='telemunca' WHERE inf_remote_eligible=1;
+        UPDATE job_postings SET employer_category='Instituții locale' WHERE id IN (1004, 1005);
     ");
 
     $db->exec("INSERT INTO calendar_events VALUES

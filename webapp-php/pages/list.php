@@ -34,6 +34,8 @@ $eqf_sel       = (array)($_GET['eqf'] ?? []);
 $occ_sel       = (array)($_GET['occupation'] ?? []);
 $funding_sel   = (array)($_GET['funding']    ?? []);
 $sector_sel    = (array)($_GET['sector']     ?? []);
+$regime_sel    = (array)($_GET['regime']     ?? []);
+$inst_sel      = (array)($_GET['inst']       ?? []);
 $has_salary    = $_GET['has_salary'] ?? '';
 $duration_sel  = (array)($_GET['duration'] ?? []);
 $schedule_sel  = (array)($_GET['schedule'] ?? []);
@@ -506,7 +508,18 @@ $parttime_count     = scope_count(facet_scope('parttime'), ["j.v5_fte IS NOT NUL
 $temp_vacant_count  = scope_count(facet_scope('temp_vacant'), ["j.v5_post_status = 'temporar_vacant'"]);
 $remote_apply_count = scope_count(facet_scope('remote_apply'),
     ["(j.v5_channels LIKE '%\"email\"%' OR j.v5_channels LIKE '%\"posta\"%' OR j.v5_channels LIKE '%\"online\"%')"]);
-$funding_options    = get_facet('v4_funding_source',  'funding');
+$funding_options    = get_facet('funding_kind',       'funding');
+// 261016: regime and institution type, read off the posting's words (classify.py).
+$regime_options     = get_facet('job_regime',         'regime');
+foreach ($regime_options as &$o) { $o['label'] = JOB_REGIME_LABELS[$o['val']] ?? $o['val']; }
+unset($o);
+$inst_options       = get_facet('employer_kind',      'inst');
+foreach ($inst_options as &$o) { $o['label'] = EMPLOYER_KIND_LABELS[$o['val']] ?? $o['val']; }
+unset($o);
+// The source's "Tip angajator" mixes the employer level with the regime; the
+// regime values now have their own group.
+$emp_cat_options = array_values(array_filter($emp_cat_options,
+    fn($o) => !preg_match('/^Func/u', (string)$o['val']) || in_array($o['val'], $emp_cats, true)));
 $sector_options     = get_facet('v4_employer_sector', 'sector');
 // 261016: "nespecificat" narrows nothing a reader would ask for; not offered
 // (a bookmarked ?funding[]=nespecificat still filters and keeps its chip).

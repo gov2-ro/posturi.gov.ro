@@ -913,6 +913,40 @@ const FUNDING_SOURCE_LABELS = [
     'venituri_proprii' => 'Venituri proprii',
     'mixt'             => 'Finanțare mixtă',
     'nespecificat'     => 'Nespecificat',
+    'pnrr'             => 'PNRR',
+];
+
+/**
+ * 261016: the job's legal regime, read from the title's grade and the body's
+ * hiring wording (classify.py::regime). The source `categorie` is the
+ * institution's free pick and put muncitori and îngrijitori under "Funcție publică".
+ */
+const JOB_REGIME_LABELS = [
+    'contractuala' => 'Contractuală (Codul muncii)',
+    'publica'      => 'Funcție publică (funcționar public)',
+    'militara'     => 'Militară (cadre militare)',
+];
+
+/** Institution type from the employer's name (classify.py::EMPLOYER_KINDS — keep in step). */
+const EMPLOYER_KIND_LABELS = [
+    'primarie'          => 'Primării și consilii locale',
+    'spital'            => 'Spitale și unități sanitare',
+    'scoala'            => 'Școli, licee, grădinițe',
+    'asistenta-sociala' => 'Asistență socială (DGASPC, DAS, cămine)',
+    'militar'           => 'Unități militare, poliție, penitenciare',
+    'universitate'      => 'Universități',
+    'servicii-publice'  => 'Servicii publice locale (gospodărie, apă, transport)',
+    'cultura'           => 'Cultură (muzee, teatre, biblioteci)',
+    'cercetare'         => 'Institute de cercetare',
+    'sport'             => 'Cluburi și baze sportive',
+    'agentie'           => 'Agenții, autorități, inspectorate',
+    'directie'          => 'Alte direcții publice',
+    'companie'          => 'Companii și societăți de stat',
+    'minister'          => 'Ministere și Guvern',
+    'dsp'               => 'Direcții de sănătate publică, DSV, CAS',
+    'consiliu-judetean' => 'Consilii județene',
+    'prefectura'        => 'Prefecturi',
+    'justitie'          => 'Instanțe și parchete',
 ];
 
 const EMPLOYER_SECTOR_LABELS = [
@@ -1452,6 +1486,8 @@ const FILTER_CHIP_GROUPS = [
     'expires_after'  => 'Termen de la',
     'expires_before' => 'Termen până la',
     'occupation'     => 'Ocupație',
+    'regime'         => 'Tip funcție',
+    'inst'           => 'Instituție',
     'funding'        => 'Finanțare',
     'sector'         => 'Sector',
     'has_salary'     => '',
@@ -1473,6 +1509,7 @@ const MULTI_PARAMS = [
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
+    'regime', 'inst',
 ];
 
 /** Form field name for a filter param. */
@@ -1548,6 +1585,8 @@ function filter_value_label(string $key, string $value): string {
         'temp_vacant'                      => 'Post temporar vacant',
         'remote_apply'                     => 'Depunere fără deplasare',
         'sector'                           => EMPLOYER_SECTOR_LABELS[$value] ?? $value,
+        'regime'                           => JOB_REGIME_LABELS[$value] ?? $value,
+        'inst'                             => EMPLOYER_KIND_LABELS[$value] ?? $value,
         'has_salary'                       => 'Cu salariu estimat',
         'expires_after', 'expires_before', 'published' => fmt_date($value),
         'family'                           => family_label($value),
@@ -2082,8 +2121,10 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // Plain-column facets added with the occupation dictionary and prompt v4.
     foreach ([
         'occupation' => 'occ_canonical',
-        'funding'    => 'v4_funding_source',
+        'funding'    => 'funding_kind',        // 261016: text signals + v4 (export-to-sqlite.py)
         'sector'     => 'v4_employer_sector',
+        'regime'     => 'job_regime',
+        'inst'       => 'employer_kind',
         'duration'   => 'v3_contract_duration',
         'schedule'   => 'v3_schedule',
     ] as $param => $column) {

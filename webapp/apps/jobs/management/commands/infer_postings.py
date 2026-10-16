@@ -29,6 +29,7 @@ from tqdm import tqdm
 REPO_ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(REPO_ROOT))
 
+import classify  # noqa: E402  (deterministic labels, shared with export-to-sqlite.py)
 import llm_ledger  # noqa: E402  (shared FIX-10 call ledger, at the repo root)
 
 from apps.jobs.models import JobPosting  # noqa: E402
@@ -327,11 +328,6 @@ _WORK_TYPE_SCHIMBURI = re.compile(
     re.IGNORECASE,
 )
 
-_REMOTE_RE = re.compile(
-    r"telemunca|munca\s+la\s+distanta|remote|hibrid|lucru\s+de\s+acasa",
-    re.IGNORECASE,
-)
-
 _COMPUTER_TRUE_RE = re.compile(
     r"operare\s+(?:pc|calculator)|ms\s+office|microsoft\s+office|\bexcel\b|\bcunostinte\s+it\b|"
     r"\bseap\b|\bsap\b|utilizare\s+calculator|cunostinte\s+informatica|"
@@ -392,11 +388,13 @@ def _infer_work_type(body: str, work_hours_text: str | None) -> tuple[str | None
 
 
 def _infer_remote(body: str) -> bool | None:
-    """Returns True if remote/hybrid mentioned, None otherwise (not False)."""
-    norm = _normalize(body)
-    if _REMOTE_RE.search(norm):
-        return True
-    return None
+    """True if the text says the job is done (partly) remotely, None otherwise (not False).
+
+    261016: the old bare regex (telemunca|remote|hibrid|…) matched "Remote Sensing", "hibridizare" and the
+    telework law in reading lists; classify.work_mode() needs a phrase about how
+    *this* job is done. The export recomputes it from the text on every run.
+    """
+    return True if classify.work_mode(body) else None
 
 
 def _infer_computer(body: str, existing_skills: list[str]) -> tuple[bool | None, str | None]:

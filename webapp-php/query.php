@@ -30,7 +30,7 @@ require_once __DIR__ . '/helpers.php';
 const QUERY_FACETS = [
     // MULTI_PARAMS, plus the facets that arrived with prompt v3/v4.
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
-    'occupation', 'funding', 'sector', 'duration', 'schedule',
+    'occupation', 'funding', 'sector', 'duration', 'schedule', 'regime', 'inst',
 ];
 
 /** Whether a param accepts multiple values (array syntax in the URL). */

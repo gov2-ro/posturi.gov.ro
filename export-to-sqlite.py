@@ -51,6 +51,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import classify  # noqa: E402  (deterministic labels from the posting's words, 261016)
 import evidence  # noqa: E402  (pure quote locator: where an extracted requirement comes from)
 import posting_roles  # noqa: E402  (pure role read model, shared with later history work)
 
@@ -240,6 +241,18 @@ CREATE TABLE job_postings (
     v5_end_date             TEXT,
     v5_channels             TEXT NOT NULL DEFAULT '[]',
     v5_work_localities      TEXT NOT NULL DEFAULT '[]',
+    -- 261016 filter notes: read off the posting's own words by classify.py
+    -- (deterministic, no LLM). work_mode replaces the old "remote" regex, which
+    -- matched "Remote Sensing" and the telework law in reading lists;
+    -- funding_kind is the text's project-funding wording (SMIS, PNRR, "finanțat
+    -- din fonduri europene"), else the v4 answer minus "nespecificat";
+    -- job_regime is publică / contractuală / militară from the grade in the
+    -- title and the hiring phrases in the body (the source label is the
+    -- institution's free pick); employer_kind is the institution type by name.
+    work_mode               TEXT NOT NULL DEFAULT '',
+    funding_kind            TEXT NOT NULL DEFAULT '',
+    job_regime              TEXT NOT NULL DEFAULT '',
+    employer_kind           TEXT NOT NULL DEFAULT '',
     -- The date after which nobody can apply any more, and therefore the one the
     -- site treats as "active". NOT `expires_at`: that is when the competition
     -- ends, which on a 20-posting sample ran a median of 15 days — up to 52 —
@@ -557,6 +570,10 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         est = _salary_columns(r["salary_estimate"])
         deadline = _apply_deadline(v4["application_deadline"],
                                    r["data_limita_depunere"], r["expires_at"])
+        text = (r["body_markdown"] or "") + "\n" + (r.get("attachment_text") or "")
+        work_mode = classify.work_mode(text)
+        funding_kind = classify.eu_funding(text) or (
+            v4["funding_source"] if v4["funding_source"] != "nespecificat" else "")
 
         anomaly_flags = inferred.get("anomaly_flags") or []
         requires_computer = inferred.get("requires_computer")
@@ -628,7 +645,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             inferred.get("seniority"),
             json.dumps(anomaly_flags, ensure_ascii=False),
             inferred.get("work_type"),
-            1 if inferred.get("remote_eligible") else 0,
+            1 if work_mode else 0,   # was inferred.remote_eligible: see work_mode
             req_comp,
             inferred.get("experience_years"),
             inferred.get("studies_required"),
@@ -640,6 +657,9 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             v4["employer_sector"], v4["parent_institution"], v4["application_deadline"],
             v5["recruitment_kind"], v5["internal_only"], v5["vacancies_total"], v5["fte"],
             v5["post_status"], v5["end_date"], v5["channels"], v5["work_localities"],
+            work_mode, funding_kind,
+            classify.regime(r["title"], r["body_markdown"]),
+            classify.employer_kind(r["employer_name"]),
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
         ))
@@ -1239,6 +1259,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         v4_employer_sector, v4_parent_institution, v4_application_deadline,
         v5_recruitment_kind, v5_internal_only, v5_vacancies_total, v5_fte,
         v5_post_status, v5_end_date, v5_channels, v5_work_localities,
+        work_mode, funding_kind, job_regime, employer_kind,
         apply_deadline, deadline_source, application_status"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart

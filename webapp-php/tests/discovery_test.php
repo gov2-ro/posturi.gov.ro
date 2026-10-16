@@ -119,7 +119,7 @@ run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the 
     // BETA-FILTERS (D4, 261016): one flat list, nothing nested, nothing behind "Mai multe filtre".
     $anc = facet_ancestors($home);
     foreach ($anc as $k => $parents) assert_same([], $parents, "$k is a top-level group");
-    foreach (['judet', 'family', 'occupation', 'studies_level', 'isced', 'exp_level', 'level', 'categorie',
+    foreach (['judet', 'family', 'occupation', 'studies_level', 'isced', 'exp_level', 'level', 'regime', 'inst',
               'employer_cat', 'duration', 'schedule', 'lang', 'skill', 'credential',
               'funding', 'sector', 'domain', 'termen'] as $k) {
         assert_true(array_key_exists($k, $anc), "group $k is offered");
@@ -131,7 +131,7 @@ run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the 
             "$k switch sits in Program de lucru");
     }
     assert_contains('Program de lucru', $home, 'merged group heading');
-    foreach (['eqf', 'type', 'seniority', 'work_type', 'anomaly', 'schema', 'stage', 'more', 'studii', 'legacy', 'diagnostics'] as $k) {
+    foreach (['eqf', 'type', 'seniority', 'work_type', 'anomaly', 'schema', 'stage', 'more', 'studii', 'legacy', 'diagnostics', 'categorie'] as $k) {
         assert_false(array_key_exists($k, $anc), "no $k group (merged or dropped)");
     }
     assert_false(array_key_exists('loc', $anc), 'Localitate waits for a county');
@@ -162,7 +162,7 @@ run_suite('no input appears under two headings', function () use ($base) {
     }
     foreach (['judet[]', 'family[]', 'occupation[]', 'isced[]', 'studies_level[]', 'exp_level[]', 'skill[]',
               'lang[]', 'credential[]', 'duration[]', 'schedule[]', 'shift', 'remote', 'sector[]',
-              'funding[]', 'domain[]', 'level[]', 'categorie[]', 'employer_cat[]'] as $name) {
+              'funding[]', 'domain[]', 'level[]', 'regime[]', 'inst[]', 'employer_cat[]'] as $name) {
         assert_true(str_contains($home, 'name="' . $name . '"'), "control for $name");
     }
 });

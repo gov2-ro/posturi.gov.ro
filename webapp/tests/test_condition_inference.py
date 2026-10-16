@@ -83,6 +83,12 @@ class TestInferRemote:
     def test_empty(self):
         assert _infer_remote("") is None
 
+    def test_reading_list_and_science_words_are_not_remote_work(self):
+        # 261016: the old regex made these postings "remote".
+        assert _infer_remote("Legea nr. 81/2018 privind reglementarea activității de telemuncă") is None
+        assert _infer_remote("Remote Sensing of Environment, 239, 111626.") is None
+        assert _infer_remote("Tehnica hibridizarii produsilor PCR") is None
+
 
 # ---------------------------------------------------------------------------
 # _infer_computer

@@ -130,7 +130,7 @@
         // merged (see list.php). Parameters that lost their control still filter:
         // they ride along as hidden fields, so the next change keeps them, and
         // their chip removes them.
-        foreach (['type' => $types, 'seniority' => $seniorities, 'work_type' => $work_types,
+        foreach (['type' => $types, 'seniority' => $seniorities, 'work_type' => $work_types, 'categorie' => $categories,
                   'anomaly' => $anomaly_flags, 'stage' => $stage_sel, 'eqf' => $eqf_sel] as $param => $vals) {
             foreach ((array)$vals as $v) {
                 if ((string)$v === '') continue; ?>
@@ -150,9 +150,11 @@
         // runs, then the long tail — skills and documents last, they are mostly fluff.
         facet_group('Județ',               $judet_options,      'judet',      $judet_slugs, true);
         facet_group('Localitate',          $loc_options,        'loc',        $loc_sel);
+        facet_group('Instituție',          $inst_options,       'inst',       $inst_sel, false,
+                    'Tipul instituției, după numele angajatorului.');
         facet_group('Sector angajator',    $sector_options,     'sector',     $sector_sel);
-        facet_group('Tip angajator',       $emp_cat_options,    'employer_cat', $emp_cats, false,
-                    'Eticheta din sursă (posturi.gov.ro).');
+        facet_group('Nivel angajator',     $emp_cat_options,    'employer_cat', $emp_cats, false,
+                    'Eticheta din sursă (posturi.gov.ro): local, județean, național.');
         facet_group('Domeniu profesional', $family_options,     'family',     $families,    true, $auto_help);
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
         // Estimated from the 2026 draft grid unless the posting states a salary.
@@ -164,7 +166,11 @@
         facet_group('Experiență minimă',   $exp_options,        'exp_level',  $exp_levels, false,
                     $auto_help . ' Unele intervale includ anunțuri fără experiență precizată.');
         facet_group('Funcție',             $level_options,      'level',      $levels);
-        facet_group('Categorie',           $cat_options,        'categorie',  $categories);
+        // 261016: the source's "Categorie" (contractuală / publică / militară) is the
+        // institution's free pick — muncitori filed as "Funcție publică". Replaced by
+        // the regime read off the title's grade and the hiring wording.
+        facet_group('Tip funcție',         $regime_options,     'regime',     $regime_sel, false,
+                    'Funcție publică: funcționar public (clasă și grad în titlu). Contractuală: contract de muncă. Dedus din textul anunțului.');
         facet_group('Contract',            $duration_options,   'duration',   $duration_sel);
         // 261016: Program, Ture, Telemuncă and Normă parțială were four groups
         // about one question. One group now; each switch keeps its own parameter.

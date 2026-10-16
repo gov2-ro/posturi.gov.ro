@@ -101,6 +101,13 @@ function shim_legacy_export(PDO $pdo): void {
         'v5_end_date'            => 'NULL',
         'v5_channels'            => "'[]'",
         'v5_work_localities'     => "'[]'",
+        // 261016 (classify.py): no text labels before that export. Funding falls
+        // back to the v4 answer, minus "nespecificat", as the export does.
+        'work_mode'              => "''",
+        'funding_kind'           => isset($cols['v4_funding_source'])
+            ? "CASE WHEN v4_funding_source = 'nespecificat' THEN '' ELSE v4_funding_source END" : "''",
+        'job_regime'             => "''",
+        'employer_kind'          => "''",
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

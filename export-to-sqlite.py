@@ -422,6 +422,34 @@ CREATE TABLE posting_text (
     v3_bibliography   TEXT NOT NULL DEFAULT '[]'
 );
 
+-- UX-03 (D14): postings that left the live slice — expired, or cancelled — in the
+-- last 90 days, so a saved or shared link still answers with what the posting was,
+-- that it closed, and similar open jobs. A slim record, not the posting: title,
+-- employer, place, dates, pay, the first paragraph of the body as `summary`.
+-- Never listed, counted or put in a feed or sitemap; the detail page reads it only
+-- when the id is not in job_postings. Empty on a full (not --active-only) export,
+-- where every posting is in job_postings already.
+CREATE TABLE archived_postings (
+    id                    INTEGER PRIMARY KEY,
+    url                   TEXT NOT NULL,
+    title                 TEXT NOT NULL DEFAULT '',
+    employer_id           INTEGER,
+    employer_name         TEXT NOT NULL DEFAULT '',
+    judet_name            TEXT NOT NULL DEFAULT '',
+    judet_slug            TEXT NOT NULL DEFAULT '',
+    locality              TEXT NOT NULL DEFAULT '',
+    published_at          TEXT,
+    expires_at            TEXT,
+    apply_deadline        TEXT,
+    cancelled             INTEGER NOT NULL DEFAULT 0,
+    nr_posturi            INTEGER,
+    occ_canonical         TEXT NOT NULL DEFAULT '',
+    inf_profession_family TEXT NOT NULL DEFAULT '',
+    sal_min               REAL,
+    sal_max               REAL,
+    summary               TEXT NOT NULL DEFAULT ''
+);
+
 -- Contentless (content=''): PHP only matches and ranks (bm25), it never reads a
 -- column back, so storing a second copy of every body (~60 MB of a 190 MB file)
 -- bought nothing.
@@ -683,6 +711,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
     export_llm_costs(cur, con)
     export_publication_monthly(cur, con)
+    if active_only:
+        export_archive(cur, con)
 
     # Source-freshness aggregates for build_meta, over the SAME slice the
     # export just wrote — MAX(detail_fetched_at) is the last real successful
@@ -723,6 +753,74 @@ def split_posting_text(con: sqlite3.Connection) -> None:
     for c in TEXT_COLUMNS:
         con.execute(f"ALTER TABLE job_postings DROP COLUMN {c}")
     print("done")
+
+
+#: UX-03: how long a posting that left the live slice keeps its archived page.
+ARCHIVE_DAYS = 90
+
+
+def _summary(body: str | None, limit: int = 600) -> str:
+    """The posting's opening, whole paragraphs up to about `limit` characters."""
+    out = ""
+    for para in (body or "").split("\n\n"):
+        para = para.strip()
+        if not para:
+            continue
+        if out and len(out) + len(para) > limit:
+            break
+        out = (out + "\n\n" + para) if out else para
+        if len(out) >= limit:
+            break
+    return out[:limit + 200]
+
+
+def export_archive(cur, con: sqlite3.Connection) -> None:
+    """UX-03 (D14): the slim records of postings that left the live slice.
+
+    The complement of the active filter in export(), bounded to ARCHIVE_DAYS: an
+    expiry in the last 90 days, or a cancellation whose expiry is not older than
+    that (a cancelled posting has no cancellation date of its own).
+    """
+    print("Exporting archived_postings...", end=" ", flush=True)
+    cur.execute(f"""
+        SELECT jp.id, jp.url, jp.title, jp.employer_id, e.name AS employer_name,
+               COALESCE(j.name, '') AS judet_name, COALESCE(j.slug, '') AS judet_slug,
+               jp.locality, jp.published_at, jp.expires_at, jp.data_limita_depunere,
+               jp.cancelled, jp.nr_posturi, jp.body_markdown,
+               jp.schema_json::text AS schema_json, jp.inferred::text AS inferred,
+               jp.salary_estimate::text AS salary_estimate,
+               COALESCE(o.canonical, '') AS occ_canonical
+        FROM jobs_jobposting jp
+        JOIN jobs_employer e ON e.id = jp.employer_id
+        LEFT JOIN jobs_judet j ON j.id = jp.judet_id
+        LEFT JOIN jobs_occupation o ON o.id = jp.occupation_id
+        WHERE NOT (jp.expires_at >= CURRENT_DATE AND NOT jp.cancelled)
+          AND jp.expires_at >= CURRENT_DATE - INTERVAL '{ARCHIVE_DAYS} days'
+        ORDER BY jp.id
+    """)
+    rows = []
+    for r in cur:
+        try:
+            inferred = json.loads(r["inferred"] or "{}")
+        except (json.JSONDecodeError, TypeError):
+            inferred = {}
+        v4 = _v4_columns(r["schema_json"])
+        est = _salary_columns(r["salary_estimate"])
+        deadline = _apply_deadline(v4["application_deadline"], r["data_limita_depunere"], r["expires_at"])
+        rows.append((
+            r["id"], r["url"], r["title"] or "", r["employer_id"], r["employer_name"] or "",
+            r["judet_name"], r["judet_slug"], r["locality"] or "",
+            fmt_date(r["published_at"]), fmt_date(r["expires_at"]), deadline["date"],
+            1 if r["cancelled"] else 0, r["nr_posturi"], r["occ_canonical"],
+            inferred.get("profession_family") or "", est["min"], est["max"],
+            _summary(r["body_markdown"]),
+        ))
+    con.executemany(
+        "INSERT INTO archived_postings(id, url, title, employer_id, employer_name, judet_name, "
+        "judet_slug, locality, published_at, expires_at, apply_deadline, cancelled, nr_posturi, "
+        "occ_canonical, inf_profession_family, sal_min, sal_max, summary) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+    print(f"{len(rows)} rows")
 
 
 def export_llm_costs(cur, con: sqlite3.Connection) -> None:

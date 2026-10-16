@@ -113,6 +113,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/stats_test.php
 
+      - name: Expired and cancelled postings keep a page (UX-03)
+        working-directory: webapp-php
+        run: php tests/archive_test.php
+
       - name: Role-scoped requirements and search (DATA-04)
         working-directory: webapp-php
         run: php tests/roles_test.php

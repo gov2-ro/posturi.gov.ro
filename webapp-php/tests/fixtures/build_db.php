@@ -215,6 +215,20 @@ CREATE TABLE publication_monthly (
     cancelled   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (month, judet_id)
 ) WITHOUT ROWID;
+CREATE TABLE archived_postings (
+    id INTEGER PRIMARY KEY, url TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', employer_id INTEGER,
+    employer_name TEXT NOT NULL DEFAULT '', judet_name TEXT NOT NULL DEFAULT '', judet_slug TEXT NOT NULL DEFAULT '',
+    locality TEXT NOT NULL DEFAULT '', published_at TEXT, expires_at TEXT, apply_deadline TEXT,
+    cancelled INTEGER NOT NULL DEFAULT 0, nr_posturi INTEGER, occ_canonical TEXT NOT NULL DEFAULT '',
+    inf_profession_family TEXT NOT NULL DEFAULT '', sal_min REAL, sal_max REAL, summary TEXT NOT NULL DEFAULT ''
+);
+INSERT INTO archived_postings VALUES
+    (9001, 'https://posturi.gov.ro/anunt/fixture-9001', 'Asistent medical principal', 1, 'Spitalul Clinic Județean Cluj',
+     'Cluj', 'cluj', 'Cluj-Napoca', '2026-08-01 09:00:00', '2026-09-15 23:59:59', '2026-08-20', 0, 2,
+     'Asistent medical', 'sănătate', 4800, 4800, 'Concurs pentru **asistent medical principal** la secția ATI.'),
+    (9002, 'https://posturi.gov.ro/anunt/fixture-9002', 'Referent anulat', 1, 'Primăria Comunei Găiceana',
+     'Bacău', 'bacau', 'Găiceana', '2026-09-20 09:00:00', '2026-10-30 23:59:59', '2026-10-10', 1, 1,
+     'Referent', 'administrație', NULL, NULL, '<script>alert(1)</script>Anunț anulat de instituție.');
 CREATE TABLE build_meta (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
     built_at        TEXT NOT NULL,

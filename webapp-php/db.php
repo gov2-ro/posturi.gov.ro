@@ -119,6 +119,7 @@ function shim_legacy_export(PDO $pdo): void {
     shim_requirement_evidence($pdo);
     shim_posting_text($pdo, $cols);
     shim_publication_monthly($pdo);
+    shim_archived_postings($pdo);
 }
 
 /**
@@ -223,5 +224,24 @@ function shim_requirement_evidence(PDO $pdo): void {
             '' AS fact_label, '' AS basis, NULL AS quote, '' AS status, NULL AS reason,
             NULL AS part, NULL AS section, NULL AS occurrences, NULL AS source_revision,
             NULL AS extraction_revision, '' AS text_hash, '' AS normalization
+        WHERE 0");
+}
+
+/**
+ * UX-03 (D14): an export without `archived_postings` has no archive, so an empty
+ * TEMP view of that name answers the detail page's lookup and every missing id is
+ * a plain 404, as before.
+ */
+function shim_archived_postings(PDO $pdo): void {
+    $has = (int)$pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'archived_postings'")
+        ->fetchColumn();
+    if ($has) {
+        return;
+    }
+    $pdo->exec("CREATE TEMP VIEW archived_postings AS SELECT
+            0 AS id, '' AS url, '' AS title, NULL AS employer_id, '' AS employer_name, '' AS judet_name,
+            '' AS judet_slug, '' AS locality, NULL AS published_at, NULL AS expires_at, NULL AS apply_deadline,
+            0 AS cancelled, NULL AS nr_posturi, '' AS occ_canonical, '' AS inf_profession_family,
+            NULL AS sal_min, NULL AS sal_max, '' AS summary
         WHERE 0");
 }

@@ -18,7 +18,23 @@ $stmt = db()->prepare("
 $stmt->execute([$id]);
 $p = $stmt->fetch();
 
-if (!$p) { http_response_code(404); echo "Anunț negăsit."; exit; }
+if (!$p) {
+    // UX-03 (D14): a posting that left the live slice in the last 90 days keeps a
+    // slim page (pages/archived.php); anything else is a real 404, with the layout.
+    $st = db()->prepare("SELECT * FROM archived_postings WHERE id = ?");
+    $st->execute([$id]);
+    if ($archived = $st->fetch()) { require __DIR__ . '/archived.php'; exit; }
+    http_response_code(404);
+    $page_title = 'Anunț negăsit';
+    $head_extra = '<meta name="robots" content="noindex">';
+    require __DIR__ . '/../inc/header.php';
+    echo '<div class="mx-auto max-w-screen-md px-4 py-16 text-center">'
+       . '<h1 class="mb-3 font-display text-2xl font-semibold text-ink">Anunțul nu mai este în baza noastră</h1>'
+       . '<p class="text-sm text-ink-muted">Păstrăm anunțurile expirate sau anulate 90 de zile; acesta este mai vechi sau nu a existat.</p>'
+       . '<a href="/" class="mt-4 inline-block text-gov hover:underline">← Toate posturile active</a></div>';
+    require __DIR__ . '/../inc/footer.php';
+    exit;
+}
 
 // One canonical URL per posting: `/job/1234/` and stale slugs redirect to it.
 $canonical_path = job_url($p);
@@ -252,7 +268,7 @@ require __DIR__ . '/../inc/header.php';
     <div class="mt-3 flex flex-wrap gap-2">
       <?php if ($p['job_level']): ?>
         <span class="px-2 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'bg-info text-info-ink border border-info-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>">
-          <?= e($p['job_level']) ?>
+          <?= e(job_level_label((string)$p['job_level'])) ?>
         </span>
       <?php endif; ?>
       <?php if ($p['job_type']): ?>

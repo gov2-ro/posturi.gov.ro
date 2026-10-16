@@ -1075,6 +1075,19 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   // <details> open/closed is restored by applyFacetState() above.
   var pending = null;
 
+  // 261016: a value is either wanted or excluded, never both. Capture phase, so the
+  // other box is cleared before the form's own `change` serialises the query.
+  document.addEventListener('change', function (ev) {
+    var el = ev.target;
+    if (!el || el.type !== 'checkbox' || !el.checked || !el.name) return;
+    var m = /^(.+?)(_not)?\[\]$/.exec(el.name);
+    if (!m) return;
+    var other = m[2] ? m[1] + '[]' : m[1] + '_not[]';
+    document.querySelectorAll('#filter-form input[type="checkbox"]').forEach(function (o) {
+      if (o.name === other && o.value === el.value) o.checked = false;
+    });
+  }, true);
+
   // 261016: no empty parameters in requests or the address bar. A key is dropped
   // only when every value it carries is empty (FormData.delete removes them all);
   // `status=active` is the default and says nothing. Mirrors clean_query().
@@ -1142,7 +1155,9 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 
     ev.preventDefault();
     fields.forEach(function (el) {
-      if (el.type === 'hidden') {
+      if (el.tagName === 'SELECT' && param === 'status') {
+        el.value = '<?= DEFAULT_STATUS ?>';
+      } else if (el.type === 'hidden') {
         el.parentNode.removeChild(el);   // scope param: drop it from the form
       } else if (el.type === 'checkbox' || el.type === 'radio') {
         if (el.value === value) el.checked = false;

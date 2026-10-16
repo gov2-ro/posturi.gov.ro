@@ -403,5 +403,28 @@ run_suite('no-JS: the form submits by GET with selections intact', function () u
     assert_contains('Termen în 7 zile', $html, 'status options render without JS');
 });
 
+run_suite('exclusions: "fără" drops postings with the value, chips and controls follow', function () use ($base) {
+    $all = result_ids($base, 'status=all');
+    $fam = result_ids($base, 'status=all&family%5B%5D=s%C4%83n%C4%83tate');
+    $not = result_ids($base, 'status=all&family_not%5B%5D=s%C4%83n%C4%83tate');
+    assert_true(count($fam) > 0, 'some sănătate postings');
+    assert_same([], array_values(array_intersect($fam, $not)), 'excluded postings are gone');
+    assert_same(array_values(array_diff($all, $fam)), $not, 'and nothing else is');
+    // A role group: no role of the posting may hold the excluded skill.
+    $excel = result_ids($base, 'status=all&skill%5B%5D=Excel&skill_mode=any');
+    $no_excel = result_ids($base, 'status=all&skill_not%5B%5D=Excel');
+    assert_true(count($excel) > 0, 'some Excel postings');
+    assert_same([], array_values(array_intersect($excel, $no_excel)), 'no Excel posting survives its exclusion');
+    $html = get_html($base, '/?status=all&skill_not%5B%5D=Excel');
+    assert_same(1, xpath_for($html)->query('//input[@name="skill_not[]" and @value="Excel" and @checked]')->length, 'the switch is on');
+    assert_contains('data-chip-param="skill_not"', $html, 'a chip removes it');
+    assert_contains('Fără', $html, 'the chip says Fără');
+    assert_same(['skill'], open_facets($html), 'its group opens');
+    // Every value row of an excludable group has the switch; a merged yes/no switch does not.
+    $home = get_html($base, '/?status=all');
+    assert_true(xpath_for($home)->query('//details[@data-facet="credential"]//input[@name="credential_not[]"]')->length > 0, 'credential values are excludable');
+    assert_same(0, xpath_for($home)->query('//details[@data-facet="schedule"]//input[contains(@name,"_not")]')->length, 'Program is not');
+});
+
 stop_fixture_server($srv, $db_path);
 finish();

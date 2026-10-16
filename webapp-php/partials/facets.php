@@ -43,6 +43,10 @@
             $own_on = count(array_filter($items, fn($i) => isset($i['param']) && !empty($i['on'])));
             $values = array_map(fn($i) => (string)($i['val'] ?? $i['value'] ?? ''),
                                 array_filter($items, fn($i) => !isset($i['param'])));
+            // 261016: an excludable group carries a second, "fără" switch per value.
+            $negatable = isset(NEGATABLE_PARAMS[$name]);
+            $not = $negatable ? array_values(array_filter(array_map('strval', (array)($_GET[$name . '_not'] ?? [])),
+                                                          fn($v) => trim($v) !== '')) : [];
 
             // Facets are capped (județ shows the top 25 of ~197 slugs). A selected
             // value outside that window has no checkbox, so the next HTMX submit
@@ -51,7 +55,7 @@
             // The count is left blank rather than set to 0: an orphan's real
             // count is simply unknown here (it fell outside the display cap),
             // and a rendered "0" would read as "this selection matches nothing".
-            foreach (array_reverse(array_diff($active, $values)) as $orphan) {
+            foreach (array_reverse(array_values(array_unique(array_diff(array_merge($active, $not), $values)))) as $orphan) {
                 array_unshift($items, [
                     'val'   => $orphan,
                     'label' => filter_value_label($name, $orphan),
@@ -60,7 +64,7 @@
                 $values[] = $orphan;
             }
 
-            $selected = array_intersect($active, $values);
+            $selected = array_merge(array_intersect($active, $values), array_intersect($not, $values));
             for ($k = 0; $k < $own_on; $k++) $selected[] = '';
             $is_open  = (bool)$selected;      // never hide a filter that is switched on
             $mode     = facet_mode($name);
@@ -112,12 +116,24 @@
                     // filter could not be taken off again. Some groups (Anomalii)
                     // pass '' for "no count available", which is not a zero.
                     $dead = !$on && $cnt !== '' && (int)$cnt === 0; ?>
-                  <label class="group flex items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>">
+                  <?php $neg = $negatable && !isset($item['param']) && in_array($val, $not, true);
+                        $dead = $dead && !$neg; ?>
+                  <div class="facet-row flex items-center gap-1<?= $neg ? ' facet-row-not' : '' ?>">
+                  <label class="group flex min-w-0 flex-1 items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>">
                     <input type="checkbox" name="<?= e($field) ?>" value="<?= e($val) ?>"
                            class="facet-check accent-gov shrink-0"<?= checked_if($on) ?><?= $dead ? ' disabled' : '' ?>>
                     <span class="flex-1 truncate text-sm text-ink <?= $dead ? '' : 'transition-colors group-hover:text-gov' ?>"><?= e($lbl) ?></span>
                     <span class="shrink-0 font-mono text-xs text-ink-muted"><?= $cnt === '' ? '' : $cnt ?></span>
                   </label>
+                  <?php if ($negatable && !isset($item['param'])): ?>
+                  <?php /* "Fără": excludes the value. A real checkbox (sr-only) inside
+                     its own label, so it is one Tab stop and announces its state. */ ?>
+                  <label class="facet-not" title="Exclude: <?= e($lbl) ?>">
+                    <input type="checkbox" name="<?= e($name) ?>_not[]" value="<?= e($val) ?>" class="sr-only"<?= checked_if($neg) ?><?= $dead ? ' disabled' : '' ?>>
+                    <span aria-hidden="true">fără</span><span class="sr-only">Exclude: <?= e($lbl) ?></span>
+                  </label>
+                  <?php endif; ?>
+                  </div>
                 <?php endforeach; ?>
               </div>
               </div>

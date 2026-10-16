@@ -173,6 +173,21 @@
   }
 
   .facet-check:checked + span { color: rgb(var(--c-gov)); font-weight: 500; }
+  /* 261016: the "fără" switch beside an excludable value. Quiet until hovered,
+     focused or on; on, the row's label is struck through. */
+  .facet-not {
+    flex-shrink: 0; cursor: pointer; border-radius: var(--radius-sm, 0.25rem);
+    padding: 0.05rem 0.3rem; font-size: 0.6875rem; line-height: 1.1rem;
+    color: rgb(var(--c-ink-muted) / 0.7); border: 1px solid transparent;
+  }
+  .facet-not:hover { color: rgb(var(--c-alert-ink)); border-color: rgb(var(--c-alert-line)); }
+  .facet-not:focus-within { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
+  .facet-not:has(input:checked) { color: rgb(var(--c-alert-ink)); background: rgb(var(--c-alert-bg)); border-color: rgb(var(--c-alert-line)); font-weight: 600; }
+  .facet-not:has(input:disabled) { visibility: hidden; }
+  .facet-row-not .facet-check + span { text-decoration: line-through; color: rgb(var(--c-alert-ink)); }
+  @media (hover: hover) {
+    .facet-row:not(:hover) .facet-not:not(:focus-within):not(:has(input:checked)) { opacity: 0; }
+  }
 
   /* The skin picker in the footer. Styled here rather than in each skin so a
      skin that forgets it still gets a usable control. */

@@ -305,3 +305,20 @@ test('feed links follow filters through HTMX, chips, pagination and history', as
   expect((await feedParams(page, 'posturi.atom')).has('title')).toBe(false);
   expect((await feedParams(page, 'posturi.json')).has('title')).toBe(false);
 });
+
+test('a value can be excluded ("fără"), and wanting it clears the exclusion', async ({ page }) => {
+  await page.goto('/?status=all');
+  await openPanel(page);
+  await openFacet(page, 'skill');
+  const not = page.locator('.facet-not:has(input[name="skill_not[]"][value="Excel"])');
+  await not.click();
+  await expect(page).toHaveURL(/skill_not%5B%5D=Excel/);
+  await expect(page.locator('input[name="skill_not[]"][value="Excel"]')).toBeChecked();
+  await expect(page.locator('.facet-row-not')).toHaveCount(1);
+  // Checking the value itself turns the exclusion off in the same request.
+  await page.locator('label:has(> input[name="skill[]"][value="Excel"])').click();
+  await expect(page).toHaveURL(/skill%5B%5D=Excel/);
+  await expect(page).not.toHaveURL(/skill_not/);
+  await expect(page.locator('input[name="skill_not[]"][value="Excel"]')).not.toBeChecked();
+  await noOverflow(page, 'exclusion switch');
+});

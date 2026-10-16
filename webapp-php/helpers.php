@@ -1488,6 +1488,18 @@ const FILTER_CHIP_GROUPS = [
     'occupation'     => 'Ocupație',
     'regime'         => 'Tip funcție',
     'inst'           => 'Instituție',
+    'family_not'     => 'Fără',
+    'occupation_not' => 'Fără',
+    'inst_not'       => 'Fără',
+    'sector_not'     => 'Fără',
+    'regime_not'     => 'Fără',
+    'funding_not'    => 'Fără',
+    'duration_not'   => 'Fără',
+    'isced_not'      => 'Fără',
+    'skill_not'      => 'Fără',
+    'lang_not'       => 'Fără',
+    'credential_not' => 'Fără',
+    'domain_not'     => 'Fără',
     'funding'        => 'Finanțare',
     'sector'         => 'Sector',
     'has_salary'     => '',
@@ -1496,6 +1508,18 @@ const FILTER_CHIP_GROUPS = [
     'shift'          => '',
     'employer'       => 'Doar angajatorul',
     'employer_id'    => 'Doar angajatorul',
+];
+
+/**
+ * 261016: groups whose values can also be *excluded* ("fără permis de conducere"):
+ * `?credential_not[]=permis_conducere`. Param => the exclusion key its facet
+ * counts with (build_filters' $excl), so a group's own counts ignore its own
+ * exclusions the way they ignore its own selections.
+ */
+const NEGATABLE_PARAMS = [
+    'family' => 'families', 'occupation' => 'occupation', 'inst' => 'inst', 'sector' => 'sector',
+    'regime' => 'regime', 'funding' => 'funding', 'duration' => 'duration', 'isced' => 'isced',
+    'skill' => 'skill', 'lang' => 'lang', 'credential' => 'credential', 'domain' => 'domain',
 ];
 
 /**
@@ -1510,6 +1534,9 @@ const MULTI_PARAMS = [
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
     'regime', 'inst',
+    // NEGATABLE_PARAMS' exclusion lists
+    'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
+    'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not',
 ];
 
 /** Form field name for a filter param. */
@@ -1559,6 +1586,9 @@ function employer_scope_label(string $key, string $value): string {
 }
 
 function filter_value_label(string $key, string $value): string {
+    if (str_ends_with($key, '_not') && isset(NEGATABLE_PARAMS[substr($key, 0, -4)])) {
+        return filter_value_label(substr($key, 0, -4), $value);
+    }
     return match ($key) {
         'judet'                            => judet_names()[$value] ?? $value,
         'studies_level'                    => STUDIES_LABELS[$value] ?? $value,
@@ -2148,6 +2178,19 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // the planner guesses those equality indexes are the most selective and
     // rescans every EQF-6 role once per posting — 250 ms per query on 1,848
     // postings, against 1 ms probing by posting_id (the primary key's prefix).
+    // 261016: exclusions. The positive clause for the excluded values, built by
+    // this same function (so a role group excludes postings with ANY role
+    // holding the value), negated as a posting-id set. Any-of: excluding two
+    // values drops postings that have either.
+    foreach (NEGATABLE_PARAMS as $param => $excl_key) {
+        $vals = array_values(array_filter(array_map('strval', (array)($p[$param . '_not'] ?? [])), fn($v) => trim($v) !== ''));
+        if (!$vals || $excl === $excl_key) continue;
+        $sub = build_filters(['status' => 'all', $param => $vals, $param . '_mode' => 'any']);
+        if (!$sub['where']) continue;
+        $where[] = "j.id NOT IN (SELECT j.id FROM job_postings j WHERE " . implode(' AND ', $sub['where']) . ")";
+        array_push($binds, ...$sub['binds']);
+    }
+
     $posting_where = $where;
     $posting_binds = $binds;
     if ($rwhere) {

@@ -426,3 +426,20 @@
   }
   @media print { .feedback, .welcome { display: none !important; } }
 }
+
+/* Notes (2026-10-17, static/saved.js): the reader's own note under a posting and its
+   editor. Above the row's stretched link, so text can be selected and typed. */
+@layer components {
+  .pref-note.pref-has-note { @apply text-gov; }
+  .note-view { @apply relative z-[1] mt-1.5 whitespace-pre-line border-l-2 border-gov pl-2 text-xs leading-snug text-ink; }
+  .note-editor { @apply relative z-[1] mt-2 border border-line-strong bg-surface p-2; }
+  .note-label { @apply mb-1 block text-xs text-ink-muted; }
+  .note-input { @apply block w-full rounded border border-line-strong bg-surface p-2 text-sm text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus; }
+  .note-actions { @apply mt-2 flex flex-wrap gap-2; }
+  .note-btn { @apply min-h-[2.25rem] border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted hover:border-gov hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus; }
+  .note-btn-primary { @apply border-gov bg-gov text-on-gov hover:text-on-gov; }
+}
+@media (min-width: 1024px) {
+  html[data-layout="table"] .pg-row > .note-view,
+  html[data-layout="table"] .pg-row > .note-editor { grid-column: 1 / -1; }
+}

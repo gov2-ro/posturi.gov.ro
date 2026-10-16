@@ -22,11 +22,12 @@ require __DIR__ . '/../inc/header.php';
   <h1 class="font-display text-[1.7rem] sm:text-[2rem] font-semibold italic leading-tight text-ink">Salvate</h1>
 
   <p class="mt-3 max-w-2xl border border-info-line bg-info px-3 py-2 text-sm leading-snug text-info-ink">
-    Salvările și anunțurile ascunse rămân în acest browser. Nu se sincronizează între dispozitive și se pot pierde dacă ștergi datele browserului.
+    Salvările și anunțurile ascunse rămân în acest browser. Nu se sincronizează între dispozitive și se pot pierde dacă ștergi datele browserului. La fel notițele — exportă-le ca CSV (mai jos) ca să le păstrezi.
   </p>
 
   <nav aria-label="Vedere" class="mt-5 flex gap-1 border-b border-line text-sm">
     <a data-view-tab="saved" href="/salvate/" class="-mb-px border border-transparent px-4 py-2 text-ink-muted hover:text-gov aria-[current=page]:border-line aria-[current=page]:border-b-page aria-[current=page]:bg-page aria-[current=page]:font-semibold aria-[current=page]:text-ink">Salvate <span class="font-mono text-xs" data-count="saved"></span></a>
+    <a data-view-tab="notes" href="/salvate/?vedere=notite" class="-mb-px border border-transparent px-4 py-2 text-ink-muted hover:text-gov aria-[current=page]:border-line aria-[current=page]:border-b-page aria-[current=page]:bg-page aria-[current=page]:font-semibold aria-[current=page]:text-ink">Notițe <span class="font-mono text-xs" data-count="notes"></span></a>
     <a data-view-tab="hidden" href="/salvate/?vedere=ascunse" class="-mb-px border border-transparent px-4 py-2 text-ink-muted hover:text-gov aria-[current=page]:border-line aria-[current=page]:border-b-page aria-[current=page]:bg-page aria-[current=page]:font-semibold aria-[current=page]:text-ink">Ascunse <span class="font-mono text-xs" data-count="hidden"></span></a>
   </nav>
 
@@ -55,6 +56,7 @@ require __DIR__ . '/../inc/header.php';
     <h2 id="saved-tools" class="font-display text-base font-semibold italic text-ink">Gestionare</h2>
     <p class="mt-1 text-xs text-ink-muted">Fiecare acțiune șterge doar lista ei din acest browser; preferințele de aspect și de filtre rămân.</p>
     <div class="mt-3 flex flex-wrap gap-2">
+      <button type="button" data-export-csv class="<?= $btn ?>">Exportă salvatele și notițele (CSV)</button>
       <button type="button" data-clear="saved" class="<?= $btn ?>">Șterge lista de salvate</button>
       <button type="button" data-clear="hidden" class="<?= $btn ?>">Restabilește toate anunțurile ascunse</button>
     </div>
@@ -78,9 +80,11 @@ require __DIR__ . '/../inc/header.php';
     <p data-f="note" class="mt-0.5 text-[11px] italic leading-snug text-ink-muted"></p>
     <p data-f="state" class="mt-1 text-xs text-ink-muted"></p>
     <p data-f="hidden-tag" hidden class="mt-1 text-xs font-medium text-note-ink">Ascuns din rezultate</p>
+    <p data-f="user-note" hidden class="note-view whitespace-pre-line"></p>
     <div class="mt-2 flex flex-wrap items-center gap-2">
       <button type="button" data-pref="save" class="<?= $btn ?>"><span data-pref-label></span><span class="sr-only" data-f="sr-title"></span></button>
       <button type="button" data-pref="hide" class="<?= $btn ?>"><span data-pref-label></span><span class="sr-only" data-f="sr-title2"></span></button>
+      <button type="button" data-pref="note" aria-expanded="false" class="<?= $btn ?>"><span data-pref-label></span></button>
       <button type="button" data-retry hidden class="<?= $btn ?>">Reîncearcă</button>
     </div>
   </li>

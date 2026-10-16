@@ -1674,6 +1674,10 @@ function pref_controls(array $p, bool $with_hide = true): string {
         $h .= '<button type="button" data-pref="hide" aria-pressed="false" aria-label="Ascunde anunțul: ' . $title
             . '" class="pref-btn pref-hide">' . $icon('i-close') . '</button>';
     }
+    // Notes (2026-10-17): opens an editor under the posting (static/saved.js). Last, so
+    // save and hide keep their tab order.
+    $h .= '<button type="button" data-pref="note" aria-expanded="false" aria-label="Adaugă o notiță: ' . $title
+        . '" class="pref-btn pref-note">' . $icon('i-note') . '</button>';
     return $h . '</span>';
 }
 

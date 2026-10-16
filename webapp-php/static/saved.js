@@ -11,6 +11,11 @@
  * re-applied after each of those. Snapshot text only ever reaches the page
  * through textContent / setAttribute; links are accepted only when they point at
  * https://posturi.gov.ro (source) or the local job route (path).
+ *
+ * Notes (2026-10-17): a record may carry a reader's `note` (plain text, ≤ 4000
+ * characters) and `notedAt`. A posting with a note counts as saved — it shows in
+ * Salvate whether or not its bookmark is on — and /salvate/ exports saved and
+ * noted postings as CSV, for feedback on the extraction before the next LLM run.
  */
 (function () {
   'use strict';
@@ -23,6 +28,7 @@
   var PAGE = 25;
   var ENDPOINT = '/preferinte-posturi.json';
   var FALLBACK_NOTE = 'Expirarea anunțului; înscriere neconfirmată';
+  var NOTE_MAX = 4000;
   var STATUS_RO = {
     confirmed_open: 'Înscrieri deschise',
     unconfirmed: 'Termen neconfirmat',
@@ -93,6 +99,8 @@
     if (typeof v.title !== 'string') return null;
     if (v.savedAt != null && !isIso(v.savedAt)) return null;
     if (v.hiddenAt != null && !isIso(v.hiddenAt)) return null;
+    if (v.note != null && typeof v.note !== 'string') return null;
+    if (v.notedAt != null && !isIso(v.notedAt)) return null;
     if (!isIso(v.snapshotAt)) return null;
     var ds = clean(v.dateSource, 20);
     return {
@@ -100,7 +108,8 @@
       employer: clean(v.employer), place: clean(v.place),
       date: /^\d{4}-\d{2}-\d{2}$/.test(v.date || '') ? v.date : '',
       dateSource: (ds === 'concurs' || ds === 'anunt' || ds === 'expirare') ? ds : '',
-      savedAt: v.savedAt || null, hiddenAt: v.hiddenAt || null, snapshotAt: v.snapshotAt
+      savedAt: v.savedAt || null, hiddenAt: v.hiddenAt || null, snapshotAt: v.snapshotAt,
+      note: typeof v.note === 'string' ? v.note.slice(0, NOTE_MAX) : '', notedAt: v.note ? (v.notedAt || null) : null
     };
   }
 
@@ -125,7 +134,7 @@
     Object.keys(r).forEach(function (k) {
       var rec = validateRecord(k, r[k]);
       if (!rec) S.invalid[k] = r[k];
-      else if (rec.savedAt || rec.hiddenAt) S.recs[k] = rec;   // records with neither flag are dropped
+      else if (kept(rec)) S.recs[k] = rec;                      // records with no flag and no note are dropped
     });
   }
 
@@ -145,13 +154,18 @@
 
   function persisted() { return !S.blocked && !S.unavailable && !S.dirty; }
 
+  /** A record stays while it is saved, hidden, or carries a note. */
+  function kept(r) { return !!(r.savedAt || r.hiddenAt || r.note); }
+  /** "Saved" for every list and count: bookmarked, or noted. */
+  function isSaved(r) { return !!(r.savedAt || r.note); }
+
   /** Re-read current storage, apply fn to it, write. fn returns an error code to abort. */
   function mutate(fn, quiet) {
     readStore();
     var err = fn(S.recs);
     if (err) return { error: err };
     Object.keys(S.recs).forEach(function (k) {
-      if (!S.recs[k].savedAt && !S.recs[k].hiddenAt) delete S.recs[k];
+      if (!kept(S.recs[k])) delete S.recs[k];
     });
     var ok = writeStore();
     if (!quiet) mutated = true;
@@ -276,6 +290,13 @@
       if (hbtn) { hbtn.setAttribute('aria-pressed', hid ? 'true' : 'false'); setLabel(hbtn, hid ? 'Restabilește' : 'Ascunde', hid ? 'Restabilește anunțul' : 'Ascunde anunțul'); }
       var flag = qs('[data-pref-flag]', el);
       if (flag) flag.hidden = !hid;
+      var nb = qs('[data-pref="note"]', el);
+      if (nb) {
+        var has = !!(rec && rec.note);
+        nb.classList.toggle('pref-has-note', has);
+        setLabel(nb, has ? 'Notiță' : 'Adaugă notiță', has ? 'Editează notița' : 'Adaugă o notiță');
+      }
+      renderNoteView(el, rec);
       if (el.hasAttribute('data-pref-hideable')) {
         el.setAttribute('data-pref-hidden', hid ? 'true' : 'false');
         el.hidden = hid && !showHidden;
@@ -319,7 +340,7 @@
   function renderNav() {
     var n = qs('[data-saved-count]');
     if (!n) return;
-    var saved = Object.keys(S.recs).filter(function (k) { return S.recs[k].savedAt; }).length;
+    var saved = Object.keys(S.recs).filter(function (k) { return isSaved(S.recs[k]); }).length;
     n.textContent = '(' + saved + ')';
     n.hidden = !!S.blocked && saved === 0;
   }
@@ -412,19 +433,111 @@
     if (!r.persisted) renderStatus();
   }
 
+  // ---- notes ---------------------------------------------------------------
+  /** The note under a posting (lists and the detail page); /salvate/ draws its own. */
+  function renderNoteView(el, rec) {
+    if (el.hasAttribute('data-pref-managed')) return;
+    var view = qs(':scope > [data-note-view]', el);
+    var text = rec && rec.note ? rec.note : '';
+    if (!text) { if (view) view.remove(); return; }
+    if (!view) {
+      view = document.createElement('p');
+      view.setAttribute('data-note-view', '');
+      view.className = 'note-view';
+      var anchor = qs(':scope > [data-note-editor]', el);
+      el.insertBefore(view, anchor || null);
+    }
+    view.textContent = '📝 ' + text;
+  }
+
+  function closeEditor(el, focusBtn) {
+    var ed = qs(':scope > [data-note-editor]', el);
+    if (ed) ed.remove();
+    var nb = qs('[data-pref="note"]', el);
+    if (nb) { nb.setAttribute('aria-expanded', 'false'); if (focusBtn) nb.focus(); }
+  }
+
+  function openEditor(el) {
+    var nb = qs('[data-pref="note"]', el);
+    if (qs(':scope > [data-note-editor]', el)) { closeEditor(el, true); return; }
+    var rec = S.recs[el.dataset.prefUrl];
+    var ed = document.createElement('div');
+    ed.setAttribute('data-note-editor', '');
+    ed.className = 'note-editor';
+    var id = 'note-' + (el.dataset.prefId || Math.random().toString(36).slice(2));
+    var label = document.createElement('label');
+    label.setAttribute('for', id);
+    label.className = 'note-label';
+    label.textContent = 'Notița ta (rămâne în acest browser; o poți exporta din Salvate)';
+    var ta = document.createElement('textarea');
+    ta.id = id; ta.rows = 4; ta.maxLength = NOTE_MAX;
+    ta.className = 'note-input';
+    ta.value = rec && rec.note ? rec.note : '';
+    var row = document.createElement('div');
+    row.className = 'note-actions';
+    var save = document.createElement('button');
+    save.type = 'button'; save.setAttribute('data-note-save', ''); save.className = 'note-btn note-btn-primary';
+    save.textContent = 'Salvează notița';
+    var cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.setAttribute('data-note-cancel', ''); cancel.className = 'note-btn';
+    cancel.textContent = 'Închide';
+    row.appendChild(save); row.appendChild(cancel);
+    ed.appendChild(label); ed.appendChild(ta); ed.appendChild(row);
+    // The list's rows sit inside the HTMX filter form, which re-queries on any
+    // `change`/`input` bubbling up to it: typing a note must not refresh the results.
+    ['change', 'input'].forEach(function (t) { ed.addEventListener(t, function (e) { e.stopPropagation(); }); });
+    el.appendChild(ed);
+    if (nb) nb.setAttribute('aria-expanded', 'true');
+    ta.focus();
+  }
+
+  function saveNote(el) {
+    var ed = qs(':scope > [data-note-editor]', el);
+    if (!ed) return;
+    var text = qs('textarea', ed).value.replace(/\r\n?/g, '\n').trim().slice(0, NOTE_MAX);
+    var url = el.dataset.prefUrl;
+    var res = mutate(function (recs) {
+      var rec = recs[url];
+      var now = new Date().toISOString();
+      if (!rec) {
+        if (!text) return null;
+        if (count(recs) >= MAX) return 'limit';
+        var snap = snapshotOf(el);
+        var v = snap && validateRecord(url, { id: snap.id, url: url, title: snap.title, snapshotAt: now });
+        if (!v) return 'invalid';
+        snap.savedAt = null; snap.hiddenAt = null; snap.snapshotAt = now;
+        rec = recs[url] = snap;
+      }
+      rec.note = text;
+      rec.notedAt = text ? now : null;
+    });
+    if (res.error === 'limit') {
+      showNotice({ text: 'Ai atins limita de ' + MAX + ' de anunțuri păstrate în acest browser. Elimină câteva din Salvate sau Ascunse, apoi încearcă din nou.', focus: true });
+      return;
+    }
+    if (res.error) { announce('Notița nu a putut fi salvată local.'); return; }
+    closeEditor(el, true);
+    applyAll();
+    announce(text ? 'Notiță salvată. Anunțul apare în Salvate.' : 'Notiță ștearsă.');
+    if (!res.persisted) renderStatus();
+  }
+
   // ---- /salvate/ -----------------------------------------------------------
+  /** Records for a view, newest first. 'savedAt' means saved or noted (notes count as saved). */
   function sortedBy(field) {
+    var when = function (r) {
+      if (field !== 'savedAt') return Date.parse(r[field]);
+      return Math.max(r.savedAt ? Date.parse(r.savedAt) : 0, r.notedAt ? Date.parse(r.notedAt) : 0);
+    };
     return Object.keys(S.recs).map(function (k) { return S.recs[k]; })
-      .filter(function (r) { return r[field]; })
-      .sort(function (a, b) {
-        var d = Date.parse(b[field]) - Date.parse(a[field]);
-        return d || b.id - a.id;
-      });
+      .filter(function (r) { return field === 'savedAt' ? isSaved(r) : field === 'note' ? !!r.note : r[field]; })
+      .sort(function (a, b) { return (when(b) - when(a)) || b.id - a.id; });
   }
 
   function savedHref(view, page) {
     var q = [];
     if (view === 'hidden') q.push('vedere=ascunse');
+    if (view === 'notes') q.push('vedere=notite');
     if (page > 1) q.push('pagina=' + page);
     return '/salvate/' + (q.length ? '?' + q.join('&') : '');
   }
@@ -433,10 +546,11 @@
     var root = qs('[data-saved-page]');
     if (!root) return;
     var params = new URLSearchParams(window.location.search);
-    var view = params.get('vedere') === 'ascunse' ? 'hidden' : 'saved';
-    var field = view === 'hidden' ? 'hiddenAt' : 'savedAt';
+    var v = params.get('vedere');
+    var view = v === 'ascunse' ? 'hidden' : v === 'notite' ? 'notes' : 'saved';
+    var field = view === 'hidden' ? 'hiddenAt' : view === 'notes' ? 'note' : 'savedAt';
     var list = sortedBy(field);
-    var savedN = sortedBy('savedAt').length, hiddenN = sortedBy('hiddenAt').length;
+    var savedN = sortedBy('savedAt').length, hiddenN = sortedBy('hiddenAt').length, notesN = sortedBy('note').length;
 
     qsa('[data-view-tab]', root).forEach(function (a) {
       if (a.getAttribute('data-view-tab') === view) a.setAttribute('aria-current', 'page');
@@ -444,6 +558,10 @@
     });
     qs('[data-count="saved"]', root).textContent = '(' + savedN + ')';
     qs('[data-count="hidden"]', root).textContent = '(' + hiddenN + ')';
+    var nc = qs('[data-count="notes"]', root);
+    if (nc) nc.textContent = '(' + notesN + ')';
+    var ex = qs('[data-export-csv]', root);
+    if (ex) ex.disabled = savedN === 0;
 
     var pages = Math.max(1, Math.ceil(list.length / PAGE));
     var page = Math.min(Math.max(1, parseInt(params.get('pagina'), 10) || 1), pages);
@@ -456,6 +574,7 @@
     empty.hidden = list.length > 0;
     qs('[data-empty-text]', root).textContent = view === 'hidden'
       ? 'Nu ai ascuns niciun anunț în acest browser.'
+      : view === 'notes' ? 'Nu ai scris încă nicio notiță. Folosește butonul ✎ de lângă un anunț.'
       : (S.blocked ? 'Lista salvată nu poate fi citită din acest browser.' : 'Nu ai salvat încă niciun anunț.');
     var tpl = document.getElementById('saved-item-tpl');
     slice.forEach(function (rec) { ul.appendChild(buildItem(tpl, rec, view)); });
@@ -531,10 +650,16 @@
       }
     }
     qs('[data-f="hidden-tag"]', li).hidden = !(view === 'saved' && rec.hiddenAt);
+    var nt = qs('[data-f="user-note"]', li);
+    if (nt) { nt.textContent = rec.note ? '📝 ' + rec.note : ''; nt.hidden = !rec.note; }
+    var nb = qs('[data-pref="note"]', li);
+    if (nb) setLabel(nb, rec.note ? 'Editează notița' : 'Adaugă notiță');
 
     var sb = qs('[data-pref="save"]', li), hb = qs('[data-pref="hide"]', li);
     setLabel(sb, rec.savedAt ? 'Elimină din salvate' : 'Salvează');
     sb.hidden = view === 'hidden';
+    // A noted posting is in Salvate by its note; its bookmark can still be on or off.
+    if (rec.note && !rec.savedAt) setLabel(sb, 'Salvează');
     setLabel(hb, rec.hiddenAt ? 'Restabilește' : 'Ascunde');
     qs('[data-f="sr-title"]', li).textContent = ' anunțul: ' + title;
     qs('[data-f="sr-title2"]', li).textContent = ' anunțul: ' + title;
@@ -600,7 +725,7 @@
     SP.confirm = kind;
     var n = sortedBy(kind === 'saved' ? 'savedAt' : 'hiddenAt').length;
     qs('[data-clear-confirm-text]', box).textContent = kind === 'saved'
-      ? 'Ștergi toate cele ' + n + ' anunțuri salvate din acest browser? Anunțurile ascunse nu se schimbă.'
+      ? 'Ștergi marcajul de salvare de pe cele ' + n + ' anunțuri din acest browser? Notițele și anunțurile ascunse nu se schimbă (un anunț cu notiță rămâne în listă).'
       : 'Restabilești toate cele ' + n + ' anunțuri ascunse? Anunțurile salvate nu se schimbă.';
     box.hidden = false;
     qs('[data-clear-no]', box).focus();
@@ -621,11 +746,54 @@
     if (origin) origin.focus();
   }
 
+  // ---- CSV export (saved + noted) --------------------------------------------
+  function csvCell(v) {
+    var t = v == null ? '' : String(v);
+    return /[",\n\r;]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+
+  function exportCsv() {
+    var rows = sortedBy('savedAt');
+    var origin = window.location.origin;
+    var head = ['id', 'titlu', 'angajator', 'localitate', 'termen', 'stare', 'link', 'link_oficial',
+                'salvat', 'notita', 'notita_la', 'ascuns'];
+    var lines = [head.join(',')];
+    rows.forEach(function (r) {
+      var c = SP && SP.cache[r.url];
+      var live = c && c.s === 'ok' ? c.d : null;
+      var path = safePath(live ? live.path : r.path, r.id) || ('/job/' + r.id + '/');
+      lines.push([
+        r.id, live ? live.title : r.title, live ? live.employer : r.employer, live ? live.location : r.place,
+        (live ? live.deadline : r.date) || '', live ? (live.status || '') : '',
+        origin + path, safeSource(r.url) || r.url,
+        r.savedAt || '', r.note || '', r.notedAt || '', r.hiddenAt ? 'da' : ''
+      ].map(csvCell).join(','));
+    });
+    // BOM: spreadsheet apps then read the diacritics as UTF-8.
+    var blob = new Blob(['\ufeff' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    var d = new Date();
+    a.href = URL.createObjectURL(blob);
+    a.download = 'posturi-salvate-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+    announce(rows.length + (rows.length === 1 ? ' anunț exportat.' : ' anunțuri exportate.'));
+  }
+
   // ---- wiring (all delegated, registered once) -----------------------------
   document.addEventListener('click', function (ev) {
     var t = ev.target;
     if (!(t instanceof Element)) return;
     var b;
+    if ((b = t.closest('[data-pref="note"]'))) {
+      ev.preventDefault();
+      var host = b.closest('[data-posting]');
+      if (host) openEditor(host);
+      return;
+    }
+    if ((b = t.closest('[data-note-save]'))) { var h1 = b.closest('[data-posting]'); if (h1) saveNote(h1); return; }
+    if ((b = t.closest('[data-note-cancel]'))) { var h2 = b.closest('[data-posting]'); if (h2) closeEditor(h2, true); return; }
     if ((b = t.closest('[data-pref]'))) { ev.preventDefault(); onPref(b); return; }
     if ((b = t.closest('[data-pref-toggle-hidden]'))) { showHidden = !showHidden; applyRows(); return; }
     if ((b = t.closest('[data-notice-undo]'))) { if (noticeUndo) noticeUndo(); return; }
@@ -639,6 +807,7 @@
     }
     if (SP) {
       if ((b = t.closest('[data-retry]'))) { onRetry(b); return; }
+      if ((b = t.closest('[data-export-csv]'))) { exportCsv(); return; }
       if ((b = t.closest('[data-clear]'))) { clearConfirm(b.getAttribute('data-clear')); return; }
       if ((b = t.closest('[data-clear-yes]'))) { clearDone(true); return; }
       if ((b = t.closest('[data-clear-no]'))) { clearDone(false); return; }
@@ -646,6 +815,12 @@
   });
 
   document.addEventListener('keydown', function (ev) {
+    var ed = ev.target instanceof Element && ev.target.closest('[data-note-editor]');
+    if (ed) {
+      var host = ed.closest('[data-posting]');
+      if (ev.key === 'Escape') { ev.preventDefault(); closeEditor(host, true); return; }
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); saveNote(host); return; }
+    }
     if (ev.key !== 'Escape') return;
     var n = document.getElementById('pref-notice');
     if (SP && SP.confirm) { clearDone(false); return; }

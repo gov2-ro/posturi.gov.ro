@@ -307,7 +307,7 @@ test('clear saved / restore hidden need confirmation and touch only their own st
   const clear = page.locator('[data-clear="saved"]');
   await clear.click();
   await expect(page.locator('[data-clear-confirm]')).toBeVisible();
-  await expect(page.locator('[data-clear-confirm]')).toContainText('Ștergi toate cele 2 anunțuri salvate');
+  await expect(page.locator('[data-clear-confirm]')).toContainText('Ștergi marcajul de salvare de pe cele 2 anunțuri');
   await expect(page.locator('[data-clear-no]')).toBeFocused();
   await page.keyboard.press('Escape');                                       // cancel by keyboard
   await expect(page.locator('[data-clear-confirm]')).toBeHidden();

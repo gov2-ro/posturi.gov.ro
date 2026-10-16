@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-10-17 — Reader notes on postings, CSV export from Salvate
+
+pax wants to browse postings and note what the extraction got wrong before the next LLM
+run, then hand the notes back. Built on the UX-09 browser-local store rather than anything
+server-side: the record gains `note` (≤ 4000 characters) and `notedAt`; a record is kept
+while saved, hidden or noted; a noted posting counts as saved (nav count, Salvate) without
+touching its bookmark. A ✎ icon button after save/hide (last, so their tab order holds)
+opens an editor under the posting — Ctrl/⌘+Enter saves, Escape closes, an emptied note
+removes itself. /salvate/ gets a "Notițe" view, the note under each item with an edit
+button, and "Exportă salvatele și notițele (CSV)" (client-side Blob, UTF-8 BOM so
+spreadsheets read the diacritics, RFC-4180 quoting).
+
+Found while testing: the result rows sit inside the HTMX filter form, which re-queries on
+any bubbling `change`/`input`, so blurring the note textarea re-fetched the list and threw
+the editor away. The editor stops those events; a browser test asserts no list request
+while typing. Tests: `notes.spec.js` (list, detail, Escape/Ctrl+Enter, empty removes,
+/salvate/ view and in-place edit, CSV content, table layout); suites green (332 browser).
+
+VPS read (posturi-vps): the posturi crontab block's `MAILTO` was already commented out —
+OPS-MAIL closed without a change; the box-wide `MAILTO` belongs to other projects.
+Runs 13–16 Oct all ok; the 10:15Z slot grew from ~1,800 s to 3,106 s with weekday volume.
+
 ### 2026-10-16 — Beta weekend, fourth slice: v5, archive pages, net pay, communes
 
 None deployed.

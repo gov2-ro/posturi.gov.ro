@@ -16,7 +16,7 @@ import glob
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
-from posting_urls import build_slug_index, url_from_slug
+from posting_urls import build_slug_index, slug_for_url, url_from_slug
 
 #: Bump this whenever a change to this file can alter what a given HTML page
 #: parses to — a selector, a regex, a date rule, the markdown conversion, a CSV
@@ -25,7 +25,7 @@ from posting_urls import build_slug_index, url_from_slug
 #: silently survive a parser fix. A bump invalidates the whole cache and the next
 #: run re-parses everything (`--full` does the same on demand). Pure refactors,
 #: comments and log changes do not need one.
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 
 #: Name of the reuse cache, written next to the anunturi CSV.
 CACHE_NAME = '.parse-cache.json'
@@ -77,6 +77,27 @@ _INDEX_DATES = _load_index_dates()
 #: which is wrong for the raw-permalink postings (`/?post_type=pg_job&p=26404`)
 #: and silently detached them from their index row — no dates, no join key.
 _SLUG_INDEX = build_slug_index(_INDEX_DATES)
+
+
+def _build_slug_date_index(index_dates):
+    """(slug, 'YYYY/MM/DD' publish date) → source URL.
+
+    A slug alone is not unique across the redesign: `/anunt/gipsar-debutant/`
+    (Moinești, 2025) and `/joburi/gipsar-debutant/` (Bihor, 2026) are two
+    postings with one slug. fetch-anunturi.py caches them as two files, each in
+    its own publish-date directory, but `_SLUG_INDEX` sent both to the first URL:
+    the new posting's row was filed under the old URL and the new one reached the
+    database with no body, no deadline and no `expires_at` — 66 postings by
+    2026-10-17. The date directory tells them apart.
+    """
+    out = {}
+    for url, (posted, _) in index_dates.items():
+        if url and posted:
+            out.setdefault((slug_for_url(url), posted.replace('-', '/')), url)
+    return out
+
+
+_SLUG_DATE_INDEX = _build_slug_date_index(_INDEX_DATES)
 
 DATE_RE = re.compile(r'\b(\d{1,2}\.\d{2}\.\d{4})\b')
 TIME_RE = re.compile(r'ora\s+(\d{1,2}[:.]\d{2})', re.IGNORECASE)
@@ -366,17 +387,25 @@ def _find_deadline(calendar_rows):
 
 # --- URL reconstruction ---
 
-def source_url_from_path(file_path):
+def source_url_from_path(file_path, sidecar=None):
     """Reconstruct the posting URL from the cached HTML path.
 
-    Resolved through `_SLUG_INDEX`, which is built by applying the fetch step's
-    own naming function to every URL in the index CSV — so the two directions
-    agree by construction rather than by two regexes kept in sync by hand.
-    Handles /anunt/, /joburi/ and raw `?post_type=pg_job&p=N` permalinks alike.
-    Unknown slugs fall back to the /joburi/{slug}/ shape.
+    The sidecar's `url` is the one the page was fetched from, so it wins. Legacy
+    pages without one are resolved by slug *and* publish-date directory
+    (`_SLUG_DATE_INDEX`), then by slug alone through `_SLUG_INDEX`. Both are
+    built by applying the fetch step's own naming function to every URL in the
+    index CSV — so the two directions agree by construction rather than by two
+    regexes kept in sync by hand. Handles /anunt/, /joburi/ and raw
+    `?post_type=pg_job&p=N` permalinks alike. Unknown slugs fall back to the
+    /joburi/{slug}/ shape.
     """
+    if sidecar is None:
+        sidecar = _read_sidecar(file_path)
+    if (sidecar or {}).get('url'):
+        return sidecar['url']
     slug = os.path.splitext(os.path.basename(file_path))[0]
-    return url_from_slug(slug, _SLUG_INDEX)
+    date_dir = '/'.join(os.path.normpath(os.path.dirname(file_path)).split(os.sep)[-3:])
+    return _SLUG_DATE_INDEX.get((slug, date_dir)) or url_from_slug(slug, _SLUG_INDEX)
 
 
 def _read_sidecar(file_path):
@@ -589,7 +618,7 @@ def extract_job_details(file_path):
                                          exclude_deadline_rows=True)
 
     # --- Index dates ---
-    src_url = source_url_from_path(file_path)
+    src_url = source_url_from_path(file_path, sidecar)
     date_posted, valid_through = _try_index_lookup(src_url)
 
     # --- Also try to get dates from new detail page meta line ---
@@ -776,7 +805,7 @@ def _page_key(file_path, sidecar):
             return None
     except (OSError, ValueError, TypeError):
         return None
-    src_url = source_url_from_path(file_path)
+    src_url = source_url_from_path(file_path, sidecar)
     return {
         'url': src_url,
         'hash': content_hash,

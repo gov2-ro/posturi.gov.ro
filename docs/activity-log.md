@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-10-17 — Slug collisions across the redesign: 63 postings with no body, no deadline
+
+Reported from `/job/14057-gipsar-debutant/`: "Fără corp", "Contact lipsă", "Termen
+neprecizat", no documents, no stages — while posturi.gov.ro shows a full body, a
+calendar and Termen 2026-11-02.
+
+- **Cause.** `/anunt/gipsar-debutant/` (Moinești, 2025) and `/joburi/gipsar-debutant/`
+  (Bihor, 2026) share a slug. fetch-anunturi.py caches them as two files, each in its
+  own publish-date directory, but `parse-anunturi.py` mapped a file back to its URL
+  by slug alone (`build_slug_index`, first URL wins). The 2026 page was filed under
+  the 2025 URL with the 2025 index dates; the `/joburi/` posting got no detail row, so
+  no body, no attachment, no `expires_at`. The full dev export shows it empty; the
+  live `--active-only` export drops NULL expiries, so on the site it simply does not
+  exist (14057 is absent from today's VPS export, active and archive alike). Same
+  family as the 2026-09-08 `index.html` collision.
+- **Fix.** `source_url_from_path` uses the sidecar's `url` (the URL the page was
+  fetched from) when there is one; legacy pages resolve by slug + date directory
+  (`_SLUG_DATE_INDEX`), then by slug alone as before. `PARSER_VERSION` 1 → 2, so the
+  next run re-parses everything once. Tests in `test_incremental_parse.py::TestSourceUrl`.
+- **Measured on the Mac's September cache (9,757 pages).** Duplicate `Source URL`s
+  66 → 3; 126 URLs gained a row of their own (63 `/joburi/` + 63 `/anunt/`), all with
+  body and expiry; no URL lost; the 9,625 already-unique rows unchanged apart from
+  parser changes made since the CSV was last written (14 Sep). The 3 left are a
+  different problem — one URL recycled for two postings — logged as DATA-08.
+- **On the VPS.** Not deployed. The next pipeline run after the code lands re-parses
+  and re-imports; the recovered postings then go through LLM extraction like new ones.
+
 ### 2026-10-17 — pax's 261016 filter notes: regimes, institutions, COR tree, exclusions, a tool
 
 pax's second batch of notes (backlog § 261016 Notes, "UX & Data quality"). Commits

@@ -39,6 +39,7 @@ def pm():
 def env(pm, tmp_path, monkeypatch):
     """A cache dir, an output dir, and the index lookups pinned to nothing."""
     monkeypatch.setattr(pm, "_SLUG_INDEX", {})
+    monkeypatch.setattr(pm, "_SLUG_DATE_INDEX", {})
     monkeypatch.setattr(pm, "_INDEX_DATES", {})
     cache = tmp_path / "cache"
     cache.mkdir()
@@ -226,6 +227,40 @@ class TestRemoved:
         s = run(pm, env)
         assert (s["parsed"], s["reused"]) == (0, 2)
         assert [r["Job Title"] for r in rows(env.csv)] == ["First", "Second"]
+
+
+class TestSourceUrl:
+    """One slug, two postings: `/anunt/gipsar-debutant/` (2025) and
+    `/joburi/gipsar-debutant/` (2026). Both used to resolve to the first URL, so
+    the 2026 posting reached the database with no body and no expiry."""
+
+    OLD = "https://posturi.gov.ro/anunt/gipsar-debutant/"
+    NEW = "https://posturi.gov.ro/joburi/gipsar-debutant/"
+
+    def _index(self, pm, monkeypatch):
+        dates = {self.OLD: ("2025-05-27", "2025-06-11"), self.NEW: ("2026-09-09", "")}
+        monkeypatch.setattr(pm, "_INDEX_DATES", dates)
+        monkeypatch.setattr(pm, "_SLUG_INDEX", pm.build_slug_index(dates))
+        monkeypatch.setattr(pm, "_SLUG_DATE_INDEX", pm._build_slug_date_index(dates))
+
+    def test_legacy_pages_resolve_by_their_date_folder(self, pm, env, monkeypatch):
+        self._index(pm, monkeypatch)
+        put(env, "gipsar-debutant", title="Moinești", sub="2025/05/27", sidecar=False)
+        put(env, "gipsar-debutant", title="Bihor", sub="2026/09/09", sidecar=False)
+        run(pm, env)
+        got = {r["Job Title"]: (r["Source URL"], r["Data Publicare"]) for r in rows(env.csv)}
+        assert got == {"Moinești": (self.OLD, "2025-05-27"), "Bihor": (self.NEW, "2026-09-09")}
+
+    def test_sidecar_url_wins(self, pm, env, monkeypatch):
+        self._index(pm, monkeypatch)
+        page = put(env, "gipsar-debutant", sub="2099/01/01")
+        meta = json.loads(page.with_suffix(".meta.json").read_text(encoding="utf-8"))
+        assert pm.source_url_from_path(str(page)) == meta["url"] == self.NEW
+
+    def test_unknown_date_folder_falls_back_to_the_slug(self, pm, env, monkeypatch):
+        self._index(pm, monkeypatch)
+        page = put(env, "gipsar-debutant", sub="2099/01/01", sidecar=False)
+        assert pm.source_url_from_path(str(page)) == self.OLD
 
 
 def test_progress_lines_and_summary(pm, env):

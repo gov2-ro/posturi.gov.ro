@@ -2,6 +2,27 @@
 
 ## 2026
 
+### 2026-10-17 — 122 open postings missing from the site: reused slugs
+
+pax found https://posturi.gov.ro/joburi/gipsar-debutant/ (open until 2 Nov) on neither the
+live site nor in the archive. posturi-vps (read-only): its row has `expires_at` NULL and no
+detail; 123 open postings are in that state, and all 122 `/joburi/` ones have an older
+`/anunt/` twin with the same slug (the source reuses slugs across years and the redesign).
+
+Cause: the detail cache is `data/anunturi/YYYY/MM/DD/{slug}.html`, so the two pages never
+collided on disk — but `parse-anunturi.py` turned a cached file back into its URL by slug
+alone (`build_slug_index`, first URL wins), so the September 2026 page was parsed *as the
+May 2025 URL*. The new row got no dates (and the old row the new deadline); the export's
+`expires_at >= today` is NULL for it, and the archive wants an expiry too, so it vanished
+without a warning (the importer's NULL-expiry guard has a ratio threshold; 123 of ~2,550 is
+under it).
+
+Fix (`31d818e`): the parser takes the URL from the fetch step's sidecar (`url`), then from
+(date directory, slug), and only then by slug. `PARSER_VERSION` 2, so the first run after
+the pull re-parses everything. Defence in depth: the export's live slice also keeps a
+posting with no expiry that the source listed in the last 3 days (`LIVE_SQL`), shown as
+"Termen neprecizat". Tests: `TestReusedSlugs`, the live-slice test.
+
 ### 2026-10-17 — pax's 261016 filter notes: regimes, institutions, COR tree, exclusions, a tool
 
 pax's second batch of notes (backlog § 261016 Notes, "UX & Data quality"). Commits

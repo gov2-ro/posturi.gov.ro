@@ -55,6 +55,10 @@ The next scheduled run then:
 - passes `--schema-floor 95` to check-export (OPS-FLOORS);
 - deploys the data and purges Cloudflare (if `CF_*` are in the VPS `.env`).
 
+The pull also fixes 122 open postings missing from the site (2026-10-17, reused slugs —
+docs/activity-log.md): `PARSER_VERSION` 2 makes the first run re-parse every cached page,
+after which `/?q=gipsar` finds the Bihor gipsar posting.
+
 The pull also brings `classify.py` (stdlib only, 2026-10-17): the export then writes
 `work_mode`, `funding_kind`, `job_regime`, `employer_kind`, `occ_group`, `med_specialty`
 and the filtered skills; until that export the site shows those groups empty (PHP shims).

@@ -78,12 +78,13 @@ class TestCancelledIsExcludedFromActive:
 
     def test_posting_filter_checks_cancelled(self):
         src = self._export_source()
-        assert "jp.expires_at >= CURRENT_DATE AND NOT jp.cancelled" in src
+        assert ") AND NOT jp.cancelled\")" in src, "LIVE_SQL ends with the cancelled check"
+        assert 'f"WHERE {LIVE_SQL}" if active_only' in src
 
     def test_calendar_filter_checks_cancelled_too(self):
         """Events for a withdrawn competition must not ship either."""
         src = self._export_source()
-        assert "expires_at >= CURRENT_DATE AND NOT cancelled" in src
+        assert 'f"jp WHERE {LIVE_SQL})"' in src
 
     def test_importer_flags_the_romanian_marker(self):
         src = (REPO_ROOT / "webapp/apps/jobs/management/commands/import_csvs.py").read_text(

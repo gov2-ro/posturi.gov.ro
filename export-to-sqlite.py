@@ -516,7 +516,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     # real dates on its detail page, so filtering on expires_at alone republishes
     # it as an open job — see docs/activity-log.md, 2026-09-08.
     active_filter = (
-        "WHERE jp.expires_at >= CURRENT_DATE AND NOT jp.cancelled" if active_only else ""
+        f"WHERE {LIVE_SQL}" if active_only else ""
     )
     occ_majority = _occupation_majority(cur)
     label = "active " if active_only else ""
@@ -704,7 +704,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     print("Exporting calendar_events...", end=" ", flush=True)
     ce_filter = (
         "WHERE posting_id IN (SELECT id FROM jobs_jobposting "
-        "WHERE expires_at >= CURRENT_DATE AND NOT cancelled)"
+        f"jp WHERE {LIVE_SQL})"
         if active_only else ""
     )
     cur.execute(f"""
@@ -788,6 +788,13 @@ def split_posting_text(con: sqlite3.Connection) -> None:
 
 
 #: UX-03: how long a posting that left the live slice keeps its archived page.
+#: The live slice: open by its expiry, or — 2026-10-17 — with no expiry at all
+#: but still listed by the source in the last few days. A posting whose detail
+#: page was never parsed has no expires_at; `>= CURRENT_DATE` is NULL for it, so
+#: it fell out of both the live slice and the archive without a trace (123 open
+#: postings on the VPS). It now shows as "Termen neprecizat" until its dates arrive.
+LIVE_SQL = ("(jp.expires_at >= CURRENT_DATE OR (jp.expires_at IS NULL AND "
+            "jp.last_seen_at >= CURRENT_DATE - INTERVAL '3 days')) AND NOT jp.cancelled")
 ARCHIVE_DAYS = 90
 
 
@@ -826,7 +833,7 @@ def export_archive(cur, con: sqlite3.Connection) -> None:
         JOIN jobs_employer e ON e.id = jp.employer_id
         LEFT JOIN jobs_judet j ON j.id = jp.judet_id
         LEFT JOIN jobs_occupation o ON o.id = jp.occupation_id
-        WHERE NOT (jp.expires_at >= CURRENT_DATE AND NOT jp.cancelled)
+        WHERE NOT ({LIVE_SQL})
           AND jp.expires_at >= CURRENT_DATE - INTERVAL '{ARCHIVE_DAYS} days'
         ORDER BY jp.id
     """)

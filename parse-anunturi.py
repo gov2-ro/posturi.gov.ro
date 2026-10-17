@@ -16,7 +16,7 @@ import glob
 from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
-from posting_urls import build_slug_index, url_from_slug
+from posting_urls import build_dated_slug_index, build_slug_index, url_from_slug
 
 #: Bump this whenever a change to this file can alter what a given HTML page
 #: parses to — a selector, a regex, a date rule, the markdown conversion, a CSV
@@ -25,7 +25,7 @@ from posting_urls import build_slug_index, url_from_slug
 #: silently survive a parser fix. A bump invalidates the whole cache and the next
 #: run re-parses everything (`--full` does the same on demand). Pure refactors,
 #: comments and log changes do not need one.
-PARSER_VERSION = 1
+PARSER_VERSION = 2   # 2: URL from sidecar / (date, slug) — reparse everything once
 
 #: Name of the reuse cache, written next to the anunturi CSV.
 CACHE_NAME = '.parse-cache.json'
@@ -77,6 +77,11 @@ _INDEX_DATES = _load_index_dates()
 #: which is wrong for the raw-permalink postings (`/?post_type=pg_job&p=26404`)
 #: and silently detached them from their index row — no dates, no join key.
 _SLUG_INDEX = build_slug_index(_INDEX_DATES)
+
+#: (publication date dir, slug) → source URL. Checked before _SLUG_INDEX: a slug
+#: alone is ambiguous when posturi.gov.ro reuses it (see build_dated_slug_index).
+_DATED_SLUG_INDEX = build_dated_slug_index(
+    (url, posted.replace('-', '/')) for url, (posted, _expires) in _INDEX_DATES.items())
 
 DATE_RE = re.compile(r'\b(\d{1,2}\.\d{2}\.\d{4})\b')
 TIME_RE = re.compile(r'ora\s+(\d{1,2}[:.]\d{2})', re.IGNORECASE)
@@ -374,8 +379,22 @@ def source_url_from_path(file_path):
     agree by construction rather than by two regexes kept in sync by hand.
     Handles /anunt/, /joburi/ and raw `?post_type=pg_job&p=N` permalinks alike.
     Unknown slugs fall back to the /joburi/{slug}/ shape.
+
+    2026-10-17: the sidecar's URL first, then (date dir, slug) — a slug alone
+    is reused by the source (old /anunt/ and new /joburi/ pages share it), and
+    the new page was attributed to the old URL.
     """
+    # The fetch step's sidecar records the exact URL it fetched: the truth.
+    sidecar = _read_sidecar(file_path)
+    if sidecar and isinstance(sidecar.get('url'), str) and sidecar['url'].startswith('http'):
+        return sidecar['url']
     slug = os.path.splitext(os.path.basename(file_path))[0]
+    # Then the page's own date directory: data/anunturi/YYYY/MM/DD/<slug>.html.
+    parts = os.path.normpath(file_path).split(os.sep)
+    if len(parts) >= 4:
+        dated = _DATED_SLUG_INDEX.get(('/'.join(parts[-4:-1]), slug))
+        if dated:
+            return dated
     return url_from_slug(slug, _SLUG_INDEX)
 
 

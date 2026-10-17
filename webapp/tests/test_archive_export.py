@@ -72,3 +72,25 @@ def test_summary_keeps_whole_paragraphs(exp):
     assert exp._summary(body) == "A" * 400, "a paragraph that would pass the limit is left out"
     assert exp._summary("") == ""
     assert exp._summary("x" * 2000).startswith("x") and len(exp._summary("x" * 2000)) <= 800
+
+
+@pytest.mark.django_db
+def test_live_slice_keeps_a_recently_listed_posting_without_an_expiry(exp):
+    """2026-10-17: 123 open postings had no expires_at (their detail page was parsed
+    as an older posting with the same slug) and vanished from both the live slice
+    and the archive. Still listed by the source → live, as "Termen neprecizat"."""
+    employer = Employer.objects.create(name="Live Employer", slug="live-employer")
+    judet = Judet.objects.create(name="Bihor LV", slug="bihor-lv")
+    today = date.today()
+    listed = post(employer, judet, expires=today)
+    JobPosting.objects.filter(pk=listed.pk).update(expires_at=None, last_seen_at=today)
+    gone = post(employer, judet, expires=today)
+    JobPosting.objects.filter(pk=gone.pk).update(expires_at=None, last_seen_at=today - timedelta(days=20))
+    cancelled = post(employer, judet, expires=today)
+    JobPosting.objects.filter(pk=cancelled.pk).update(expires_at=None, last_seen_at=today, cancelled=True)
+    with connection.cursor() as cur:
+        cur.execute(f"SELECT jp.id FROM jobs_jobposting jp WHERE {exp.LIVE_SQL}")
+        live = {r[0] for r in cur.fetchall()}
+    assert listed.id in live
+    assert gone.id not in live, "no longer listed: not shown as open"
+    assert cancelled.id not in live

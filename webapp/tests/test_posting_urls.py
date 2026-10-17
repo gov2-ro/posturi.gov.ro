@@ -102,3 +102,47 @@ class TestCancelledIsExcludedFromActive:
     ])
     def test_marker_detection_is_case_insensitive(self, raw, expected):
         assert ("anulat" in raw.lower()) is expected
+
+
+class TestReusedSlugs:
+    """2026-10-17: posturi.gov.ro reuses slugs — /anunt/gipsar-debutant/ (May 2025)
+    and /joburi/gipsar-debutant/ (Sept 2026). The cache keeps them apart by date
+    directory; the parser must too, or the new page is parsed as the old URL and
+    the new posting reaches the database with no dates (123 open postings)."""
+
+    OLD = "https://posturi.gov.ro/anunt/gipsar-debutant/"
+    NEW = "https://posturi.gov.ro/joburi/gipsar-debutant/"
+
+    def test_the_date_tells_reused_slugs_apart(self):
+        from posting_urls import build_dated_slug_index
+        index = build_dated_slug_index([(self.OLD, "2025/05/27"), (self.NEW, "2026/09/09")])
+        assert index[("2025/05/27", "gipsar-debutant")] == self.OLD
+        assert index[("2026/09/09", "gipsar-debutant")] == self.NEW
+
+    @pytest.fixture
+    def parser(self, monkeypatch):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("parse_anunturi_urls", REPO_ROOT / "parse-anunturi.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        from posting_urls import build_dated_slug_index
+        monkeypatch.setattr(mod, "_SLUG_INDEX", build_slug_index([self.OLD, self.NEW]))
+        monkeypatch.setattr(mod, "_DATED_SLUG_INDEX",
+                            build_dated_slug_index([(self.OLD, "2025/05/27"), (self.NEW, "2026/09/09")]))
+        return mod
+
+    def test_parser_resolves_the_page_by_its_date_directory(self, parser, tmp_path):
+        new_page = tmp_path / "anunturi" / "2026" / "09" / "09" / "gipsar-debutant.html"
+        old_page = tmp_path / "anunturi" / "2025" / "05" / "27" / "gipsar-debutant.html"
+        for p in (new_page, old_page):
+            p.parent.mkdir(parents=True)
+            p.write_text("<html></html>", encoding="utf-8")
+        assert parser.source_url_from_path(str(new_page)) == self.NEW
+        assert parser.source_url_from_path(str(old_page)) == self.OLD
+
+    def test_the_sidecar_url_wins(self, parser, tmp_path):
+        page = tmp_path / "2026" / "01" / "01" / "gipsar-debutant.html"
+        page.parent.mkdir(parents=True)
+        page.write_text("<html></html>", encoding="utf-8")
+        (page.parent / "gipsar-debutant.meta.json").write_text('{"url": "%s"}' % self.NEW, encoding="utf-8")
+        assert parser.source_url_from_path(str(page)) == self.NEW

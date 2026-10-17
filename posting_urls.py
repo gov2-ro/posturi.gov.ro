@@ -57,6 +57,24 @@ def build_slug_index(urls) -> dict[str, str]:
     return index
 
 
+def build_dated_slug_index(urls_with_dates) -> dict[tuple[str, str], str]:
+    """Map (publication date `YYYY/MM/DD`, cache slug) → source URL.
+
+    The cache lives at `data/anunturi/YYYY/MM/DD/{slug}.html`, so the date is
+    part of a cached page's identity — and it has to be part of the lookup:
+    posturi.gov.ro reuses slugs across years and across the 2026 redesign
+    (`/anunt/gipsar-debutant/` of May 2025 and `/joburi/gipsar-debutant/` of
+    September 2026). Keyed on the slug alone, the new page was parsed as the
+    old URL; the new posting never got its dates and vanished from the export
+    (2026-10-17, 123 open postings on the VPS).
+    """
+    index: dict[tuple[str, str], str] = {}
+    for url, date_dir in urls_with_dates:
+        if url and date_dir:
+            index.setdefault((date_dir, slug_for_url(url)), url)
+    return index
+
+
 def url_from_slug(slug: str, slug_index: dict[str, str] | None = None) -> str:
     """Reconstruct a posting URL from its cache slug.
 

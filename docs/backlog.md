@@ -208,7 +208,10 @@ VPS export writes (classify.py); until then the live site shows them empty or sh
 
 ### Misc
 - [x] add sort by salariu estimat
-- [ ] see what other fields might we be able to extract / enhance LLM info extraction. — *v5 (BETA-V5) waits for pax's notes CSV.*
+- [ ] LLM 
+    - [ ] see what other fields might we be able to extract / enhance LLM info extraction. — *v5 (BETA-V5) waits for pax's notes CSV.*
+    - [x] add few more extracted keywords along the likes of Funcții de execuție, Permanent. Up to 2-3 rows, but these keywords should what makes the job more special, figure out what's about — *2026-10-18, pax chose rarity-ranked facts (no AI): `classify.tag_candidates` + `rank_tags` — up to 4 tags, rarest first, none on more than 25% of postings (so Permanent / Execuție never show): Perioadă determinată / Până la …, Normă parțială, Ture, Telemuncă, Proiect UE / PNRR, Fără experiență, Studii generale, Doctorat, Post de conducere, Funcție publică, Permis auto, a medical specialty, a tool-like skill (GIS, SICAP, REGES), a language, N posturi. Live data: 68% of postings get at least one. Rows and the detail page show them; the auto meta keeps only grade, studies and experience.*
+    - [ ] rank job posting quality. We should talk about the criteria. Counting filled fields. Explicit texts, less fluff? — *2026-10-18, pax: internal first; all four groups. `classify.quality`: 15 checks, 100 points (completeness 45, pay & terms 20, timing 20, clarity 15), scored only with an extraction; `/statistici#calitate` shows the distribution, per-check rates and the least/most complete employers. Live data: median 83; salary stated 2%, duties 22%, bibliography 62% — the checks near 100% (text, attachment, contact, calendar) barely discriminate and are the first to revisit. Open: decide on public display after a week of looking.*
 - [x] show all filters explicitly (unbundle "mai multe filtre"). Salary, for example should not be hidden. Remove boxes around filters in "grilă mode" plain text is fine and more compact. 
 - [x] remove boxes around post cards. And around post attributes. 
 - [x] make each post more compact on mobile. Instead of "Salariu estimat" use 💰 - and add (estimat) at the end of the numbers. All following attributes inline, just after salary (inline with it). we can also do without published date.  

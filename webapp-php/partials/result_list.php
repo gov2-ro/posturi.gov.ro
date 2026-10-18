@@ -117,16 +117,12 @@ $chips = $active_chips ?? [];
 
           <?php /* One line of facts, no boxes (261016): pay first — 💰, the amount and,
              for the draft-grid estimate, "(estimat)" (list_salary(): the stated
-             salary wins) — then the source's own labels, then the inferred ones
-             behind the "auto" marker. In the table view the line dissolves
+             salary wins) — then the distinctive tags (row_tags(): uncommon facts,
+             rarest first; 2026-10-18), then the requirements behind the "auto" marker. In the table view the line dissolves
              (display: contents): pay becomes the Salariu column, the rest hides. */ ?>
-          <?php $sal = list_salary($p); $meta = inferred_meta($p);
-                $labels = array_values(array_filter([
-                    $p['job_level'] ? job_level_label((string)$p['job_level']) : '',
-                    (string)($p['job_type'] ?? ''),
-                    JOB_REGIME_SHORT[(string)($p['job_regime'] ?? '')] ?? '',
-                    ($p['nr_posturi'] ?? 0) > 1 ? $p['nr_posturi'] . ' posturi' : '',
-                ], fn($v) => $v !== '')); ?>
+          <?php $sal = list_salary($p); $labels = row_tags($p);
+                // A requirement already said by a tag ("Fără experiență") is not repeated.
+                $meta = array_values(array_diff(inferred_meta($p), $labels)); ?>
           <?php if ($sal || $labels || $meta): ?>
           <p class="pg-facts mt-1 text-xs leading-relaxed text-ink-muted">
             <?php if ($sal): ?>

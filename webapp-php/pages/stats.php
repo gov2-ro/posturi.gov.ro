@@ -332,6 +332,72 @@ require __DIR__ . '/../inc/header.php';
       <?php endforeach; ?>
     </div>
   </section>
+
+  <?php /* 2026-10-18 (pax: "internal first"): how clear and complete the announcements
+     are, by classify.quality(). Experimental — here to check the criteria before
+     anything is shown on postings. Only postings with an extraction are scored. */
+  $q_rows = export_has_column('quality')
+      ? db()->query("SELECT quality FROM job_postings WHERE quality IS NOT NULL ORDER BY quality")->fetchAll(PDO::FETCH_COLUMN)
+      : [];
+  if ($q_rows):
+      $q_n = count($q_rows);
+      $q_median = (int)$q_rows[intdiv($q_n, 2)];
+      $q_hist = array_fill(0, 10, 0);
+      foreach ($q_rows as $v) $q_hist[min(9, intdiv((int)$v, 10))]++;
+      $q_max = max($q_hist) ?: 1;
+      $q_pass = [];
+      foreach (db()->query("SELECT je.key AS k, AVG(je.value) AS v FROM job_postings, json_each(job_postings.quality_json) je
+                            WHERE quality_json IS NOT NULL GROUP BY je.key") as $r) $q_pass[$r['k']] = (float)$r['v'];
+      $q_emp = db()->query("SELECT employer_name AS e, employer_id AS id, ROUND(AVG(quality)) AS q, COUNT(*) AS n FROM job_postings
+                            WHERE quality IS NOT NULL GROUP BY employer_id HAVING n >= 5 ORDER BY q, n DESC")->fetchAll();
+  ?>
+  <section class="bg-surface border border-line rounded-lg p-6 mt-8" id="calitate">
+    <h3 class="font-display text-lg italic font-semibold text-ink mb-1">Calitatea anunțurilor <span class="ml-1 align-middle text-[11px] not-italic font-mono uppercase tracking-wider text-note-ink">experimental</span></h3>
+    <p class="mb-4 text-sm text-ink-muted">Cât de clar și complet este un anunț pentru cineva care vrea să aplice, 0–100, din <?= count(QUALITY_CHECKS) ?> verificări automate. <?= number_format($q_n, 0, ',', '.') ?> anunțuri cu extragere; mediana <?= $q_median ?>. Criteriile sunt în probă — nu se afișează pe anunțuri.</p>
+    <div class="grid grid-cols-1 gap-8 md:grid-cols-2">
+      <div>
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Distribuție</h4>
+        <div class="space-y-1" data-quality-hist>
+          <?php foreach ($q_hist as $i => $cnt): ?>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="w-14 shrink-0 font-mono text-ink-muted"><?= $i * 10 ?>–<?= $i === 9 ? 100 : $i * 10 + 9 ?></span>
+            <span class="h-2 flex-1 overflow-hidden rounded-full bg-sunken"><span class="block h-full rounded-full bg-gov" style="width:<?= round(100 * $cnt / $q_max) ?>%"></span></span>
+            <span class="w-10 shrink-0 text-right font-mono text-ink-muted"><?= $cnt ?></span>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+      <div>
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Verificări îndeplinite</h4>
+        <table class="w-full text-xs" data-quality-checks>
+          <?php foreach (QUALITY_CHECKS as $k => [$grp, $lbl, $w]): ?>
+          <tr class="border-b border-line/60">
+            <td class="py-1 pr-2 text-ink"><?= e($lbl) ?> <span class="text-ink-faint">· <?= e($grp) ?></span></td>
+            <td class="py-1 pr-2 text-right font-mono text-ink-muted"><?= $w ?> p</td>
+            <td class="py-1 text-right font-mono text-ink"><?= isset($q_pass[$k]) ? round(100 * $q_pass[$k]) . '%' : '—' ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </table>
+      </div>
+    </div>
+    <?php if (count($q_emp) >= 4):
+        $low = array_slice($q_emp, 0, 10); $high = array_reverse(array_slice($q_emp, -10)); ?>
+    <div class="mt-6 grid grid-cols-1 gap-8 md:grid-cols-2" data-quality-employers>
+      <?php foreach ([['Cele mai puțin complete', $low], ['Cele mai complete', $high]] as [$ttl_q, $list]): ?>
+      <div>
+        <h4 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted"><?= e($ttl_q) ?> <span class="normal-case tracking-normal">(angajatori cu ≥ 5 anunțuri)</span></h4>
+        <ol class="space-y-1 text-sm">
+          <?php foreach ($list as $r): ?>
+          <li class="flex justify-between gap-3"><a href="/?employer_id=<?= (int)$r['id'] ?>&amp;status=all" class="min-w-0 truncate text-gov hover:underline"><?= e($r['e']) ?></a>
+            <span class="shrink-0 font-mono text-xs text-ink-muted"><?= (int)$r['q'] ?> · <?= (int)$r['n'] ?> anunțuri</span></li>
+          <?php endforeach; ?>
+        </ol>
+      </div>
+      <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+  </section>
+  <?php endif; ?>
   </section>
 
   <!-- Historical publication intake (publication_monthly) -->

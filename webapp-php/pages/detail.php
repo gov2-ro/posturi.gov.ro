@@ -287,11 +287,16 @@ require __DIR__ . '/../inc/header.php';
       <?php if ($p['job_type']): ?>
         <span class="px-2 py-0.5 text-xs bg-neutral text-neutral-ink border border-neutral-line"><?= e($p['job_type']) ?></span>
       <?php endif; ?>
-      <?php if ($p['categorie']): ?>
-        <span class="px-2 py-0.5 text-xs <?= stripos($p['categorie'], 'public') !== false ? 'bg-ok text-ok-ink border border-ok-line' : 'bg-note text-note-ink border border-note-line' ?>">
-          <?= e($p['categorie']) ?>
+      <?php /* 261016: the regime read off the text, not the source's free-pick categorie. */
+      if ($regime = JOB_REGIME_SHORT[(string)($p['job_regime'] ?? '')] ?? ''): ?>
+        <span class="px-2 py-0.5 text-xs <?= ($p['job_regime'] ?? '') === 'publica' ? 'bg-ok text-ok-ink border border-ok-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>" data-regime>
+          <?= e($regime) ?>
         </span>
       <?php endif; ?>
+      <?php /* 2026-10-18: the distinctive tags (row_tags), minus what a badge here already says. */
+      foreach (array_diff(row_tags($p), ['Perioadă determinată', 'Post de conducere', 'Funcție publică', 'Funcție militară', $regime]) as $tag): ?>
+        <span class="px-2 py-0.5 text-xs bg-info text-info-ink border border-info-line" data-tag><?= e($tag) ?></span>
+      <?php endforeach; ?>
       <?php if ($days !== null): ?>
         <?php if ($days < 0): ?>
           <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?> <?= fmt_date($deadline) ?></span>

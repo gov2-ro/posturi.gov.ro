@@ -176,6 +176,30 @@ run_suite('a later export loses expired rows but not the historical totals', fun
     assert_same('0', card_number($x2, 'Închise'), 'closed rows left the slice');
 });
 
+run_suite('announcement quality (experimental): scored count, distribution, per-check rates', function () use ($tmp) {
+    [$html, $x, , $log] = stats_page("$tmp-quality.sqlite", function (PDO $p) {
+        // Two more employer-1 rows so it reaches the ≥ 5 employer cut.
+        $p->exec("UPDATE job_postings SET quality = 60, quality_json = '{\"salary\": 0}' WHERE employer_id = 1 AND quality IS NULL");
+    });
+    $text = section_text($x, 'calitate');
+    assert_contains('Calitatea anunțurilor', $text);
+    assert_contains('experimental', $text);
+    assert_contains('nu se afișează pe anunțuri', $text, 'says it is internal');
+    assert_same(10, $x->query('//*[@data-quality-hist]/div')->length, 'ten buckets');
+    assert_same(15, $x->query('//*[@data-quality-checks]//tr')->length, 'every check listed');
+    assert_contains('Salariul este precizat', $text);
+    assert_not_contains('Fatal error', $html);
+    assert_not_contains('stats.php', $log, 'server log');
+});
+
+run_suite('an export without quality columns has no quality section', function () use ($tmp) {
+    [$html, $x] = stats_page("$tmp-noquality.sqlite", function (PDO $p) {
+        $p->exec('UPDATE job_postings SET quality = NULL, quality_json = NULL');
+    });
+    assert_same('', section_text($x, 'calitate'));
+    assert_not_contains('Fatal error', $html);
+});
+
 run_suite('an export without the aggregate says indisponibil and infers no history', function () use ($tmp) {
     [$html, $x, , $log] = stats_page("$tmp-nohist.sqlite", function (PDO $p) {
         $p->exec('DROP TABLE publication_monthly');

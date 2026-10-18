@@ -280,7 +280,7 @@ test('grid cards: columns, title, employer, pay beside the deadline with the lab
   expect(dl.x, 'deadline right of the pay').toBeGreaterThan(pay.x + pay.width);
   expect(meta.y - (title.y + title.height), 'employer line right under the title').toBeLessThanOrEqual(6);
   expect(pay.y - (meta.y + meta.height), 'pay right under the employer').toBeLessThanOrEqual(6);
-  // 261016: no boxed badges; the source labels follow the pay on the same line of facts.
+  // 261016: no boxed badges; the tags (2026-10-18: distinctive facts) follow the pay on the same line of facts.
   expect(badges.y, 'labels start on the pay line').toBeLessThanOrEqual(pay.y + pay.height);
   await expect(li.locator('.pg-salary')).toContainText('💰 4.100–5.200 lei (estimat)');
   // The three cards of the first row sit side by side.

@@ -110,6 +110,9 @@ function shim_legacy_export(PDO $pdo): void {
         'employer_kind'          => "''",
         'occ_group'              => isset($cols['occ_isco_group']) ? 'occ_isco_group' : "''",
         'med_specialty'          => "'[]'",
+        'tags'                   => "'[]'",       // 2026-10-18: distinctive tags
+        'quality'                => 'NULL',       // and the internal quality score
+        'quality_json'           => 'NULL',
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

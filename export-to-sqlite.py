@@ -260,6 +260,12 @@ CREATE TABLE job_postings (
     occ_group               TEXT NOT NULL DEFAULT '',
     -- Doctors' specialties named in the title (classify.MEDICAL_SPECIALTIES).
     med_specialty           TEXT NOT NULL DEFAULT '[]',
+    -- 2026-10-18: up to four distinctive facts, rarest first (classify.rank_tags),
+    -- and the internal announcement-quality score (classify.quality; NULL without
+    -- an extraction). quality_json holds the per-check results.
+    tags                    TEXT NOT NULL DEFAULT '[]',
+    quality                 INTEGER,
+    quality_json            TEXT,
     -- The date after which nobody can apply any more, and therefore the one the
     -- site treats as "active". NOT `expires_at`: that is when the competition
     -- ends, which on a 20-posting sample ran a median of 15 days — up to 52 —
@@ -519,6 +525,9 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         f"WHERE {LIVE_SQL}" if active_only else ""
     )
     occ_majority = _occupation_majority(cur)
+    cur.execute("SELECT posting_id, COUNT(*) AS n FROM jobs_calendarevent GROUP BY posting_id")
+    cal_counts = {r["posting_id"]: r["n"] for r in cur.fetchall()}
+    tag_cands: dict = {}
     label = "active " if active_only else ""
     print(f"Exporting {label}job_postings...", end=" ", flush=True)
     cur.execute(f"""
@@ -623,6 +632,33 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         }, schema, roles, r["body_markdown"], r.get("attachment_text")):
             evidence_batch.append(tuple(ev[c] for c in evidence.ROW_COLUMNS))
 
+        q = classify.quality({
+            "schema": schema, "body": r["body_markdown"], "contact_phone": r["contact_phone"],
+            "contact_email": r["contact_email"], "published_at": fmt_date(r["published_at"]),
+            "apply_deadline": deadline["date"], "deadline_source": deadline["source"],
+            "inf_salary_min": inferred.get("salary_min"), "v3_contract_duration": v3["contract_duration"],
+            "v3_schedule": v3["schedule"], "calendar_events": cal_counts.get(r["id"], 0),
+            "attachment_meta": json.loads(r["attachment_meta"] or "[]"),
+        })
+        role_skills = []
+        for role in roles:
+            for sk in json.loads(role.get("skills") or "[]"):
+                if sk not in role_skills:
+                    role_skills.append(sk)
+        tag_cands[r["id"]] = classify.tag_candidates({
+            "job_type": r["job_type"], "job_level": r["job_level"],
+            "job_regime": classify.regime(r["title"], r["body_markdown"]),
+            "work_mode": work_mode, "funding_kind": funding_kind,
+            "v3_schedule": v3["schedule"], "v3_shift_work": v3["shift_work"],
+            "v3_contract_duration": v3["contract_duration"],
+            "v5_end_date": v5["end_date"], "v5_fte": v5["fte"], "v5_recruitment_kind": v5["recruitment_kind"],
+            "v5_post_status": v5["post_status"], "v5_channels": v5["channels"],
+            "inf_experience_years": inferred.get("experience_years"),
+            "inf_studies_required": inferred.get("studies_required"),
+            "v3_credentials": v3["credentials"], "v3_languages": v3["languages"],
+            "med_specialty": json.dumps(classify.medical_specialties(r["title"])),
+            "skills": role_skills or json.loads(v3["skills"] or "[]"), "nr_posturi": r["nr_posturi"],
+        })
         batch.append((
             r["id"], r["url"], r["title"] or "",
             r["employer_id"], r["employer_name"],
@@ -672,6 +708,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             r["occ_isco_group"] or occ_majority.get(r["occ_canonical"])
                 or classify.occupation_fallback(r["occ_canonical"], r["title"]),
             json.dumps(classify.medical_specialties(r["title"]), ensure_ascii=False),
+            None if q is None else q["score"],
+            None if q is None else json.dumps(q["checks"]),
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
         ))
@@ -688,6 +726,10 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         _insert_roles(con, role_batch)
         _insert_evidence(con, evidence_batch)
     print(f" {total} rows")
+    # 2026-10-18: distinctive tags need the whole slice (rarity), so they are set last.
+    ranked = classify.rank_tags(tag_cands)
+    con.executemany("UPDATE job_postings SET tags = ? WHERE id = ?",
+                    [(json.dumps(t, ensure_ascii=False), pid) for pid, t in ranked.items() if t])
     # Coverage, not a target: how many postings carry a real per-role decomposition.
     roles_total = con.execute("SELECT COUNT(*) FROM posting_roles").fetchone()[0]
     print(f"  posting_roles: {roles_total} rows; {decomposed_postings} of {total} postings "
@@ -1310,6 +1352,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         v5_recruitment_kind, v5_internal_only, v5_vacancies_total, v5_fte,
         v5_post_status, v5_end_date, v5_channels, v5_work_localities,
         work_mode, funding_kind, job_regime, employer_kind, occ_group, med_specialty,
+        quality, quality_json,
         apply_deadline, deadline_source, application_status"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart

@@ -294,6 +294,25 @@ function pay_meter(array $p, string $extra = ''): string {
          . '" title="' . e($pl['text']) . '">' . $bars . '</span>';
 }
 
+/** classify.QUALITY_CHECKS: key => [group, label, weight]. Keep in step. */
+const QUALITY_CHECKS = [
+    'studies'      => ['Completitudine', 'Studiile cerute sunt precizate', 8],
+    'experience'   => ['Completitudine', 'Experiența cerută este precizată', 7],
+    'documents'    => ['Completitudine', 'Lista documentelor de depus', 8],
+    'calendar'     => ['Completitudine', 'Calendar cu cel puțin două date', 10],
+    'contact'      => ['Completitudine', 'Telefon sau e-mail de contact', 6],
+    'duties'       => ['Completitudine', 'Atribuțiile postului', 3],
+    'bibliography' => ['Completitudine', 'Bibliografie / tematică', 3],
+    'salary'       => ['Salariu și condiții', 'Salariul este precizat', 10],
+    'duration'     => ['Salariu și condiții', 'Durata contractului', 5],
+    'schedule'     => ['Salariu și condiții', 'Programul de lucru', 5],
+    'confirmed'    => ['Termene', 'Termen de depunere precizat (nu doar expirarea)', 8],
+    'window'       => ['Termene', 'Cel puțin 10 zile pentru depunere', 12],
+    'text'         => ['Claritate', 'Text propriu, nu doar formule standard', 6],
+    'specific'     => ['Claritate', 'Cerințe concrete, nu doar calități generice', 4],
+    'attachment'   => ['Claritate', 'Anunț complet în pagină sau atașat ca document', 5],
+];
+
 /** Short regime word for a result row (261016: replaces the source's unreliable `categorie`). */
 const JOB_REGIME_SHORT = ['contractuala' => 'Contractual', 'publica' => 'Funcție publică', 'militara' => 'Funcție militară'];
 
@@ -1289,13 +1308,11 @@ const FAMILY_MIN_CONFIDENCE = 0.5;
 function inferred_meta(array $p): array {
     $inf  = inferred_of($p);
     $meta = [];
-
-    $family = (string)($inf['profession_family'] ?? '');
-    $conf   = (float)($inf['profession_family_confidence'] ?? 0);
-    // 'altele' is the dictionary's catch-all — a label that says nothing.
-    if ($family !== '' && $family !== 'altele' && $conf >= FAMILY_MIN_CONFIDENCE) {
-        $meta[] = ucfirst($family);
-    }
+    // 2026-10-18: requirements only (grade, studies, experience). The domain,
+    // schedule, telework and "Calculator" moved out: the occupation tree says the
+    // domain, and schedule / telework show as distinctive tags when they are
+    // uncommon (row_tags()) — the stored `inferred.remote_eligible` was also the
+    // regex that matched "Remote Sensing".
     if ($seniority = (string)($inf['seniority'] ?? '')) {
         $meta[] = seniority_label($seniority);
     }
@@ -1315,16 +1332,38 @@ function inferred_meta(array $p): array {
         // stronger signal than simply not mentioning experience.
         $meta[] = 'Fără experiență';
     }
-    if ($work_type = (string)($inf['work_type'] ?? '')) {
-        $meta[] = work_type_label($work_type);
-    }
-    if (!empty($inf['remote_eligible'])) {
-        $meta[] = 'Telemuncă';
-    }
-    if (!empty($inf['requires_computer'])) {
-        $meta[] = ($inf['computer_level'] ?? '') === 'advanced' ? 'Calculator (avansat)' : 'Calculator';
-    }
     return $meta;
+}
+
+/** Whether the export itself has a column (not a shim's stand-in). Cached per request. */
+function export_has_column(string $name): bool {
+    static $cols = null;
+    if ($cols === null) {
+        $cols = array_flip(db()->query("SELECT name FROM pragma_table_info('job_postings') WHERE schema = 'main'")
+            ->fetchAll(PDO::FETCH_COLUMN) ?: []);
+        if (!$cols) {   // older SQLite: pragma_table_info without a schema column
+            $cols = array_flip(db()->query("SELECT name FROM main.pragma_table_info('job_postings')")->fetchAll(PDO::FETCH_COLUMN) ?: []);
+        }
+    }
+    return isset($cols[$name]);
+}
+
+/**
+ * The short facts a result row shows after the pay (2026-10-18): the export's
+ * distinctive tags — uncommon facts, rarest first (classify.rank_tags). An export
+ * from before the tags falls back to the source labels it always showed.
+ */
+function row_tags(array $p): array {
+    if (export_has_column('tags')) {
+        $t = json_decode((string)($p['tags'] ?? '[]'), true);
+        return is_array($t) ? array_values(array_filter(array_map('strval', $t), fn($v) => $v !== '')) : [];
+    }
+    return array_values(array_filter([
+        $p['job_level'] ?? '' ? job_level_label((string)$p['job_level']) : '',
+        (string)($p['job_type'] ?? ''),
+        JOB_REGIME_SHORT[(string)($p['job_regime'] ?? '')] ?? '',
+        ($p['nr_posturi'] ?? 0) > 1 ? $p['nr_posturi'] . ' posturi' : '',
+    ], fn($v) => $v !== ''));
 }
 
 /** Free-form inferred tag lists, for the detail page. */

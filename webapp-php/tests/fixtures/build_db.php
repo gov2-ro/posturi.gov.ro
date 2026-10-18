@@ -144,6 +144,9 @@ CREATE TABLE job_postings (
     employer_kind           TEXT NOT NULL DEFAULT '',
     occ_group               TEXT NOT NULL DEFAULT '',
     med_specialty           TEXT NOT NULL DEFAULT '[]',
+    tags                    TEXT NOT NULL DEFAULT '[]',
+    quality                 INTEGER,
+    quality_json            TEXT,
     apply_deadline          TEXT,
     deadline_source         TEXT NOT NULL DEFAULT '',
     application_status      TEXT NOT NULL DEFAULT ''
@@ -527,6 +530,11 @@ SQL);
         UPDATE job_postings SET occ_group='9' WHERE id=1005;
         UPDATE job_postings SET occ_group='2212', med_specialty='[\"Cardiologie\"]' WHERE id=1006;
         UPDATE job_postings SET occ_group='5153' WHERE id=1004;
+        UPDATE job_postings SET tags='[\"Normă parțială\", \"Proiect cu fonduri UE\"]', quality=72,
+            quality_json='{\"salary\": 0, \"calendar\": 1, \"window\": 1}' WHERE id=1002;
+        UPDATE job_postings SET tags='[\"Ture / gărzi\"]', quality=55,
+            quality_json='{\"salary\": 0, \"calendar\": 0, \"window\": 0.5}' WHERE id=1004;
+        UPDATE job_postings SET quality=90, tags='[\"Permis auto\"]', quality_json='{\"salary\": 1, \"calendar\": 1, \"window\": 1}' WHERE id=1001;
     ");
 
     $db->exec("INSERT INTO calendar_events VALUES

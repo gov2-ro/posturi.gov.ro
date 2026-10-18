@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-10-18 — Distinctive tags per posting; announcement quality score (internal)
+
+pax's two new notes, decided in a short walkthrough: tags from facts we already hold,
+ranked by rarity (no AI); a quality score shown internally first, weighing completeness,
+pay and terms, timing and clarity.
+
+- **Tags** (`classify.tag_candidates`, `rank_tags`): candidates are contract, schedule,
+  telework, funding, requirements, credentials, specialty, tool-like skills, languages and
+  seat count; the export counts each key over the whole slice and keeps up to four, rarest
+  first, dropping any on more than 25% of postings. Free-text skills read as noise in a
+  first pass ("gramatică și ortografie", "integrare TIC în educație"), so a skill tag must
+  start with an acronym or product name. On the live export 68% of postings get a tag. Rows
+  replace the source labels with them (old exports keep the labels: `export_has_column`);
+  the detail badges gain them and show the regime read off the text instead of the source
+  categorie. The row's auto meta drops domain, schedule, telework and "Calculator".
+- **Quality** (`classify.quality`): 15 checks, 100 points; NULL without an extraction.
+  Live export: median 83, p10 66; salary stated on 2% of postings, duties 22%. Least
+  complete employers include ambulance and hospital services; most complete, research
+  institutes and some DGASPCs. `/statistici#calitate`, labelled experimental.
+
 ### 2026-10-17 — 122 open postings missing from the site: reused slugs
 
 pax found https://posturi.gov.ro/joburi/gipsar-debutant/ (open until 2 Nov) on neither the

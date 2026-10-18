@@ -131,3 +131,23 @@ def test_skill_tags_drop_soft_skills_and_merge_spellings():
     ]
     assert classify.skill_tags(skills) == ["Microsoft Excel", "Operare PC", "GIS", "Contabilitate"]
     assert classify.skill_tags(None) == []
+
+
+def test_tags_are_rare_facts_and_at_most_four():
+    common = {"job_type": "Permanent", "job_level": "Funcții de execuție"}
+    cands = {i: classify.tag_candidates(dict(common)) for i in range(10)}
+    special = dict(common, job_type="Temporar", v3_schedule="norma_partiala", funding_kind="pnrr",
+                   med_specialty='["Cardiologie"]', skills=["GIS", "lucru în echipă", "integrare TIC în educație"],
+                   nr_posturi=3, v3_credentials='["permis_conducere"]', work_mode="hibrid")
+    cands[99] = classify.tag_candidates(special)
+    tags = classify.rank_tags(cands)
+    assert tags[0] == [], "Permanent / execuție are not tags"
+    assert len(tags[99]) == 4
+    assert set(tags[99]) <= {"Perioadă determinată", "Normă parțială", "PNRR", "Cardiologie", "GIS",
+                             "3 posturi", "Permis auto", "Hibrid"}
+    assert "integrare TIC în educație" not in tags[99] and "lucru în echipă" not in tags[99]
+
+
+def test_a_tag_on_most_postings_is_dropped():
+    cands = {i: [("parttime", "Normă parțială")] for i in range(10)}
+    assert all(v == [] for v in classify.rank_tags(cands).values())

@@ -380,7 +380,7 @@ _SKILL_ALIASES: list[tuple[re.Pattern, str]] = [(re.compile(p), label) for p, la
     (r"^(ms\s+|microsoft\s+)?word$", "Microsoft Word"),
     (r"^(ms\s+|microsoft\s+)?power\s?point$", "Microsoft PowerPoint"),
     (r"^(ms\s+|microsoft\s+)?office$|^pachetul\s+(microsoft\s+)?office$", "Microsoft Office"),
-    (r"^(operare|utilizare|utilizarea|lucru\s+(pe|la))\s+(pc|calculator\w*|computer\w*)$|^cunostinte\s+(de\s+)?(operare\s+)?(pc|calculator)$", "Operare PC"),
+    (r"^(operare|utilizare|utilizarea|lucru)\s+(pe\s+|la\s+|a\s+)?(pc|calculator\w*|computer\w*)$|^cunostinte\s+(de\s+)?(operare\s+)?(pc|calculator)$", "Operare PC"),
     (r"^ssm$|^securitate\w*\s+si\s+sanatate\w*\s+in\s+munca$", "Securitate și sănătate în muncă"),
     (r"^psi$|^prevenire\w*\s+si\s+stingere\w*\s+a?\s*incendiilor$", "PSI"),
 ]]
@@ -411,3 +411,219 @@ def skill_tags(skill_list) -> list[str]:
         if label not in out:
             out.append(label)
     return out
+
+
+# ---- Distinctive tags ---------------------------------------------------------------
+
+#: 261016 (pax, 2026-10-18): a few short tags per posting saying what makes it
+#: different. Candidates are facts the export already holds; `rank_tags()` keeps
+#: the uncommon ones, so "Permanent" and "Funcții de execuție" (most postings)
+#: never show and "Normă parțială", "PNRR" or "GIS" do.
+TAG_MAX = 4
+TAG_MAX_SHARE = 0.25     # a tag on more than a quarter of postings says nothing
+
+_CRED_TAGS = {"permis_conducere": "Permis auto", "acces_informatii_clasificate": "Acces info. clasificate"}
+
+
+def _fmt_day(iso) -> str:
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", str(iso or ""))
+    return f"{m.group(3)}.{m.group(2)}.{m.group(1)}" if m else ""
+
+
+def _json_list(v) -> list:
+    if isinstance(v, list):
+        return v
+    try:
+        import json
+        out = json.loads(v or "[]")
+        return out if isinstance(out, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def tag_candidates(p: dict) -> list[tuple[str, str]]:
+    """(key, label) facts that might make a posting stand out; ranked later by rarity.
+
+    `p` holds export column values (job_type, job_level, job_regime, work_mode,
+    funding_kind, v3_schedule, v3_shift_work, v3_contract_duration, v5_*,
+    inf_experience_years, inf_studies_required, v3_credentials, v3_languages,
+    med_specialty, skills (classify.skill_tags output), nr_posturi). The key is
+    what rarity is counted on; a value-specific key ("skill:GIS") is rare on its own.
+    """
+    out: list[tuple[str, str]] = []
+    add = lambda key, label: out.append((key, label)) if label else None  # noqa: E731
+
+    end = _fmt_day(p.get("v5_end_date"))
+    if end:
+        add("temporar", f"Până la {end}")
+    elif (p.get("v3_contract_duration") in ("determinata", "proiect")) or p.get("job_type") == "Temporar":
+        add("temporar", "Perioadă determinată")
+    if "conducere" in fold(p.get("job_level")):
+        add("conducere", "Post de conducere")
+    add("regime:" + str(p.get("job_regime") or ""),
+        {"publica": "Funcție publică", "militara": "Funcție militară"}.get(p.get("job_regime") or "", ""))
+    fte = p.get("v5_fte")
+    if isinstance(fte, (int, float)) and 0 < fte < 1:
+        add("parttime", "Normă " + f"{fte:g}".replace(".", ","))
+    elif p.get("v3_schedule") == "norma_partiala":
+        add("parttime", "Normă parțială")
+    if p.get("v3_schedule") == "tura_noapte":
+        add("ture", "Tură de noapte")
+    elif p.get("v3_shift_work") or p.get("v3_schedule") == "schimburi":
+        add("ture", "Ture / gărzi")
+    add("work:" + str(p.get("work_mode") or ""), {"telemunca": "Telemuncă", "hibrid": "Hibrid"}.get(p.get("work_mode") or "", ""))
+    add("fund:" + str(p.get("funding_kind") or ""),
+        {"fonduri_europene": "Proiect cu fonduri UE", "pnrr": "PNRR"}.get(p.get("funding_kind") or "", ""))
+    exp = p.get("inf_experience_years")
+    if exp is not None and float(exp) == 0:
+        add("noexp", "Fără experiență")
+    add("studies:" + str(p.get("inf_studies_required") or ""),
+        {"generala": "Studii generale", "doctorat": "Doctorat"}.get(p.get("inf_studies_required") or "", ""))
+    if p.get("v5_recruitment_kind") == "promovare":
+        add("promovare", "Promovare (doar interni)")
+    if p.get("v5_post_status") == "temporar_vacant":
+        add("tempvacant", "Post temporar vacant")
+    if set(_json_list(p.get("v5_channels"))) & {"email", "online", "posta"}:
+        add("remote_apply", "Depunere la distanță")
+    for kind in _json_list(p.get("v3_credentials")):
+        if kind in _CRED_TAGS:
+            add("cred:" + kind, _CRED_TAGS[kind])
+    for spec in _json_list(p.get("med_specialty"))[:1]:
+        add("spec:" + spec, spec)
+    # Only tool-like skills ("GIS", "AutoCAD", "SICAP", "ECDL"): an acronym or a
+    # product name. Free-text skills ("gramatică și ortografie") read as noise.
+    for skill in (p.get("skills") or [])[:12]:
+        if (len(skill) <= 25 and _TOOLISH.match(skill)
+                and skill not in ("Microsoft Office", "Microsoft Excel", "Microsoft Word", "Microsoft PowerPoint",
+                                  "Operare PC", "PSI", "SSM", "TIC", "IT", "PC")):
+            add("skill:" + skill, skill)
+    for tok in _json_list(p.get("v3_languages")):
+        code, _, level = str(tok).partition(":")
+        if code and code not in ("ro", "straina") and len(code) <= 3:
+            add("lang:" + code, (_LANG_NAMES.get(code, code.upper()) + (f" {level}" if level else "")))
+            break
+    n = p.get("nr_posturi")
+    if isinstance(n, int) and n >= 3:
+        add("many", f"{n} posturi")
+    return out
+
+
+_TOOLISH = re.compile(r"\b[A-Z][A-Za-z]*[A-Z][A-Za-z0-9+#]*\b")
+
+_LANG_NAMES = {"en": "Engleză", "fr": "Franceză", "de": "Germană", "it": "Italiană", "es": "Spaniolă",
+               "hu": "Maghiară", "ru": "Rusă", "uk": "Ucraineană"}
+
+
+def rank_tags(candidates_by_id: dict, max_tags: int = TAG_MAX, max_share: float = TAG_MAX_SHARE) -> dict:
+    """id -> up to `max_tags` labels, rarest first, dropping keys on more than `max_share`.
+
+    Skills are counted per skill, so a skill only shows when few postings ask
+    for it; at most one skill tag per posting, so a long tool list cannot
+    crowd out the contract facts.
+    """
+    from collections import Counter
+    n = max(1, len(candidates_by_id))
+    freq = Counter(k for cands in candidates_by_id.values() for k in {k for k, _ in cands})
+    out = {}
+    for pid, cands in candidates_by_id.items():
+        seen, picked, skills = set(), [], 0
+        for key, label in sorted(cands, key=lambda c: freq[c[0]]):
+            if key in seen or freq[key] / n > max_share:
+                continue
+            if key.startswith("skill:"):
+                if skills or freq[key] / n > 0.02:
+                    continue
+                skills += 1
+            seen.add(key)
+            picked.append(label)
+            if len(picked) >= max_tags:
+                break
+        out[pid] = picked
+    return out
+
+
+# ---- Posting quality (internal, 2026-10-18) -------------------------------------------
+
+#: How clear and complete an announcement is, for a reader deciding whether and
+#: how to apply. pax's four groups; weights sum to 100. Scored only for postings
+#: with an extraction — without one most checks would measure our pipeline, not
+#: the announcement. Internal first (/statistici), not shown on postings yet.
+QUALITY_CHECKS: list[tuple[str, str, str, int]] = [
+    # key, group, label, weight
+    ("studies",      "Completitudine", "Studiile cerute sunt precizate", 8),
+    ("experience",   "Completitudine", "Experiența cerută este precizată", 7),
+    ("documents",    "Completitudine", "Lista documentelor de depus", 8),
+    ("calendar",     "Completitudine", "Calendar cu cel puțin două date", 10),
+    ("contact",      "Completitudine", "Telefon sau e-mail de contact", 6),
+    ("duties",       "Completitudine", "Atribuțiile postului", 3),
+    ("bibliography", "Completitudine", "Bibliografie / tematică", 3),
+    ("salary",       "Salariu și condiții", "Salariul este precizat", 10),
+    ("duration",     "Salariu și condiții", "Durata contractului", 5),
+    ("schedule",     "Salariu și condiții", "Programul de lucru", 5),
+    ("confirmed",    "Termene", "Termen de depunere precizat (nu doar expirarea)", 8),
+    ("window",       "Termene", "Cel puțin 10 zile pentru depunere", 12),
+    ("text",         "Claritate", "Text propriu, nu doar formule standard", 6),
+    ("specific",     "Claritate", "Cerințe concrete, nu doar calități generice", 4),
+    ("attachment",   "Claritate", "Anunț complet în pagină sau atașat ca document", 5),
+]
+
+
+def _days_between(a, b):
+    from datetime import date
+    try:
+        da, db = date.fromisoformat(str(a)[:10]), date.fromisoformat(str(b)[:10])
+    except (ValueError, TypeError):
+        return None
+    return (db - da).days
+
+
+def quality(p: dict) -> dict | None:
+    """{'score': 0–100, 'checks': {key: 0 | 0.5 | 1}} for one posting, or None without an extraction.
+
+    `p`: schema (dict), body, contact_phone, contact_email, published_at,
+    apply_deadline, deadline_source, inf_salary_min, v3_contract_duration,
+    v3_schedule, attachment_meta (list), calendar_events (int, scraped rows).
+    """
+    s = p.get("schema")
+    if not isinstance(s, dict):
+        return None
+    import boilerplate
+
+    def filled(v) -> bool:
+        if isinstance(v, str):
+            return v.strip() not in ("", "null", "-")
+        if isinstance(v, (list, dict)):
+            return bool(v)
+        return v is not None
+
+    edu, exp = s.get("education") or {}, s.get("experience") or {}
+    cal = s.get("competition_calendar") or {}
+    dated = [e for e in (cal.get("events") or []) if isinstance(e, dict) and e.get("date")] if isinstance(cal, dict) else []
+    skills = [k for k in (s.get("skill_list") or []) if isinstance(k, dict)]
+    soft = sum(1 for k in skills if k.get("type") == "transversal")
+    body = str(p.get("body") or "")
+    own = boilerplate.strip_hg_1336(body).replace(boilerplate._BOILERPLATE_MARKER, "")
+    window = _days_between(p.get("published_at"), p.get("apply_deadline"))
+    confirmed = p.get("deadline_source") in ("concurs", "anunt")
+
+    c = {
+        "studies": filled(edu.get("minimum_level") if isinstance(edu, dict) else None) or filled(s.get("educationRequirements")),
+        "experience": (isinstance(exp, dict) and (exp.get("years_minimum") is not None or exp.get("none_required")))
+                      or filled(s.get("experienceRequirements")),
+        "documents": filled(s.get("application_docs")) or filled((s.get("documents") or {}).get("standard") if isinstance(s.get("documents"), dict) else None),
+        "calendar": len(dated) >= 2 or (p.get("calendar_events") or 0) >= 2,
+        "contact": bool(str(p.get("contact_phone") or "").strip() or str(p.get("contact_email") or "").strip()),
+        "duties": filled(s.get("responsibilities")),
+        "bibliography": filled(s.get("bibliography_topics")),
+        "salary": (p.get("inf_salary_min") or 0) > 0 or filled(s.get("baseSalary")),
+        "duration": filled(p.get("v3_contract_duration")),
+        "schedule": filled(p.get("v3_schedule")),
+        "confirmed": confirmed,
+        "window": 0 if not confirmed or window is None else (1 if window >= 10 else 0.5 if window >= 7 else 0),
+        "text": len(own.strip()) >= 300,
+        "specific": not skills or soft <= len(skills) / 2,
+        "attachment": len(body.strip()) >= 800 or bool(p.get("attachment_meta")),
+    }
+    checks = {k: (float(v) if not isinstance(v, bool) else (1.0 if v else 0.0)) for k, v in c.items()}
+    score = round(sum(w * checks[k] for k, _g, _l, w in QUALITY_CHECKS))
+    return {"score": int(score), "checks": checks}

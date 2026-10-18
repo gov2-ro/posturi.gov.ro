@@ -110,10 +110,6 @@ $cl_custom = checklist_custom_items_enabled();
 
   <?php /* Everything below is for readers with JavaScript: checklist.js un-hides it. */ ?>
   <div hidden data-cl-js>
-    <p class="mb-3 text-xs text-ink-muted">
-      «Pregătit» înseamnă doar că ai pregătit documentul, nu că dosarul a fost depus. «Notat» înseamnă că ți-ai notat etapa; nu schimbă data și nu marchează etapa ca încheiată.
-    </p>
-
     <p class="mb-3 rounded border border-note-line bg-note px-3 py-2 text-xs text-note-ink" data-cl-notice role="note" hidden></p>
     <p class="mb-3 rounded border border-neutral-line bg-neutral px-3 py-2 text-xs text-neutral-ink" data-cl-flash hidden></p>
 
@@ -152,20 +148,6 @@ $cl_custom = checklist_custom_items_enabled();
     </div>
     <?php endif; ?>
 
-    <p class="text-xs text-ink-muted" data-cl-storage>
-      Progresul se păstrează doar în acest browser. Nu se trimite nicăieri, nu se sincronizează între dispozitive și se poate pierde dacă ștergi datele browserului.
-    </p>
-
-    <div class="mt-2">
-      <button type="button" data-cl-clear class="min-h-[2.75rem] border border-line px-3 py-2 text-xs text-ink-muted hover:border-gov hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2.25rem]">Șterge progresul</button>
-    </div>
-    <div class="mt-2 rounded border border-alert-line bg-alert px-3 py-2 text-sm text-alert-ink" data-cl-confirm hidden>
-      <p class="mb-2" data-cl-confirm-text>Ștergi progresul salvat pentru acest anunț (<?= $cl_custom ? 'bifele și elementele adăugate de dvs.' : 'bifele' ?>)? Alte anunțuri și lista de salvate nu se schimbă.</p>
-      <div class="flex flex-wrap gap-2">
-        <button type="button" data-cl-clear-yes class="min-h-[2.75rem] border border-alert-line bg-surface px-3 py-2 text-xs font-medium text-alert-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2.25rem]">Șterge</button>
-        <button type="button" data-cl-clear-no class="min-h-[2.75rem] border border-line bg-surface px-3 py-2 text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:min-h-[2.25rem]">Anulează</button>
-      </div>
-    </div>
   </div>
 
   <div class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-cl-live></div>

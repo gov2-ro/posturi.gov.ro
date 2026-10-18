@@ -508,27 +508,6 @@
     if (h) h.focus();
   }
 
-  function clearAsk() {
-    var box = qs('[data-cl-confirm]');
-    box.hidden = false;
-    qs('[data-cl-clear-no]').focus();
-    announce('Confirmă ștergerea progresului pentru acest anunț.');
-  }
-
-  function clearDone(yes) {
-    qs('[data-cl-confirm]').hidden = true;
-    if (yes) {
-      var unreadable = !!(S.blocked || S.invalid[URL_KEY]);
-      mutate(function (postings) { delete postings[URL_KEY]; });
-      render();
-      announce(unreadable
-        ? 'Progresul din această sesiune a fost șters; datele salvate nu au putut fi citite și au rămas neschimbate.'
-        : 'Progresul pentru acest anunț a fost șters.');
-    }
-    var origin = qs('[data-cl-clear]');
-    if (origin) origin.focus();
-  }
-
   // ---- wiring (delegated on the section) -----------------------------------------
   root.addEventListener('change', function (ev) {
     var t = ev.target;
@@ -543,18 +522,13 @@
     if ((b = t.closest('[data-cl-add]'))) { onAdd(); return; }
     if ((b = t.closest('[data-cl-remove]'))) { onRemove(b); return; }
     if ((b = t.closest('[data-cl-dismiss]'))) { onDismiss(); return; }
-    if ((b = t.closest('[data-cl-clear]'))) { clearAsk(); return; }
-    if ((b = t.closest('[data-cl-clear-yes]'))) { clearDone(true); return; }
-    if ((b = t.closest('[data-cl-clear-no]'))) { clearDone(false); return; }
   });
 
   root.addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' && ev.target instanceof Element && ev.target.matches('[data-cl-add-input]')) {
       ev.preventDefault();                                          // no form, nothing is submitted
       onAdd();
-      return;
     }
-    if (ev.key === 'Escape' && !qs('[data-cl-confirm]').hidden) clearDone(false);
   });
 
   function sync() { readStore(); render(); }

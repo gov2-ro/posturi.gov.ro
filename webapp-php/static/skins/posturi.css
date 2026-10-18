@@ -124,3 +124,18 @@
    bare columns on desktop, and the shadow gave it a phantom outline at every
    width. Styling by utility class rather than by token is why; if a lift ever
    comes back, give it its own class in the template. */
+
+/* The main column — the results on the listing, the posting body on a detail
+   page — is a white sheet on the off-white ground, edged by the same 1px line
+   the cards use. `.pg-main` is its own class (the list page's right column and
+   the detail page's body column), not a utility, so nothing else picks this up.
+   The padding is smaller on phones, where the column is already full width. */
+[data-skin="posturi"] .pg-main {
+  background: rgb(var(--c-surface));
+  border: 1px solid rgb(var(--c-line));
+  border-radius: var(--radius-md);
+  padding: 0.75rem;
+}
+@media (min-width: 640px) {
+  [data-skin="posturi"] .pg-main { padding: 1.25rem; }
+}

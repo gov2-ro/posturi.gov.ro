@@ -30,7 +30,6 @@ const REV_B = 'b11010000000000000000000';
 const SESSION_ONLY = 'Disponibil doar în această sesiune; browserul nu a putut salva progresul.';
 const UNREADABLE = 'Progresul salvat nu poate fi citit; nu a fost modificat.';
 const NO_DOCS = 'Lista documentelor nu a fost extrasă automat. Consultați anunțul oficial pentru documentele cerute.';
-const DISCLOSURE = 'Progresul se păstrează doar în acest browser.';
 
 let server;
 let base;
@@ -128,7 +127,6 @@ test('check survives reload; stage ticking never changes dates or the passed sta
   await go(page, 1101);
   await expect(page.locator('#cl-heading')).toHaveText('Pregătirea dosarului');
   await expect(sec(page)).toContainText('Lista provine din extragerea automată a anunțului și poate fi incompletă.');
-  await expect(sec(page).locator('[data-cl-storage]')).toContainText(DISCLOSURE);
   expect(await storedRaw(page)).toBeNull();                       // nothing is written by merely looking
 
   await doc(page, 'Cerere de înscriere').check();
@@ -403,55 +401,6 @@ test.describe('storage failures', () => {
   });
 });
 
-test('clear asks in the page, cancel changes nothing, confirm removes only this posting', async ({ page }) => {
-  const prefs = JSON.stringify({ version: 1, records: {} });
-  await seed(page, { [PREFS]: prefs, 'pg.skin': 'govuk', 'posturi.facets': '{"open":["judet"]}' });
-  await go(page, 1101);
-  await doc(page, 'Cerere de înscriere').check();
-  await stage(page, ST_WRITTEN).check();
-  await sec(page).getByLabel('Adaugă un element al dvs.').fill('Poză');
-  await sec(page).getByRole('button', { name: 'Adaugă' }).click();
-  // another posting's progress, written behind this tab's back
-  const other = 'https://posturi.gov.ro/anunt/fixture-1102';
-  await page.evaluate(([k, o]) => {
-    const s = JSON.parse(localStorage.getItem(k));
-    s.postings[o] = { rev: 'rrr', updatedAt: '2026-10-01T10:00:00.000Z', seen: [], items: {}, custom: [{ id: 'c1', label: 'Alt anunț', checked: false, at: '2026-10-01T10:00:00.000Z' }] };
-    localStorage.setItem(k, JSON.stringify(s));
-  }, [KEY, other]);
-  const before = await storedRaw(page);
-
-  const clear = sec(page).getByRole('button', { name: 'Șterge progresul' });
-  const confirm = sec(page).locator('[data-cl-confirm]');
-  await expect(confirm).toBeHidden();
-  await clear.click();
-  await expect(confirm).toBeVisible();
-  await expect(confirm).toContainText('Alte anunțuri și lista de salvate nu se schimbă.');
-  await expect(sec(page).getByRole('button', { name: 'Anulează' })).toBeFocused();
-  await page.keyboard.press('Escape');                             // cancel by keyboard
-  await expect(confirm).toBeHidden();
-  await expect(clear).toBeFocused();
-  expect(await storedRaw(page)).toBe(before);
-  await clear.click();
-  await sec(page).getByRole('button', { name: 'Anulează' }).click();
-  await expect(confirm).toBeHidden();
-  expect(await storedRaw(page)).toBe(before);
-  await expect(doc(page, 'Cerere de înscriere')).toBeChecked();
-
-  await clear.click();
-  await sec(page).getByRole('button', { name: 'Șterge', exact: true }).click();
-  await expect(confirm).toBeHidden();
-  await expect(clear).toBeFocused();
-  await expect(live_(page)).toHaveText('Progresul pentru acest anunț a fost șters.');
-  await expect(doc(page, 'Cerere de înscriere')).not.toBeChecked();
-  await expect(stage(page, ST_WRITTEN)).not.toBeChecked();
-  await expect(sec(page).locator('[data-cl-custom-list] li')).toHaveCount(0);
-  const s = await stored(page);
-  expect(Object.keys(s.postings)).toEqual([other]);
-  expect(await page.evaluate((k) => localStorage.getItem(k), PREFS)).toBe(prefs);
-  expect(await page.evaluate(() => localStorage.getItem('pg.skin'))).toBe('govuk');
-  expect(await page.evaluate(() => localStorage.getItem('posturi.facets'))).toBe('{"open":["judet"]}');
-});
-
 test('reader-added items: text only, distinct from source rows, capped, removable', async ({ page }) => {
   await page.addInitScript(() => { window.__pwned = 0; });
   await go(page, 1101);
@@ -595,8 +544,6 @@ test('privacy: no requests, no forms, nothing in the URL, the preferences key un
   await stage(page, ST_WRITTEN).check();
   await sec(page).getByLabel('Adaugă un element al dvs.').fill('Mapă cu șină');
   await page.keyboard.press('Enter');
-  await sec(page).getByRole('button', { name: 'Șterge progresul' }).click();
-  await sec(page).getByRole('button', { name: 'Anulează' }).click();
   await doc(page, 'Cerere de înscriere').uncheck();
   await page.waitForTimeout(300);
   expect(reqs, 'no request is made by any interaction').toEqual([]);
@@ -634,7 +581,7 @@ test('widths: nothing overflows, touch targets are large on phones', async ({ pa
     await go(page, id);
     expect(await noOverflow(page), `overflow on ${id}`).toBeLessThanOrEqual(1);
   }
-  // with the review box, custom items and the confirm box all open
+  // with the review box and custom items open
   await go(page, 1101);
   for (const l of ['Copie după diploma de studii', 'Adeverință medicală']) await doc(page, l).check();
   await stage(page, ST_INTERVIEW_A).check();
@@ -643,9 +590,7 @@ test('widths: nothing overflows, touch targets are large on phones', async ({ pa
   setDb('b');
   await page.reload();
   await expect(sec(page).locator('[data-cl-review]')).toBeVisible();
-  await sec(page).getByRole('button', { name: 'Șterge progresul' }).click();
-  await expect(sec(page).locator('[data-cl-confirm]')).toBeVisible();
-  expect(await noOverflow(page), 'overflow with review, custom items and confirm open').toBeLessThanOrEqual(1);
+  expect(await noOverflow(page), 'overflow with review and custom items open').toBeLessThanOrEqual(1);
   const h = (await doc(page, 'Cerere de înscriere').locator('xpath=ancestor::label').boundingBox()).height;
   if (testInfo.project.name.startsWith('mobile')) expect(h, 'touch target height').toBeGreaterThanOrEqual(43);
   for (const b of await sec(page).locator('button:visible').all()) {
@@ -661,10 +606,11 @@ test('widths: nothing overflows, touch targets are large on phones', async ({ pa
 test.describe('"Elementele dvs." off (the default)', () => {
   const goOff = async (page, id) => {
     await page.goto(`${baseOff}/job/${id}/`);
-    await expect(sec(page).locator('[data-cl-js]')).toBeVisible();
+    // with the add box off the region holds nothing visible, so "script ran" is its hidden flag
+    await expect(sec(page).locator('[data-cl-js]')).toHaveJSProperty('hidden', false);
   };
 
-  test('no add box and no reader items; source items still check, the confirm text names only the ticks', async ({ page }) => {
+  test('no add box and no reader items; source items still check', async ({ page }) => {
     await goOff(page, 1101);
     await expect(sec(page).locator('[data-cl-custom-region]')).toHaveCount(0);
     await expect(sec(page).getByText('Elementele dvs.')).toHaveCount(0);
@@ -674,9 +620,6 @@ test.describe('"Elementele dvs." off (the default)', () => {
     await expect(sec(page).locator('[data-cl-summary="document"]')).toHaveText('1 din 5 documente pregătite');
     await page.reload();
     await expect(doc(page, 'Cerere de înscriere')).toBeChecked();
-    await sec(page).getByRole('button', { name: 'Șterge progresul' }).click();
-    await expect(sec(page).locator('[data-cl-confirm-text]')).toHaveText(
-      'Ștergi progresul salvat pentru acest anunț (bifele)? Alte anunțuri și lista de salvate nu se schimbă.');
     expect(await noOverflow(page)).toBeLessThanOrEqual(1);
   });
 

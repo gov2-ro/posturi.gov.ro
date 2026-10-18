@@ -247,14 +247,9 @@ run_suite('detail 1101: a complete read-only list, official link, no controls wi
     assert_same(0, $xp->query('//*[@checked]')->length, 'the server marks nothing as done');
     assert_true($xp->query('//*[@data-cl-js and @hidden]')->length === 1, 'the JS-only region is hidden by default');
     assert_same(1, $xp->query('//noscript')->length, 'the no-JS explanation');
-    assert_contains('Progresul se păstrează doar în acest browser.', cl_text($xp->query('//*[@data-cl-storage]')->item(0)), 'storage disclosure');
-    // "prepared", never "submitted": outside the sentence that explains the difference, no such claim
+    // "prepared", never "submitted": the section makes no such claim anywhere
     $dom = new DOMDocument();
     @$dom->loadHTML('<?xml encoding="UTF-8">' . $sec, LIBXML_NOERROR | LIBXML_NOWARNING);
-    $xp2 = new DOMXPath($dom);
-    $explain = $xp2->query('//div[@data-cl-js]/p[1]')->item(0);
-    assert_contains('nu că dosarul a fost depus', cl_text($explain), 'the explanation exists');
-    $explain->parentNode->removeChild($explain);
     $text = cl_text($dom->documentElement);
     foreach (['depus', 'trimis', 'încheiat', 'finalizat', 'expirat', 'completat'] as $bad) assert_not_contains($bad, $text, "no \"$bad\" claim");
     // the whole page also loads the script once, deferred, with a cache-busting version
@@ -393,7 +388,7 @@ run_suite('old export (no deadline or revision columns): renders, falls back, cl
     foreach (['Fatal', 'Warning', 'Notice', 'Deprecated', 'no such'] as $bad) assert_not_contains($bad, $log, "log: $bad");
 });
 
-run_suite('release gate: "Elementele dvs." ships off; off, the page has no add box and the confirm names only the ticks', function () use ($db_a) {
+run_suite('release gate: "Elementele dvs." ships off; off, the page has no add box', function () use ($db_a) {
     assert_false(CHECKLIST_CUSTOM_ITEMS_ENABLED, 'the constant ships off');
     putenv('POSTURI_CHECKLIST_CUSTOM');
     assert_false(checklist_custom_items_enabled(), 'no override: off');
@@ -408,8 +403,6 @@ run_suite('release gate: "Elementele dvs." ships off; off, the page has no add b
         assert_same(0, $xp->query('//*[@data-cl-custom-region] | //*[@data-cl-custom-list]')->length, 'no reader-items region');
         assert_not_contains('Elementele dvs.', cl_text($xp->query('//section')->item(0)), 'no heading');
         assert_same(5, $xp->query('//ul[@data-cl-list="document"]/li')->length, 'the source list is unchanged');
-        assert_same('Ștergi progresul salvat pentru acest anunț (bifele)? Alte anunțuri și lista de salvate nu se schimbă.',
-            cl_text($xp->query('//*[@data-cl-confirm-text]')->item(0)), 'the confirm names only the ticks');
     } finally {
         stop_fixture_server($srv, $off_db);
     }

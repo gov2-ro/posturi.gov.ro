@@ -732,7 +732,7 @@ function build_stamp_relative(): ?array {
  */
 function robots_disclaimer(string $url, string $class = ''): string {
     $href = evidence_safe_url($url) ?? 'https://posturi.gov.ro/';
-    return '<p class="robots-disclaimer ' . e($class) . '">Datele sunt preluate de pe posturi.gov.ro și restructurate cu '
+    return '<p class="robots-disclaimer w-fit max-w-full rounded border border-info-line bg-info px-3 py-2 text-sm text-info-ink ' . e($class) . '">Datele sunt preluate de pe posturi.gov.ro și restructurate cu '
          . '<span aria-hidden="true">🤖</span> roboți. Verificați întotdeauna '
          . '<a href="' . e($href) . '" target="_blank" rel="noopener" class="text-gov underline underline-offset-2 hover:no-underline">anunțul oficial</a>.</p>';
 }

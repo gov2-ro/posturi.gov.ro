@@ -223,12 +223,12 @@ require __DIR__ . '/../inc/header.php';
 
 <div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-6">
 
-  <nav aria-label="Firimituri" class="mb-4 text-sm">
+  <nav aria-label="Firimituri" class="mb-3 text-sm">
     <a href="<?= e($back_url) ?>" class="text-gov hover:underline">← <?= e($back_label) ?></a>
   </nav>
 
   <?php /* D9: the same sentence opens and closes every posting. */ ?>
-  <?= robots_disclaimer((string)$p['url'], 'mb-4') ?>
+  <?= robots_disclaimer((string)$p['url'], 'mb-3') ?>
 
   <?php /* 261016: a posting whose submission date has passed says so first, in bold.
      A confirmed date is a fact; the expiry fallback only makes it likely. */
@@ -243,75 +243,86 @@ require __DIR__ . '/../inc/header.php';
   </div>
   <?php endif; ?>
 
-  <!-- Title block -->
+  <!-- Title block. Left: who / where / when above the title, then the title with its
+       icon buttons and the normalised-from line. Right (sm+): the link to the original,
+       then the tags below it. On phones the right block simply follows the left. -->
   <?php $dt = display_title($p); ?>
-  <div class="border-b border-line pb-5 mb-6"<?= pref_attrs($p) ?>>
-    <?php /* The icon buttons sit right after the heading, inside the same block
-       that carries the posting identity. Hiding here only marks the posting
-       hidden in this browser (reversible); the page itself stays. */ ?>
-    <div class="leading-tight">
-    <h1 class="inline font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink">
-      <?= e($dt['primary']) ?>
-      <?php if ($dt['normalized']): ?>
-        <abbr title="Titlu normalizat automat pe ocupațiile COR — poate fi incomplet sau greșit."
-              class="ml-1 cursor-help font-mono text-[10px] font-normal uppercase not-italic tracking-wider text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">normalizat</abbr>
-      <?php endif; ?>
-    </h1><?= pref_controls($p) ?>
-    </div>
-    <?= pref_flag() ?>
-    <?php if ($dt['secondary']): ?>
-      <p class="mt-0.5 text-sm not-italic text-ink-muted"><?= e($dt['secondary']) ?></p>
-    <?php endif; ?>
-    <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
-      <a href="/angajator/<?= e($p['employer_slug'] ?? '') ?>/"
-         class="font-medium text-gov hover:underline"><?= e($p['employer_name'] ?? '') ?></a>
-      <?php if ($place = place_label($p)): ?>
-        <span aria-hidden="true">·</span>
-        <span><?= e($place) ?></span>
-      <?php endif; ?>
-      <?php if ($p['published_at']): ?>
-        <span aria-hidden="true">·</span>
-        <span class="font-mono text-xs">Publicat <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>"><?= fmt_date($p['published_at']) ?></time></span>
-      <?php endif; ?>
-      <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener"
-         class="text-xs text-gov hover:underline font-mono sm:ml-auto">anunțul original ↗</a>
-    </div>
-
-    <!-- Badges -->
-    <div class="mt-3 flex flex-wrap gap-2">
-      <?php if ($p['job_level']): ?>
-        <span class="px-2 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'bg-info text-info-ink border border-info-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>">
-          <?= e(job_level_label((string)$p['job_level'])) ?>
-        </span>
-      <?php endif; ?>
-      <?php if ($p['job_type']): ?>
-        <span class="px-2 py-0.5 text-xs bg-neutral text-neutral-ink border border-neutral-line"><?= e($p['job_type']) ?></span>
-      <?php endif; ?>
-      <?php /* 261016: the regime read off the text, not the source's free-pick categorie. */
-      if ($regime = JOB_REGIME_SHORT[(string)($p['job_regime'] ?? '')] ?? ''): ?>
-        <span class="px-2 py-0.5 text-xs <?= ($p['job_regime'] ?? '') === 'publica' ? 'bg-ok text-ok-ink border border-ok-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>" data-regime>
-          <?= e($regime) ?>
-        </span>
-      <?php endif; ?>
-      <?php /* 2026-10-18: the distinctive tags (row_tags), minus what a badge here already says. */
-      foreach (array_diff(row_tags($p), ['Perioadă determinată', 'Post de conducere', 'Funcție publică', 'Funcție militară', $regime]) as $tag): ?>
-        <span class="px-2 py-0.5 text-xs bg-info text-info-ink border border-info-line" data-tag><?= e($tag) ?></span>
-      <?php endforeach; ?>
-      <?php if ($days !== null): ?>
-        <?php if ($days < 0): ?>
-          <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?> <?= fmt_date($deadline) ?></span>
-        <?php elseif ($days <= 3): ?>
-          <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold"><?= $est ? 'Termen estimat: ' : 'Înscrieri: ' ?><?= e(days_label($days)) ?>!</span>
-        <?php elseif ($days <= 7): ?>
-          <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono"><?= $est ? 'Termen estimat: ' : 'Înscrieri: ' ?><?= e(days_label($days)) ?></span>
-        <?php elseif ($est): ?>
-          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Termen estimat: <?= fmt_date($deadline) ?></span>
-        <?php else: ?>
-          <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Înscrieri până la <?= fmt_date($deadline) ?></span>
+  <div class="mb-5 border-b border-line pb-4"<?= pref_attrs($p) ?>>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+      <div class="min-w-0">
+        <div class="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-ink-muted">
+          <a href="/angajator/<?= e($p['employer_slug'] ?? '') ?>/"
+             class="font-medium text-gov hover:underline"><?= e($p['employer_name'] ?? '') ?></a>
+          <?php if ($place = place_label($p)): ?>
+            <span aria-hidden="true">·</span>
+            <span><?= e($place) ?></span>
+          <?php endif; ?>
+          <?php if ($p['published_at']): ?>
+            <span aria-hidden="true">·</span>
+            <span class="font-mono text-xs">Publicat <time datetime="<?= e(substr($p['published_at'], 0, 10)) ?>"><?= fmt_date($p['published_at']) ?></time></span>
+          <?php endif; ?>
+        </div>
+        <?php /* The icon buttons sit right after the heading, inside the same block
+           that carries the posting identity. Hiding here only marks the posting
+           hidden in this browser (reversible); the page itself stays. */ ?>
+        <div class="leading-tight">
+        <h1 class="inline font-display text-[1.7rem] sm:text-[2rem] font-semibold italic text-ink">
+          <?= e($dt['primary']) ?>
+          <?php if ($dt['normalized']): ?>
+            <abbr title="Titlu normalizat automat pe ocupațiile COR — poate fi incomplet sau greșit."
+                  class="ml-1 cursor-help font-mono text-[10px] font-normal uppercase not-italic tracking-wider text-ink-muted decoration-dotted underline-offset-2 [text-decoration:underline]">normalizat</abbr>
+          <?php endif; ?>
+        </h1><?= pref_controls($p) ?>
+        </div>
+        <?= pref_flag() ?>
+        <?php if ($dt['secondary']): ?>
+          <p class="mt-0.5 text-sm not-italic text-ink-muted"><?= e($dt['secondary']) ?></p>
         <?php endif; ?>
-      <?php else: ?>
-        <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Termen neprecizat</span>
-      <?php endif; ?>
+      </div>
+
+      <div class="flex min-w-0 flex-col gap-2 sm:max-w-[40%] sm:shrink-0 sm:items-end">
+        <a href="<?= e($p['url']) ?>" target="_blank" rel="noopener"
+           class="font-mono text-xs text-gov hover:underline">anunțul original ↗</a>
+        <!-- Badges: below the link to the original, right-aligned from sm up -->
+        <div class="flex flex-wrap gap-1.5 sm:justify-end">
+          <?php if ($p['job_level']): ?>
+            <span class="px-2 py-0.5 text-xs font-medium <?= $p['job_level'] === 'conducere' ? 'bg-info text-info-ink border border-info-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>">
+              <?= e(job_level_label((string)$p['job_level'])) ?>
+            </span>
+          <?php endif; ?>
+          <?php if ($p['job_type']): ?>
+            <span class="px-2 py-0.5 text-xs bg-neutral text-neutral-ink border border-neutral-line"><?= e($p['job_type']) ?></span>
+          <?php endif; ?>
+          <?php /* 261016: the regime read off the text, not the source's free-pick categorie. */
+          if ($regime = JOB_REGIME_SHORT[(string)($p['job_regime'] ?? '')] ?? ''): ?>
+            <span class="px-2 py-0.5 text-xs <?= ($p['job_regime'] ?? '') === 'publica' ? 'bg-ok text-ok-ink border border-ok-line' : 'bg-neutral text-neutral-ink border border-neutral-line' ?>" data-regime>
+              <?= e($regime) ?>
+            </span>
+          <?php endif; ?>
+          <?php /* 2026-10-18: the distinctive tags (row_tags), minus what a badge here already says —
+             the level and type badges above included, which used to show twice. */
+          $said = ['Perioadă determinată', 'Post de conducere', 'Funcție publică', 'Funcție militară', $regime, (string)($p['job_type'] ?? '')];
+          if ($p['job_level']) $said[] = job_level_label((string)$p['job_level']);
+          foreach (array_diff(row_tags($p), $said) as $tag): ?>
+            <span class="px-2 py-0.5 text-xs bg-info text-info-ink border border-info-line" data-tag><?= e($tag) ?></span>
+          <?php endforeach; ?>
+          <?php if ($days !== null): ?>
+            <?php if ($days < 0): ?>
+              <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono"><?= $est ? 'Termen estimat depășit' : 'Înscrieri închise' ?> <?= fmt_date($deadline) ?></span>
+            <?php elseif ($days <= 3): ?>
+              <span class="px-2 py-0.5 text-xs bg-alert text-alert-ink border border-alert-line font-mono font-semibold"><?= $est ? 'Termen estimat: ' : 'Înscrieri: ' ?><?= e(days_label($days)) ?>!</span>
+            <?php elseif ($days <= 7): ?>
+              <span class="px-2 py-0.5 text-xs bg-note text-note-ink border border-note-line font-mono"><?= $est ? 'Termen estimat: ' : 'Înscrieri: ' ?><?= e(days_label($days)) ?></span>
+            <?php elseif ($est): ?>
+              <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Termen estimat: <?= fmt_date($deadline) ?></span>
+            <?php else: ?>
+              <span class="px-2 py-0.5 text-xs bg-gov-light text-gov border border-info-line font-mono">Înscrieri până la <?= fmt_date($deadline) ?></span>
+            <?php endif; ?>
+          <?php else: ?>
+            <span class="px-2 py-0.5 text-xs bg-neutral text-ink-muted border border-neutral-line font-mono">Termen neprecizat</span>
+          <?php endif; ?>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -375,7 +386,7 @@ require __DIR__ . '/../inc/header.php';
         </div>
         <?php endif; ?>
 
-        <?php if ($p['nr_posturi']): ?>
+        <?php if ((int)$p['nr_posturi'] > 1): ?>
         <div>
           <div class="text-xs font-semibold uppercase tracking-widest text-ink-muted mb-1">Nr. posturi</div>
           <div class="font-mono text-ink text-lg font-medium"><?= (int)$p['nr_posturi'] ?></div>
@@ -472,11 +483,12 @@ require __DIR__ . '/../inc/header.php';
       </div>
     </aside>
 
-    <!-- Main content -->
+    <!-- Main content: the summary strip, then the white sheet holding the posting -->
     <div class="flex-1 min-w-0 w-full">
 
-      <!-- Inferred conditions grid -->
-      <?php
+      <?php /* The automatic summaries — deduced conditions, contract terms, exam topics, estimated
+         pay — sit above the posting as plain rows: no boxes, no background (the white sheet
+         below is the posting itself), one row per summary with its facts inline. */
       $wt = $inferred['work_type'] ?? null;
       $re = $inferred['remote_eligible'] ?? null;
       $rc = isset($inferred['requires_computer']) ? $inferred['requires_computer'] : null;
@@ -484,201 +496,169 @@ require __DIR__ . '/../inc/header.php';
       $st = $inferred['studies_required'] ?? null;
       $smn = $inferred['salary_min'] ?? null;
       $smx = $inferred['salary_max'] ?? null;
-      if ($wt || $re || $rc !== null || $exp || $st || $smn):
-      ?>
-      <div class="mb-6 rounded-lg border border-note-line/60 bg-note/40 p-4">
-      <div class="mb-3 flex items-baseline gap-1.5">
-        <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții deduse automat</span>
-        <a href="/despre/" class="text-xs text-gov hover:underline" title="Cum sunt deduse aceste date">metodologie</a>
-      </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-sm">
-        <div class="flex flex-col gap-0.5">
-          <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Program</span>
-          <?php if ($wt): ?><span class="font-medium text-ink"><?= e(work_type_label($wt)) ?></span>
-          <?php else: ?><span class="text-ink-muted">—</span><?php endif; ?>
-        </div>
-        <div class="flex flex-col gap-0.5">
-          <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Telemuncă</span>
-          <?php if ($re): ?><span class="font-medium text-ink">Da</span>
-          <?php else: ?><span class="text-ink-muted">—</span><?php endif; ?>
-        </div>
-        <div class="flex flex-col gap-0.5">
-          <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Calculator</span>
-          <?php if ($rc === true || $rc === 1): ?>
-            <span class="font-medium text-ink">Solicitat<?= ($inferred['computer_level'] ?? '') === 'advanced' ? ' (avansat)' : '' ?></span>
-          <?php elseif ($rc === false || $rc === 0): ?>
-            <span class="font-medium text-ink">Nesolicitat</span>
-          <?php else: ?>
-            <span class="text-ink-muted">—</span>
-          <?php endif; ?>
-        </div>
-        <div class="flex flex-col gap-0.5">
-          <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Experiență</span>
-          <?php if ($exp): ?><span class="font-medium text-ink">Min. <?= e(years_label((int)$exp)) ?></span>
-          <?php else: ?><span class="text-ink-muted">—</span><?php endif; ?>
-        </div>
-        <div class="flex flex-col gap-0.5">
-          <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Studii</span>
-          <?php if ($st): ?><span class="font-medium text-ink"><?= e(STUDIES_LABELS[$st] ?? ucfirst($st)) ?></span>
-          <?php else: ?><span class="text-ink-muted">—</span><?php endif; ?>
-        </div>
-        <div class="flex flex-col gap-0.5">
-          <span class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Salariu</span>
-          <?php if ($smn || $smx): ?>
-            <span class="font-medium text-ink font-mono">
-              <?php
-              if ($smn && $smx && $smn != $smx) echo (int)$smn . '–' . (int)$smx;
-              elseif ($smn) echo (int)$smn;
-              else echo (int)$smx;
-              ?> RON
-            </span>
-          <?php else: ?><span class="text-ink-muted">—</span><?php endif; ?>
-        </div>
-      </div>
+      // A condition nobody could deduce is left out rather than shown as "—".
+      $cond = [];
+      if ($wt) $cond['Program'] = work_type_label($wt);
+      if ($re) $cond['Telemuncă'] = 'Da';
+      if ($rc === true || $rc === 1) $cond['Calculator'] = 'Solicitat' . (($inferred['computer_level'] ?? '') === 'advanced' ? ' (avansat)' : '');
+      elseif ($rc === false || $rc === 0) $cond['Calculator'] = 'Nesolicitat';
+      if ($exp) $cond['Experiență'] = 'Min. ' . years_label((int)$exp);
+      if ($st) $cond['Studii'] = STUDIES_LABELS[$st] ?? ucfirst($st);
+      if ($smn || $smx) {
+          if ($smn && $smx && $smn != $smx) $cond['Salariu'] = (int)$smn . '–' . (int)$smx . ' RON';
+          else $cond['Salariu'] = ($smn ? (int)$smn : (int)$smx) . ' RON';
+      }
+      $tag_groups = $cond ? inferred_tags($p) : [];
 
-      <?php $tag_groups = inferred_tags($p); ?>
-      <?php if ($tag_groups): ?>
-      <div class="mt-4 space-y-2 border-t border-note-line/60 pt-3">
-        <?php foreach ($tag_groups as $group): ?>
-        <div class="flex flex-wrap items-baseline gap-1.5">
-          <span class="mr-1 text-xs font-semibold uppercase tracking-widest text-ink-muted"><?= e($group['label']) ?></span>
-          <?php foreach ($group['values'] as $value): ?>
-            <span class="rounded-full border border-note-line bg-surface/70 px-2 py-0.5 text-xs text-ink"><?= e(ucfirst((string)$value)) ?></span>
+      // Contract terms and bibliography — extracted by v3 since it first ran and, until
+      // 2026-09-13, displayed nowhere. No new extraction: data the project had already paid for.
+      $v3c = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : [];
+      $ct  = $v3c['contract'] ?? null;
+      $bib = $v3c['bibliography_topics'] ?? [];
+      $sen = $v3c['seniority_hint'] ?? null;
+      $terms = [];
+      if ($ct) {
+          if (!empty($ct['duration'])) {
+              $d = CONTRACT_DURATION_LABELS[$ct['duration']] ?? $ct['duration'];
+              if (!empty($ct['duration_months'])) $d .= ' (' . (int)$ct['duration_months'] . ' luni)';
+              $terms['Contract'] = $d;
+          }
+          if (!empty($ct['schedule']))    $terms['Program'] = SCHEDULE_LABELS[$ct['schedule']] ?? $ct['schedule'];
+          if (!empty($ct['hours_per_week'])) $terms['Ore/săptămână'] = rtrim(rtrim(number_format((float)$ct['hours_per_week'], 1, ',', '.'), '0'), ',');
+          if (!empty($ct['probation_months'])) $terms['Perioadă de probă'] = (int)$ct['probation_months'] . ' luni';
+          if (!empty($ct['shift_work']))  $terms['Ture'] = 'Da — ture, gărzi sau weekend';
+      }
+      if ($sen && isset(SENIORITY_HINT_LABELS[$sen])) $terms['Grad'] = SENIORITY_HINT_LABELS[$sen];
+      // BETA-V5: who can apply and how (temporary vacancy, norm, end date, channels…).
+      foreach (v5_facts($v3c) as $k => $v) $terms[$k] = $v;
+
+      // Estimated pay from the 2026 draft salary grid. Derived, never scraped: 44 of 9,757
+      // postings state a salary in the text. The law is an unadopted draft, so the card never
+      // shows a bare number — the range, its legal status and the rows it came from are all
+      // part of the claim, and "cum a fost calculat" is open to anyone who wants to check it.
+      $sal = ($p['sal_json'] ?? null) ? (json_decode($p['sal_json'], true) ?: []) : [];
+      $show_sal = !empty($sal['lei_min']);
+      ?>
+      <?php if ($cond || $terms || $bib || $show_sal): ?>
+      <div class="mb-4 divide-y divide-line text-sm">
+
+        <?php if ($cond): ?>
+        <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
+          <div class="flex items-baseline gap-1.5">
+            <h2 class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții deduse automat</h2>
+            <a href="/despre/" class="text-xs text-gov hover:underline" title="Cum sunt deduse aceste date">metodologie</a>
+          </div>
+          <?php foreach ($cond as $label => $value): ?>
+            <span class="whitespace-nowrap"><span class="text-ink-muted"><?= e($label) ?></span> <span class="font-medium text-ink"><?= e($value) ?></span></span>
           <?php endforeach; ?>
-        </div>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
-      </div>
-      <?php endif; ?>
+          <?php foreach ($tag_groups as $group): ?>
+            <span><span class="text-ink-muted"><?= e($group['label']) ?></span>
+              <span class="font-medium text-ink"><?= e(implode(', ', array_map(fn($v) => ucfirst((string)$v), $group['values']))) ?></span></span>
+          <?php endforeach; ?>
+        </section>
+        <?php endif; ?>
 
-      <!-- Contract terms and bibliography — extracted by v3 since it first ran
-           and, until 2026-09-13, displayed nowhere. No new extraction: this is
-           data the project had already paid for and could not see. -->
-      <?php
-        $v3c = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : [];
-        $ct  = $v3c['contract'] ?? null;
-        $bib = $v3c['bibliography_topics'] ?? [];
-        $sen = $v3c['seniority_hint'] ?? null;
-        $terms = [];
-        if ($ct) {
-            if (!empty($ct['duration'])) {
-                $d = CONTRACT_DURATION_LABELS[$ct['duration']] ?? $ct['duration'];
-                if (!empty($ct['duration_months'])) $d .= ' (' . (int)$ct['duration_months'] . ' luni)';
-                $terms['Contract'] = $d;
-            }
-            if (!empty($ct['schedule']))    $terms['Program'] = SCHEDULE_LABELS[$ct['schedule']] ?? $ct['schedule'];
-            if (!empty($ct['hours_per_week'])) $terms['Ore/săptămână'] = rtrim(rtrim(number_format((float)$ct['hours_per_week'], 1, ',', '.'), '0'), ',');
-            if (!empty($ct['probation_months'])) $terms['Perioadă de probă'] = (int)$ct['probation_months'] . ' luni';
-            if (!empty($ct['shift_work']))  $terms['Ture'] = 'Da — ture, gărzi sau weekend';
-        }
-        if ($sen && isset(SENIORITY_HINT_LABELS[$sen])) $terms['Grad'] = SENIORITY_HINT_LABELS[$sen];
-        // BETA-V5: who can apply and how (temporary vacancy, norm, end date, channels…).
-        foreach (v5_facts($v3c) as $k => $v) $terms[$k] = $v;
-      ?>
-      <?php if ($terms || $bib): ?>
-      <section class="mb-6 rounded-lg border border-line bg-sunken p-4">
         <?php if ($terms): ?>
-        <h2 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții contractuale</h2>
-        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
+          <h2 class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții contractuale</h2>
           <?php foreach ($terms as $k => $v): ?>
-            <dt class="text-ink-muted"><?= e($k) ?></dt>
-            <dd class="text-ink"><?= e((string)$v) ?></dd>
+            <span><span class="text-ink-muted"><?= e($k) ?></span> <span class="font-medium text-ink"><?= e((string)$v) ?></span></span>
           <?php endforeach; ?>
-        </dl>
+        </section>
         <?php endif; ?>
 
         <?php if ($bib): ?>
-        <div class="<?= $terms ? 'mt-4 border-t border-line/60 pt-3' : '' ?>">
-          <h2 class="mb-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">Tematica examenului</h2>
-          <div class="flex flex-wrap gap-1.5">
-            <?php foreach ($bib as $topic): ?>
-              <?php $t = trim((string)$topic); if ($t === '') continue; ?>
-              <a href="/?q=<?= urlencode($t) ?>"
-                 class="rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-ink hover:border-gov hover:text-gov"><?= e($t) ?></a>
-            <?php endforeach; ?>
-          </div>
-          <p class="mt-2 text-xs text-ink-faint">Temele din bibliografie, pe scurt. Caută alte concursuri pe aceeași temă.</p>
-        </div>
+        <?php /* Heading, then the topics as one inline-block of comma-separated links: beside the
+           heading while they fit, dropped below it as a whole when they are many. */
+        $topic_links = [];
+        foreach ($bib as $topic) {
+            $t = trim((string)$topic);
+            if ($t !== '') $topic_links[] = '<a href="/?q=' . urlencode($t) . '" class="text-gov hover:underline">' . e($t) . '</a>';
+        } ?>
+        <section class="py-2 leading-[1.1rem]">
+          <h2 class="mr-3 inline-block align-top text-xs font-semibold uppercase tracking-widest text-ink-muted">Tematica examenului</h2>
+          <span class="inline-block max-w-full align-top"><?= implode(', ', $topic_links) ?></span>
+          <p class="mt-0.5 text-xs text-ink-faint">Temele din bibliografie, pe scurt. Caută alte concursuri pe aceeași temă.</p>
+        </section>
         <?php endif; ?>
-      </section>
+
+        <?php if ($show_sal): ?>
+        <?php /* Highlighted, as wide as its content, three rows: the figure, how it ranks, the
+           caveat with the way in to the calculation. */ ?>
+        <section class="py-2">
+          <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
+            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
+              <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu estimat</h2>
+              <p class="text-lg font-semibold text-ink">
+                <?php if ((int)$sal['lei_min'] === (int)$sal['lei_max']): ?>
+                  <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?> lei
+                <?php else: ?>
+                  <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?>–<?= number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei
+                <?php endif; ?>
+                <span class="text-sm font-normal text-ink-muted">brut / lună, la gradația 0</span>
+              </p>
+              <?php if (($net = net_label((float)$sal['lei_min'], (float)$sal['lei_max'])) !== ''): ?>
+              <p class="text-ink"><?= e($net) ?> <span class="text-xs text-ink-muted">(estimare)</span></p>
+              <?php endif; ?>
+            </div>
+            <?php if ($pl = pay_level($p)): ?>
+            <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
+              <span><?= e($pl['text']) ?></span></p>
+            <?php endif; ?>
+            <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-muted">
+              <p><?= e((string)($sal['disclaimer'] ?? '')) ?></p>
+              <details class="open:basis-full">
+                <summary class="cursor-pointer list-none text-xs font-semibold uppercase tracking-widest text-note-ink marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+                  Cum a fost calculat ▾
+                </summary>
+                <div class="pt-2 text-sm text-ink">
+                  <?php /* What used to be separate lines on the card: the net assumptions and the
+                     caveats on the range. They open with the calculation. */ ?>
+                  <p class="mb-1 text-xs text-ink-muted">Net: estimare cu CAS 25 %, CASS 10 %, impozit 10 % cu deducerea personală, fără persoane în întreținere.</p>
+                  <?php if (!empty($sal['avertismente'])): ?>
+                  <ul class="mb-2 space-y-0.5 text-xs text-ink-muted">
+                    <?php foreach ($sal['avertismente'] as $w): ?>
+                      <li>• <?= e((string)$w) ?></li>
+                    <?php endforeach; ?>
+                  </ul>
+                  <?php endif; ?>
+                  <p class="mb-2 font-mono text-xs text-ink-muted">
+                    coeficient
+                    <?= e(rtrim(rtrim(number_format((float)$sal['coef_min'], 4, ',', '.'), '0'), ',')) ?><?php
+                      if ((float)$sal['coef_min'] !== (float)$sal['coef_max']): ?>–<?= e(rtrim(rtrim(number_format((float)$sal['coef_max'], 4, ',', '.'), '0'), ',')) ?><?php endif; ?>
+                    × valoare de referință <?= number_format((float)$sal['valoare_referinta'], 0, ',', '.') ?> lei
+                    × gradația <?= (int)$sal['gradatie'] ?>
+                  </p>
+                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                    <?php if (!empty($sal['ocupatie'])): ?>
+                      <dt class="text-ink-muted">Ocupație</dt>
+                      <dd><?= e((string)$sal['ocupatie']) ?><?php if (!empty($sal['incredere_ocupatie'])): ?>
+                        <span class="text-ink-muted">(<?= e(OCC_CONFIDENCE_LABELS[$sal['incredere_ocupatie']] ?? (string)$sal['incredere_ocupatie']) ?>)</span>
+                      <?php endif; ?></dd>
+                    <?php endif; ?>
+                    <?php foreach ((array)($sal['selector_provenienta'] ?? []) as $field => $basis): ?>
+                      <dt class="text-ink-muted"><?= e(SELECTOR_FIELD_LABELS[$field] ?? $field) ?></dt>
+                      <dd><?= e(selector_value_label((string)$field, ($sal['selector'] ?? [])[$field] ?? '')) ?>
+                        <span class="text-ink-muted">— <?= e((string)$basis) ?></span></dd>
+                    <?php endforeach; ?>
+                    <?php if (!empty($sal['randuri'])): ?>
+                      <dt class="text-ink-muted">Rânduri din grilă</dt>
+                      <dd class="font-mono"><?= e(implode(', ', (array)$sal['randuri'])) ?></dd>
+                    <?php endif; ?>
+                    <dt class="text-ink-muted">Varianta</dt>
+                    <dd><?= e((string)$sal['varianta']) ?></dd>
+                  </dl>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
+        <?php endif; ?>
+
+      </div>
       <?php endif; ?>
 
-      <!-- Estimated pay from the 2026 draft salary grid.
-           Derived, never scraped: 44 of 9,757 postings state a salary in the
-           text. The law is an unadopted draft, so the card never shows a bare
-           number — the range, its legal status and the rows it came from are
-           all part of the claim, and "cum a fost calculat" is open to anyone
-           who wants to check it. -->
-      <?php $sal = ($p['sal_json'] ?? null) ? (json_decode($p['sal_json'], true) ?: []) : []; ?>
-      <?php if (!empty($sal['lei_min'])): ?>
-      <section class="mb-6 rounded-lg border border-note-line bg-note p-4">
-        <h2 class="mb-1 text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu estimat</h2>
-        <p class="text-2xl font-semibold text-ink">
-          <?php if ((int)$sal['lei_min'] === (int)$sal['lei_max']): ?>
-            <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?> lei
-          <?php else: ?>
-            <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?>–<?= number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei
-          <?php endif; ?>
-          <span class="text-sm font-normal text-ink-muted">brut / lună, la gradația 0</span>
-        </p>
-        <?php if ($pl = pay_level($p)): ?>
-        <p class="mt-1 flex items-center gap-2 text-sm text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
-          <span><?= e($pl['text']) ?></span></p>
-        <?php endif; ?>
-        <?php if (($net = net_label((float)$sal['lei_min'], (float)$sal['lei_max'])) !== ''): ?>
-        <p class="mt-0.5 text-sm text-ink"><?= e($net) ?>
-          <span class="text-xs text-ink-muted">— estimare: CAS 25 %, CASS 10 %, impozit 10 % cu deducerea personală, fără persoane în întreținere</span></p>
-        <?php endif; ?>
-
-        <?php if (!empty($sal['avertismente'])): ?>
-        <ul class="mt-2 space-y-1 text-xs text-ink-muted">
-          <?php foreach ($sal['avertismente'] as $w): ?>
-            <li>• <?= e((string)$w) ?></li>
-          <?php endforeach; ?>
-        </ul>
-        <?php endif; ?>
-
-        <details class="mt-3 border-t border-note-line/60 pt-2">
-          <summary class="cursor-pointer list-none text-xs font-semibold uppercase tracking-widest text-note-ink marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
-            Cum a fost calculat ▾
-          </summary>
-          <div class="pt-2 text-sm text-ink">
-            <p class="mb-2 font-mono text-xs text-ink-muted">
-              coeficient
-              <?= e(rtrim(rtrim(number_format((float)$sal['coef_min'], 4, ',', '.'), '0'), ',')) ?><?php
-                if ((float)$sal['coef_min'] !== (float)$sal['coef_max']): ?>–<?= e(rtrim(rtrim(number_format((float)$sal['coef_max'], 4, ',', '.'), '0'), ',')) ?><?php endif; ?>
-              × valoare de referință <?= number_format((float)$sal['valoare_referinta'], 0, ',', '.') ?> lei
-              × gradația <?= (int)$sal['gradatie'] ?>
-            </p>
-            <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-              <?php if (!empty($sal['ocupatie'])): ?>
-                <dt class="text-ink-muted">Ocupație</dt>
-                <dd><?= e((string)$sal['ocupatie']) ?><?php if (!empty($sal['incredere_ocupatie'])): ?>
-                  <span class="text-ink-muted">(<?= e(OCC_CONFIDENCE_LABELS[$sal['incredere_ocupatie']] ?? (string)$sal['incredere_ocupatie']) ?>)</span>
-                <?php endif; ?></dd>
-              <?php endif; ?>
-              <?php foreach ((array)($sal['selector_provenienta'] ?? []) as $field => $basis): ?>
-                <dt class="text-ink-muted"><?= e(SELECTOR_FIELD_LABELS[$field] ?? $field) ?></dt>
-                <dd><?= e(selector_value_label((string)$field, ($sal['selector'] ?? [])[$field] ?? '')) ?>
-                  <span class="text-ink-muted">— <?= e((string)$basis) ?></span></dd>
-              <?php endforeach; ?>
-              <?php if (!empty($sal['randuri'])): ?>
-                <dt class="text-ink-muted">Rânduri din grilă</dt>
-                <dd class="font-mono"><?= e(implode(', ', (array)$sal['randuri'])) ?></dd>
-              <?php endif; ?>
-              <dt class="text-ink-muted">Varianta</dt>
-              <dd><?= e((string)$sal['varianta']) ?></dd>
-            </dl>
-          </div>
-        </details>
-
-        <p class="mt-3 border-t border-note-line/60 pt-2 text-xs text-ink-muted">
-          <?= e((string)($sal['disclaimer'] ?? '')) ?>
-        </p>
-      </section>
-      <?php endif; ?>
-
+      <div class="pg-main">
 
       <!-- Structured schema sections OR body fallback -->
       <?php if ($schema_sections): ?>
@@ -940,6 +920,7 @@ require __DIR__ . '/../inc/header.php';
         <p class="mt-1 text-xs text-ink-muted"><a href="/despre/#cum-functioneaza" class="text-gov hover:underline">Cum funcționează</a></p>
       </div>
 
+      </div><!-- /pg-main -->
     </div>
   </div>
 </div>

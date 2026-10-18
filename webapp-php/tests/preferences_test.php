@@ -212,7 +212,7 @@ run_suite('markup: identity attributes and real buttons on list, employer and de
     $xd = xpath_for($det);
     assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]//button[@data-pref="save"]')->length, 'detail save button');
     assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]//button[@data-pref="hide"]')->length, 'detail hide icon button');
-    assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]/div/h1/following-sibling::*[@data-pref-controls]')->length, 'detail icons sit right after the h1');
+    assert_same(1, $xd->query('//*[@data-posting][@data-pref-id="1001"]//h1/following-sibling::*[@data-pref-controls]')->length, 'detail icons sit right after the h1');
     assert_same(0, $xd->query('//h1//button')->length, 'no button inside the heading');
     assert_same('https://posturi.gov.ro/anunt/fixture-1001', $xd->query('//*[@data-posting]')->item(0)->getAttribute('data-pref-url'), 'detail identity');
 });

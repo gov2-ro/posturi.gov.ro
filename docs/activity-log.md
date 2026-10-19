@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-10-19 — /pipeline-check: card-only anomaly flags never refreshed; anomaly step limit 15 → 1.5
+
+`/pipeline-check` on the VPS found the machine healthy (every slot ran, 14 runs since 10-11 exit 0, all checks pass, live `built_at` equal to the local export) and two things that no check had caught.
+
+- **Stale anomaly flags.** `no_body` 0.1% → 2.1% and `missing_contact` 1.6% → 3.5% in one run (`2026-10-18T15:33:01Z`, first on `1738d8c`, with `active` +52). In the export 51 of the 53 `no_body` rows have a body of ≥100 chars and 48 have contact fields. Rows first inferred from the listing card (no body, no contact) were never re-inferred when their detail page arrived: `invalidate_enrichment` only requeues on two known, different hashes, and a card-only row has no previous hash. The reused-slug fix (`31d818e`) is what brought ~50 such rows into the live slice at once. `import_csvs` now passes `first_body=True` when a row had no body and has one (`TestFirstDetailRequeuesInference`, four cases). A legacy row that already had a body is deliberately not requeued — the "first refresh is not a full re-run" rule stands.
+- **`anomaly_stable` 15 → 1.5 points** (`ANOMALY_STEP_PTS` in `ops/check-export.py`). Over 76 export-check records (450 flag-to-flag steps) the largest ordinary step was 0.6; only the 10-18 jump (+2.0, +1.9) reaches 1.5. `TestAnomalyStable` pins it.
+- **Not fixed by code:** the 51 rows already in the stale state. They have a body and an unchanged hash, so nothing requeues them. One-time remediation, run on the VPS (expect a count near 51; the next run's `infer` clears the marker):
+
+  ```
+  .venv/bin/python webapp/manage.py shell -c "
+  from django.db.models import Q
+  from django.db.models.functions import Length
+  from apps.jobs.models import JobPosting
+  has_contact = ~Q(contact_phone='') | ~Q(contact_email='') | ~Q(contact_person='')
+  qs = (JobPosting.objects.annotate(n=Length('body_markdown'))
+        .filter((Q(inferred__anomaly_flags__contains=['no_body']) & Q(n__gte=100))
+              | (Q(inferred__anomaly_flags__contains=['missing_contact']) & has_contact)))
+  print('stale:', qs.count())
+  for p in qs.iterator():
+      JobPosting.objects.filter(pk=p.pk).update(inferred={**p.inferred, 'stale_revision': p.detail_content_hash or ''})
+  "
+  ```
+
+- **Crontab: still to do.** The live posturi lines lack `POSTURI_RUN_TRIGGER=cron` (OPS-TRIGGER step b of the beta rollout), so the four runs since 10-17 are recorded `manual`. A backup was taken (`~/crontab.bak.2026-10-19-1046`) and the two-line edit staged, but installing it was denied by the harness, so nothing changed; see the OPS-TRIGGER backlog entry.
+- Not addressed: DeepSeek balance ($4.62 against the $5.00 warn line) needs a top-up; Cloudflare purge (`CF_*`) is unset (BETA-CACHE).
+- Verified: the full `webapp/tests` suite, 1375 passed. The `Postgres` side of the flag check was not read (the query was denied), so the cause rests on the export plus the importer code, not on a look at the live rows.
+
 ### 2026-10-19 — White main column, boxed disclaimer, inline summary rows, compact header; checklist footer removed
 
 Default skin (`posturi`) and the detail page, per pax's request:

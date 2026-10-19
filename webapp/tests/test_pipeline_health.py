@@ -490,6 +490,34 @@ class TestFillRates:
         assert check_map(checks)["body_fill"][1] is False
 
 
+class TestAnomalyStable:
+    """The old limit was 15 points a run. Over the 76 export-check records of
+    2026-09-10..10-18 the largest ordinary step was +0.6 (frequent_repost); the one
+    real jump, no_body 0.1% -> 2.1% and missing_contact 1.6% -> 3.5% on 10-18, was
+    +2.0 / +1.9 and passed every check."""
+
+    def _anomaly(self, check, prev, cur):
+        checks = run_evaluate(check, metrics(anomaly_pct=cur),
+                              {"previous": metrics(anomaly_pct=prev), "window": []},
+                              prompt_version="v3", max_age_hours=6.0)
+        return check_map(checks)["anomaly_stable"]
+
+    def test_the_2026_10_18_jump_warns_and_names_the_flags(self, check):
+        level, ok, message = self._anomaly(
+            check, {"no_body": 0.1, "missing_contact": 1.6},
+            {"no_body": 2.1, "missing_contact": 3.5})
+        assert level == "soft" and not ok
+        assert "no_body 0.1%→2.1%" in message and "missing_contact 1.6%→3.5%" in message
+
+    def test_the_largest_ordinary_step_passes(self, check):
+        level, ok, _ = self._anomaly(check, {"frequent_repost": 1.9},
+                                     {"frequent_repost": 2.5})
+        assert level == "soft" and ok
+
+    def test_a_flag_new_to_this_run_is_not_a_jump_from_zero(self, check):
+        assert self._anomaly(check, {}, {"gender_criteria": 0.2})[1] is True
+
+
 # ------------------------------------------------- REV-14: truncation at the cap
 
 

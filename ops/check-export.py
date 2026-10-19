@@ -51,6 +51,12 @@ SHORT_BODY_CHARS = 100
 #: Window for the expiry-parsing ratio, kept equal to import_csvs.RECENT_WINDOW_DAYS.
 RECENT_WINDOW_DAYS = 30
 
+#: Most an anomaly flag's share of postings may move between two runs. Over the 76
+#: export-check records of 2026-09-10..10-18 the largest ordinary step was 0.6 pts;
+#: the one real jump (no_body +2.0, missing_contact +1.9 on 10-18) was 2-3x that.
+#: It was 15 until then, which could only fire on a wholesale reclassification.
+ANOMALY_STEP_PTS = 1.5
+
 
 # ---------------------------------------------------------------------------
 # Reused thresholds
@@ -514,11 +520,11 @@ def evaluate(
     jumps = [
         f"{flag} {prev_flags.get(flag, 0.0):.1f}%→{pct:.1f}%"
         for flag, pct in m["anomaly_pct"].items()
-        if abs(pct - prev_flags.get(flag, pct)) > 15
+        if abs(pct - prev_flags.get(flag, pct)) > ANOMALY_STEP_PTS
     ]
     soft("anomaly_stable", not jumps,
          "; ".join(jumps) if jumps else
-         f"{len(m['anomaly_pct'])} flag(s), none moved more than 15 pts")
+         f"{len(m['anomaly_pct'])} flag(s), none moved more than {ANOMALY_STEP_PTS:g} pts")
 
     prev_short = prev("short_body_pct")
     soft("bodies_present",

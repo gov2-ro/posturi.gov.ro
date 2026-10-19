@@ -232,6 +232,8 @@ sample report. Extend it, or add a sibling `pipeline-check` command, that:
   state-derived run log genuinely cannot reach (see the note under Part 1).
 - **Tighten the soft thresholds** once there is run history. The ones most likely
   to be wrong: `family_concentration` at 30% (sănătate already sits at 27.7%),
-  `skill_concentration` at 40%, and the 15-point anomaly-flag step change.
+  `skill_concentration` at 40%. (The anomaly-flag step change was the third; it
+  was 15 points and is now 1.5 — `ANOMALY_STEP_PTS`, set 2026-10-19 from 76 records,
+  where the largest ordinary step was 0.6.)
 - **Surface the latest record on `/despre`**, as the original Part 1 note asked —
   "when did the data last actually change, and by how much" without SSH.

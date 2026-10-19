@@ -511,6 +511,74 @@ class TestImportProvenance:
         assert posting.detail_content_hash == ""
 
 
+def card_only_row():
+    """A listing card whose detail page has not been parsed yet: no body, no contact."""
+    r = anunturi_row()
+    r.update({"Main Body Markdown": "", "Contact Telefon": "", "Contact Email": ""})
+    return r
+
+
+class TestFirstDetailRequeuesInference:
+    """2026-10-18: 53 postings kept `no_body` + `missing_contact` flags computed from
+    their listing card after their detail page arrived (48 of them have a phone or
+    email in the export). With no previous hash the importer saw "unknown", not "changed"."""
+
+    URL = INDEX_ROWS[0]["url"]
+
+    @pytest.mark.django_db(transaction=True)
+    def test_body_arriving_for_a_card_only_row_marks_inference_stale(self, import_env):
+        tmp_path, call_command = import_env
+        write_csv(tmp_path / "anunturi" / "anunturi.csv", [card_only_row()])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+        JobPosting.objects.filter(url=self.URL).update(
+            inferred={"anomaly_flags": ["no_body", "missing_contact"]})
+
+        write_csv(tmp_path / "anunturi" / "anunturi.csv",
+                  [anunturi_row(status="Live", content_hash="d" * 64)])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+
+        posting = JobPosting.objects.get(url=self.URL)
+        assert "stale_revision" in posting.inferred
+        assert posting.inferred["anomaly_flags"] == ["no_body", "missing_contact"]
+
+    @pytest.mark.django_db(transaction=True)
+    def test_body_arriving_without_a_hash_still_marks_it(self, import_env):
+        tmp_path, call_command = import_env
+        write_csv(tmp_path / "anunturi" / "anunturi.csv", [card_only_row()])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+        JobPosting.objects.filter(url=self.URL).update(inferred={"anomaly_flags": ["no_body"]})
+
+        write_csv(tmp_path / "anunturi" / "anunturi.csv", [anunturi_row()])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+
+        assert "stale_revision" in JobPosting.objects.get(url=self.URL).inferred
+
+    @pytest.mark.django_db(transaction=True)
+    def test_a_legacy_row_that_already_had_a_body_is_not_requeued(self, import_env):
+        """The documented rule: a first refresh of legacy rows is not a full re-run."""
+        tmp_path, call_command = import_env
+        write_csv(tmp_path / "anunturi" / "anunturi.csv", [anunturi_row()])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+        JobPosting.objects.filter(url=self.URL).update(inferred={"anomaly_flags": []})
+
+        write_csv(tmp_path / "anunturi" / "anunturi.csv",
+                  [anunturi_row(status="Live", content_hash="e" * 64)])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+
+        assert "stale_revision" not in JobPosting.objects.get(url=self.URL).inferred
+
+    @pytest.mark.django_db(transaction=True)
+    def test_a_card_only_row_that_stays_card_only_is_not_requeued(self, import_env):
+        tmp_path, call_command = import_env
+        write_csv(tmp_path / "anunturi" / "anunturi.csv", [card_only_row()])
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+        JobPosting.objects.filter(url=self.URL).update(inferred={"anomaly_flags": ["no_body"]})
+
+        call_command("import_csvs", data_dir=tmp_path, verbosity=0)
+
+        assert "stale_revision" not in JobPosting.objects.get(url=self.URL).inferred
+
+
 # ------------------------------------------------- REV-07: refresh priorities
 
 

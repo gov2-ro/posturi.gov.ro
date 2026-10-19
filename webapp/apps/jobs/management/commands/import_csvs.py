@@ -199,12 +199,19 @@ def unique_slug(name: str, model, taken: set[str], max_len: int = 240) -> str:
 STALE_MARKER = "stale_revision"
 
 
-def invalidate_enrichment(posting: JobPosting, prev_hash: str, new_hash: str) -> list[str]:
+def invalidate_enrichment(
+    posting: JobPosting, prev_hash: str, new_hash: str, *, first_body: bool = False,
+) -> list[str]:
     """REV-07: requeue what was derived from a detail page that changed.
 
     Only a confirmed change counts — both hashes known and different. A legacy
     row (no previous hash) or a fetch without one is "unknown", and requeueing
     those would turn the first production refresh into a full re-run.
+
+    The one other change that is not unknown is `first_body`: the row had no body
+    and now has one, so whatever was inferred from it saw only the listing card
+    (2026-10-18: `no_body` and `missing_contact` flags that outlived the page
+    that disproved them). A legacy row that already had a body is not that.
 
     Schema extraction is re-paid by `llm-schema.py --resume` when its recorded
     source revision and `detail_content_hash` are both known and differ. An
@@ -217,7 +224,7 @@ def invalidate_enrichment(posting: JobPosting, prev_hash: str, new_hash: str) ->
 
     Returns the extra fields to save — empty when nothing was invalidated.
     """
-    if not (prev_hash and new_hash and prev_hash != new_hash):
+    if not (first_body or (prev_hash and new_hash and prev_hash != new_hash)):
         return []
     posting.attachment_text = ""
     posting.inferred = {**(posting.inferred or {}), STALE_MARKER: new_hash}
@@ -433,6 +440,7 @@ class Command(BaseCommand):
                     continue
                 try:
                     prev_hash = posting.detail_content_hash or ""
+                    had_body = bool((posting.body_markdown or "").strip())
                     posting.job_level = r.get("Job Level", "").strip()
                     posting.job_type = r.get("Job Type", "").strip()
                     posting.employer_category = r.get("Employer Category", "").strip()
@@ -474,7 +482,9 @@ class Command(BaseCommand):
                         "data_rezultate_finale", "updated_at",
                         "detail_fetched_at", "detail_content_hash", "cancelled",
                     ]
-                    if extra := invalidate_enrichment(posting, prev_hash, detail_hash):
+                    first_body = not had_body and bool(posting.body_markdown.strip())
+                    if extra := invalidate_enrichment(posting, prev_hash, detail_hash,
+                                                      first_body=first_body):
                         fields += extra
                         revised += 1
                     posting.save(update_fields=fields)

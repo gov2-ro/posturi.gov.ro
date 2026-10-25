@@ -533,3 +533,66 @@ This is the only signal that reports a run which *never happened*. `MAILTO` in t
 crontab mails any run that produced output, but only if the box has an MTA — verify
 with `command -v sendmail` before relying on it, because a dead MAILTO is
 indistinguishable from a clean run.
+
+## 7. Backups — pulled to the Mac by hand
+
+Nothing on the box copies itself anywhere. Now and then, run on the Mac:
+
+```bash
+ops/pull-backup.sh
+```
+
+Each run writes one dated snapshot under `~/posturi-backups/`:
+
+| Path | What |
+|---|---|
+| `<stamp>/posturi.sql.gz` | `pg_dump --no-owner --no-privileges`, plain SQL, gzipped on the VPS before it is sent |
+| `<stamp>/data/anunturi/` | raw detail pages and `.meta.json` sidecars (`anunturi.csv` is left out: the parser rebuilds it) |
+| `<stamp>/data/downloads/` | attachments and their manifests |
+| `<stamp>/data/pipeline-runs.jsonl` | the run log |
+| `<stamp>/data/posturi_gov_ro.csv` | the index, whose `updates` column is change history nothing else holds |
+| `latest` | a symlink to the newest snapshot |
+
+Files that have not changed since the previous snapshot are hard links to it
+(`rsync --link-dest`). Every snapshot is a complete tree, but only new pages,
+attachments and the dump take space. The 8 newest are kept (`POSTURI_BACKUP_KEEP`).
+A failed run leaves no snapshot and does not move `latest`. Sizes on 2026-10-25: the dump is ~190 MB gzipped (about a minute to make; the database is 774 MB on disk), `data/anunturi` 288 MB in 16,602 files, `data/downloads` 2.0 GB in 7,818 files. The first pull copies ~2.5 GB, later ones mostly the dump, so eight snapshots take about 4 GB. The dump is plain SQL,
+not `-Fc`, so the Mac's Postgres 14 tools can read a dump from the VPS's Postgres 16
+(a `-Fc` archive from 16 is refused by `pg_restore` 14).
+
+**One-time setup.** The script connects with `ssh gov2-1` and key login only
+(`BatchMode`). Add a host entry to `~/.ssh/config`:
+
+```
+Host gov2-1
+    HostName <the VPS address>
+    User pax
+```
+
+Alternatively, set `POSTURI_VPS=pax@<address>` in the environment or in the Mac's
+`.env`. The other settings are `POSTURI_VPS_DIR`, `POSTURI_BACKUP_DIR` and
+`POSTURI_BACKUP_KEEP` (see the script's header). The VPS needs `rsync`.
+
+The script checks the dump before keeping it: the gzip must be intact, at least
+1 MB, and contain the `jobs_jobposting` data. It also checks that at least as many
+archive files arrived as the VPS had before the copy.
+
+**Restoring.** Never restore into the live database. Load the dump into a scratch
+database and compare:
+
+```bash
+createdb posturi_restore
+gunzip -c ~/posturi-backups/latest/posturi.sql.gz | psql -q -v ON_ERROR_STOP=1 posturi_restore
+psql posturi_restore -c 'select count(*) from jobs_jobposting'
+```
+
+A dump from a newer server can open with `SET` lines an older one rejects (for
+example `transaction_timeout`, which Postgres 17 added). If that is the only error,
+restore into a server of the VPS's version, or leave out `ON_ERROR_STOP`.
+
+To rebuild a lost box, provision it as in § 1–3. Copy `latest/data/` back into
+the checkout's `data/` and load the dump into the new database with the same `psql`
+line. The CSVs and exports regenerate on the next pipeline run.
+
+Off-site storage (restic to Backblaze B2) was written and then shelved on
+2026-10-25 in favour of this pull. It is in commit `18c76fb` if it is wanted later.

@@ -25,7 +25,7 @@ from posting_urls import build_dated_slug_index, build_slug_index, url_from_slug
 #: silently survive a parser fix. A bump invalidates the whole cache and the next
 #: run re-parses everything (`--full` does the same on demand). Pure refactors,
 #: comments and log changes do not need one.
-PARSER_VERSION = 2   # 2: URL from sidecar / (date, slug) — reparse everything once
+PARSER_VERSION = 3   # 3: date-first calendar rows (DATA-10); 2: URL from sidecar / (date, slug)
 
 #: Name of the reuse cache, written next to the anunturi CSV.
 CACHE_NAME = '.parse-cache.json'
@@ -85,6 +85,17 @@ _DATED_SLUG_INDEX = build_dated_slug_index(
 
 DATE_RE = re.compile(r'\b(\d{1,2}\.\d{2}\.\d{4})\b')
 TIME_RE = re.compile(r'ora\s+(\d{1,2}[:.]\d{2})', re.IGNORECASE)
+# Calendar row prefixes. The row number must not eat the day of a date-first
+# row ("10.06.2025 ..." is not row 10).
+_ROW_NUMBER_RE = re.compile(r'^(?!\d{1,2}\.\d{2}\.\d{4})\d+[.)]?\s*')
+# Word's Symbol-font bullets arrive as private-use code points (U+F0D8, U+F0A7…).
+_LIST_MARK_RE = re.compile(r'^[•·▪◦*>»➢✓\-–—\ue000-\uf8ff]+\s*')
+# The dates, hours and separators a date-first row opens with, before its label.
+_LEAD_DATE_TIME_RE = re.compile(
+    # "până la ora 15.30 –", "până la 15.30 –", "ora 1530 –", "ora 13ºº -" all occur.
+    r'^(?:[\s,;:–—\-]+|(?:p[âa]n[ăa]\s+la\s+(?:ora\s+)?|(?:ora|orele)\s*:?\s*)\d{1,2}(?:[:.,]?\d{2}|ºº)?'
+    r'|\d{1,2}\.\d{2}\.\d{4}|\d{1,2}[:.]\d{2})+',
+    re.IGNORECASE)
 PHONE_RE = re.compile(r'\b(0[0-9]{9})\b')
 PHONE_CANDIDATE_RE = re.compile(r'\b0[\d\s.\-–/]{9,14}\d\b')
 EMAIL_RE = re.compile(r'[\w.+-]+@[\w.-]+\.[a-z]{2,}')
@@ -218,7 +229,7 @@ def extract_calendar(body_soup):
             if re.search(r'CALENDAR|Nr\.\s*crt', line, re.IGNORECASE):
                 header_skipped = True
             continue
-        line = re.sub(r'^\d+\.?\s*', '', line).strip()
+        line = _LIST_MARK_RE.sub('', _ROW_NUMBER_RE.sub('', line)).strip()
         if not line:
             continue
         date_m = DATE_RE.search(line)
@@ -228,6 +239,12 @@ def extract_calendar(body_soup):
         time_m = TIME_RE.search(line[date_m.start():])
         time_str = time_m.group(1) if time_m else ''
         eveniment = line[:date_m.start()].strip().rstrip(',.').strip()
+        if not eveniment:
+            # "• 17.06.2025 ora 11:00, proba scrisă" — a date-first row names its
+            # event after the date and hour. Taking only the text before the date
+            # left the bullet as the label, and `_find_deadline` never saw
+            # "depunerea dosarelor".
+            eveniment = _LEAD_DATE_TIME_RE.sub('', line[date_m.start():]).rstrip(',.;').strip()
         # A submission row often states a window: "Depunerea dosarelor de la
         # 11.09.2026 până la 30.09.2026". The row's own date stays the first one
         # (when the stage begins), but the closing date is what a candidate has

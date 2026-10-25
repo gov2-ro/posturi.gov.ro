@@ -112,3 +112,37 @@ class TestVocabulary:
     def test_tiers_run_most_specific_first(self, parser):
         assert parser._DEADLINE_KEYWORDS[0] == ("limita", "limită")
         assert parser._DEADLINE_KEYWORDS[-1] == ("dosar",)
+
+
+class TestDateFirstRows:
+    """DATA-10: a calendar written as "• 17.06.2025 ora 11:00, proba scrisă" puts
+    the event after the date. Taking only the text before the date stored the
+    bullet as the event name (3.4% of calendar rows), and `_find_deadline` never
+    saw "depunerea dosarelor" — 267 cached pages had no calendar deadline."""
+
+    def calendar(self, parser, *lines):
+        from bs4 import BeautifulSoup
+        html = "<p>Concursul se va organiza conform calendarului următor:<br/>" + "<br/>".join(lines) + "</p>"
+        return parser.extract_calendar(BeautifulSoup(html, "html.parser"))
+
+    def test_the_event_comes_from_after_the_date(self, parser):
+        rows = self.calendar(parser,
+                             "• 10.06.2025 ora 14:00, data limită pentru depunerea dosarelor",
+                             "• 17.06.2025 ora 11:00, proba scrisă")
+        assert [r[0] for r in rows] == ["data limită pentru depunerea dosarelor", "proba scrisă"]
+        assert parser._find_deadline(rows) == "10.06.2025, ora 14:00"
+
+    @pytest.mark.parametrize("line,label", [
+        ("– 13.09.2024 până la ora 15.30 – Afişarea rezultatelor", "Afişarea rezultatelor"),
+        (" 16.09.2024 ora 13ºº -Perioada de înscriere", "Perioada de înscriere"),
+        ("- 20.09.2024 până la 15.30 – Afişare rezultate", "Afişare rezultate"),
+        ("• Rezultat selecție dosare 13.07.2026", "Rezultat selecție dosare"),
+    ])
+    def test_list_marks_and_leading_hours_are_not_the_label(self, parser, line, label):
+        assert self.calendar(parser, line)[0][0] == label
+
+    def test_a_row_number_does_not_eat_the_day(self, parser):
+        """`^\\d+\\.?` used to read "10." of "10.06.2025" as row 10."""
+        rows = self.calendar(parser, "1. Depunerea dosarelor 10.06.2025", "10.06.2025 proba scrisă")
+        assert [(r[0], r[1]) for r in rows] == [("Depunerea dosarelor", "10.06.2025"),
+                                                ("proba scrisă", "10.06.2025")]

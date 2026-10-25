@@ -57,6 +57,19 @@ RECENT_WINDOW_DAYS = 30
 #: It was 15 until then, which could only fire on a wholesale reclassification.
 ANOMALY_STEP_PTS = 1.5
 
+#: Most an anomaly flag may rise above its lowest share in the healthy window
+#: (`anomaly_sustained`): small steps that `anomaly_stable` lets through one at a
+#: time still add up against a baseline the climb cannot drag along. Replayed over
+#: the 90 VPS export-checks to 2026-10-25: outside the 10-18 step the largest rise
+#: of any flag was 0.3 pts, and that step rose 2.0-2.1. At 2.0 the catch hung on
+#: 0.1 pt; at 1.0 it warns for the 7 runs the window takes to absorb the step.
+ANOMALY_SUSTAINED_PTS = 1.0
+
+#: Flags that grow with the archive by construction, not with a fault.
+#: `frequent_repost` counts employer+title over every posting ever imported, so
+#: its share rises as history accumulates (1.8% on 10-08, 4.0% on 10-25).
+ANOMALY_CUMULATIVE = frozenset({"frequent_repost"})
+
 
 # ---------------------------------------------------------------------------
 # Reused thresholds
@@ -525,6 +538,25 @@ def evaluate(
     soft("anomaly_stable", not jumps,
          "; ".join(jumps) if jumps else
          f"{len(m['anomaly_pct'])} flag(s), none moved more than {ANOMALY_STEP_PTS:g} pts")
+
+    floors = {}
+    for w in window:
+        for flag, pct in (w.get("anomaly_pct") or {}).items():
+            floors[flag] = min(pct, floors.get(flag, pct))
+    climbs = [
+        f"{flag} {floors[flag]:.1f}%→{pct:.1f}%"
+        for flag, pct in m["anomaly_pct"].items()
+        if flag in floors and flag not in ANOMALY_CUMULATIVE
+        and pct - floors[flag] > ANOMALY_SUSTAINED_PTS
+    ]
+    if climbs:
+        message = "; ".join(climbs) + f" over the lowest of the last {len(window)} healthy run(s)"
+    elif floors:
+        message = (f"no flag more than {ANOMALY_SUSTAINED_PTS:g} pts above its lowest "
+                   f"in the last {len(window)} healthy run(s)")
+    else:
+        message = "no healthy window yet for sustained comparison"
+    soft("anomaly_sustained", not climbs, message)
 
     prev_short = prev("short_body_pct")
     soft("bodies_present",

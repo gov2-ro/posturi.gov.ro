@@ -518,6 +518,46 @@ class TestAnomalyStable:
         assert self._anomaly(check, {}, {"gender_criteria": 0.2})[1] is True
 
 
+class TestAnomalySustained:
+    """OPS-ANOMALY-SUSTAINED: steps under ANOMALY_STEP_PTS add up unnoticed when
+    each run is compared only with the one before it."""
+
+    def _sustained(self, check, history, cur):
+        window = [metrics(anomaly_pct=h) for h in history]
+        checks = run_evaluate(check, metrics(anomaly_pct=cur),
+                              {"previous": window[-1] if window else None, "window": window},
+                              prompt_version="v3", max_age_hours=6.0)
+        return check_map(checks)["anomaly_sustained"]
+
+    def test_a_climb_of_small_steps_warns(self, check):
+        history = [{"missing_contact": 1.6 + 0.4 * i} for i in range(7)]   # 1.6 … 4.0
+        level, ok, message = self._sustained(check, history, {"missing_contact": 4.4})
+        assert level == "soft" and not ok
+        assert "missing_contact 1.6%→4.4%" in message
+        assert check_map(run_evaluate(check, metrics(anomaly_pct={"missing_contact": 4.4}),
+                                      {"previous": metrics(anomaly_pct=history[-1]), "window": []},
+                                      prompt_version="v3", max_age_hours=6.0)
+                         )["anomaly_stable"][1] is True
+
+    def test_frequent_repost_grows_with_the_archive_and_is_exempt(self, check):
+        history = [{"frequent_repost": 1.8 + 0.3 * i} for i in range(7)]
+        assert self._sustained(check, history, {"frequent_repost": 4.0})[1] is True
+
+    def test_noise_within_the_limit_passes(self, check):
+        """The largest rise outside the 10-18 step, over 90 VPS records, was 0.3."""
+        history = [{"no_body": v} for v in (0.1, 0.3, 0.2, 0.4, 0.1, 0.2, 0.3)]
+        assert self._sustained(check, history, {"no_body": 0.4})[1] is True
+
+    def test_the_2026_10_18_step_warns(self, check):
+        history = [{"no_body": 0.1, "missing_contact": 1.4}] * 7
+        ok = self._sustained(check, history, {"no_body": 2.1, "missing_contact": 3.5})[1]
+        assert ok is False
+
+    def test_no_window_passes(self, check):
+        level, ok, message = self._sustained(check, [], {"no_body": 9.0})
+        assert ok and "no healthy window" in message
+
+
 # ------------------------------------------------- REV-14: truncation at the cap
 
 

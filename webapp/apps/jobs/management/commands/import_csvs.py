@@ -535,6 +535,9 @@ class Command(BaseCommand):
                         for r in items:
                             d = parse_date(r.get("data", ""))
                             if not d:
+                                # Name the row: a source typo (31.09.2024) otherwise
+                                # shows up only as errors=1 on every run.
+                                self.stderr.write(f"calendar: unparseable date {r.get('data', '')!r} for {u}")
                                 c_errors += 1
                                 continue
                             t = None

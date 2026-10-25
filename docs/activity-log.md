@@ -2,6 +2,19 @@
 
 ## 2026
 
+### 2026-10-25 — /pipeline-check after DST; calendar labels, anomaly_sustained, backlog cleanup
+
+`/pipeline-check` on the VPS (session `posturi-vps-2510`, relayed over Remote Control). All 14 slots of 10-19…10-25 ran, including the first two after the change to winter time (11:15Z and 16:33Z). There were no failed or warned steps, `check-export` passed 31/31, and the live `built_at` matched the last run.
+
+- **DeepSeek balance $2.85**, burning about $0.25/day: the $1.00 abort floor arrives around 2026-11-02. Noted on OPS-BALANCE; a top-up is an operator step.
+- **Trigger label:** the 18 scheduled runs since 10-17 are recorded `manual` because the crontab still lacks `POSTURI_RUN_TRIGGER=cron`. This is a VPS crontab edit (the existing operator checklist item).
+- **Calendar `errors=1` (DATA-09):** one source typo, `31.09.2024` on `bucatar-180` (expired 2024-09-27). The calendar pass dropped the row silently; it now writes the URL and the raw date to stderr.
+- **New backlog items:** OPS-ANOMALY-SUSTAINED (`frequent_repost` 1.8% → 4.0% over 17 days without tripping the per-run check) and DATA-10 (3.4% of calendar rows have a bare `•` or `-` as the event name).
+- **Crontab and balance:** pax added `POSTURI_RUN_TRIGGER=cron` to both lines (the VPS session checked: only lines 83–84 changed) and topped up DeepSeek.
+- **DATA-10, date-first calendar rows** (`parse-anunturi.py`, `PARSER_VERSION` 3). "• 17.06.2025 ora 11:00, proba scrisă" kept the bullet as the event name, because the label was taken only from before the date. The undercount was worse than first measured: en dashes and Word's private-use bullets (U+F0D8, U+F0A7…) did the same, on 665 of 9,757 cached pages. A side effect was a missed deadline: `_find_deadline` never saw "depunerea dosarelor". Now the label comes from after the date and hour, and list marks are stripped. The row-number strip (`^\d+\.?`) no longer reads "10." of "10.06.2025" as row 10, which used to drop date-first rows outright. Measured over the Mac's cache: junk labels 665 → 4 pages, calendar rows +1,371, calendar deadlines 1,536 → 1,803 pages, none lost, ten changed (see the backlog entry). Four pages lose a row whose only "label" was half a date.
+- **`anomaly_sustained`** (`ops/check-export.py`): each anomaly flag is compared with its lowest value in the healthy window, limit 1.0 pt (VPS replay: noise ≤ 0.3, the 10-18 step +2.0/+2.1). `frequent_repost` is exempt. It counts employer+title over every posting ever imported, so the rise the VPS flagged (1.8% → 4.0%) is the archive growing, by construction.
+- **Backlog cleanup.** Ten items still said "not deployed" although the live code (`2e151ef`) contains them; they are ticked or annotated. FIX-05-STAGES had been ready to tick since 10-12, and its strict-stage decision stands; my first summary to pax had wrongly offered an `altele` fallback that pax rejected on 10-11.
+
 ### 2026-10-19 — /pipeline-check: card-only anomaly flags never refreshed; anomaly step limit 15 → 1.5
 
 `/pipeline-check` on the VPS found the machine healthy (every slot ran, 14 runs since 10-11 exit 0, all checks pass, live `built_at` equal to the local export) and two things that no check had caught.

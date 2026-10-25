@@ -63,6 +63,7 @@ webapp-php/posturi.sqlite
 *.sqlite-shm
 node_modules/
 .pipeline.lock
+.backup.lock
 
 # Playwright output (browser traces and reports)
 test-results/

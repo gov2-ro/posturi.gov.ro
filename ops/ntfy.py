@@ -29,6 +29,7 @@ Configuration (.env):
 Usage:
     ops/ntfy.py test                                    # one marker push: is it wired?
     ops/ntfy.py run --outcome ok --exit 0               # what run-pipeline.sh calls
+    ops/ntfy.py send --title T --message M [--priority 4] [--tag x]   # what ops/backup.sh calls
 """
 from __future__ import annotations
 
@@ -554,6 +555,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_send(args: argparse.Namespace) -> int:
+    """One free-form push (ops/backup.sh's failure alert). Like `run`, it never fails
+    its caller: no topic means nothing is sent, and a push that cannot be delivered
+    has already printed its WARNING."""
+    notify(Message(args.title, args.message, args.priority, tuple(args.tag)))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="ntfy.sh notifications for the pipeline.")
     sub = ap.add_subparsers(dest="command", required=True)
@@ -565,13 +574,20 @@ def main(argv: list[str] | None = None) -> int:
                      help="Default: $POSTURI_RUN_ID, which run-pipeline.sh exports.")
     run.add_argument("--run-log", default=str(DEFAULT_RUN_LOG), metavar="PATH")
     sub.add_parser("test", help="Send one marker push to check the wiring.")
+    send = sub.add_parser("send", help="Send one free-form push (ops/backup.sh).")
+    send.add_argument("--title", required=True)
+    send.add_argument("--message", required=True)
+    send.add_argument("--priority", type=int, default=3, choices=range(1, 6),
+                      help="ntfy priority, 1 (min) to 5 (urgent). Default 3.")
+    send.add_argument("--tag", action="append", default=[],
+                      help="An ntfy tag (a known name becomes an emoji); repeatable.")
     args = ap.parse_args(argv)
 
     _load_env()
     if args.command == "test":
         return cmd_test()
     try:
-        return cmd_run(args)
+        return cmd_send(args) if args.command == "send" else cmd_run(args)
     except Exception as exc:    # never change a run's exit status
         print(f"WARNING: ntfy summary failed: {type(exc).__name__}: {exc}")
         return 0

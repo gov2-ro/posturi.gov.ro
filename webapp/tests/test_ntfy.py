@@ -664,6 +664,31 @@ class TestCliTest:
         assert "NTFY_TOPIC" in capsys.readouterr().out
 
 
+class TestCliSend:
+    """`ops/ntfy.py send`: the free-form push ops/backup.sh sends when a backup fails."""
+
+    def test_send_pushes_the_given_title_message_priority_and_tags(self, ntfy, clean_env,
+                                                                    monkeypatch, posts):
+        monkeypatch.setenv("NTFY_TOPIC", TOPIC)
+        assert ntfy.main(["send", "--title=posturi backup FAILED", "--message=- step: pg_dump",
+                          "--priority=4", "--tag=x", "--tag=warning"]) == 0
+        (req,) = posts
+        assert req["body"]["title"] == "posturi backup FAILED"
+        assert req["body"]["message"] == "- step: pg_dump"      # a leading '-' is not a flag
+        assert req["body"]["priority"] == 4
+        assert req["body"]["tags"] == ["x", "warning"]
+
+    def test_send_without_a_topic_sends_nothing_and_still_exits_0(self, ntfy, clean_env, posts):
+        assert ntfy.main(["send", "--title=t", "--message=m"]) == 0
+        assert posts == []
+
+    def test_a_failed_delivery_does_not_change_the_exit_status(self, ntfy, clean_env,
+                                                               monkeypatch, capsys):
+        monkeypatch.setenv("NTFY_TOPIC", TOPIC)
+        monkeypatch.setattr(ntfy, "send", lambda *a, **k: False)
+        assert ntfy.main(["send", "--title=t", "--message=m"]) == 0
+
+
 class TestSuiteSafety:
     def test_no_test_can_inherit_the_real_topic_from_the_environment_or_dotenv(self):
         """With the topic in .env, a test of the abort path would otherwise buzz a phone.

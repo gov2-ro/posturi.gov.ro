@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "institution": {"name": "Spitalul Orășenesc Exemplu", "cui": "87654321", "locality": "Exemplu", "county": "Brașov", "email": "hr@spital.example"},
+    "department": "Secția Pediatrie",
+    "interview": true
+  },
+  "data": {
+    "occupation_title": "Asistent medical generalist",
+    "positions": [{"title": "Asistent medical generalist", "count": 1}],
+    "recruitment": {"kind": "recrutare"},
+    "vacancies_total": 1,
+    "contract": {"post_status": "temporar_vacant", "duration": "determinata", "duration_months": 8, "schedule": "schimburi"},
+    "education": {"minimum_level": "postliceala", "fields_of_study": [{"label_ro": "asistență medicală generală"}]},
+    "experience": {"none_required": true},
+    "baseSalary": {"minValue": 5400, "maxValue": 5400, "currency": "RON", "unitText": "MONTH"},
+    "documents": {"standard": ["formular_inscriere", "act_identitate", "acte_studii", "cazier_judiciar", "adeverinta_medicala", "cv"]},
+    "bibliography_topics": ["Legea nr. 95/2006 privind reforma în domeniul sănătății"],
+    "application": {"channels": ["email"], "window_start": "2026-04-07"},
+    "application_contact": {"email": "hr@spital.example"},
+    "competition_calendar": {
+      "application_deadline": "2026-04-15",
+      "events": [
+        {"stage": "publicare", "date": "2026-04-07"},
+        {"stage": "depunere_dosare", "date": "2026-04-15"},
+        {"stage": "selectie_dosare", "date": "2026-04-16"},
+        {"stage": "rezultate_selectie_dosare", "date": "2026-04-17"},
+        {"stage": "contestatii_selectie_dosare", "date": "2026-04-20"},
+        {"stage": "rezultate_contestatii_selectie_dosare", "date": "2026-04-21"},
+        {"stage": "proba_scrisa", "date": "2026-04-23"},
+        {"stage": "rezultate_proba_scrisa", "date": "2026-04-24"},
+        {"stage": "contestatii_proba_scrisa", "date": "2026-04-27"},
+        {"stage": "rezultate_contestatii_proba_scrisa", "date": "2026-04-28"},
+        {"stage": "interviu", "date": "2026-04-29"},
+        {"stage": "rezultate_interviu", "date": "2026-04-30"},
+        {"stage": "contestatii_interviu", "date": "2026-05-04"},
+        {"stage": "rezultate_contestatii_interviu", "date": "2026-05-05"},
+        {"stage": "rezultate_finale", "date": "2026-05-06"}
+      ]
+    }
+  }
+}

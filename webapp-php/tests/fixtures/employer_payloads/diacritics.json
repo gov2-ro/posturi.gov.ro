@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "institution": {"name": "Direcția „Achiziții & Contracte” <DAC>", "county": "Timiș", "locality": "TIMIȘOARA"},
+    "department": "Biroul Ș&Ț <test>",
+    "interview": false
+  },
+  "data": {
+    "occupation_title": "Șef serviciu „Achiziții & Contracte” <nivel 2>",
+    "positions": [{"title": "Șef serviciu „Achiziții & Contracte” <nivel 2>", "count": 1}],
+    "recruitment": {"kind": "recrutare"},
+    "vacancies_total": 1,
+    "contract": {"post_status": "vacant", "duration": "nedeterminata", "schedule": "norma_intreaga"},
+    "education": {"minimum_level": "master", "fields_of_study": [{"label_ro": "drept & administrație"}], "specialization": "achiziții <publice>"},
+    "experience": {"years_minimum": 5, "in_specialty": true},
+    "language_list": [{"language": "franceză", "cefr": "B1", "required": true}],
+    "baseSalary": {"minValue": 9000, "maxValue": 9000, "currency": "RON", "unitText": "MONTH"},
+    "responsibilities": "- Coordonează echipa (3 persoane) & răspunde de buget\n- Verifică „dosarele” înainte de semnare: a < b, b > c",
+    "documents": {
+      "standard": ["formular_inscriere", "act_identitate", "acte_studii", "cv"],
+      "specific": [{"label": "Dovada „bunei reputații” (≥ 5 ani)"}]
+    },
+    "bibliography_topics": ["Legea nr. 98/2016 — art. 2 alin. (1) lit. a) & b)", "Ghid „Șt. & Ț.” <ediția 2025>"],
+    "application": {"channels": ["sediu", "posta", "email", "online"], "window_start": "2026-10-05"},
+    "application_contact": {"name": "Ștefan Țurcanu", "phone": "0256 000 000", "email": "dac@exemplu.example", "address": "Piața Libertății nr. 1, Timișoara"},
+    "competition_calendar": {
+      "application_deadline": "2026-10-16",
+      "events": [
+        {"stage": "publicare", "date": "2026-10-05"},
+        {"stage": "depunere_dosare", "date": "2026-10-16"},
+        {"stage": "selectie_dosare", "date": "2026-10-20"},
+        {"stage": "rezultate_selectie_dosare", "date": "2026-10-21"},
+        {"stage": "contestatii_selectie_dosare", "date": "2026-10-22"},
+        {"stage": "rezultate_contestatii_selectie_dosare", "date": "2026-10-23"},
+        {"stage": "proba_scrisa", "date": "2026-10-26"},
+        {"stage": "rezultate_proba_scrisa", "date": "2026-10-27"},
+        {"stage": "contestatii_proba_scrisa", "date": "2026-10-28"},
+        {"stage": "rezultate_contestatii_proba_scrisa", "date": "2026-10-29"},
+        {"stage": "rezultate_finale", "date": "2026-10-30"}
+      ]
+    }
+  }
+}

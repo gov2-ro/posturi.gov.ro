@@ -1,6 +1,6 @@
 // Reader notes (2026-10-17): a note per posting, kept in the browser beside the
 // save/hide state (static/saved.js). A noted posting counts as saved, /salvate/ has a
-// Notițe view, and saved + noted postings export as CSV. Runs at 320, 375 and 1280.
+// one page with saved jobs (the Notițe tab was merged in, UX-15), and saved + noted postings export as CSV. Runs at 320, 375 and 1280.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 
@@ -85,7 +85,7 @@ test('Escape closes without saving; Ctrl+Enter saves; an emptied note is removed
   await noOverflow(page, 'detail page');
 });
 
-test('/salvate/: noted postings listed, a Notițe view, edit in place, CSV export', async ({ page }) => {
+test('/salvate/: noted postings listed with saved ones, edit in place, CSV export', async ({ page }) => {
   await page.goto('/');
   // One bookmarked, one noted only.
   await row(page, 1006).locator('[data-pref="save"]').click();
@@ -95,12 +95,11 @@ test('/salvate/: noted postings listed, a Notițe view, edit in place, CSV expor
 
   await page.goto('/salvate/');
   await expect(page.locator('[data-saved-list] li')).toHaveCount(2);
-  await expect(page.locator('[data-count="notes"]')).toHaveText('(1)');
   const noted = page.locator('[data-saved-list] li[data-pref-id="1001"]');
   await expect(noted.locator('[data-f="user-note"]')).toContainText('vezi anexa');
-  await page.locator('[data-view-tab="notes"]').click();
-  await expect(page).toHaveURL(/vedere=notite/);
-  await expect(page.locator('[data-saved-list] li')).toHaveCount(1);
+  // Old links to the Notițe view land on the same page.
+  await page.goto('/salvate/?vedere=notite');
+  await expect(page.locator('[data-saved-list] li')).toHaveCount(2);
 
   // Edit in place on /salvate/.
   await noted.locator('[data-pref="note"]').click();

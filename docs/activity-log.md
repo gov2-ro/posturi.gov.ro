@@ -2,6 +2,31 @@
 
 ## 2026
 
+### 2026-11-02 — UX-15 saved searches in the browser (code ready, not deployed)
+
+**Done**
+- `search_key()` (`helpers.php`) and `searchKey()` (`static/searches.js`) implement ADR 0001. Both read `tests/fixtures/search_keys.json` (23 cases). `tests/searches_test.php` also checks that the JS multi-value list equals `MULTI_PARAMS`.
+- New store `posturi.searches.v1` in `static/searches.js`: validated records, invalid records kept in storage, corrupt or other-version data never overwritten, verified write, limit 50. API on `window.PosturiSearches`.
+- `inc/header.php`: inline redirect to the default search once per session. The flag is set on `/` even with no saved search.
+- List page: „Salvează căutarea” toggle and „Afișăm căutarea ta salvată” notice, both outside `#results`. `syncFeedLinks()` calls `PosturiSearches.sync()`. `data-active-chips` added in `result_list.php`.
+- `/salvate/?vedere=cautari`: fourth tab with rename, open, delete, RSS, clear-all (in-page confirmation). `saved.js` changed in three lines only.
+- `searches.spec.js`: 13 tests x 3 widths, all pass. PHP suites `searches` (49), `request` (226), `feeds` (392), `preferences` (196), `deadline` (85), `discovery` (391) pass. CI job has the new step.
+
+**Hard**
+- Measured: `saved.spec.js` and `feeds.spec.js` fail 20 of 84 runs at 320 and 375 px on the baseline `7cbe836` as well (checked in a clean worktree with the untracked `gov2.css`). The failing set is the same with my change. Desktop passes. Cause not investigated; the footer skin select overflows by 57 px. So `searches.spec.js` checks that its own elements fit the viewport, not the whole page.
+- The fourth tab made the tab bar 38 px too wide at 320 px. Fix: `px-2 sm:px-4` and `flex-wrap` on the nav.
+- The inline script in `<head>` runs before `searches.js` loads, and `searches.js` loads deferred after the list script's first `syncFeedLinks()`. So `searches.js` syncs itself on load.
+- `searchKey()` needs the multi-value list, so it is duplicated in JS. The PHP test guards the drift.
+
+**Decided**
+- The tab is drawn by `searches.js`, not `saved.js`: a fault in the new store must not reach saved jobs. Cost of the alternative: shared code and shared failure.
+- Empty values inside a multi-value parameter: the build kept them, because ADR step 2 said "all empty" only. In the Opus review this changed. `judet[]=&judet[]=CJ` and `judet[]=CJ` select the same postings and `clean_query()` drops the blank, so the key now drops it too (PHP, JS, ADR wording, a new fixture case; 51 PHP assertions and 39 browser tests pass).
+- Assumed, not measured: Safari and Firefox behave like Chromium; `location.replace` before paint hides the flash on a slow device.
+
+**Follow-up 1 (pax, 2026-11-02): one page, one count, lower caps.** Done: the navbar „Salvate” count is saved jobs + saved searches (`searches.js` fires `posturi:searches-changed` after each write and on `storage`; `saved.js` `renderNav()` adds `PosturiSearches.list().length`, 0 when that store is blocked). `/salvate/` shows „Căutări salvate” then „Anunțuri salvate”, each with an `h2`, a count and an empty state. The „Căutări” tab is gone; `?vedere=cautari` is the default view; Notițe and Ascunse show no searches section. Saved-search cap 50 → 4, refused with `window.PosturiSaved.showNotice` (the `#pref-notice` pattern). New `SAVE_MAX = 20` in `saved.js` counts records with `savedAt`; it blocks only a new `savedAt` (new, hidden or noted record) and never hide, note or unsave; `MAX = 500` stays for all records. Records above the cap are never trimmed (tested with 25). Info box states both limits. Decided: `/salvate/` item titles changed from `h2` to `h3`, because the sections now own the `h2` level (cost: three selectors in `saved.spec.js`). Hard: the 500-record test seeded 499 saved records, which now hits the 20 cap, so it seeds hidden records instead. Measured: PHP `searches` 51, `preferences` 196, `request` 226, `feeds` 392, `deadline` 85, `discovery` 391 pass; `searches.spec.js` + `saved.spec.js` + `feeds.spec.js` = 121 pass, 20 fail, all at 320 and 375 px with „horizontal overflow” of 57 px (BUG-MOBILE-OVERFLOW), same count and tests as the baseline. Not checked: Safari, Firefox, screen readers.
+
+**Follow-up 2 (pax, 2026-11-02): only Ascunse is separate.** The Notițe tab is gone. The main list already held noted-only jobs (`isSaved()` = `savedAt` or `note`), so the change is the tab, the view switch and the texts: heading „Anunțuri salvate și notițe”, and `?vedere=notite` (old links) shows the one page. `notes.spec.js` and `searches.spec.js` updated. Measured: `searches` + `saved` + `notes` + `feeds` specs = 125 pass, 26 fail, all „horizontal overflow” at 320/375 px (BUG-MOBILE-OVERFLOW; `notes.spec.js` adds its 6 mobile runs to the known 20); desktop 0 failures. Note: `SAVE_MAX` counts `savedAt` only, so a noted job that is not saved does not count toward the 20.
+
 ### 2026-10-25 — /pipeline-check after DST; calendar labels, anomaly_sustained, backlog cleanup
 
 `/pipeline-check` on the VPS (session `posturi-vps-2510`, relayed over Remote Control). All 14 slots of 10-19…10-25 ran, including the first two after the change to winter time (11:15Z and 16:33Z). There were no failed or warned steps, `check-export` passed 31/31, and the live `built_at` matched the last run.

@@ -1,0 +1,29 @@
+{
+  "_doc": "ADR 0001. Each case: a list URL query string and its search key. Read by tests/searches_test.php and tests/browser/searches.spec.js.",
+  "cases": [
+    {"name": "no query", "input": "", "key": ""},
+    {"name": "bare question mark", "input": "?", "key": ""},
+    {"name": "empty q", "input": "?q=", "key": ""},
+    {"name": "blank q and empty multi", "input": "?q=%20%20&judet[]=", "key": ""},
+    {"name": "blank value inside a multi", "input": "?judet[]=&judet[]=CJ&judet[]=%20", "key": "judet%5B%5D=CJ"},
+    {"name": "default status only", "input": "?status=active", "key": ""},
+    {"name": "page, sort and title only", "input": "?page=3&sort=deadline&title=Mine", "key": ""},
+    {"name": "non-default status", "input": "?status=all", "key": "status=all"},
+    {"name": "default status next to a filter", "input": "?status=active&q=x", "key": "q=x"},
+    {"name": "page, sort and title dropped", "input": "?page=3&sort=deadline&title=Mine&q=contabil", "key": "q=contabil"},
+    {"name": "single judet written judet=", "input": "?judet=cluj", "key": "judet%5B%5D=cluj"},
+    {"name": "single judet written judet[]=", "input": "?judet[]=cluj", "key": "judet%5B%5D=cluj"},
+    {"name": "single judet written judet%5B%5D=", "input": "?judet%5B%5D=cluj", "key": "judet%5B%5D=cluj"},
+    {"name": "two judete sorted", "input": "?judet%5B%5D=iasi&judet%5B%5D=cluj", "key": "judet%5B%5D=cluj&judet%5B%5D=iasi"},
+    {"name": "duplicate values removed", "input": "?judet[]=cluj&judet[]=cluj", "key": "judet%5B%5D=cluj"},
+    {"name": "judet and judet[] merged", "input": "?status=all&page=2&judet=ilfov&judet[]=cluj", "key": "judet%5B%5D=cluj&judet%5B%5D=ilfov&status=all"},
+    {"name": "params sorted by name", "input": "?q=a&judet=cluj&family=it", "key": "family%5B%5D=it&judet%5B%5D=cluj&q=a"},
+    {"name": "params sorted by name, reversed", "input": "?family=it&judet=cluj&q=a", "key": "family%5B%5D=it&judet%5B%5D=cluj&q=a"},
+    {"name": "diacritics and plus as space", "input": "?q=m%C4%83surare+%C8%99i+fi%C8%99e", "key": "q=m%C4%83surare%20%C8%99i%20fi%C8%99e"},
+    {"name": "percent-20 space", "input": "?q=a%20b", "key": "q=a%20b"},
+    {"name": "reserved characters", "input": "?q=a%26b%3Dc%23d", "key": "q=a%26b%3Dc%23d"},
+    {"name": "characters that encodeURIComponent keeps", "input": "?q=%28x%29%2A%21%27", "key": "q=(x)*!'"},
+    {"name": "flag parameters", "input": "?remote_apply=1&parttime=1", "key": "parttime=1&remote_apply=1"},
+    {"name": "last scalar wins", "input": "?q=x&q=y", "key": "q=y"}
+  ]
+}

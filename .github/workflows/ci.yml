@@ -101,6 +101,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/preferences_test.php
 
+      - name: Saved-search key (UX-15, ADR 0001)
+        working-directory: webapp-php
+        run: php tests/searches_test.php
+
       - name: RSS, Atom and iCal subscriptions (UX-04-FEEDS)
         working-directory: webapp-php
         run: php tests/feeds_test.php

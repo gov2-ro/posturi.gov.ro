@@ -91,7 +91,7 @@ test('save on the list survives reload; detail and /salvate/ agree; unsave in an
   await other.goto('/salvate/');
   const item = other.locator('[data-saved-list] li');
   await expect(item).toHaveCount(1);
-  await expect(item.locator('h2 a')).toHaveAttribute('href', '/job/1001-asistent-medical-generalist/');
+  await expect(item.locator('h3 a')).toHaveAttribute('href', '/job/1001-asistent-medical-generalist/');
   await expect(item).toContainText('Înscrieri deschise');
   await expect(other.locator('[data-count="saved"]')).toHaveText('(1)');
 
@@ -333,7 +333,8 @@ test('clear saved / restore hidden need confirmation and touch only their own st
 
 test('500 distinct records: the limit never evicts a save and says what to do', async ({ page }) => {
   const recs = [];
-  for (let i = 0; i < 499; i++) recs.push(rec(5000 + i, { savedAt: at(i) }));
+  // Hidden records: the 500 cap counts every stored record, the 20 cap only those with a savedAt.
+  for (let i = 0; i < 499; i++) recs.push(rec(5000 + i, { hiddenAt: at(i) }));
   await seed(page, recs);
   await page.goto('/');
   await saveBtn(page, 1001).click();                                        // 500th: allowed
@@ -345,11 +346,66 @@ test('500 distinct records: the limit never evicts a save and says what to do', 
   await expect(row(page, 1002)).toBeVisible();
   const s = await stored(page);
   expect(Object.keys(s.records).length).toBe(500);
-  expect(s.records['https://posturi.gov.ro/anunt/fixture-5000'].savedAt).toBeTruthy();   // nothing evicted
+  expect(s.records['https://posturi.gov.ro/anunt/fixture-5000'].hiddenAt).toBeTruthy();   // nothing evicted
   // Changing an existing record is still possible at the limit.
   await hideBtn(page, 1001).click();
   await expect(row(page, 1001)).toBeHidden();
   expect(Object.keys((await stored(page)).records).length).toBe(500);
+});
+
+const SAVE_LIMIT = 'Ai atins limita de 20 de anunțuri salvate. Elimină câteva din Salvate, apoi încearcă din nou.';
+const twenty = (n) => Array.from({ length: n }, (_, i) => rec(5000 + i, { savedAt: at(i) }));
+
+test('the 21st save is refused with the notice, and nothing is evicted', async ({ page }) => {
+  await seed(page, twenty(20));
+  await page.goto('/');
+  await saveBtn(page, 1001).click();
+  await expect(page.locator('#pref-notice')).toBeVisible();
+  await expect(page.locator('#pref-notice [data-notice-text]')).toHaveText(SAVE_LIMIT);
+  await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'false');
+  const s = await stored(page);
+  expect(Object.keys(s.records).length).toBe(20);
+  expect(Object.values(s.records).filter((r) => r.savedAt).length).toBe(20);
+  expect(s.records['https://posturi.gov.ro/anunt/fixture-5000'].savedAt).toBeTruthy();
+  // A hidden record that is saved later hits the same cap.
+  await hideBtn(page, 1002).click();
+  await expect(row(page, 1002)).toBeHidden();
+  await page.evaluate(() => document.querySelector('[data-notice-close]').click());
+  expect(Object.values((await stored(page)).records).filter((r) => r.savedAt).length).toBe(20);
+});
+
+test('hide and note still work at 20 saved', async ({ page }) => {
+  await seed(page, twenty(20));
+  await page.goto('/');
+  await hideBtn(page, 1001).click();
+  await expect(row(page, 1001)).toBeHidden();
+  const s = await stored(page);
+  expect(s.records['https://posturi.gov.ro/anunt/fixture-1001'].hiddenAt).toBeTruthy();
+  expect(Object.values(s.records).filter((r) => r.savedAt).length).toBe(20);
+});
+
+test('a reader with 25 saved jobs keeps all 25, cannot save more, can unsave', async ({ page }) => {
+  await seed(page, twenty(25));
+  await page.goto('/salvate/');
+  await expect(page.locator('[data-saved-list] > li')).toHaveCount(25);
+  await expect(page.locator('[data-count="saved"]')).toHaveText('(25)');
+  await expect(page.locator('[data-saved-heading-count]')).toHaveText('(25)');
+  await expect(page.locator('[data-saved-count]')).toHaveText('(25)');
+  expect(Object.keys((await stored(page)).records).length).toBe(25);
+
+  await page.goto('/');
+  await saveBtn(page, 1001).click();
+  await expect(page.locator('#pref-notice [data-notice-text]')).toHaveText(SAVE_LIMIT);
+  expect(Object.keys((await stored(page)).records).length).toBe(25);
+
+  await page.goto('/salvate/');
+  await page.locator('[data-saved-list] > li').first().locator('[data-pref="save"]').click();
+  await expect(page.locator('[data-saved-list] > li')).toHaveCount(24);
+  expect(Object.values((await stored(page)).records).filter((r) => r.savedAt).length).toBe(24);
+  // Still above the cap: still refused.
+  await page.goto('/');
+  await saveBtn(page, 1001).click();
+  await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'false');
 });
 
 test.describe('storage failures', () => {
@@ -461,7 +517,7 @@ test.describe('resolving today’s data', () => {
     await page.unroute('**/preferinte-posturi.json');
     await item.locator('[data-retry]').click();
     await expect(page.locator('[data-saved-list] li')).toContainText('Înscrieri deschise');
-    await expect(page.locator('[data-saved-list] li h2')).toContainText('Asistent medical');
+    await expect(page.locator('[data-saved-list] li h3')).toContainText('Asistent medical');
     // HTTP errors and non-JSON are failures too, not "missing".
     await page.route('**/preferinte-posturi.json', (r) => r.fulfill({ status: 500, body: 'oops' }));
     await page.reload();
@@ -476,7 +532,7 @@ test.describe('resolving today’s data', () => {
     ]);
     await page.goto('/salvate/');
     const a = page.locator('[data-saved-list] li[data-pref-id="1001"]');
-    await expect(a.locator('h2 a')).toHaveAttribute('href', '/job/1001-asistent-medical-generalist/');
+    await expect(a.locator('h3 a')).toHaveAttribute('href', '/job/1001-asistent-medical-generalist/');
     await expect(a).toContainText('Termen: 16.10.2026');
     await expect.poll(async () => (await stored(page)).records['https://posturi.gov.ro/anunt/fixture-1001'].path).toBe('/job/1001-asistent-medical-generalist/');
     const s = (await stored(page)).records;

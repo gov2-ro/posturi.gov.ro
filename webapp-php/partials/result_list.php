@@ -39,7 +39,7 @@ $chips = $active_chips ?? [];
      each other ("și"). active_filter_chips() walks FILTER_CHIP_GROUPS in order,
      so chips sharing a param are already adjacent and a look-back is enough. -->
 <?php if ($chips): ?>
-<div class="mb-3 flex flex-wrap items-center gap-1.5">
+<div data-active-chips class="mb-3 flex flex-wrap items-center gap-1.5">
   <?php $prev_param = null; foreach ($chips as $chip): ?>
     <?php if ($prev_param !== null):
         $same = $prev_param === $chip['param'];

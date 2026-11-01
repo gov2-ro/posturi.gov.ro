@@ -70,6 +70,13 @@ if (!isset($_build_stamp)) {
   <?php /* D10: welcome on a first visit or after 90 days away. Every page view
      records the visit; the close button only hides the box for this page. */ ?>
   <script>try{var k='posturi.lastVisit',n=Date.now(),v=+localStorage.getItem(k)||0;if(!v||n-v>7776e6)document.documentElement.dataset.welcome='1';localStorage.setItem(k,String(n))}catch(e){}</script>
+  <?php /* UX-15: on the first visit to `/` in a browser session, open the default
+     saved search (the one named by `defaultId`, else the newest). The flag is set
+     even when nothing is saved, so a search saved later in the session never moves
+     the reader off the page they are on. HTML is cached publicly, so the server
+     cannot do this. The page is hidden while the redirect runs, so `/` does not
+     flash. Store shape and rules: static/searches.js, ADR 0001. */ ?>
+  <script>try{if(location.pathname==='/'&&location.search===''&&!sessionStorage.getItem('posturi.searchRedirect')){sessionStorage.setItem('posturi.searchRedirect','1');var s=JSON.parse(localStorage.getItem('posturi.searches.v1')||'null');if(s&&s.version===1&&s.searches&&typeof s.searches==='object'){var ok=function(r,k){return r&&r.key===k&&r.qs===k&&/^[A-Za-z0-9_.~!'()*%=&-]+$/.test(k)&&/^(|deadline|employer|salary)$/.test(r.sort||'')&&typeof r.savedAt==='string'},d=null,i=s.defaultId;if(typeof i==='string'&&ok(s.searches[i],i))d=s.searches[i];else for(var k in s.searches)if(ok(s.searches[k],k)&&(!d||Date.parse(s.searches[k].savedAt)>Date.parse(d.savedAt)))d=s.searches[k];if(d){sessionStorage.setItem('posturi.searchApplied',d.key);document.documentElement.style.visibility='hidden';location.replace('/?'+d.qs+(d.sort?'&sort='+encodeURIComponent(d.sort):''))}}}}catch(e){}</script>
   <?php /* getCacheBusterParam gives every HTMX GET its own URL, so a cached
      results fragment can never be served as a page (index.php, BETA-CACHE). */ ?>
   <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
@@ -78,6 +85,8 @@ if (!isset($_build_stamp)) {
   <?php /* UX-09: one shared script for browser-local save/hide, loaded once here
      rather than copied into the list and detail inline scripts. */ ?>
   <script src="/static/saved.js?v=<?= @filemtime(__DIR__ . '/../static/saved.js') ?: '1' ?>" defer></script>
+  <?php /* UX-15: saved searches (`posturi.searches.v1`); a separate store from saved.js. */ ?>
+  <script src="/static/searches.js?v=<?= @filemtime(__DIR__ . '/../static/searches.js') ?: '1' ?>" defer></script>
   <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">

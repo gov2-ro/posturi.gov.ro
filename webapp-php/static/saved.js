@@ -24,11 +24,13 @@
 
   var KEY = 'posturi.preferences.v1';
   var VERSION = 1;
-  var MAX = 500;
+  var MAX = 500;                   // all stored records: saved, hidden and noted
+  var SAVE_MAX = 20;               // records with a savedAt (UX-15 follow-up 1)
   var PAGE = 25;
   var ENDPOINT = '/preferinte-posturi.json';
   var FALLBACK_NOTE = 'Expirarea anunțului; înscriere neconfirmată';
   var NOTE_MAX = 4000;
+  var SAVE_LIMIT_TEXT = 'Ai atins limita de ' + SAVE_MAX + ' de anunțuri salvate. Elimină câteva din Salvate, apoi încearcă din nou.';
   var STATUS_RO = {
     confirmed_open: 'Înscrieri deschise',
     unconfirmed: 'Termen neconfirmat',
@@ -157,6 +159,7 @@
   /** A record stays while it is saved, hidden, or carries a note. */
   function kept(r) { return !!(r.savedAt || r.hiddenAt || r.note); }
   /** "Saved" for every list and count: bookmarked, or noted. */
+  function savedCount(recs) { return Object.keys(recs).filter(function (k) { return !!recs[k].savedAt; }).length; }
   function isSaved(r) { return !!(r.savedAt || r.note); }
 
   /** Re-read current storage, apply fn to it, write. fn returns an error code to abort. */
@@ -341,8 +344,16 @@
     var n = qs('[data-saved-count]');
     if (!n) return;
     var saved = Object.keys(S.recs).filter(function (k) { return isSaved(S.recs[k]); }).length;
-    n.textContent = '(' + saved + ')';
-    n.hidden = !!S.blocked && saved === 0;
+    // Saved searches live in another store (searches.js). A blocked store counts as 0, never NaN.
+    var searches = 0;
+    try {
+      var api = window.PosturiSearches;
+      var l = api && api.list ? api.list() : [];
+      searches = Array.isArray(l) ? l.length : 0;
+    } catch (e) { searches = 0; }
+    var total = saved + searches;
+    n.textContent = '(' + total + ')';
+    n.hidden = !!S.blocked && total === 0;
   }
 
   function applyAll() {
@@ -362,8 +373,12 @@
     var res = mutate(function (recs) {
       var rec = recs[url];
       var now = new Date().toISOString();
+      // Only a new savedAt is refused. Hide, note and unsave are never blocked, and
+      // records above the cap (UX-09 readers) are never trimmed.
+      var adding = field === 'savedAt' && !(rec && rec.savedAt);
       if (!rec) {
         if (count(recs) >= MAX) return 'limit';
+        if (adding && savedCount(recs) >= SAVE_MAX) return 'savelimit';
         var snap = snapshotOf(el);
         var v = snap && validateRecord(url, { id: snap.id, url: url, title: snap.title, snapshotAt: now });
         if (!v) return 'invalid';
@@ -372,6 +387,7 @@
         rec = recs[url] = snap;
         out.copy = JSON.parse(JSON.stringify(rec));
       } else {
+        if (adding && savedCount(recs) >= SAVE_MAX) return 'savelimit';
         out.copy = JSON.parse(JSON.stringify(rec));
       }
       out.before = rec[field];
@@ -405,6 +421,10 @@
     var r = toggle(el, kind);
     if (r.error === 'limit') {
       showNotice({ text: 'Ai atins limita de ' + MAX + ' de anunțuri păstrate în acest browser. Elimină câteva din Salvate sau Ascunse, apoi încearcă din nou.', focus: true });
+      return;
+    }
+    if (r.error === 'savelimit') {
+      showNotice({ text: SAVE_LIMIT_TEXT, focus: true });
       return;
     }
     if (r.error) { announce('Anunțul nu a putut fi salvat local.'); return; }
@@ -547,9 +567,11 @@
     if (!root) return;
     var params = new URLSearchParams(window.location.search);
     var v = params.get('vedere');
-    var view = v === 'ascunse' ? 'hidden' : v === 'notite' ? 'notes' : 'saved';
+    // One page for searches, saved jobs and notes; only Ascunse is separate.
+    // ?vedere=notite and ?vedere=cautari (old links) show the default view.
+    var view = v === 'ascunse' ? 'hidden' : 'saved';
     var field = view === 'hidden' ? 'hiddenAt' : view === 'notes' ? 'note' : 'savedAt';
-    var list = sortedBy(field);
+    var list = sortedBy(field);   // the saved-searches section is drawn by searches.js
     var savedN = sortedBy('savedAt').length, hiddenN = sortedBy('hiddenAt').length, notesN = sortedBy('note').length;
 
     qsa('[data-view-tab]', root).forEach(function (a) {
@@ -558,6 +580,12 @@
     });
     qs('[data-count="saved"]', root).textContent = '(' + savedN + ')';
     qs('[data-count="hidden"]', root).textContent = '(' + hiddenN + ')';
+    var hc = qs('[data-saved-heading]', root);
+    if (hc) {
+      var hn = view === 'hidden' ? hiddenN : view === 'notes' ? notesN : savedN;
+      qs('[data-saved-heading-text]', hc).textContent = view === 'hidden' ? 'Anunțuri ascunse' : view === 'notes' ? 'Notițe' : 'Anunțuri salvate și notițe';
+      qs('[data-saved-heading-count]', hc).textContent = '(' + hn + ')';
+    }
     var nc = qs('[data-count="notes"]', root);
     if (nc) nc.textContent = '(' + notesN + ')';
     var ex = qs('[data-export-csv]', root);
@@ -575,7 +603,7 @@
     qs('[data-empty-text]', root).textContent = view === 'hidden'
       ? 'Nu ai ascuns niciun anunț în acest browser.'
       : view === 'notes' ? 'Nu ai scris încă nicio notiță. Folosește butonul ✎ de lângă un anunț.'
-      : (S.blocked ? 'Lista salvată nu poate fi citită din acest browser.' : 'Nu ai salvat încă niciun anunț.');
+      : (S.blocked ? 'Lista salvată nu poate fi citită din acest browser.' : 'Nu ai salvat încă niciun anunț și nu ai scris nicio notiță.');
     var tpl = document.getElementById('saved-item-tpl');
     slice.forEach(function (rec) { ul.appendChild(buildItem(tpl, rec, view)); });
 
@@ -834,6 +862,11 @@
   window.addEventListener('pageshow', function (ev) { if (ev.persisted) syncFromStorage(); });
   window.addEventListener('storage', function (ev) { if (ev.key === KEY || ev.key === null) syncFromStorage(); });
   window.addEventListener('popstate', function () { if (SP) renderSaved(); });
+  // searches.js announces each write to its own store (this tab, and other tabs through `storage`).
+  document.addEventListener('posturi:searches-changed', renderNav);
+
+  // Small public surface for searches.js: the same notice, so a refusal reads the same everywhere.
+  window.PosturiSaved = { showNotice: showNotice };
 
   readStore();
   if (qs('[data-saved-page]')) SP = { cache: Object.create(null), confirm: null };

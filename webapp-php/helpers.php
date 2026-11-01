@@ -1564,6 +1564,40 @@ function feed_url(string $filename): string {
 }
 
 /**
+ * The search key of a list URL (ADR 0001, docs/decisions/0001-saved-search-identity.md).
+ * Two URLs with the same key select the same postings. static/searches.js
+ * `searchKey()` implements the same rule; tests/fixtures/search_keys.json is
+ * read by both test suites.
+ *
+ * @param array $params Query parameters, as in $_GET.
+ */
+function search_key(array $params): string {
+    $enc = static fn(string $s): string =>
+        strtr(rawurlencode($s), ['%21' => '!', '%27' => "'", '%28' => '(', '%29' => ')', '%2A' => '*']);
+    $multi = array_flip(MULTI_PARAMS);
+    $parts = [];
+    foreach ($params as $name => $value) {
+        $name = (string)$name;
+        if ($name === 'page' || $name === 'sort' || $name === 'title') continue;
+        if (str_ends_with($name, '[]')) $name = substr($name, 0, -2);
+        $values = is_array($value) ? array_values($value) : [$value];
+        $values = array_values(array_filter($values, 'is_scalar'));
+        $values = array_map('strval', $values);
+        if (!array_filter($values, fn($v) => trim($v) !== '')) continue;
+        if ($name === 'status' && count($values) === 1 && $values[0] === DEFAULT_STATUS) continue;
+        if (is_array($value) || isset($multi[$name])) {
+            $values = array_values(array_unique(array_filter($values, fn($v) => trim($v) !== '')));
+            sort($values, SORT_STRING);
+            $parts[$name] = array_map(fn($v) => $enc($name) . '%5B%5D=' . $enc($v), $values);
+        } else {
+            $parts[$name] = [$enc($name) . '=' . $enc(end($values))];
+        }
+    }
+    ksort($parts, SORT_STRING);
+    return implode('&', array_merge(...array_values($parts) ?: [[]]));
+}
+
+/**
  * When a feed request is scoped to one angajator (`?employer=<slug>`), return
  * that employer's `{id, name, slug}` row so the feed can name itself after it;
  * null otherwise. Used by the three feed handlers for their titles.

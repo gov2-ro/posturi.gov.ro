@@ -111,6 +111,15 @@ Results: the whole browser suite passed 458, skipped 52 and failed 0; Python pas
 - The publication day counts as day 1 of the art. 34 window (art. 98(1)). This is an interpretation. The UI says so, and the rule lives in one function.
 - Salary gets a nudge, not a legal claim. We did not check the transposition status of the EU pay-transparency directive in Romania.
 
+### 2026-11-02 — Environment check on gov2-1 for the UX-14 email-alerts design
+
+Read-only check run on gov2-1 for the saved-searches session (relayed over Remote Control); nothing was changed and no code was touched.
+
+- **gov2-1 has no PHP** and no nginx, apache2 or caddy. The only non-loopback listeners are SSH (22) and a Python process on 8765. It is the pipeline box, not a web host.
+- **Python side:** `pynacl` 1.5.0 and `cryptography` 41.0.7 are installed, so signing or encrypting unsubscribe tokens is possible in Python here.
+- **Deploy path:** code goes out by hand with `./deploy-php.sh --code-only`; the twice-daily cron ships only the database (`--data-only --no-export`, `run-pipeline.sh:172`). `~/.ssh/config` shows no VPS/shared-host entry, so the target comes from `DEPLOY_HOST`/`DEPLOY_PATH` or the script arguments.
+- **Consequence for UX-14:** any alert sender has to run either where the PHP app lives or as a Python job on this box. That choice, plus the hosting and delivery questions already listed in the backlog item, is still open. No email delivery is authorised.
+
 ### 2026-10-25 — /pipeline-check after DST; calendar labels, anomaly_sustained, backlog cleanup
 
 `/pipeline-check` on the VPS (session `posturi-vps-2510`, relayed over Remote Control). All 14 slots of 10-19…10-25 ran, including the first two after the change to winter time (11:15Z and 16:33Z). There were no failed or warned steps, `check-export` passed 31/31, and the live `built_at` matched the last run.

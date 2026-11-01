@@ -124,6 +124,8 @@ if ($uri === '/' || $uri === '') {
     require __DIR__ . '/pages/saved.php';
 } elseif ($uri === '/pot-aplica' || $uri === '/pot-aplica/') {
     require __DIR__ . '/pages/eligibility_tool.php';
+} elseif ($uri === '/pentru-angajatori/anunt' || $uri === '/pentru-angajatori/anunt/') {
+    require __DIR__ . '/pages/employer_builder.php';
 } elseif ($uri === '/despre' || $uri === '/despre/') {
     require __DIR__ . '/pages/about.php';
 } else {

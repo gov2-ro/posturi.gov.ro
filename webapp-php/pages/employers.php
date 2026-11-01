@@ -93,6 +93,8 @@ require __DIR__ . '/../inc/header.php';
     </div>
   </div>
 
+  <p class="mb-6 text-sm"><a href="/pentru-angajatori/anunt/" class="text-gov underline hover:no-underline">Pentru angajatori: scrie un anunț structurat</a></p>
+
   <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
 
     <!-- Top overall with judet filter -->

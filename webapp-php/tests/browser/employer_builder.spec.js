@@ -41,7 +41,7 @@ const settle = (page) => page.waitForTimeout(700);
 
 test('every section keeps its values after a reload', async ({ page }) => {
   const errors = await open(page);
-  await expect(page.locator('h1')).toHaveText('Anunț structurat');
+  await expect(page.locator('h1')).toHaveText('Asistent redactare anunțuri angajare');
   await noOverflow(page, 'empty form');
 
   const text = {
@@ -49,19 +49,32 @@ test('every section keeps its values after a reload', async ({ page }) => {
     '#f-inst-phone': '0264 111 222', '#f-inst-email': 'hr@exemplu.example',
     '#f-title': 'Referent', '#f-vacancies': '2', '#f-dept': 'Serviciul Resurse Umane', '#f-hours': '40', '#f-location': 'Str. Mare 1, Exemplu',
     '#f-localities': 'Exemplu\nAlt Oraș',
-    '#f-fields': 'drept\nștiințe economice', '#f-exp': '3', '#f-creds': 'permis categoria B', '#f-langs': 'engleză B2', '#f-qual': 'Operare PC.',
+    '#f-exp': '3', '#f-creds': 'permis categoria B', '#f-langs': 'engleză B2', '#f-qual': 'Operare PC.',
     '#f-sal-min': '5000', '#f-sal-max': '6500', '#f-duties': 'Primește dosare\nTine evidența',
     '#f-docs-extra': 'Declarație pe propria răspundere', '#f-bib': 'Legea 53/2003\nHG 1336/2022',
     '#f-ap-address': 'Str. Mare 1, camera 3', '#f-ap-email': 'depunere@exemplu.example', '#f-ap-phone': '0264 333 444', '#f-ap-name': 'Ion Ionescu',
     '#f-fee': '40', '#f-fee-details': 'La casierie.', '#f-pub': '2026-04-07',
   };
-  const selects = { '#f-inst-county': 'Cluj', '#f-duration': 'nedeterminata', '#f-schedule': 'norma_intreaga', '#f-edu': 'licenta' };
+  const selects = { '#f-inst-county': 'Cluj', '#f-duration': 'nedeterminata', '#f-schedule': 'norma_partiala', '#f-edu': 'licenta' };
+  // UX-EMP-03: a conditional field shows after its choice, so the choices come first.
+  await page.locator('#f-schedule').selectOption('norma_partiala');
+  await page.locator('#f-multi-loc').check();
+  await page.locator('input[data-path="application.channels"][value="sediu"]').check();
+  await page.locator('input[data-path="application.channels"][value="email"]').check();
+  await page.locator('input[data-path="meta.fee"]').check();
   for (const [sel, v] of Object.entries(text)) await page.locator(sel).fill(v);
   for (const [sel, v] of Object.entries(selects)) await page.locator(sel).selectOption(v);
+  await page.locator('#f-schedule').selectOption('norma_partiala');
   await page.locator('#f-status').selectOption('vacant');
+  await page.locator('#f-fields').fill('drept');
+  await page.locator('#f-fields').press('Enter');
+  await page.locator('#f-fields').fill('științe economice, domeniu propriu');
+  await page.locator('#f-fields').press('Enter');
+  await expect(page.locator('[data-chip-list] li')).toHaveCount(3);
+  // UX-EMP-03: acte_studii is a default now, so the test clears it to check that the choice is kept.
+  await page.locator('input[data-path="documents.standard"][value="acte_studii"]').uncheck();
   await page.locator('input[data-path="documents.standard"][value="cv"]').check();
   await page.locator('input[data-path="documents.standard"][value="cazier_judiciar"]').check();
-  await page.locator('input[data-path="application.channels"][value="email"]').check();
   await page.locator('input[data-path="experience.in_specialty"]').check();
   // The mirrored status select in the calendar section follows the first one.
   await expect(page.locator('#f-status-cal')).toHaveValue('vacant');
@@ -77,6 +90,7 @@ test('every section keeps its values after a reload', async ({ page }) => {
   await expect(page.locator('input[data-path="documents.standard"][value="acte_studii"]')).not.toBeChecked();
   await expect(page.locator('input[data-path="application.channels"][value="email"]')).toBeChecked();
   await expect(page.locator('input[data-path="experience.in_specialty"]')).toBeChecked();
+  await expect(page.locator('[data-chip-list] li')).toHaveText(['drept×', 'științe economice×', 'domeniu propriu×']);
   await expect(page.locator('[data-cal-body] tr')).toHaveCount(15);
   await expect(page.locator('[data-preview]')).toContainText('Referent');
   await noOverflow(page, 'filled form');
@@ -98,18 +112,20 @@ test('profile: saved, and used by the next draft', async ({ page }) => {
   await page.locator('#f-inst-name').fill('Consiliul Județean Exemplu');
   await page.locator('#f-inst-email').fill('cj@exemplu.example');
   await page.locator('input[data-path="application.channels"][value="sediu"]').check();
-  await page.locator('input[data-path="documents.standard"][value="cv"]').check();
+  // UX-EMP-03: cv is a default now. The profile keeps the list as the employer left it.
+  await page.locator('input[data-path="documents.standard"][value="cazier_judiciar"]').uncheck();
   await page.getByRole('button', { name: 'Salvează ca profil' }).click();
   const prof = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), PROFILE);
   expect(prof.version).toBe(1);
   expect(prof.profile.institution.name).toBe('Consiliul Județean Exemplu');
   expect(prof.profile.channels).toEqual(['sediu']);
-  expect(prof.profile.documents).toEqual(['cv']);
+  expect(prof.profile.documents).toEqual(['formular_inscriere', 'act_identitate', 'certificat_casatorie', 'acte_studii', 'carnet_munca_adeverinta_vechime', 'adeverinta_medicala', 'cv']);
   await page.getByRole('button', { name: 'Ciornă nouă' }).click();
   await expect(page.locator('#f-inst-name')).toHaveValue('Consiliul Județean Exemplu');
   await expect(page.locator('#f-ap-email')).toHaveValue('cj@exemplu.example');
   await expect(page.locator('input[data-path="application.channels"][value="sediu"]')).toBeChecked();
   await expect(page.locator('input[data-path="documents.standard"][value="cv"]')).toBeChecked();
+  await expect(page.locator('input[data-path="documents.standard"][value="cazier_judiciar"]')).not.toBeChecked();
   await expect(page.locator('#f-title')).toHaveValue('');
 });
 
@@ -349,7 +365,7 @@ test('the page states the scope and the PDF warning', async ({ page }) => {
 test('links to the builder: footer, /angajatori/', async ({ page }) => {
   await page.goto('/angajatori/');
   await expect(page.locator('main a[href="/pentru-angajatori/anunt/"], body > div a[href="/pentru-angajatori/anunt/"]').first()).toBeVisible();
-  await expect(page.locator('footer a[href="/pentru-angajatori/anunt/"]')).toHaveText('Pentru angajatori: scrie un anunț structurat');
+  await expect(page.locator('footer a[href="/pentru-angajatori/anunt/"]')).toHaveText('Asistent redactare anunțuri angajare');
   await noOverflow(page, '/angajatori/');
   const res = await page.request.get('/pentru-angajatori/anunt');
   expect(res.status()).toBe(200);

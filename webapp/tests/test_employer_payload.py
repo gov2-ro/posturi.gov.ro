@@ -118,6 +118,12 @@ def test_quality_keys_labels_and_weights_match_classify():
     assert [tuple(x) for x in js] == [(k, label, w) for k, _g, label, w in classify.QUALITY_CHECKS]
 
 
+def test_quality_weights_add_up_to_100():
+    """UX-EMP-03: the page shows the score as a percent. That is right only while the weights add up to 100.
+    The JS side of this check is in employer_assistant.spec.js."""
+    assert sum(w for _k, _g, _l, w in classify.QUALITY_CHECKS) == 100
+
+
 def quality_input(data):
     """The `p` of classify.quality() for a builder payload (brief UX-EMP-01 § 3)."""
     cal = data.get("competition_calendar") or {}

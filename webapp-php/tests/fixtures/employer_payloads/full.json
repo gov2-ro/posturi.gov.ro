@@ -35,8 +35,8 @@
     "contract": {
       "post_status": "vacant",
       "duration": "nedeterminata",
-      "schedule": "norma_intreaga",
-      "hours_per_week": 40
+      "schedule": "norma_partiala",
+      "hours_per_week": 20
     },
     "jobLocation": "Str. Libertății nr. 1, Exemplu",
     "work_localities": [

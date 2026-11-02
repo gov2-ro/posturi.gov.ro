@@ -351,7 +351,9 @@ test('institution autocomplete: Alba, ciugud, keyboard and mouse; the category s
   expect((await draftData(page)).meta.institution.category).toBeUndefined();
 
   // The attribution and the issue link.
-  await expect(page.locator('#inst-source')).toContainText('Date despre instituții: org.gov2.ro (EUPL), actualizate la 27.10.2026.');
+  const idx = await (await page.request.get('/static/institutii/index.json')).json();
+  const [yy, mm, dd] = idx.consolidated_at.slice(0, 10).split('-');
+  await expect(page.locator('#inst-source')).toContainText(`Date despre instituții: org.gov2.ro (EUPL), actualizate la ${dd}.${mm}.${yy}.`);
   const href = await page.locator('[data-inst-issue]').getAttribute('href');
   expect(href).toContain('/gov2-ro/institutii-publice/issues/new?title=');
   expect(decodeURIComponent(href)).toContain('O instituție care nu e în listă');

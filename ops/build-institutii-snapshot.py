@@ -9,6 +9,8 @@ Output: webapp-php/static/institutii/<judet-slug>.json (one file for each county
 Rules:
 - The CSV `county` goes through webapp/apps/jobs/judete.py `normalize_judet()`. A row that does not map is
   counted and printed. It is not written to any file.
+- A record whose id starts with P is a proposed institution (unreviewed, no CUI). It is left out unless
+  `--include-proposed` is given.
 - A row with no name is left out. The CSV order is kept.
 - The locality comes from `uat`. The script removes the type word ("Municipiul", "Comuna", "Orașul") and
   title-cases a SHOUTED name, so that "COMUNA CIUGUD" becomes "Ciugud".
@@ -75,6 +77,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--from", dest="src", required=True, help="path of institutii.csv")
     ap.add_argument("--out", default=str(OUT_DIR), help="output directory")
+    ap.add_argument("--include-proposed", action="store_true",
+                    help="keep the proposed institutions (ids that start with P; unreviewed, no CUI). Default: leave them out")
     ap.add_argument("--consolidated-at", help="date of the source (default: dataset.generated_at of metadata.json next to the CSV)")
     args = ap.parse_args()
 
@@ -90,10 +94,14 @@ def main():
     by_county = {c: [] for c in judete.COUNTIES}
     unmapped = Counter()
     no_name = 0
+    proposed = 0
     total = 0
     with src.open(encoding="utf-8", newline="") as fh:
         for row in csv.DictReader(fh):
             total += 1
+            if not args.include_proposed and (row.get("id") or "").strip().upper().startswith("P"):
+                proposed += 1
+                continue
             name = (row.get("name") or "").strip()
             if not name:
                 no_name += 1
@@ -140,12 +148,12 @@ def main():
     (out / "index.json").write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
 
     written = sum(counts.values())
-    print(f"rows read: {total}; written: {written}; no name: {no_name}; unmapped county: {sum(unmapped.values())}")
+    print(f"rows read: {total}; written: {written}; proposed (P...) left out: {proposed}; no name: {no_name}; unmapped county: {sum(unmapped.values())}")
     for value, n in unmapped.most_common():
         print(f"  unmapped county {value!r}: {n} rows")
     print("kinds: " + ", ".join(f"{k or '(none)'}={n}" for k, n in kinds.most_common()))
     print(f"files: {len(counts)} counties + index.json; size: {raw_total} bytes raw, {gz_total} bytes gzip")
-    if written + no_name + sum(unmapped.values()) != total:
+    if written + no_name + proposed + sum(unmapped.values()) != total:
         sys.exit("Row count mismatch.")
 
 

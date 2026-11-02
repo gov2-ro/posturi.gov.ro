@@ -243,7 +243,10 @@
     if (!o || typeof o.label !== 'string' || !o.label || typeof o.cor !== 'string' || !o.cor) return undefined;
     var title = fold((data || {}).occupation_title);
     var label = fold(o.label);
+    // fold() turns every comma and dash into a space, so the label ends at a word boundary when
+    // the title ends there or the next character is a space.
     if (!label || title.indexOf(label) !== 0) return undefined;
+    if (title.length > label.length && title.charAt(label.length) !== ' ') return undefined;
     var out = { cor_code: o.cor, label: o.label };
     if (typeof o.grade === 'string' && o.grade) out.grade = o.grade;
     return out;

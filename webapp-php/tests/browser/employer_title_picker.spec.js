@@ -153,3 +153,16 @@ test('no institution picked: the dialog shows the list for all postings', async 
   await expect(dialog(page).locator('[data-td-preview]')).toHaveText(noGrade.label);
   await noOverflow(page, 'no institution');
 });
+
+test('the label must end at a word boundary in the title', async ({ page }) => {
+  await open(page);
+  const block = (label, title) => page.evaluate(([l, t]) => window.EmployerDoc.occupationBlock(
+    { occupation: { id: 1, cor: '263102', label: l } }, { occupation_title: t }), [label, title]);
+  expect(await block('Consilier', 'Consilier')).toEqual({ cor_code: '263102', label: 'Consilier' });
+  expect(await block('Consilier', 'Consilier, gradul IA')).toBeTruthy();
+  expect(await block('Consilier', 'Consilier - Serviciul Buget')).toBeTruthy();
+  expect(await block('Consilier', 'CONSILIER juridic')).toBeTruthy();
+  expect(await block('Consilier', 'Consilier-șef')).toBeTruthy();   // a dash ends the word
+  expect(await block('Consilier', 'Consiliere')).toBeUndefined();
+  expect(await block('Consilier', 'Consilierul primarului')).toBeUndefined();
+});

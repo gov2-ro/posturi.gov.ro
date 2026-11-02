@@ -10,6 +10,7 @@ Output: webapp-php/static/ocupatii.json.
 Rules:
 - One entry in `occupations` for each distinct `canonical`, sorted by posting count, descending.
   When a canonical has several COR codes, the entry takes the most frequent one (by postings).
+  The code must cover at least 50% of the postings that have a code, and at least 3 postings; else ''.
   Empty codes do not count: 1,738 of 3,767 normalisations have none. The `id` is the index in the sorted list.
 - `kind_labels`: `classify.EMPLOYER_KIND_LABELS` for the kinds in `by_kind`.
 - `grades`: the `ocupatii.parse_title(title).grade_token` values that occur in at least 2 postings of the
@@ -37,6 +38,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgres://localhost/posturi_dev"
 OUT = ROOT / "webapp-php" / "static" / "ocupatii.json"
 TOP = 15
 MIN_GRADE_POSTINGS = 2
+MIN_COR_POSTINGS = 3
 
 
 def main():
@@ -82,7 +84,13 @@ def main():
     for c in canonicals:
         # Most frequent non-empty COR code; a tie goes to the smaller code, so the build is stable.
         # '' when no normalisation of this canonical found a code (the builder then writes no `occupation` block).
-        cor = sorted(cor_counts[c].items(), key=lambda kv: (-kv[1], kv[0]))[0][0] if cor_counts[c] else ""
+        # It counts only when it covers at least half of the postings that have a code, and at least 3 postings:
+        # a wrong code in the payload is worse than none (a generic title maps to several codes).
+        cor = ""
+        if cor_counts[c]:
+            top, n_top = sorted(cor_counts[c].items(), key=lambda kv: (-kv[1], kv[0]))[0]
+            if n_top >= MIN_COR_POSTINGS and n_top * 2 >= sum(cor_counts[c].values()):
+                cor = top
         grades = [g for g, n in sorted(grade_counts[c].items(), key=lambda kv: (-kv[1], kv[0])) if n >= MIN_GRADE_POSTINGS]
         occupations.append({"id": index[c], "label": c, "cor": cor, "n": total[c], "grades": grades})
 

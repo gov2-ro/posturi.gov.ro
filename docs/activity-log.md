@@ -27,6 +27,24 @@
 
 **Follow-up 2 (pax, 2026-11-02): only Ascunse is separate.** The Notițe tab is gone. The main list already held noted-only jobs (`isSaved()` = `savedAt` or `note`), so the change is the tab, the view switch and the texts: heading „Anunțuri salvate și notițe”, and `?vedere=notite` (old links) shows the one page. `notes.spec.js` and `searches.spec.js` updated. Measured: `searches` + `saved` + `notes` + `feeds` specs = 125 pass, 26 fail, all „horizontal overflow” at 320/375 px (BUG-MOBILE-OVERFLOW; `notes.spec.js` adds its 6 mobile runs to the known 20); desktop 0 failures. Note: `SAVE_MAX` counts `savedAt` only, so a noted job that is not saved does not count toward the 20.
 
+### 2026-11-02 — UX-EMP-01 designed: employer posting builder, payload ADR, brief
+
+**Done.** pax asked for a browser-only tool for employers that produces structured job postings, with a .docx download, and that remembers filled fields. Decisions (pax): vendored docx.js, embed the structured data now, v1 = institution profile + drafts + completeness meter + calendar helper, public and linked. Opus wrote [ADR 0002](decisions/0002-employer-posting-payload.md), the [brief](briefs/2026-11-02-employer-posting-builder.md) and the backlog items UX-EMP-01 and UX-EMP-02.
+
+**Hard.**
+- docx.js does not write Custom XML parts. Its `Packer.compiler.compile()` returns the JSZip object before compression, so the builder can add the parts. This is an internal API. The pin to 9.11.0 (published 2026-10-13) and a Playwright unzip test protect it.
+- Spike: a 4,000-character payload with diacritics, `&` and `<` survives a LibreOffice 26.8 open-and-save, both as a Custom XML part and as a custom property. **Word was not measured** (there is no Word on the Mac). This is an assumption until pax tests it.
+- The intervals come from HG 1336/2022, read in a consolidated copy of 2026-03-26 (arcub.ro), not on legislatie.just.ro: art. 18(1) 15/10 working days to the first test, art. 34 10/5 days for dosare, art. 36–37 selection, art. 53–56 contestații and results, art. 41(5) interview within 4 days, art. 98 counting. The brief asks Sonnet to check them against the official text.
+- Size: docx.js 9.11.0 `index.iife.js` is 1.0 MB, 285 KB gzipped; minified, 138 KB gzipped. It loads only on the builder page.
+
+**Built (Sonnet, same day).** Branch `worktree-agent-aab2d26361ee88e04`, 3 commits, 16 files, +2,298 lines: the page, the two stores, the meter, the calendar, the preview, the .docx and .json downloads, 4 fixtures, Playwright and Python tests. Results: Playwright 36/36 at 320/375/1280 px; Python 17/17, with exact quality parity on all 4 fixtures; the whole browser suite 377 passed, 52 skipped, 0 failed; 14 PHP suites pass; `check-skins` 69 (baseline). The vendored docx.min.js is 487 KB. Findings: LibreOffice rewrites `"` as `&quot;` inside the Custom XML part, so a reader must parse the XML, not match strings. Codul muncii art. 139 also lists 6 and 7 January (Legea 52/2023); they are in the holiday list. The parity input uses `deadline_source = ''` when there is no deadline; the brief's fixed `'anunt'` would have made `confirmed` differ. The helper proposes the latest legal date for each "within N days" stage, and the earliest date for the written test. Opus re-ran both test files and checked the 2026-04-07 calendar by hand.
+
+**Decided.**
+- Carrier = Custom XML part, plus a short custom property `posturi.posting.v1;sha256=…`. Alternative: the full JSON in a custom property. It is simpler, but Word limits text properties to 255 characters in its UI, and we have not measured whether Word keeps a longer value on save.
+- The builder covers contractual staff only (HG 1336/2022). Civil-servant competitions (OUG 57/2019) have other intervals. Supporting both in v1 would double the calendar rules.
+- The publication day counts as day 1 of the art. 34 window (art. 98(1)). This is an interpretation. The UI says so, and the rule lives in one function.
+- Salary gets a nudge, not a legal claim. We did not check the transposition status of the EU pay-transparency directive in Romania.
+
 ### 2026-10-25 — /pipeline-check after DST; calendar labels, anomaly_sustained, backlog cleanup
 
 `/pipeline-check` on the VPS (session `posturi-vps-2510`, relayed over Remote Control). All 14 slots of 10-19…10-25 ran, including the first two after the change to winter time (11:15Z and 16:33Z). There were no failed or warned steps, `check-export` passed 31/31, and the live `built_at` matched the last run.

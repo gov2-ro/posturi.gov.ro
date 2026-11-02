@@ -2,6 +2,19 @@
 
 ## 2026
 
+### 2026-11-02 — Footer skin picker fits at 320 px (BUG-DS-FOOTER, BUG-MOBILE-OVERFLOW)
+
+**Done**
+- `pg_skin_label()` (`inc/skins.php`) keeps only the text before „ — ” in the `@skin` line. This is the format of `_template.css`. The gov2 option now reads „gov2”. Before, it read „gov2 — stilul comun pentru proiectele gov2.ro · v0.4.0 · 26.10.2026”.
+- `.skin-select` gets `max-width: 100%` in `assets/app.css`, so a long label can never widen the page again.
+- Measured with `gov2.css` committed (`403da9a`): browser suite 470 passed, 52 skipped, 0 failed (before: 14–20 overflow failures at 320 and 375 px). All PHP suites pass. `check-skins.php`: 69 problems, the known baseline of the DS copy.
+
+**Hard**
+- The overflow was not a DS defect. The DS header line is long, and the project read the whole line as the label. No DS issue opened.
+
+**Decided**
+- Fix the parser, not the DS copy. The project must not edit `gov2.css`, and the template already defines the label as the text before the dash.
+
 ### 2026-11-02 — UX-15 saved searches in the browser (code ready, not deployed)
 
 **Done**

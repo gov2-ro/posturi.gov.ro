@@ -81,7 +81,11 @@ function pg_skin_label(string $path): ?string
     if (!preg_match('/@skin\s+(.+)$/mu', $head, $m)) return null;
 
     // Trim the comment terminator when the declaration is on one line.
-    $label = trim(preg_replace('#\*/.*$#u', '', $m[1]) ?? '');
+    $label = preg_replace('#\*/.*$#u', '', $m[1]) ?? '';
+    // `@skin <label> — <description>` (see _template.css): the picker shows the
+    // label only. The gov2 DS header carries a long description, and as an
+    // <option> it widened the footer select past 320 px (BUG-DS-FOOTER).
+    $label = trim(preg_split('/\s+[—–]\s+/u', $label, 2)[0]);
     return $label !== '' ? $label : null;
 }
 

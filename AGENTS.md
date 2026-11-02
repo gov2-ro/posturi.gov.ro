@@ -35,6 +35,24 @@ See README.md for project overview, pipeline, commands, and data structure.
 - When detecting things that need to be addressed later, add to `docs/backlog.md`. Use a checkbox `- [ ]` entry with a clear title and enough context to act on it later.
 - After completing any meaningful work, add an entry to `docs/activity-log.md` under the relevant section heading with a `### YYYY-MM-DD — Short Title` entry. Include what was done, why, and any non-obvious decisions.
 
+## Design system (gov2 DS)
+
+This project uses the gov2 design system (DS), version 0.4.0.
+DS repo: gov2-ro/gov2ro-design-system (local copy: ~/devbox/gov2/gov2ro-design-system).
+
+- Read `COMPONENTS.md` in the DS before you build UI. Use a DS component when one fits.
+- Do not edit the copy of the DS in this project: `webapp-php/static/skins/gov2.css`.
+- To update the DS, copy `gov2.css` from a DS tag. Then set the version above.
+- Before you update, read `CHANGELOG.md` in the DS back to the version above. The DS is 0.x, so a minor version can break. Look for **Breaking**.
+- Put the project styles in `webapp-php/assets/app.css` and the Tailwind role tokens (see the palette rule above). Use the DS tokens. Do not change how a `.g2-` class looks.
+- After you update the copy, run `php webapp-php/assets/check-skins.php`. On 2026-10-26 it reports 69 problems for `gov2.css`: 23 DS tokens that the skin contract does not know, and 46 `.g2-` rules outside `[data-skin]`. The DS backlog tracks these problems. Do not fix them in the copy.
+- When the project needs a component, a variant or a token that other projects can use, open an issue in the DS:
+  `gh issue create -R gov2-ro/gov2ro-design-system --label ds-proposal --title "[proposal] …" --body-file <file>`.
+  Use the sections of `.github/ISSUE_TEMPLATE/ds-proposal.md`.
+- Open an issue for a DS defect too, with the type "fix".
+- Do not wait for the DS. Build a local version, and put the issue URL in a comment next to it.
+- When the DS has the component, replace the local version.
+
 # AI Context
 
 Generated locally by codesight (`.codesight/` is not in git): read `.codesight/wiki/index.md`

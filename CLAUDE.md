@@ -30,12 +30,70 @@ See README.md for project overview, pipeline, commands, and data structure.
 
 **Rate limiting** — `random.uniform(0.5, 1.1)` sleep between pages, built into all fetch scripts.
 
-## Project tracking
 
-- When detecting things that need to be addressed later, add to `docs/backlog.md`. Use a checkbox `- [ ]` entry with a clear title and enough context to act on it later.
-- After completing any meaningful work, add an entry to `docs/activity-log.md` under the relevant section heading with a `### YYYY-MM-DD — Short Title` entry. Include what was done, why, and any non-obvious decisions.
+## Tone of voice
+
+Follow Simplified Technical English (ASD-STE100) for docs, error messages and agent-facing text:
+
+- One instruction per sentence; at most ~20 words (procedures), ~25 (descriptive).
+- Active voice; name the actor.
+- Simple tenses.
+- One word, one meaning; the same term every time.
+- No noun clusters over three words; keep the articles.
+- Keep every condition and qualifier.
+
+ASD-STE100 is for English. For Romanian UI copy, use the same principles: short sentences, active voice, and one term for each concept.
+
+## Process notes
+
+Two files carry the project memory between sessions. Create each file with the first work that needs it. Read both files before you start.
+
+**`docs/BACKLOG.md`** — roadmap, tasks and bugs. Statuses: `[ ]` open, `[~]` in progress, `[x]` done, `[-]` dropped.
+- Change an item to `[x]` in the same change that finishes it.
+- Add a defect or deferred work when you find it.
+- Mark a dead end `[-]` **with the reason**, under *Verified limits*, so that nobody investigates it again.
+
+**`docs/ACTIVITY.md`** — dated entries, newest first. Each entry has **Done / Hard / Decided**.
+- Add an entry when a chunk of work lands.
+- Give each decision its rationale and the cost of the alternative.
+- Record wrong turns. Say what you measured and what you assumed. Keep the measured numbers: they are the baseline for regressions.
+
+Record a design rule that the projects depend on as an ADR in `docs/decisions/NNNN-title.md`.
+
+## Opus designs, Sonnet builds
+
+The work is divided by model. **When you are Opus**, give implementation and well-defined future work to Sonnet by default:
+
+- **Opus** writes specs, ADRs and briefs. Opus makes and records decisions. Opus reviews the results of Sonnet against the brief before it accepts them.
+- **Sonnet** does what a brief says: code, spikes, measurements and fixture changes. Sonnet also writes the activity and backlog entries for that work.
+- **Opus does the work itself** when the task is a few lines, or when the design still changes and the work is part of the decision.
+
+Write the brief in the GitHub issue. When there is no issue, write it in `docs/briefs/`.
+
+**Sonnet stops and asks** when a step would change a spec, an ADR, a token or `.g2-` class name, or a file that the brief does not include. Sonnet reports what it measured and what it assumed.
+
+To hand over, Opus tells the owner that the brief is ready. The owner runs the brief in a Sonnet session, or asks Opus to start a Sonnet agent on it.
+
+## Design system (gov2 DS)
+
+This project uses the gov2 design system (DS), version 0.4.0.
+DS repo: gov2-ro/gov2ro-design-system (local copy: ~/devbox/gov2/gov2ro-design-system).
+
+- Read `COMPONENTS.md` in the DS before you build UI. Use a DS component when one fits.
+- Do not edit the copy of the DS in this project: `webapp-php/static/skins/gov2.css`.
+- To update the DS, copy `gov2.css` from a DS tag. Then set the version above.
+- Before you update, read `CHANGELOG.md` in the DS back to the version above. The DS is 0.x, so a minor version can break. Look for **Breaking**.
+- Put the project styles in `webapp-php/assets/app.css` and the Tailwind role tokens (see the palette rule above). Use the DS tokens. Do not change how a `.g2-` class looks.
+- After you update the copy, run `php webapp-php/assets/check-skins.php`. On 2026-10-26 it reports 69 problems for `gov2.css`: 23 DS tokens that the skin contract does not know, and 46 `.g2-` rules outside `[data-skin]`. The DS backlog tracks these problems. Do not fix them in the copy.
+- When the project needs a component, a variant or a token that other projects can use, open an issue in the DS:
+  `gh issue create -R gov2-ro/gov2ro-design-system --label ds-proposal --title "[proposal] …" --body-file <file>`.
+  Use the sections of `.github/ISSUE_TEMPLATE/ds-proposal.md`.
+- Open an issue for a DS defect too, with the type "fix".
+- Do not wait for the DS. Build a local version, and put the issue URL in a comment next to it.
+- When the DS has the component, replace the local version.
 
 # AI Context
 
 Generated locally by codesight (`.codesight/` is not in git): read `.codesight/wiki/index.md`
 for orientation, `.codesight/CODESIGHT.md` for the full context map. Orientation only; may be stale — source and tests are authoritative.
+

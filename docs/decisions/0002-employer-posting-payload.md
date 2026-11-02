@@ -28,12 +28,18 @@ The payload is one JSON object:
     "county": "Alba",
     "department": "Compartimentul urbanism"
   },
+  "occupation": {
+    "cor_code": "<COR code>",
+    "label": "Referent de specialitate",
+    "grade": "gradul I A"
+  },
   "data": { }
 }
 ```
 
 - `data` must validate against `schema_models.JobPostingExtractionV5`. Only fields that the employer filled are present.
 - `employer` identifies the institution. The v5 schema has no field for it, because the pipeline takes the employer from the posturi.gov.ro listing. Each key is optional; an empty key is left out, and an empty block is left out. `cui` is digits only, without `RO`. `county` is one of the 42 canonical names of `webapp/apps/jobs/judete.py`. A reader matches the employer by `cui` first, then by name. (Amended 2026-11-02, pax: an envelope block, not a schema change.)
+- `occupation` is present only when the employer picked a standard occupation in the title dialog. `cor_code` and `label` are a `jobs_occupation` row (`cor_code`, `canonical`). `grade` is a `ocupatii.GRADE_TOKENS` value, or absent. `data.occupation_title` stays the full title that the employer kept or edited. When the title text no longer starts with `label`, the builder leaves the block out, because the employer replaced the occupation. A reader uses the block in place of the title normalisation step (`normalize-titles.py`). (Amended 2026-11-02, pax.)
 - `format` changes only for a change that breaks compatibility. A reader rejects a `format` that it does not know.
 - `schema` names the extraction model that `data` follows. It is not the same as `format`.
 

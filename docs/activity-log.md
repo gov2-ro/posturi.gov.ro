@@ -27,6 +27,29 @@
 
 **Follow-up 2 (pax, 2026-11-02): only Ascunse is separate.** The Notițe tab is gone. The main list already held noted-only jobs (`isSaved()` = `savedAt` or `note`), so the change is the tab, the view switch and the texts: heading „Anunțuri salvate și notițe”, and `?vedere=notite` (old links) shows the one page. `notes.spec.js` and `searches.spec.js` updated. Measured: `searches` + `saved` + `notes` + `feeds` specs = 125 pass, 26 fail, all „horizontal overflow” at 320/375 px (BUG-MOBILE-OVERFLOW; `notes.spec.js` adds its 6 mobile runs to the known 20); desktop 0 failures. Note: `SAVE_MAX` counts `savedAt` only, so a noted job that is not saved does not count toward the 20.
 
+### 2026-11-02 — UX-EMP-03: the employer assistant tuned after pax's review
+
+**Done.** pax reviewed the live builder and asked for eight changes. Opus wrote the [brief](briefs/2026-11-02-employer-assistant-tuning.md); Sonnet built it in 5 commits (`77f3b1a`…`11802ed`):
+- the new name „Asistent redactare anunțuri angajare” (pax kept their wording over „Asistent pentru anunțuri de concurs”);
+- a sticky sidebar at `lg` with a bottom bar on phones, and the score as a percent;
+- defaults for a new draft, conditional fields and field-of-study chips;
+- institution autocomplete from an org.gov2.ro snapshot.
+
+Results: the whole browser suite passed 458, skipped 52 and failed 0; Python passed 85; all 15 PHP suites passed. Opus re-ran all three before the merge.
+
+**Hard.**
+- The snapshot CSV has 25,154 lines but 24,981 records, because some fields contain newlines. All 42 county values map through `normalize_judet()`. The files are 5.2 MB raw and 0.82 MB gzipped; București is the largest at 532 KB raw. The page loads one county file on demand.
+- Playwright `fill` cannot pick from a `<datalist>`, so the test sends an `insertReplacementText` input event.
+- The site's floating „?!” button covered the bottom-bar link, so the bar has right padding.
+
+**Decided.**
+- A hidden field keeps its value in the draft and is cut in `buildData()`. Clearing it would lose the value when the employer switches back.
+- **Wrong turn (Opus):** the brief's table made the contact e-mail conditional on the `email` channel. Art. 18(2) b) requires the HR contact data in every anunț. Fixed in `11802ed`: the e-mail is always shown, and the hint for the channel shows only when it is checked.
+- The online platform link goes in the address field, because v5 has no URL field (UX-EMP-03d).
+- The default documents are HG 1336/2022 art. 35(1) a)–g) and i). The integrity certificate (lit. h) follows the org.gov2.ro category, and only while the employer has not changed the list. A new draft scores 33% before anything is typed.
+- Field of study: 58 suggestions from 1,620 labels in 848 v3/v4 extractions. Synonyms are merged, and occupations and over-general labels are dropped. The merge decisions are in the header of `static/domenii-studii.js`.
+- Matching the posturi employers with org.gov2.ro (DATA-ORG-01) runs in the institutii-publice repo, as a new source of its linker.
+
 ### 2026-11-02 — UX-EMP-01 designed: employer posting builder, payload ADR, brief
 
 **Done.** pax asked for a browser-only tool for employers that produces structured job postings, with a .docx download, and that remembers filled fields. Decisions (pax): vendored docx.js, embed the structured data now, v1 = institution profile + drafts + completeness meter + calendar helper, public and linked. Opus wrote [ADR 0002](decisions/0002-employer-posting-payload.md), the [brief](briefs/2026-11-02-employer-posting-builder.md) and the backlog items UX-EMP-01 and UX-EMP-02.

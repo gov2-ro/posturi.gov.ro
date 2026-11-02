@@ -58,6 +58,7 @@
   <p data-notice-storage hidden class="mt-1 text-xs leading-snug text-ink-muted">Salvările și anunțurile ascunse rămân în acest browser. Nu se sincronizează între dispozitive și se pot pierde dacă ștergi datele browserului.</p>
   <div class="mt-2 flex flex-wrap gap-2">
     <button type="button" data-notice-undo hidden class="min-h-[2.5rem] border border-gov bg-gov px-3 py-2 text-xs font-medium text-on-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2">Anulează</button>
+    <a data-notice-link hidden href="/salvate/" class="inline-flex min-h-[2.5rem] items-center border border-line px-3 py-2 text-xs font-medium text-gov hover:border-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">Vezi salvatele</a>
     <button type="button" data-notice-close class="min-h-[2.5rem] border border-line px-3 py-2 text-xs text-ink-muted hover:border-gov hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">Închide</button>
   </div>
 </div>

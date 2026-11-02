@@ -80,6 +80,9 @@ test('save two județe: pressed, kept on reload, follows HTMX filter changes', a
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
   await expect(toggle(page)).toContainText('Căutare salvată');
+  await expect(page.locator('#pref-notice')).toContainText('Căutare salvată:');
+  await expect(page.locator('[data-notice-link]')).toBeVisible();
+  await expect(page.locator('[data-notice-link]')).toHaveAttribute('href', '/salvate/');
   await shot(page, 'toggle-on');
 
   const s = await stored(page);

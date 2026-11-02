@@ -301,7 +301,10 @@
       res = API.save(key, { sort: currentSort(), label: defaultLabel() });
       if (res.error === 'limit' && window.PosturiSaved && window.PosturiSaved.showNotice) {
         say('');
-        window.PosturiSaved.showNotice({ text: LIMIT_TEXT, focus: true });
+        window.PosturiSaved.showNotice({ text: LIMIT_TEXT, link: true, focus: true });
+      } else if (res.ok && window.PosturiSaved && window.PosturiSaved.showNotice) {
+        say('');
+        window.PosturiSaved.showNotice({ text: 'Căutare salvată: ' + defaultLabel() + '.', link: true });
       } else {
         say(res.ok ? 'Căutarea a fost salvată.'
           : res.error === 'limit' ? LIMIT_TEXT

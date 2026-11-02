@@ -68,6 +68,8 @@ test('save on the list survives reload; detail and /salvate/ agree; unsave in an
   // First save explains where the data lives.
   await expect(page.locator('#pref-notice')).toBeVisible();
   await expect(page.locator('[data-notice-storage]')).toHaveText(PERSIST);
+  await expect(page.locator('[data-notice-link]')).toBeVisible();
+  await expect(page.locator('[data-notice-link]')).toHaveAttribute('href', '/salvate/');
 
   const s = await stored(page);
   expect(Object.keys(s.records)).toEqual(['https://posturi.gov.ro/anunt/fixture-1001']);

@@ -207,6 +207,9 @@
     var undo = qs('[data-notice-undo]', n);
     undo.hidden = !opts.undo;
     noticeUndo = opts.undo || null;
+    // "Vezi salvatele" after a save or at a limit; not on /salvate/ itself.
+    var link = qs('[data-notice-link]', n);
+    if (link) link.hidden = !opts.link || window.location.pathname.indexOf('/salvate/') === 0;
     n.hidden = false;
     announce(opts.text);
     if (opts.focus) (opts.undo ? undo : n).focus();
@@ -420,11 +423,11 @@
     var title = el.dataset.prefTitle || 'anunț';
     var r = toggle(el, kind);
     if (r.error === 'limit') {
-      showNotice({ text: 'Ai atins limita de ' + MAX + ' de anunțuri păstrate în acest browser. Elimină câteva din Salvate sau Ascunse, apoi încearcă din nou.', focus: true });
+      showNotice({ text: 'Ai atins limita de ' + MAX + ' de anunțuri păstrate în acest browser. Elimină câteva din Salvate sau Ascunse, apoi încearcă din nou.', link: true, focus: true });
       return;
     }
     if (r.error === 'savelimit') {
-      showNotice({ text: SAVE_LIMIT_TEXT, focus: true });
+      showNotice({ text: SAVE_LIMIT_TEXT, link: true, focus: true });
       return;
     }
     if (r.error) { announce('Anunțul nu a putut fi salvat local.'); return; }
@@ -440,12 +443,13 @@
     // A hide on the detail page removes nothing from view, so say what happened
     // (and offer the undo) the way a disappearing row would.
     var detailHide = kind === 'hide' && !el.hasAttribute('data-pref-hideable');
+    var link = kind === 'save' && !!r.after;
     if (detailHide) {
       showNotice({ text: text, undo: undo, storage: r.first });
     } else if (gone) {
-      showNotice({ text: text, undo: undo, storage: r.first, focus: true });
+      showNotice({ text: text, undo: undo, storage: r.first, link: link, focus: true });
     } else if (r.first) {
-      showNotice({ text: text, undo: undo, storage: true });
+      showNotice({ text: text, undo: undo, storage: true, link: link });
     } else {
       hideNotice();
       announce(text);
@@ -532,7 +536,7 @@
       rec.notedAt = text ? now : null;
     });
     if (res.error === 'limit') {
-      showNotice({ text: 'Ai atins limita de ' + MAX + ' de anunțuri păstrate în acest browser. Elimină câteva din Salvate sau Ascunse, apoi încearcă din nou.', focus: true });
+      showNotice({ text: 'Ai atins limita de ' + MAX + ' de anunțuri păstrate în acest browser. Elimină câteva din Salvate sau Ascunse, apoi încearcă din nou.', link: true, focus: true });
       return;
     }
     if (res.error) { announce('Notița nu a putut fi salvată local.'); return; }

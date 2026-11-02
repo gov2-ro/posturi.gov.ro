@@ -14,6 +14,7 @@ Rules:
   title-cases a SHOUTED name, so that "COMUNA CIUGUD" becomes "Ciugud".
 - The address comes from `address`. The script removes the empty parts that the source writes
   ("Bloc/Scara ,", "Sector ,").
+- `kind` is `classify.employer_kind(name)`: '' when the name fits no kind. The title picker (UX-EMP-04) uses it.
 - Rebuilding is the sync with org.gov2.ro. Commit the generated files.
 Standard library only.
 """
@@ -30,6 +31,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+import classify  # noqa: E402  (stdlib only)
 OUT_DIR = ROOT / "webapp-php" / "static" / "institutii"
 
 
@@ -107,6 +111,7 @@ def main():
                 "phone": (row.get("phone") or "").strip(),
                 "email": (row.get("email") or "").strip(),
                 "category": (row.get("category") or "").strip(),
+                "kind": classify.employer_kind(name),
             })
 
     out = Path(args.out)
@@ -115,11 +120,13 @@ def main():
         old.unlink()
     counts = {}
     raw_total = gz_total = 0
+    kinds = Counter()
     for county in judete.COUNTIES:
         rows = by_county[county]
         text = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
         (out / (slug(county) + ".json")).write_text(text, encoding="utf-8")
         counts[county] = len(rows)
+        kinds.update(r["kind"] for r in rows)
         raw_total += len(text.encode("utf-8"))
         gz_total += len(gzip.compress(text.encode("utf-8"), 9))
     index = {
@@ -136,6 +143,7 @@ def main():
     print(f"rows read: {total}; written: {written}; no name: {no_name}; unmapped county: {sum(unmapped.values())}")
     for value, n in unmapped.most_common():
         print(f"  unmapped county {value!r}: {n} rows")
+    print("kinds: " + ", ".join(f"{k or '(none)'}={n}" for k, n in kinds.most_common()))
     print(f"files: {len(counts)} counties + index.json; size: {raw_total} bytes raw, {gz_total} bytes gzip")
     if written + no_name + sum(unmapped.values()) != total:
         sys.exit("Row count mismatch.")

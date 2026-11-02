@@ -27,6 +27,26 @@
 
 **Follow-up 2 (pax, 2026-11-02): only Ascunse is separate.** The Notițe tab is gone. The main list already held noted-only jobs (`isSaved()` = `savedAt` or `note`), so the change is the tab, the view switch and the texts: heading „Anunțuri salvate și notițe”, and `?vedere=notite` (old links) shows the one page. `notes.spec.js` and `searches.spec.js` updated. Measured: `searches` + `saved` + `notes` + `feeds` specs = 125 pass, 26 fail, all „horizontal overflow” at 320/375 px (BUG-MOBILE-OVERFLOW; `notes.spec.js` adds its 6 mobile runs to the known 20); desktop 0 failures. Note: `SAVE_MAX` counts `savedAt` only, so a noted job that is not saved does not count toward the 20.
 
+### 2026-11-02 — UX-EMP-04: title picker in the employer assistant
+
+**Done.** pax asked for title suggestions that use our title normalisation, in a dialog, ranked for the institution's kind. Opus wrote the [brief](briefs/2026-11-02-employer-title-picker.md) and amended ADR 0002 (the `occupation` block). Sonnet built it in 5 commits (`31ff929`…`e8d156a`):
+- `ops/build-title-suggestions.py` writes `static/ocupatii.json`: 821 occupations, the top 15 for each `classify.employer_kind`, and the observed grades. 119 occupations have grades.
+- The institution snapshot carries `kind`.
+- The dialog offers the top 12 for the institution kind, a search over all occupations, a grade select and a preview.
+- The payload carries `{cor_code, label, grade}`. The builder drops the block when the title no longer starts with the label at a word boundary.
+
+Opus ran the suites before the merge: browser 470 passed, 52 skipped, 0 failed; Python 1,435 passed; all PHP suites passed.
+
+**Hard.**
+- 1,738 of 3,767 `jobs_occupation` rows have no COR code.
+- The first rule ("the most frequent code") gave „Referent de specialitate” a code backed by 19 of 206 postings.
+- **Wrong turn (Opus):** the next rule (≥50% of coded postings and ≥3 postings) left only 183 of 821 occupations with a code. It also dropped 365 occupations whose 1–2 coded postings agree on one code, which is the code our pipeline already uses. The final rule allows a single code below 3 postings: 548 occupations have a code.
+- A native modal `<dialog>` does not stop Tab at the browser chrome. The builder added a Tab wrap.
+
+**Decided.**
+- No COR code, no `occupation` block. A wrong code is worse than none, because a reader trusts the block over the title.
+- The institution snapshot leaves out the unreviewed `P` records (no CUI) until the review of DATA-ORG-02.
+
 ### 2026-11-02 — UX-EMP-03: the employer assistant tuned after pax's review
 
 **Done.** pax reviewed the live builder and asked for eight changes. Opus wrote the [brief](briefs/2026-11-02-employer-assistant-tuning.md); Sonnet built it in 5 commits (`77f3b1a`…`11802ed`):

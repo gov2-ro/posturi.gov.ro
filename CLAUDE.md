@@ -48,12 +48,12 @@ ASD-STE100 is for English. For Romanian UI copy, use the same principles: short 
 
 Two files carry the project memory between sessions. Create each file with the first work that needs it. Read both files before you start.
 
-**`docs/BACKLOG.md`** — roadmap, tasks and bugs. Statuses: `[ ]` open, `[~]` in progress, `[x]` done, `[-]` dropped.
+**`docs/backlog.md`** — roadmap, tasks and bugs. Statuses: `[ ]` open, `[~]` in progress, `[x]` done, `[-]` dropped.
 - Change an item to `[x]` in the same change that finishes it.
 - Add a defect or deferred work when you find it.
 - Mark a dead end `[-]` **with the reason**, under *Verified limits*, so that nobody investigates it again.
 
-**`docs/ACTIVITY.md`** — dated entries, newest first. Each entry has **Done / Hard / Decided**.
+**`docs/activity-log.md`** — dated entries (`### YYYY-MM-DD — Short Title`), under the section headings. Each entry has **Done / Hard / Decided**.
 - Add an entry when a chunk of work lands.
 - Give each decision its rationale and the cost of the alternative.
 - Record wrong turns. Say what you measured and what you assumed. Keep the measured numbers: they are the baseline for regressions.

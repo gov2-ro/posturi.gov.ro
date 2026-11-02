@@ -27,6 +27,16 @@
 
 **Follow-up 2 (pax, 2026-11-02): only Ascunse is separate.** The Notițe tab is gone. The main list already held noted-only jobs (`isSaved()` = `savedAt` or `note`), so the change is the tab, the view switch and the texts: heading „Anunțuri salvate și notițe”, and `?vedere=notite` (old links) shows the one page. `notes.spec.js` and `searches.spec.js` updated. Measured: `searches` + `saved` + `notes` + `feeds` specs = 125 pass, 26 fail, all „horizontal overflow” at 320/375 px (BUG-MOBILE-OVERFLOW; `notes.spec.js` adds its 6 mobile runs to the known 20); desktop 0 failures. Note: `SAVE_MAX` counts `savedAt` only, so a noted job that is not saved does not count toward the 20.
 
+### 2026-11-02 — Save-search bar moved above the results
+
+**Done.** pax asked for „Salvează căutarea” at the top of the results list (relayed by the VPS session, which made the edit but cannot run PHP there). The Mac session moved the `[data-search-bar]` block in `pages/list.php` from below `#results` (before `#urmareste`) to directly above `#results`, after `#results-status`. It stays outside `#results`, so HTMX swaps do not rebuild it. `mt-3` became `mb-3`. The CSS build is unchanged.
+
+**Measured.** In a clean worktree (no `gov2.css`), all PHP suites pass; the browser suite: 470 passed, 52 skipped, 0 failed. At 375 px with a county filter, the bar is visible above `#results` (bar top 408 px, results top 452 px) and `scrollWidth` is 375.
+
+**Hard.** The 14 `saved.spec.js` failures at 320/375 px (57 px and 29 px overflow) that the VPS session reported are not from this code. They come from the untracked `static/skins/gov2.css` in the Mac checkout: its skin option widens the footer select (BUG-DS-FOOTER). The same spec passes 72/72 in a clean worktree at `2a2c086`.
+
+**Decided.** A deploy must not run from a checkout that holds the untracked `gov2.css`, because `deploy-php.sh` copies the working tree with rsync and does not exclude it. Fix BUG-DS-FOOTER first, or deploy from a clean worktree.
+
 ### 2026-11-02 — UX-EMP-04: title picker in the employer assistant
 
 **Done.** pax asked for title suggestions that use our title normalisation, in a dialog, ranked for the institution's kind. Opus wrote the [brief](briefs/2026-11-02-employer-title-picker.md) and amended ADR 0002 (the `occupation` block). Sonnet built it in 5 commits (`31ff929`…`e8d156a`):

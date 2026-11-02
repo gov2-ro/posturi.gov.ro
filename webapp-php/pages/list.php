@@ -828,6 +828,17 @@ if (!$is_htmx): ?>
         <?php /* UX-15: shown by static/searches.js when the site opened the reader's default saved search. Outside #results, so a swap does not rebuild it. */ ?>
         <p data-search-notice hidden role="status" class="mb-3 border border-info-line bg-info px-3 py-2 text-sm leading-snug text-info-ink">Afișăm căutarea ta salvată «<span data-search-notice-label></span>». <a href="/" class="font-medium underline">Vezi toate posturile</a></p>
         <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
+        <?php /* UX-15: browser-local saved search. Above #results (outside it), so HTMX does not rebuild it;
+           static/searches.js shows it (JS and storage needed, and at least one filter) and syncFeedLinks() calls
+           PosturiSearches.sync() after each push, restore and popstate. */ ?>
+        <div data-search-bar hidden class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <button type="button" data-search-toggle hidden aria-pressed="false"
+                  class="pref-btn pref-save !w-auto gap-1.5 border border-line bg-surface px-2.5 text-sm">
+            <svg class="pref-ico" aria-hidden="true"><use href="#i-bookmark"/></svg>
+            <span data-search-toggle-label>Salvează căutarea</span>
+          </button>
+          <span data-search-msg role="status" aria-live="polite" class="text-xs text-ink-muted"></span>
+        </div>
         <div id="results">
 <?php endif; // !$is_htmx ?>
 
@@ -860,17 +871,6 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
        the links are right without JavaScript too. Saved/hidden announcements
        are browser-local and are never part of these URLs. */
        $ics_abs = site_origin() . feed_url('posturi.ics'); ?>
-    <?php /* UX-15: browser-local saved search. Outside #results like the block below, so HTMX does not rebuild it;
-       static/searches.js shows it (JS and storage needed, and at least one filter) and syncFeedLinks() calls
-       PosturiSearches.sync() after each push, restore and popstate. */ ?>
-    <div data-search-bar hidden class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <button type="button" data-search-toggle hidden aria-pressed="false"
-              class="pref-btn pref-save !w-auto gap-1.5 border border-line bg-surface px-2.5 text-sm">
-        <svg class="pref-ico" aria-hidden="true"><use href="#i-bookmark"/></svg>
-        <span data-search-toggle-label>Salvează căutarea</span>
-      </button>
-      <span data-search-msg role="status" aria-live="polite" class="text-xs text-ink-muted"></span>
-    </div>
     <details id="urmareste" class="mt-3 rounded-md border border-line bg-surface">
       <summary class="cursor-pointer select-none px-3 py-2 text-sm font-medium text-gov hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Urmărește această căutare</summary>
       <div id="urmareste-linkuri" class="border-t border-line px-3 py-3 text-xs text-ink-muted">

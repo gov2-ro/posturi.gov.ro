@@ -258,5 +258,6 @@ VPS export writes (classify.py); until then the live site shows them empty or sh
 - [x] let's show prices visually, compare to median, on a 1-5   $    scale — *five bars after the pay, quintiles of the open postings; said in words on hover / for screen readers and on the detail page.*
 
 ### Later
+- [ ] create /llms.txt, then let ~/devbox/gov2/gov2.ro know, to update their llms.txt - or submit an issue to [gov2-ro/gov2-alpha-sunrise](https://github.com/gov2-ro/gov2-alpha-sunrise)
 - [ ] match employers to ~/devbox/gov2/institutii-publice/ / https://github.com/gov2-ro/institutii-publice 
 - [ ] upload your CV!

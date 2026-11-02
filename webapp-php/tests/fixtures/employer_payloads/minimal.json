@@ -1,8 +1,17 @@
 {
-  "meta": {"institution": {"name": "Școala Gimnazială Exemplu"}, "interview": true},
+  "meta": {
+    "institution": {},
+    "interview": true
+  },
   "data": {
     "occupation_title": "Îngrijitor",
-    "positions": [{"title": "Îngrijitor"}],
-    "recruitment": {"kind": "recrutare"}
+    "positions": [
+      {
+        "title": "Îngrijitor"
+      }
+    ],
+    "recruitment": {
+      "kind": "recrutare"
+    }
   }
 }

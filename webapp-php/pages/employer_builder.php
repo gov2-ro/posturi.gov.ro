@@ -18,8 +18,7 @@ $meta_description = 'Completați un formular și descărcați un anunț de concu
 $study_levels = ['generala', 'profesionala', 'liceala', 'postliceala', 'licenta', 'master', 'doctorat'];
 $study_labels = ['generala' => 'Generale (8 clase)', 'profesionala' => 'Școală profesională', 'liceala' => 'Liceale', 'postliceala' => 'Postliceale',
     'licenta' => 'Superioare (licență)', 'master' => 'Master', 'doctorat' => 'Doctorat'];
-$judete = judet_names();
-asort($judete);
+$counties = json_decode('["Alba","Arad","Argeș","Bacău","Bihor","Bistrița-Năsăud","Botoșani","Brăila","Brașov","București","Buzău","Călărași","Caraș-Severin","Cluj","Constanța","Covasna","Dâmbovița","Dolj","Galați","Giurgiu","Gorj","Harghita","Hunedoara","Ialomița","Iași","Ilfov","Maramureș","Mehedinți","Mureș","Neamț","Olt","Prahova","Sălaj","Satu Mare","Sibiu","Suceava","Teleorman","Timiș","Tulcea","Vâlcea","Vaslui","Vrancea"]', true); // judete.COUNTIES; a test compares
 
 $field  = 'mt-1 w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus';
 $legend = 'text-xs font-semibold uppercase tracking-widest text-ink-muted';
@@ -160,7 +159,7 @@ require __DIR__ . '/../inc/header.php';
             <label for="f-inst-county" class="<?= $legend ?>">Județul</label>
             <select id="f-inst-county" class="<?= $field ?>" data-path="meta.institution.county" data-kind="text">
               <option value="">— alege —</option>
-              <?php foreach ($judete as $name): ?><option value="<?= e($name) ?>"><?= e($name) ?></option><?php endforeach; ?>
+              <?php foreach ($counties as $name): ?><option value="<?= e($name) ?>"><?= e($name) ?></option><?php endforeach; ?>
             </select>
           </div>
           <?php $input('Telefon', 'meta.institution.phone', 'f-inst-phone', ['type' => 'tel', 'attrs' => 'autocomplete="tel"']); ?>

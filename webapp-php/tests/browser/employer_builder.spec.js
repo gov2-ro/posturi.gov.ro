@@ -304,6 +304,8 @@ test('fixtures: the form turns each fixture into the same data, scores them, and
     expect(payload.format).toBe('posturi.posting.v1');
     expect(payload.schema).toBe('v5');
     expect(payload.data, fx.name).toEqual(fx.data);
+    expect(payload.employer, fx.name).toEqual(fx.employer);
+    expect('employer' in payload, fx.name).toBe(!!fx.employer);
 
     const custom = unzip('docProps/custom.xml');
     const m = /posturi\.posting[\s\S]*?<vt:lpwstr>([^<]+)<\/vt:lpwstr>/.exec(custom);
@@ -331,8 +333,9 @@ test('the .json download holds the payload alone', async ({ page }, testInfo) =>
   const file = testInfo.outputPath('payload.json');
   await dl.saveAs(file);
   const p = JSON.parse(fs.readFileSync(file, 'utf8'));
-  expect(Object.keys(p).sort()).toEqual(['created', 'data', 'format', 'generator', 'schema']);
+  expect(Object.keys(p).sort()).toEqual(['created', 'data', 'employer', 'format', 'generator', 'schema']);
   expect(p.data).toEqual(fixtures.find((f) => f.name === 'full').data);
+  expect(p.employer).toEqual(fixtures.find((f) => f.name === 'full').employer);
 });
 
 test('the page states the scope and the PDF warning', async ({ page }) => {

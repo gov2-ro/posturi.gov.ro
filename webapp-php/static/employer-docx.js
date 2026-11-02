@@ -62,6 +62,12 @@
     rezultate_finale: 'Rezultatele finale'
   };
 
+  // The 42 canonical counties of webapp/apps/jobs/judete.py (COUNTIES). test_employer_payload.py compares them.
+  var COUNTIES = ['Alba', 'Arad', 'Argeș', 'Bacău', 'Bihor', 'Bistrița-Năsăud', 'Botoșani', 'Brăila', 'Brașov', 'București', 'Buzău',
+    'Călărași', 'Caraș-Severin', 'Cluj', 'Constanța', 'Covasna', 'Dâmbovița', 'Dolj', 'Galați', 'Giurgiu', 'Gorj', 'Harghita',
+    'Hunedoara', 'Ialomița', 'Iași', 'Ilfov', 'Maramureș', 'Mehedinți', 'Mureș', 'Neamț', 'Olt', 'Prahova', 'Sălaj', 'Satu Mare',
+    'Sibiu', 'Suceava', 'Teleorman', 'Timiș', 'Tulcea', 'Vâlcea', 'Vaslui', 'Vrancea'];
+
   function isFilled(v) {
     if (v === null || v === undefined) return false;
     if (typeof v === 'string') return v.trim() !== '';
@@ -198,14 +204,32 @@
   }
 
   // ---- payload (ADR 0002) -----------------------------------------------------
-  function buildPayload(data, created) {
-    return {
+  /** The `employer` block of ADR 0002 from draft.meta, or undefined when it is empty. */
+  function employerBlock(meta) {
+    meta = meta || {};
+    var inst = meta.institution || {};
+    var out = {};
+    function put(k, v) { v = typeof v === 'string' ? v.trim() : ''; if (v) out[k] = v; }
+    put('name', inst.name);
+    // cui: digits only. "RO 4562583" and "RO4562583" become "4562583".
+    put('cui', String(inst.cui || '').replace(/^\s*RO/i, '').replace(/\D/g, ''));
+    put('address', inst.address);
+    put('locality', inst.locality);
+    if (COUNTIES.indexOf(inst.county) >= 0) out.county = inst.county;
+    put('department', meta.department);
+    return Object.keys(out).length ? out : undefined;
+  }
+
+  function buildPayload(data, created, employer) {
+    var p = {
       format: FORMAT,
       schema: 'v5',
       generator: 'posturi.gov2.ro/pentru-angajatori/anunt@' + CODE_VERSION,
-      created: created || new Date().toISOString().replace(/\.\d+Z$/, 'Z'),
-      data: data
+      created: created || new Date().toISOString().replace(/\.\d+Z$/, 'Z')
     };
+    if (employer) p.employer = employer;
+    p.data = data;
+    return p;
   }
 
   function sha256Hex(str) {
@@ -283,7 +307,7 @@
     if (!d || !d.Packer || !d.Packer.compiler || typeof d.Packer.compiler.compile !== 'function') {
       return Promise.reject(new Error('docx.js is not loaded'));
     }
-    var payload = buildPayload(data);
+    var payload = buildPayload(data, null, employerBlock(draft.meta));
     var json = JSON.stringify(payload);
     return sha256Hex(json).then(function (hash) {
       var doc = new d.Document({
@@ -305,7 +329,7 @@
     FORMAT: FORMAT, NS: NS,
     DOCUMENT_LABELS: DOCUMENT_LABELS, STUDY_LABELS: STUDY_LABELS, DURATION_LABELS: DURATION_LABELS,
     SCHEDULE_LABELS: SCHEDULE_LABELS, CHANNEL_LABELS: CHANNEL_LABELS, STAGE_LABELS: STAGE_LABELS,
-    sections: sections, buildPayload: buildPayload, buildDocx: buildDocx,
+    COUNTIES: COUNTIES, employerBlock: employerBlock, sections: sections, buildPayload: buildPayload, buildDocx: buildDocx,
     sha256Hex: sha256Hex, slug: slug, fileName: fileName, dmy: dmy, today: today, bulletLines: bulletLines
   };
 })();

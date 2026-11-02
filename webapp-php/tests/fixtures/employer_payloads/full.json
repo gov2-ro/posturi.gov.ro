@@ -2,7 +2,7 @@
   "meta": {
     "institution": {
       "name": "Primăria Municipiului Exemplu",
-      "cui": "12345678",
+      "cui": "RO 12345678",
       "address": "Str. Libertății nr. 1",
       "locality": "Exemplu",
       "county": "Cluj",
@@ -12,48 +12,178 @@
     "department": "Serviciul Achiziții Publice",
     "interview": true
   },
+  "employer": {
+    "name": "Primăria Municipiului Exemplu",
+    "cui": "12345678",
+    "address": "Str. Libertății nr. 1",
+    "locality": "Exemplu",
+    "county": "Cluj",
+    "department": "Serviciul Achiziții Publice"
+  },
   "data": {
     "occupation_title": "Referent de specialitate",
-    "positions": [{"title": "Referent de specialitate", "count": 2}],
-    "recruitment": {"kind": "recrutare"},
+    "positions": [
+      {
+        "title": "Referent de specialitate",
+        "count": 2
+      }
+    ],
+    "recruitment": {
+      "kind": "recrutare"
+    },
     "vacancies_total": 2,
-    "contract": {"post_status": "vacant", "duration": "nedeterminata", "schedule": "norma_intreaga", "hours_per_week": 40},
+    "contract": {
+      "post_status": "vacant",
+      "duration": "nedeterminata",
+      "schedule": "norma_intreaga",
+      "hours_per_week": 40
+    },
     "jobLocation": "Str. Libertății nr. 1, Exemplu",
-    "work_localities": ["Exemplu"],
-    "education": {"minimum_level": "licenta", "fields_of_study": [{"label_ro": "științe economice"}, {"label_ro": "drept"}]},
-    "experience": {"years_minimum": 3, "in_specialty": true},
-    "credentials": [{"label": "permis categoria B", "kind": "permis_conducere", "required": true}],
-    "language_list": [{"language": "engleză", "cefr": "B2", "required": true}],
+    "work_localities": [
+      "Exemplu"
+    ],
+    "education": {
+      "minimum_level": "licenta",
+      "fields_of_study": [
+        {
+          "label_ro": "științe economice"
+        },
+        {
+          "label_ro": "drept"
+        }
+      ]
+    },
+    "experience": {
+      "years_minimum": 3,
+      "in_specialty": true
+    },
+    "credentials": [
+      {
+        "label": "permis categoria B",
+        "kind": "permis_conducere",
+        "required": true
+      }
+    ],
+    "language_list": [
+      {
+        "language": "engleză",
+        "cefr": "B2",
+        "required": true
+      }
+    ],
     "qualifications": "Cunoștințe de operare Word și Excel.",
-    "baseSalary": {"minValue": 6200, "maxValue": 8100, "currency": "RON", "unitText": "MONTH"},
+    "baseSalary": {
+      "minValue": 6200,
+      "maxValue": 8100,
+      "currency": "RON",
+      "unitText": "MONTH"
+    },
     "responsibilities": "- Pregătește documentația de achiziție\n- Ține evidența contractelor\n- Redactează răspunsuri la solicitări",
     "documents": {
-      "standard": ["formular_inscriere", "act_identitate", "acte_studii", "carnet_munca_adeverinta_vechime", "cazier_judiciar", "adeverinta_medicala", "cv"],
-      "specific": [{"label": "Declarație pe propria răspundere privind lipsa conflictului de interese"}]
+      "standard": [
+        "formular_inscriere",
+        "act_identitate",
+        "acte_studii",
+        "carnet_munca_adeverinta_vechime",
+        "cazier_judiciar",
+        "adeverinta_medicala",
+        "cv"
+      ],
+      "specific": [
+        {
+          "label": "Declarație pe propria răspundere privind lipsa conflictului de interese"
+        }
+      ]
     },
-    "bibliography_topics": ["Legea nr. 98/2016 privind achizițiile publice", "HG nr. 395/2016", "Codul administrativ, partea a VI-a"],
-    "application": {"channels": ["sediu", "email"], "window_start": "2026-04-07"},
-    "application_contact": {"name": "Ana Popescu", "phone": "0264 000 000", "email": "resurse.umane@exemplu.example", "address": "Str. Libertății nr. 1, camera 12"},
-    "application_fee": {"amount": 50, "details": "Plata se face la casierie."},
+    "bibliography_topics": [
+      "Legea nr. 98/2016 privind achizițiile publice",
+      "HG nr. 395/2016",
+      "Codul administrativ, partea a VI-a"
+    ],
+    "application": {
+      "channels": [
+        "sediu",
+        "email"
+      ],
+      "window_start": "2026-04-07"
+    },
+    "application_contact": {
+      "name": "Ana Popescu",
+      "phone": "0264 000 000",
+      "email": "resurse.umane@exemplu.example",
+      "address": "Str. Libertății nr. 1, camera 12"
+    },
+    "application_fee": {
+      "amount": 50,
+      "details": "Plata se face la casierie."
+    },
     "competition_calendar": {
       "application_deadline": "2026-04-22",
       "application_deadline_time": "16:00",
       "events": [
-        {"stage": "publicare", "date": "2026-04-07"},
-        {"stage": "depunere_dosare", "date": "2026-04-22", "time": "16:00"},
-        {"stage": "selectie_dosare", "date": "2026-04-24"},
-        {"stage": "rezultate_selectie_dosare", "date": "2026-04-27"},
-        {"stage": "contestatii_selectie_dosare", "date": "2026-04-28"},
-        {"stage": "rezultate_contestatii_selectie_dosare", "date": "2026-04-29"},
-        {"stage": "proba_scrisa", "date": "2026-04-30", "time": "10:00"},
-        {"stage": "rezultate_proba_scrisa", "date": "2026-05-04"},
-        {"stage": "contestatii_proba_scrisa", "date": "2026-05-05"},
-        {"stage": "rezultate_contestatii_proba_scrisa", "date": "2026-05-06"},
-        {"stage": "interviu", "date": "2026-05-07", "time": "10:00"},
-        {"stage": "rezultate_interviu", "date": "2026-05-08"},
-        {"stage": "contestatii_interviu", "date": "2026-05-11"},
-        {"stage": "rezultate_contestatii_interviu", "date": "2026-05-12"},
-        {"stage": "rezultate_finale", "date": "2026-05-13"}
+        {
+          "stage": "publicare",
+          "date": "2026-04-07"
+        },
+        {
+          "stage": "depunere_dosare",
+          "date": "2026-04-22",
+          "time": "16:00"
+        },
+        {
+          "stage": "selectie_dosare",
+          "date": "2026-04-24"
+        },
+        {
+          "stage": "rezultate_selectie_dosare",
+          "date": "2026-04-27"
+        },
+        {
+          "stage": "contestatii_selectie_dosare",
+          "date": "2026-04-28"
+        },
+        {
+          "stage": "rezultate_contestatii_selectie_dosare",
+          "date": "2026-04-29"
+        },
+        {
+          "stage": "proba_scrisa",
+          "date": "2026-04-30",
+          "time": "10:00"
+        },
+        {
+          "stage": "rezultate_proba_scrisa",
+          "date": "2026-05-04"
+        },
+        {
+          "stage": "contestatii_proba_scrisa",
+          "date": "2026-05-05"
+        },
+        {
+          "stage": "rezultate_contestatii_proba_scrisa",
+          "date": "2026-05-06"
+        },
+        {
+          "stage": "interviu",
+          "date": "2026-05-07",
+          "time": "10:00"
+        },
+        {
+          "stage": "rezultate_interviu",
+          "date": "2026-05-08"
+        },
+        {
+          "stage": "contestatii_interviu",
+          "date": "2026-05-11"
+        },
+        {
+          "stage": "rezultate_contestatii_interviu",
+          "date": "2026-05-12"
+        },
+        {
+          "stage": "rezultate_finale",
+          "date": "2026-05-13"
+        }
       ]
     }
   }

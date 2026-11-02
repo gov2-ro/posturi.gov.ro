@@ -46,6 +46,54 @@ def test_fixture_validates_as_v5(path):
     assert model.occupation_title == data["occupation_title"]
 
 
+def _judete():
+    """webapp/apps/jobs/judete.py loaded by path: it needs no Django."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("judete_canonical", ROOT / "webapp" / "apps" / "jobs" / "judete.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["judete_canonical"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_county_lists_match_judete():
+    """The page select and employer-docx.js copy judete.COUNTIES (42 canonical names)."""
+    mod = _judete()
+    canon = list(mod.COUNTIES)
+    assert len(canon) == 42
+    js = (ROOT / "webapp-php" / "static" / "employer-docx.js").read_text(encoding="utf-8")
+    js_list = re.findall(r"'([^']+)'", re.search(r"var COUNTIES = \[(.*?)\];", js, re.S).group(1))
+    assert js_list == canon
+    php = (ROOT / "webapp-php" / "pages" / "employer_builder.php").read_text(encoding="utf-8")
+    php_list = json.loads(re.search(r"\$counties = json_decode\('(\[.*?\])'", php).group(1))
+    assert php_list == canon
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)
+def test_employer_block_is_canonical(path):
+    fx = load(path)
+    emp = fx.get("employer")
+    if emp is None:
+        # No block: the institution is empty, so nothing may be derived from it.
+        assert not any((fx["meta"].get("institution") or {}).get(k) for k in ("name", "cui", "address", "locality", "county"))
+        assert not fx["meta"].get("department")
+        return
+    assert set(emp) <= {"name", "cui", "address", "locality", "county", "department"}
+    assert all(isinstance(v, str) and v.strip() for v in emp.values())     # no empty keys
+    if "cui" in emp:
+        assert re.fullmatch(r"\d+", emp["cui"])
+    if "county" in emp:
+        assert emp["county"] in _judete().COUNTIES
+
+
+def test_fixtures_have_a_full_block_and_a_missing_one():
+    blocks = {p.stem: load(p).get("employer") for p in FIXTURES}
+    assert set(blocks["full"]) == {"name", "cui", "address", "locality", "county", "department"}
+    assert blocks["minimal"] is None
+    assert load(next(p for p in FIXTURES if p.stem == "full"))["meta"]["institution"]["cui"] == "RO 12345678"
+
+
 def test_document_labels_match_the_site():
     """employer-docx.js copies DOCUMENT_CODE_LABELS of inc/v5.php. The two lists must be equal."""
     php = (ROOT / "webapp-php" / "inc" / "v5.php").read_text(encoding="utf-8")
@@ -128,6 +176,8 @@ def test_payload_read_back_from_the_downloaded_docx(path):
         pytest.skip("run the Playwright suite employer_builder first (it writes test-results/employer_docx/)")
     inner, prop = read_back(docx)
     payload = json.loads(inner)
+    assert payload.get("employer") == load(path).get("employer")
+    assert ("employer" in payload) == ("employer" in load(path))
     assert payload["format"] == "posturi.posting.v1"
     assert payload["schema"] == "v5"
     assert payload["data"] == load(path)["data"]

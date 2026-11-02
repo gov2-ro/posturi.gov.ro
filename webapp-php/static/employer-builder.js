@@ -872,7 +872,7 @@
     },
     'download-json': function () {
       var data = buildData(draft);
-      var json = JSON.stringify(Doc.buildPayload(data), null, 2);
+      var json = JSON.stringify(Doc.buildPayload(data, null, Doc.employerBlock(draft.meta)), null, 2);
       download(new Blob([json], { type: 'application/json' }), 'anunt-' + Doc.slug(data.occupation_title) + '-' + Doc.today() + '.json');
     },
     'reset-drafts': function (b) {

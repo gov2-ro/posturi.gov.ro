@@ -14,6 +14,14 @@
  * as unavailable instead.
  *
  * Counting rules for the calendar are in ONE place: addWorkingDays() and windowEnd().
+ *
+ * UX-EMP-03 added, without a change to the stores or the payload format:
+ *   - defaults for a new draft (DEFAULT_*), set in newDraft();
+ *   - conditional fields (VISIBLE): a hidden field keeps its value in the draft and is left out
+ *     of buildData(), so also out of the payload, the preview, the .docx and the meter;
+ *   - `draft.meta` keys: multi_localities, fee (checkboxes), institution.category (from org.gov2.ro);
+ *   - a chip input for education.fields_of_study, and an institution autocomplete that loads
+ *     static/institutii/<judet-slug>.json (the only request; the typed text never leaves the page).
  */
 (function () {
   'use strict';
@@ -31,6 +39,13 @@
   var CFG = {};
   try { CFG = JSON.parse(root.querySelector('script[data-config]').textContent) || {}; } catch (e) { CFG = {}; }
   var CLS = CFG.cls || {};
+
+  // ---- defaults for a new draft (UX-EMP-03 item 4) ----------------------------
+  // HG 1336/2022 art. 35(1) a)-g) and i). Item h), the integrity certificate, is conditional.
+  var DEFAULT_DOCS = ['formular_inscriere', 'act_identitate', 'certificat_casatorie', 'acte_studii',
+    'carnet_munca_adeverinta_vechime', 'cazier_judiciar', 'adeverinta_medicala', 'cv'];
+  var CERT = 'certificat_integritate';
+  var CERT_CATEGORIES = ['Educație', 'Sănătate', 'Asistență socială și muncă'];
 
   // ---- calendar: counting rules (HG 1336/2022) --------------------------------
   // Art. 98(1) counts the first and the last day. Art. 98(3) moves a start on a non-working
@@ -196,10 +211,34 @@
     return undefined;
   }
 
+  // ---- conditional fields (UX-EMP-03 item 5) ----------------------------------
+  // A field that applies to one choice shows only after that choice. A hidden field keeps its value
+  // in the draft, so that switching back restores it. buildData() leaves it out.
+  function channelsOf(d) { return getPath(d.data, 'application.channels') || []; }
+  var VISIBLE = {
+    months: function (d) { return getPath(d.data, 'contract.duration') === 'determinata'; },
+    hours: function (d) { return getPath(d.data, 'contract.schedule') === 'norma_partiala'; },
+    exp: function (d) { return !getPath(d.data, 'experience.none_required'); },
+    localities: function (d) { return !!(d.meta && d.meta.multi_localities); },
+    // The v5 contact has one address field. It holds a postal address or the link of the platform.
+    addr: function (d) { var c = channelsOf(d); return c.indexOf('sediu') >= 0 || c.indexOf('posta') >= 0 || c.indexOf('online') >= 0; },
+    email: function (d) { return channelsOf(d).indexOf('email') >= 0; },
+    fee: function (d) { return !!(d.meta && d.meta.fee); }
+  };
+
   /** The v5 `data` of a draft: only what the employer filled, plus the derived keys. */
   function buildData(draft) {
     var d = clone(draft.data) || {};
     var meta = draft.meta || {};
+    var vis = {};
+    Object.keys(VISIBLE).forEach(function (k) { vis[k] = VISIBLE[k](draft); });
+    if (!vis.months && d.contract) delete d.contract.duration_months;
+    if (!vis.hours && d.contract) delete d.contract.hours_per_week;
+    if (!vis.exp && d.experience) { delete d.experience.years_minimum; delete d.experience.in_specialty; }
+    if (!vis.localities) delete d.work_localities;
+    if (!vis.addr && d.application_contact) delete d.application_contact.address;
+    if (!vis.email && d.application_contact) delete d.application_contact.email;
+    if (!vis.fee) delete d.application_fee;
     // The calendar: keep events with a date; the deadline comes from the submission row.
     var cal = d.competition_calendar;
     if (cal && Array.isArray(cal.events)) {
@@ -225,7 +264,6 @@
         s.unitText = 'MONTH';
       } else delete d.baseSalary;
     }
-    if (d.experience && d.experience.none_required) delete d.experience.years_minimum;
     d = prune(d) || {};
     if (d.occupation_title) {
       var pos = { title: d.occupation_title };
@@ -429,6 +467,11 @@
       get: function (el) { var k = el.dataset.key; return lines(el.value).map(function (l) { var o = {}; o[k] = l; return o; }); },
       set: function (el, v) { var k = el.dataset.key; el.value = Array.isArray(v) ? v.map(function (o) { return o[k]; }).join('\n') : ''; }
     },
+    // The chip list is the source of truth in draft.data; the container only shows it.
+    chips: {
+      get: function () { return clone(getPath(draft.data, 'education.fields_of_study')) || []; },
+      set: function (el, v) { renderChips(el, Array.isArray(v) ? v : []); }
+    },
     langs: {
       get: function (el) {
         return lines(el.value).map(function (l) {
@@ -478,18 +521,51 @@
   function newId() { return 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function nowIso() { return new Date().toISOString(); }
 
+  /** Codes in the order of the form, so that the stored list does not depend on the click order. */
+  function inFormOrder(codes) {
+    var order = [];
+    root.querySelectorAll('input[data-path="documents.standard"]').forEach(function (b) { order.push(b.value); });
+    return codes.slice().sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
+  }
+  function certNeeded(category) { return CERT_CATEGORIES.indexOf(category) >= 0; }
+  function defaultDocs(category) {
+    return inFormOrder(certNeeded(category) ? DEFAULT_DOCS.concat([CERT]) : DEFAULT_DOCS);
+  }
+  function sameSet(a, b) {
+    return a.length === b.length && a.every(function (x) { return b.indexOf(x) >= 0; });
+  }
+  /** After the user picks an institution: follow its category only while the list is still a default one. */
+  function followCategory(category) {
+    var cur = getPath(draft.data, 'documents.standard') || [];
+    if (sameSet(cur, DEFAULT_DOCS) || sameSet(cur, DEFAULT_DOCS.concat([CERT]))) {
+      setPath(draft.data, 'documents.standard', defaultDocs(category));
+    }
+  }
+
+  /** Old drafts have no flag for the two switches: derive it from the values they hold. */
+  function normalizeMeta(d) {
+    if (!isObj(d.meta)) d.meta = {};
+    var data = d.data || {};
+    if (d.meta.multi_localities === undefined) d.meta.multi_localities = Array.isArray(data.work_localities) && data.work_localities.length > 0;
+    if (d.meta.fee === undefined) {
+      var f = data.application_fee || {};
+      d.meta.fee = typeof f.amount === 'number' || !!String(f.details || '').trim();
+    }
+    return d;
+  }
+
   function newDraft() {
     var prof = profileStore.value.profile || {};
     var inst = prof.institution || {};
-    var data = {};
+    var data = { contract: { post_status: 'vacant', duration: 'nedeterminata', schedule: 'norma_intreaga' } };
     if ((prof.channels || []).length) data.application = { channels: prof.channels.slice() };
-    if ((prof.documents || []).length) data.documents = { standard: prof.documents.slice() };
+    data.documents = { standard: (prof.documents || []).length ? prof.documents.slice() : defaultDocs(inst.category) };
     var contact = {};
     if (inst.phone) contact.phone = inst.phone;
     if (inst.email) contact.email = inst.email;
     if (inst.address) contact.address = inst.address;
     if (Object.keys(contact).length) data.application_contact = contact;
-    return { id: newId(), title: '', updatedAt: nowIso(), data: data, meta: { institution: clone(inst), interview: true } };
+    return { id: newId(), title: '', updatedAt: nowIso(), data: data, meta: { institution: clone(inst), interview: true, multi_localities: false, fee: false } };
   }
 
   // ---- status, messages -------------------------------------------------------
@@ -545,11 +621,16 @@
   function renderMeter(data) {
     var q = quality(data);
     var score = root.querySelector('[data-meter-score]');
-    if (score) score.textContent = String(q.score);
+    if (score) score.textContent = q.score + '%';
+    var barScore = root.querySelector('[data-bar-score]');
+    if (barScore) barScore.textContent = q.score + '%';
     var bar = root.querySelector('[data-meter-bar]');
     if (bar) bar.style.width = q.score + '%';
     var meter = root.querySelector('[data-meter]');
-    if (meter) meter.setAttribute('aria-valuenow', String(q.score));
+    if (meter) {
+      meter.setAttribute('aria-valuenow', String(q.score));
+      meter.setAttribute('aria-valuetext', q.score + '%');
+    }
     var ul = root.querySelector('[data-meter-missing]');
     if (ul) {
       ul.textContent = '';
@@ -730,7 +811,18 @@
   }
 
   var pageTimer = null;
+  function applyConditions() {
+    root.querySelectorAll('[data-cond]').forEach(function (n) {
+      var f = VISIBLE[n.dataset.cond];
+      n.hidden = f ? !f(draft) : false;
+    });
+    var hint = root.querySelector('[data-no-channel]');
+    if (hint) hint.hidden = channelsOf(draft).length > 0;
+    updateIssueLink();
+  }
+
   function refresh() {
+    applyConditions();
     var data = buildData(draft);
     renderMeter(data);
     renderCalendar();
@@ -744,6 +836,7 @@
   function onInput(ev) {
     var t = ev.target;
     if (!(t instanceof HTMLElement)) return;
+    if (t.matches('[data-chip-input]')) { onChipInput(t, ev); return; }
     if (t.matches('[data-ev-date], [data-ev-time]')) {
       var row = t.closest('[data-stage]');
       var stage = row.dataset.stage;
@@ -764,6 +857,11 @@
     }
     if (path === 'meta.interview' && eventsOf().length) {
       setEvents(eventMap(), true);
+    }
+    if (path === 'meta.institution.county' && t.value) loadCounty(t.value);
+    if (path === 'meta.institution.name' && ev.type === 'input') {
+      if (draft.meta.institution) delete draft.meta.institution.category;   // typed by hand: the category of an earlier pick no longer applies
+      suggestInstitutions();
     }
     fillForm(t);
     touch(); refresh();
@@ -790,8 +888,7 @@
     draftsStore.load();
     var d = draftsStore.value.drafts[id];
     if (!d) return;
-    draft = clone(d);
-    if (!isObj(draft.meta)) draft.meta = {};
+    draft = normalizeMeta(clone(d));
     draftsStore.mutate(function (v) { v.currentId = id; });
     fillForm(); refresh(); renderList();
     renderPreview(buildData(draft));
@@ -818,7 +915,7 @@
       var copy = clone(src);
       copy.id = newId(); copy.updatedAt = nowIso();
       draftsStore.mutate(function (v) { v.drafts[copy.id] = copy; v.currentId = copy.id; });
-      draft = clone(copy);
+      draft = normalizeMeta(clone(copy));
       fillForm(); refresh(); renderList();
       say('Am duplicat ciorna.');
     },
@@ -929,6 +1026,226 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
   }
 
+  // ---- field of study: chips (UX-EMP-03 item 6) -------------------------------
+  var DOMENII = window.DOMENII_STUDII || [];
+
+  function foldText(t) {
+    return String(t || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  function suggestionFor(label) {
+    var f = foldText(label);
+    for (var i = 0; i < DOMENII.length; i++) if (foldText(DOMENII[i].label_ro) === f) return DOMENII[i];
+    return null;
+  }
+  function renderDatalist() {
+    var dl = root.querySelector('#fields-list');
+    if (!dl || dl.children.length) return;
+    DOMENII.forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o.label_ro;
+      dl.appendChild(opt);
+    });
+  }
+  function renderChips(box, list) {
+    var ul = box.querySelector('[data-chip-list]');
+    if (!ul) return;
+    ul.textContent = '';
+    list.forEach(function (o, i) {
+      var li = el('li', CLS.chip);
+      li.dataset.isced = o.isced_field || '';
+      li.appendChild(document.createTextNode(o.label_ro || ''));
+      var b = el('button', CLS.chipX, '×');
+      b.type = 'button';
+      b.dataset.action = 'chip-remove';
+      b.dataset.idx = String(i);
+      b.setAttribute('aria-label', 'Elimină „' + (o.label_ro || '') + '”');
+      li.appendChild(b);
+      ul.appendChild(li);
+    });
+  }
+  function chipBox() { return root.querySelector('[data-chips]'); }
+  function chipList() { return (getPath(draft.data, 'education.fields_of_study') || []).slice(); }
+  function saveChips(list, msg) {
+    setPath(draft.data, 'education.fields_of_study', list);
+    renderChips(chipBox(), list);
+    touch(); refresh();
+    if (msg) say(msg);
+  }
+  /** A suggestion gives its isced_field. Free text gives null. */
+  function addChips(texts) {
+    var list = chipList(), added = [];
+    texts.forEach(function (t) {
+      t = String(t || '').trim();
+      if (!t) return;
+      var sug = suggestionFor(t);
+      var label = sug ? sug.label_ro : t;
+      var f = foldText(label);
+      if (list.some(function (o) { return foldText(o.label_ro) === f; })) return;
+      list.push({ label_ro: label, isced_field: sug ? sug.isced_field : null });
+      added.push(label);
+    });
+    if (added.length) saveChips(list, 'Am adăugat: ' + added.join(', ') + '.');
+  }
+  function onChipInput(t, ev) {
+    if (ev.type === 'change') { addChips([t.value]); t.value = ''; return; }
+    if (t.value.indexOf(',') >= 0) {
+      var parts = t.value.split(',');
+      t.value = parts.pop();
+      addChips(parts);
+      return;
+    }
+    // A pick from the datalist is an input event with this type (or none, in some browsers).
+    if ((ev.inputType === 'insertReplacementText' || ev.inputType === undefined) && suggestionFor(t.value)) {
+      addChips([t.value]); t.value = '';
+    }
+  }
+  root.addEventListener('keydown', function (ev) {
+    var t = ev.target;
+    if (t && t.matches && t.matches('[data-chip-input]') && ev.key === 'Enter') {
+      ev.preventDefault();
+      addChips([t.value]); t.value = '';
+    }
+  });
+
+  // ---- institution autocomplete from org.gov2.ro (UX-EMP-03 item 7) -----------
+  // One request per county, on demand: static/institutii/<slug>.json. The typed text stays here.
+  var ISSUE_URL = 'https://' + 'github.com/gov2-ro/institutii-publice/issues/new';
+  var countyRows = {};       // slug -> Promise of rows (or null when the file could not be read)
+  var combo = { shown: [], active: -1 };
+
+  function slugOf(name) {
+    return String(name || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  function loadCounty(county) {
+    var slug = slugOf(county);
+    if (!slug) return Promise.resolve(null);
+    if (!countyRows[slug]) {
+      countyRows[slug] = fetch('/static/institutii/' + slug + '.json').then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function (rows) {
+        rows.forEach(function (r) { r._f = foldText(r.name + ' ' + (r.locality || '')); r._n = foldText(r.name); });
+        return rows;
+      }).catch(function () { delete countyRows[slug]; return null; });
+    }
+    return countyRows[slug];
+  }
+  function nameInput() { return root.querySelector('#f-inst-name'); }
+  function comboList() { return root.querySelector('[data-inst-list]'); }
+  function comboLive(msg) { var n = root.querySelector('[data-inst-live]'); if (n) n.textContent = msg; }
+
+  function closeCombo() {
+    var ul = comboList(), inp = nameInput();
+    if (ul) { ul.hidden = true; ul.textContent = ''; }
+    if (inp) { inp.setAttribute('aria-expanded', 'false'); inp.removeAttribute('aria-activedescendant'); }
+    combo.shown = []; combo.active = -1;
+  }
+  function setActive(i) {
+    var ul = comboList(), inp = nameInput();
+    combo.active = i;
+    Array.prototype.forEach.call(ul.children, function (li, k) { li.setAttribute('aria-selected', k === i ? 'true' : 'false'); });
+    if (i >= 0 && ul.children[i]) {
+      inp.setAttribute('aria-activedescendant', ul.children[i].id);
+      ul.children[i].scrollIntoView({ block: 'nearest' });
+    } else inp.removeAttribute('aria-activedescendant');
+  }
+  function openCombo(rows) {
+    var ul = comboList(), inp = nameInput();
+    ul.textContent = '';
+    combo.shown = rows; combo.active = -1;
+    rows.forEach(function (r, i) {
+      var li = el('li', CLS.opt);
+      li.id = 'inst-opt-' + i;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
+      li.dataset.i = String(i);
+      li.appendChild(document.createTextNode(r.name));
+      var sub = [r.locality, r.category].filter(Boolean).join(' · ');
+      if (sub) li.appendChild(el('span', CLS.optSub, sub));
+      ul.appendChild(li);
+    });
+    ul.hidden = !rows.length;
+    inp.setAttribute('aria-expanded', rows.length ? 'true' : 'false');
+    comboLive(rows.length ? rows.length + (rows.length === 1 ? ' sugestie.' : ' sugestii.') + ' Folosește săgețile și Enter.' : 'Nicio sugestie.');
+  }
+  function matchRows(rows, q) {
+    var words = q.split(' ');
+    var hit = rows.filter(function (r) { return words.every(function (w) { return r._f.indexOf(w) >= 0; }); });
+    var starts = hit.filter(function (r) { return r._n.indexOf(q) === 0; });
+    var rest = hit.filter(function (r) { return r._n.indexOf(q) !== 0; });
+    return starts.concat(rest).slice(0, 8);
+  }
+  function suggestInstitutions() {
+    var inp = nameInput();
+    var county = (draft.meta.institution || {}).county;
+    var q = foldText(inp.value);
+    if (!county || q.length < 2) { closeCombo(); return; }
+    loadCounty(county).then(function (rows) {
+      if (!rows || foldText(nameInput().value) !== q || document.activeElement !== nameInput()) return;
+      openCombo(matchRows(rows, q));
+    });
+  }
+  function pickInstitution(r) {
+    var i = draft.meta.institution = draft.meta.institution || {};
+    i.name = r.name; i.cui = r.cif || ''; i.address = r.address || ''; i.locality = r.locality || '';
+    i.phone = r.phone || ''; i.email = r.email || ''; i.category = r.category || '';
+    followCategory(i.category);
+    closeCombo();
+    fillForm(); touch(); refresh();
+    comboLive('');
+    say('Am completat datele instituției. Poți schimba orice câmp.');
+  }
+  (function wireCombo() {
+    var inp = nameInput(), ul = comboList();
+    if (!inp || !ul) return;
+    inp.addEventListener('focus', function () {
+      var c = ((draft && draft.meta.institution) || {}).county;
+      if (c) loadCounty(c);
+    });
+    inp.addEventListener('keydown', function (ev) {
+      var open = !ul.hidden && combo.shown.length;
+      if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        if (!open) { suggestInstitutions(); return; }
+        setActive((combo.active + 1) % combo.shown.length);
+      } else if (ev.key === 'ArrowUp' && open) {
+        ev.preventDefault();
+        setActive((combo.active - 1 + combo.shown.length) % combo.shown.length);
+      } else if (ev.key === 'Enter' && open && combo.active >= 0) {
+        ev.preventDefault();
+        pickInstitution(combo.shown[combo.active]);
+      } else if (ev.key === 'Escape' && open) {
+        ev.preventDefault();
+        closeCombo();
+      }
+    });
+    inp.addEventListener('blur', closeCombo);
+    ul.addEventListener('mousedown', function (ev) {
+      ev.preventDefault();                       // keep the focus in the field
+      var li = ev.target.closest && ev.target.closest('[role="option"]');
+      if (li) pickInstitution(combo.shown[+li.dataset.i]);
+    });
+  })();
+
+  function updateIssueLink() {
+    var a = root.querySelector('[data-inst-issue]');
+    if (!a || !draft) return;
+    var i = draft.meta.institution || {};
+    var title = 'Instituție lipsă sau cu date greșite' + (i.name ? ': ' + i.name : '');
+    var body = ['Județ: ' + (i.county || ''), 'Denumire: ' + (i.name || ''), 'CUI: ' + (i.cui || ''), 'Localitate: ' + (i.locality || ''),
+      'Adresă: ' + (i.address || ''), 'Telefon: ' + (i.phone || ''), 'E-mail: ' + (i.email || ''), '',
+      'Ce lipsește sau ce este greșit:', '', '(Trimis din asistentul de redactare a anunțurilor, posturi.gov2.ro/pentru-angajatori/anunt/.)'].join('\n');
+    a.href = ISSUE_URL + '?title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+  }
+
+  ACTIONS['chip-remove'] = function (b) {
+    var list = chipList();
+    var gone = list.splice(+b.dataset.idx, 1)[0];
+    saveChips(list, gone ? 'Am eliminat: ' + gone.label_ro + '.' : '');
+    var inp = root.querySelector('[data-chip-input]');
+    if (inp) inp.focus();
+  };
+
   window.addEventListener('pagehide', flush);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
 
@@ -942,7 +1259,8 @@
       var v = draftsStore.value;
       var cur = v.currentId && v.drafts[v.currentId] ? v.currentId : Object.keys(v.drafts).sort(function (a, b) { return v.drafts[a].updatedAt < v.drafts[b].updatedAt ? 1 : -1; })[0];
       draft = cur ? clone(v.drafts[cur]) : newDraft();
-      if (!isObj(draft.meta)) draft.meta = {};
+      normalizeMeta(draft);
+      renderDatalist();
       fillForm();
       refresh();
       renderList();

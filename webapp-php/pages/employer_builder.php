@@ -12,8 +12,11 @@
  */
 declare(strict_types=1);
 
-$page_title = 'Anunț structurat pentru angajatori';
-$meta_description = 'Completați un formular și descărcați un anunț de concurs în format .docx, cu datele structurate încorporate. Datele rămân în browserul dumneavoastră.';
+$page_title = 'Asistent redactare anunțuri angajare';
+$meta_description = 'Asistent pentru redactarea anunțurilor de angajare: completați un formular și descărcați anunțul de concurs în format .docx, cu datele structurate încorporate. Datele rămân în browserul dumneavoastră.';
+
+$inst_index = json_decode((string)@file_get_contents(__DIR__ . '/../static/institutii/index.json'), true) ?: [];
+$inst_date = preg_match('/^(\d{4})-(\d{2})-(\d{2})/', (string)($inst_index['consolidated_at'] ?? ''), $m) ? $m[3] . '.' . $m[2] . '.' . $m[1] : '';
 
 $study_levels = ['generala', 'profesionala', 'liceala', 'postliceala', 'licenta', 'master', 'doctorat'];
 $study_labels = ['generala' => 'Generale (8 clase)', 'profesionala' => 'Școală profesională', 'liceala' => 'Liceale', 'postliceala' => 'Postliceale',
@@ -34,7 +37,7 @@ $input = function (string $label, string $path, string $id, array $o = []) use (
     $type = $o['type'] ?? 'text';
     $kind = $o['kind'] ?? 'text';
     $attrs = $o['attrs'] ?? '';
-    echo '<div class="' . ($o['wrap'] ?? '') . '"><label for="' . e($id) . '" class="' . $legend . '">' . e($label);
+    echo '<div class="' . ($o['wrap'] ?? '') . '"' . (!empty($o['cond']) ? ' data-cond="' . e($o['cond']) . '"' : '') . '><label for="' . e($id) . '" class="' . $legend . '">' . e($label);
     if (!empty($o['req'])) echo '<span class="' . $tag . '">obligatoriu (art. 18 alin. 2)</span>';
     echo '</label>';
     if ($type === 'textarea') {
@@ -71,18 +74,22 @@ $cls = [
     'pvTable' => 'w-full border-collapse text-sm',
     'pvTh' => 'border-b border-line-strong px-2 py-1 text-left font-semibold text-ink-muted',
     'pvTd' => 'border-b border-line px-2 py-1 text-ink',
+    'chip' => 'inline-flex items-center gap-1 border border-line-strong bg-sunken px-2 py-0.5 text-sm text-ink',
+    'chipX' => 'min-h-[1.5rem] min-w-[1.5rem] text-ink-muted hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus',
+    'opt' => 'cursor-pointer px-3 py-2 text-sm text-ink aria-selected:bg-sunken aria-selected:text-gov',
+    'optSub' => 'block text-xs text-ink-muted',
 ];
 
 $v = static fn(string $f): string => '/static/' . $f . '?v=' . (@filemtime(__DIR__ . '/../static/' . $f) ?: '1');
 
 require __DIR__ . '/../inc/header.php';
 ?>
-<div class="w-full max-w-3xl px-4 sm:px-6 py-6" data-employer-builder>
+<div class="w-full max-w-6xl px-4 sm:px-6 py-6 pb-20 lg:pb-6" data-employer-builder>
   <script type="application/json" data-config><?= json_encode(['cls' => $cls], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 
   <p class="text-sm"><a href="/angajatori/" class="text-gov hover:underline">← Angajatori</a></p>
-  <h1 class="mt-2 font-display text-[1.7rem] sm:text-[2rem] font-semibold italic leading-tight text-ink">Anunț structurat</h1>
-  <p class="mt-2 text-sm leading-snug text-ink-muted">
+  <h1 class="mt-2 font-display text-[1.7rem] sm:text-[2rem] font-semibold italic leading-tight text-ink">Asistent redactare anunțuri angajare</h1>
+  <p class="mt-2 max-w-3xl text-sm leading-snug text-ink-muted">
     Completați formularul și descărcați anunțul ca fișier .docx. Fișierul poartă și datele structurate ale anunțului, ca site-ul să le citească exact.
     Versiunea 1 acoperă un singur post pentru fiecare anunț și doar personalul contractual (HG 1336/2022). Funcționarii publici (OUG 57/2019) au alte termene.
   </p>
@@ -132,36 +139,34 @@ require __DIR__ . '/../inc/header.php';
       </li>
     </template>
 
-    <section class="mt-6 border border-line bg-surface p-4" aria-labelledby="meter-h">
-      <h2 id="meter-h" class="<?= $h2 ?>">Cât de complet este anunțul</h2>
-      <p class="mt-1 text-sm text-ink"><span class="text-2xl font-semibold" data-meter-score>0</span> din 100</p>
-      <div class="mt-1 h-2 w-full bg-sunken" role="meter" aria-labelledby="meter-h" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-meter>
-        <div class="h-2 bg-gov" style="width:0%" data-meter-bar></div>
-      </div>
-      <h3 class="mt-3 <?= $legend ?>">De completat</h3>
-      <ul class="mt-1" data-meter-missing></ul>
-      <h3 class="mt-3 <?= $legend ?>">Elementele obligatorii ale anunțului (art. 18 alin. 2)</h3>
-      <ul class="mt-1" data-mandatory></ul>
-      <p class="<?= $hint ?>">Poți descărca anunțul și cu elemente lipsă. Scorul este un ajutor, nu o regulă.</p>
-    </section>
-
+    <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-start lg:gap-8">
+    <div class="min-w-0">
     <form id="builder-form" class="mt-2" onsubmit="return false" novalidate>
 
       <section id="sec-1" class="<?= $sec ?>" aria-labelledby="h-1">
         <h2 id="h-1" class="<?= $h2 ?>">1. Instituția</h2>
         <p class="<?= $hint ?>">Aceste date pot fi păstrate ca profil al instituției și apar în fiecare ciornă nouă.</p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
-          <?php $input('Denumirea instituției', 'meta.institution.name', 'f-inst-name', ['wrap' => 'sm:col-span-2', 'attrs' => 'autocomplete="organization"']); ?>
-          <?php $input('CUI', 'meta.institution.cui', 'f-inst-cui'); ?>
-          <?php $input('Adresa', 'meta.institution.address', 'f-inst-address', ['attrs' => 'autocomplete="street-address"']); ?>
-          <?php $input('Localitatea', 'meta.institution.locality', 'f-inst-locality'); ?>
           <div>
             <label for="f-inst-county" class="<?= $legend ?>">Județul</label>
             <select id="f-inst-county" class="<?= $field ?>" data-path="meta.institution.county" data-kind="text">
               <option value="">— alege —</option>
               <?php foreach ($counties as $name): ?><option value="<?= e($name) ?>"><?= e($name) ?></option><?php endforeach; ?>
             </select>
+            <p class="<?= $hint ?>">Alege județul întâi: pagina propune instituțiile din județ.</p>
           </div>
+          <div class="relative sm:col-span-2" data-inst-combo>
+            <label for="f-inst-name" class="<?= $legend ?>">Denumirea instituției</label>
+            <input id="f-inst-name" type="text" class="<?= $field ?>" data-path="meta.institution.name" data-kind="text" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="inst-listbox" aria-autocomplete="list" aria-describedby="inst-source">
+            <ul id="inst-listbox" role="listbox" aria-label="Instituții din județ" hidden class="absolute z-20 mt-1 max-h-64 w-full overflow-auto border border-line-strong bg-surface shadow-sm" data-inst-list></ul>
+            <p id="inst-source" class="<?= $hint ?>">Date despre instituții: <a href="https://org.gov2.ro/" class="<?= $cls['link'] ?>">org.gov2.ro</a> (EUPL)<?php if ($inst_date): ?>, actualizate la <?= e($inst_date) ?><?php endif; ?>.
+              Poți scrie și o instituție care nu apare în listă.</p>
+            <p class="<?= $hint ?>"><a href="https://github.com/gov2-ro/institutii-publice/issues/new" target="_blank" rel="noopener noreferrer" class="<?= $cls['link'] ?>" data-inst-issue>Instituția lipsește sau are date greșite?</a></p>
+            <p class="sr-only" role="status" data-inst-live></p>
+          </div>
+          <?php $input('CUI', 'meta.institution.cui', 'f-inst-cui'); ?>
+          <?php $input('Adresa', 'meta.institution.address', 'f-inst-address', ['attrs' => 'autocomplete="street-address"']); ?>
+          <?php $input('Localitatea', 'meta.institution.locality', 'f-inst-locality'); ?>
           <?php $input('Telefon', 'meta.institution.phone', 'f-inst-phone', ['type' => 'tel', 'attrs' => 'autocomplete="tel"']); ?>
           <?php $input('E-mail', 'meta.institution.email', 'f-inst-email', ['type' => 'email', 'attrs' => 'autocomplete="email"']); ?>
         </div>
@@ -177,11 +182,12 @@ require __DIR__ . '/../inc/header.php';
           <?php $input('Structura (compartiment, serviciu)', 'meta.department', 'f-dept', ['req' => true]); ?>
           <?php $select('Statutul postului', 'contract.post_status', 'f-status', ['vacant' => 'Vacant', 'temporar_vacant' => 'Temporar vacant']); ?>
           <?php $select('Durata contractului', 'contract.duration', 'f-duration', ['nedeterminata' => 'Nedeterminată', 'determinata' => 'Determinată', 'sezonier' => 'Sezonier', 'proiect' => 'Pe durata unui proiect'], ['req' => true]); ?>
-          <?php $input('Durata în luni (pentru contract pe durată determinată)', 'contract.duration_months', 'f-months', ['type' => 'number', 'kind' => 'int', 'attrs' => 'min="1" step="1" inputmode="numeric"']); ?>
+          <?php $input('Durata în luni', 'contract.duration_months', 'f-months', ['type' => 'number', 'kind' => 'int', 'cond' => 'months', 'attrs' => 'min="1" step="1" inputmode="numeric"']); ?>
           <?php $select('Programul de lucru', 'contract.schedule', 'f-schedule', ['norma_intreaga' => 'Normă întreagă', 'norma_partiala' => 'Normă parțială', 'schimburi' => 'În schimburi', 'tura_noapte' => 'Tură de noapte', 'flexibil' => 'Flexibil'], ['req' => true]); ?>
-          <?php $input('Ore pe săptămână', 'contract.hours_per_week', 'f-hours', ['type' => 'number', 'kind' => 'num', 'attrs' => 'min="1" max="80" step="any" inputmode="decimal"']); ?>
+          <?php $input('Ore pe săptămână', 'contract.hours_per_week', 'f-hours', ['type' => 'number', 'kind' => 'num', 'cond' => 'hours', 'attrs' => 'min="1" max="80" step="any" inputmode="decimal"']); ?>
           <?php $input('Locul muncii (adresa)', 'jobLocation', 'f-location', ['wrap' => 'sm:col-span-2']); ?>
-          <?php $input('Localități în care se lucrează', 'work_localities', 'f-localities', ['type' => 'textarea', 'kind' => 'lines', 'rows' => 2, 'wrap' => 'sm:col-span-2', 'hint' => 'Una pe linie. Lasă gol dacă este doar localitatea instituției.']); ?>
+          <label class="flex items-center gap-2 text-sm text-ink sm:col-span-2"><input type="checkbox" class="accent-gov" data-path="meta.multi_localities" data-kind="bool" id="f-multi-loc"> Postul presupune lucru în mai multe localități</label>
+          <?php $input('Localități în care se lucrează', 'work_localities', 'f-localities', ['type' => 'textarea', 'kind' => 'lines', 'rows' => 2, 'cond' => 'localities', 'wrap' => 'sm:col-span-2', 'hint' => 'Una pe linie.']); ?>
         </div>
       </section>
 
@@ -190,13 +196,21 @@ require __DIR__ . '/../inc/header.php';
         <p class="<?= $hint ?>">Condițiile generale de la art. 15 se aplică tuturor candidaților. Nu le copia aici. Anunțul trimite la ele.</p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
           <?php $select('Nivelul studiilor', 'education.minimum_level', 'f-edu', $study_labels, ['req' => true]); ?>
-          <?php $input('Domeniul sau specializarea', 'education.fields_of_study', 'f-fields', ['type' => 'textarea', 'kind' => 'labels', 'rows' => 3, 'attrs' => 'data-key="label_ro"', 'hint' => 'Un domeniu pe linie. Fiecare linie este o alternativă.']); ?>
+          <div>
+            <label for="f-fields" class="<?= $legend ?>">Domeniul sau specializarea</label>
+            <div data-path="education.fields_of_study" data-kind="chips" data-chips>
+              <ul class="mt-1 flex flex-wrap gap-1" data-chip-list aria-label="Domenii alese"></ul>
+              <input id="f-fields" type="text" class="<?= $field ?>" list="fields-list" autocomplete="off" data-chip-input aria-describedby="f-fields-hint">
+              <datalist id="fields-list"></datalist>
+            </div>
+            <p id="f-fields-hint" class="<?= $hint ?>">Alege din listă sau scrie. Apasă Enter sau virgulă ca să adaugi. Fiecare domeniu este o alternativă.</p>
+          </div>
           <fieldset class="sm:col-span-2">
             <legend class="<?= $legend ?>">Experiența<span class="<?= $tag ?>">obligatoriu (art. 18 alin. 2)</span></legend>
             <div class="mt-1 flex flex-wrap items-end gap-x-6 gap-y-2">
               <label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" class="accent-gov" data-path="experience.none_required" data-kind="bool"> Fără experiență</label>
-              <?php $input('Ani de experiență (minimum)', 'experience.years_minimum', 'f-exp', ['type' => 'number', 'kind' => 'num', 'attrs' => 'min="0" max="50" step="0.5" inputmode="decimal"']); ?>
-              <label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" class="accent-gov" data-path="experience.in_specialty" data-kind="bool"> În specialitate</label>
+              <?php $input('Ani de experiență (minimum)', 'experience.years_minimum', 'f-exp', ['type' => 'number', 'kind' => 'num', 'cond' => 'exp', 'attrs' => 'min="0" max="50" step="0.5" inputmode="decimal"']); ?>
+              <div data-cond="exp"><label class="flex items-center gap-2 text-sm text-ink"><input type="checkbox" class="accent-gov" data-path="experience.in_specialty" data-kind="bool"> În specialitate</label></div>
             </div>
           </fieldset>
           <?php $input('Atestate, autorizații, permise', 'credentials', 'f-creds', ['type' => 'textarea', 'kind' => 'creds', 'rows' => 3, 'hint' => 'Unul pe linie, de exemplu „permis categoria B”.']); ?>
@@ -225,7 +239,7 @@ require __DIR__ . '/../inc/header.php';
           <legend class="<?= $legend ?>">Documente standard</legend>
           <div class="mt-2 grid gap-y-1 sm:grid-cols-2 sm:gap-x-4">
             <?php foreach (DOCUMENT_CODE_LABELS as $code => $label): ?>
-            <label class="flex items-start gap-2 text-sm text-ink"><input type="checkbox" class="mt-1 accent-gov" data-path="documents.standard" data-kind="checks" value="<?= e($code) ?>"> <span><?= e($label) ?></span></label>
+            <label class="flex items-start gap-2 text-sm text-ink"><input type="checkbox" class="mt-1 accent-gov" data-path="documents.standard" data-kind="checks" value="<?= e($code) ?>"> <span><?= e($label) ?><?php if ($code === 'certificat_integritate'): ?><span class="<?= $hint ?> block">Obligatoriu în învățământ, sănătate, protecție socială și în posturile cu persoane vulnerabile (art. 35 alin. 1 lit. h)</span><?php endif; ?></span></label>
             <?php endforeach; ?>
           </div>
         </fieldset>
@@ -249,13 +263,15 @@ require __DIR__ . '/../inc/header.php';
             <?php endforeach; ?>
           </div>
         </fieldset>
+        <p class="<?= $hint ?>" data-no-channel>Bifează cum se depune dosarul. Câmpurile de depunere apar după alegere.</p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
-          <?php $input('Adresa de depunere', 'application_contact.address', 'f-ap-address', ['req' => true]); ?>
-          <?php $input('E-mail pentru depunere și contact', 'application_contact.email', 'f-ap-email', ['type' => 'email']); ?>
+          <?php $input('Adresa de depunere (sau adresa web a platformei)', 'application_contact.address', 'f-ap-address', ['req' => true, 'cond' => 'addr']); ?>
+          <?php $input('E-mail pentru depunere și contact', 'application_contact.email', 'f-ap-email', ['type' => 'email', 'cond' => 'email']); ?>
           <?php $input('Telefon de contact', 'application_contact.phone', 'f-ap-phone', ['type' => 'tel']); ?>
           <?php $input('Persoana de contact', 'application_contact.name', 'f-ap-name'); ?>
-          <?php $input('Taxa de participare (lei)', 'application_fee.amount', 'f-fee', ['type' => 'number', 'kind' => 'num', 'attrs' => 'min="0" step="any" inputmode="decimal"', 'hint' => 'Lasă gol dacă nu există taxă.']); ?>
-          <?php $input('Detalii despre taxă (cont, scutiri)', 'application_fee.details', 'f-fee-details'); ?>
+          <label class="flex items-center gap-2 text-sm text-ink sm:col-span-2"><input type="checkbox" class="accent-gov" data-path="meta.fee" data-kind="bool"> Se percepe taxă de participare</label>
+          <?php $input('Taxa de participare (lei)', 'application_fee.amount', 'f-fee', ['type' => 'number', 'kind' => 'num', 'cond' => 'fee', 'attrs' => 'min="0" step="any" inputmode="decimal"']); ?>
+          <?php $input('Detalii despre taxă (cont, scutiri)', 'application_fee.details', 'f-fee-details', ['cond' => 'fee']); ?>
         </div>
       </section>
 
@@ -293,27 +309,50 @@ require __DIR__ . '/../inc/header.php';
         </template>
       </section>
     </form>
+    </div>
+
+    <aside class="mt-8 lg:sticky lg:top-4 lg:mt-6 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto" aria-label="Completarea anunțului" data-sidebar>
+      <section class="border border-line bg-surface p-4" aria-labelledby="meter-h">
+        <h2 id="meter-h" class="<?= $h2 ?>">Cât de complet este anunțul</h2>
+        <p class="mt-1 text-ink"><span class="text-3xl font-semibold" data-meter-score>0%</span> <span class="text-sm text-ink-muted">complet</span></p>
+        <div class="mt-1 h-2 w-full bg-sunken" role="meter" aria-labelledby="meter-h" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="0%" data-meter>
+          <div class="h-2 bg-gov" style="width:0%" data-meter-bar></div>
+        </div>
+        <h3 class="mt-3 <?= $legend ?>">De completat</h3>
+        <ul class="mt-1" data-meter-missing></ul>
+        <h3 class="mt-3 <?= $legend ?>">Elementele obligatorii ale anunțului (art. 18 alin. 2)</h3>
+        <ul class="mt-1" data-mandatory></ul>
+        <p class="<?= $hint ?>">Poți descărca anunțul și cu elemente lipsă. Procentul este un ajutor, nu o regulă.</p>
+      </section>
+
+      <section class="mt-4 border border-line bg-surface p-4" aria-labelledby="h-dl">
+        <h2 id="h-dl" class="<?= $h2 ?>">Descarcă</h2>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" data-action="download-docx" class="<?= $btn_main ?>">Descarcă anunțul (.docx)</button>
+          <button type="button" data-action="download-json" class="<?= $btn ?>">Descarcă datele (.json)</button>
+        </div>
+        <p class="mt-2 text-sm leading-snug text-ink">Datele structurate se pierd dacă salvezi anunțul ca PDF. Publică fișierul .docx.</p>
+        <p class="<?= $hint ?>">Datele structurate se pierd și dacă copiezi textul în alt document. Dacă schimbi textul din fișier după descărcare, datele încorporate nu se schimbă.</p>
+        <p data-status role="status" class="mt-2 text-sm text-ink-muted"></p>
+      </section>
+    </aside>
+    </div>
 
     <section class="<?= $sec ?>" aria-labelledby="h-prev">
       <h2 id="h-prev" class="<?= $h2 ?>">Previzualizare</h2>
       <div class="mt-3 border border-line bg-surface p-4" data-preview></div>
     </section>
 
-    <section class="<?= $sec ?>" aria-labelledby="h-dl">
-      <h2 id="h-dl" class="<?= $h2 ?>">Descarcă</h2>
-      <div class="mt-3 flex flex-wrap gap-2">
-        <button type="button" data-action="download-docx" class="<?= $btn_main ?>">Descarcă anunțul (.docx)</button>
-        <button type="button" data-action="download-json" class="<?= $btn ?>">Descarcă datele (.json)</button>
-      </div>
-      <p class="mt-2 text-sm leading-snug text-ink">Datele structurate se pierd dacă salvezi anunțul ca PDF. Publică fișierul .docx.</p>
-      <p class="<?= $hint ?>">Datele structurate se pierd și dacă copiezi textul în alt document. Dacă schimbi textul din fișier după descărcare, datele încorporate nu se schimbă.</p>
-      <p data-status role="status" class="mt-2 text-sm text-ink-muted"></p>
-    </section>
+    <div class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-line-strong bg-surface py-2 pl-4 pr-20 text-sm text-ink lg:hidden" data-bar>
+      <span>Anunț complet în proporție de <strong data-bar-score>0%</strong></span>
+      <a href="#meter-h" class="<?= $cls['link'] ?> shrink-0">Vezi ce lipsește</a>
+    </div>
   </div>
 </div>
 
 <script src="<?= e($v('vendor/docx.min.js')) ?>" defer></script>
 <script src="<?= e($v('ro-holidays.js')) ?>" defer></script>
+<script src="<?= e($v('domenii-studii.js')) ?>" defer></script>
 <script src="<?= e($v('employer-docx.js')) ?>" defer></script>
 <script src="<?= e($v('employer-builder.js')) ?>" defer></script>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

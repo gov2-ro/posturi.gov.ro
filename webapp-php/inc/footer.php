@@ -15,7 +15,7 @@
     <a href="https://github.com/gov2-ro/posturi.gov.ro" class="text-gov underline hover:no-underline" target="_blank" rel="noopener">cod sursă</a> ·
     <a href="/despre/" class="text-gov underline hover:no-underline">despre și metodologie</a> ·
     <a href="/despre/#confidentialitate" class="text-gov underline hover:no-underline">confidențialitate</a> ·
-    <a href="/pentru-angajatori/anunt/" class="text-gov underline hover:no-underline">Pentru angajatori: scrie un anunț structurat</a>
+    <a href="/pentru-angajatori/anunt/" class="text-gov underline hover:no-underline">Asistent redactare anunțuri angajare</a>
   </p>
   <p class="flex items-center justify-center gap-2 pt-1">
     <label for="skin-picker" class="text-ink-faint">Stil vizual</label>

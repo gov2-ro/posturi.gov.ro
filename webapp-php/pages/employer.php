@@ -58,7 +58,7 @@ require __DIR__ . '/../inc/header.php';
 
   <div class="mb-4 text-sm">
     <a href="/angajatori/" class="text-gov hover:underline">← Angajatori</a>
-    <span class="ml-3 text-ink-muted"><a href="/pentru-angajatori/anunt/" class="text-gov underline hover:no-underline">Pentru angajatori: scrie un anunț structurat</a></span>
+    <span class="ml-3 text-ink-muted"><a href="/pentru-angajatori/anunt/" class="text-gov underline hover:no-underline">Asistent redactare anunțuri angajare</a></span>
   </div>
 
   <div class="border-b border-line pb-5 mb-6">

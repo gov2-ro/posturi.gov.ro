@@ -322,6 +322,8 @@ test('fixtures: the form turns each fixture into the same data, scores them, and
     expect(payload.data, fx.name).toEqual(fx.data);
     expect(payload.employer, fx.name).toEqual(fx.employer);
     expect('employer' in payload, fx.name).toBe(!!fx.employer);
+    expect(payload.occupation, fx.name).toEqual(fx.occupation);
+    expect('occupation' in payload, fx.name).toBe(!!fx.occupation);
 
     const custom = unzip('docProps/custom.xml');
     const m = /posturi\.posting[\s\S]*?<vt:lpwstr>([^<]+)<\/vt:lpwstr>/.exec(custom);

@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "institution": {
+      "name": "Comuna Ciugud",
+      "county": "Alba",
+      "kind": "primarie"
+    },
+    "interview": true,
+    "occupation": {
+      "id": 12,
+      "cor": "242204",
+      "label": "Referent de specialitate",
+      "grade": "gradul I A"
+    }
+  },
+  "employer": {
+    "name": "Comuna Ciugud",
+    "county": "Alba"
+  },
+  "data": {
+    "occupation_title": "Consilier",
+    "positions": [
+      {
+        "title": "Consilier"
+      }
+    ],
+    "recruitment": {
+      "kind": "recrutare"
+    }
+  }
+}

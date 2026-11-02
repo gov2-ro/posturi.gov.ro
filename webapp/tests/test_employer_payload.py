@@ -184,6 +184,8 @@ def test_payload_read_back_from_the_downloaded_docx(path):
     payload = json.loads(inner)
     assert payload.get("employer") == load(path).get("employer")
     assert ("employer" in payload) == ("employer" in load(path))
+    assert payload.get("occupation") == load(path).get("occupation")
+    assert ("occupation" in payload) == ("occupation" in load(path))
     assert payload["format"] == "posturi.posting.v1"
     assert payload["schema"] == "v5"
     assert payload["data"] == load(path)["data"]
@@ -191,6 +193,100 @@ def test_payload_read_back_from_the_downloaded_docx(path):
     assert len(prop) < 255
     # The payload validates, as the later pipeline reader will need.
     schema_models.JobPostingExtractionV5.model_validate(payload["data"])
+
+
+# ---- UX-EMP-04: the occupation block and static/ocupatii.json ------------------
+
+SUGGESTIONS = ROOT / "webapp-php" / "static" / "ocupatii.json"
+
+
+def _fold(t):
+    import unicodedata
+
+    t = unicodedata.normalize("NFKD", t or "")
+    return re.sub(r"[^a-z0-9]+", " ", "".join(c for c in t if not unicodedata.combining(c)).lower()).strip()
+
+
+def _db_cor_codes():
+    """{cor_code: {canonical, ...}} from jobs_occupation, or None when Postgres is not available."""
+    try:
+        import os
+
+        import psycopg
+
+        with psycopg.connect(os.environ.get("DATABASE_URL", "postgres://localhost/posturi_dev"), connect_timeout=3) as conn:
+            rows = conn.execute("select cor_code, canonical from jobs_occupation where cor_code <> ''").fetchall()
+    except Exception:
+        return None
+    out = {}
+    for cor, canonical in rows:
+        out.setdefault(cor, set()).add(canonical)
+    return out
+
+
+def _known_cor_codes():
+    """The COR codes of jobs_occupation. Without Postgres, those of ocupatii.json."""
+    db = _db_cor_codes()
+    if db is not None:
+        return db
+    out = {}
+    for o in json.loads(SUGGESTIONS.read_text(encoding="utf-8"))["occupations"]:
+        if o["cor"]:
+            out.setdefault(o["cor"], set()).add(o["label"])
+    return out
+
+
+def test_fixtures_have_an_occupation_block_and_an_edited_one():
+    by = {p.stem: load(p) for p in FIXTURES}
+    assert by["occupation"]["occupation"]["grade"] == "gradul I A"
+    assert by["occupation"]["data"]["occupation_title"] == "Referent de specialitate, gradul IA"
+    # The title was edited after the pick: meta keeps the pick, the payload has no block.
+    assert by["occupation_edited"]["meta"]["occupation"]["label"] == "Referent de specialitate"
+    assert "occupation" not in by["occupation_edited"]
+    for name, fx in by.items():
+        if name not in ("occupation", "occupation_edited"):
+            assert "occupation" not in fx
+
+
+@pytest.mark.parametrize("path", FIXTURES, ids=lambda p: p.stem)
+def test_occupation_block_is_canonical(path):
+    import ocupatii
+
+    fx = load(path)
+    block = fx.get("occupation")
+    if block is None:
+        return
+    assert set(block) <= {"cor_code", "label", "grade"}
+    assert {"cor_code", "label"} <= set(block)
+    assert all(isinstance(v, str) and v.strip() for v in block.values())
+    if "grade" in block:
+        assert block["grade"] in ocupatii.GRADE_TOKENS
+    # The title still starts with the label, or the builder would have left the block out.
+    assert _fold(fx["data"]["occupation_title"]).startswith(_fold(block["label"]))
+    known = _known_cor_codes()
+    assert block["cor_code"] in known
+    assert block["label"] in known[block["cor_code"]] or _db_cor_codes() is None
+
+
+def test_suggestions_file_is_consistent():
+    d = json.loads(SUGGESTIONS.read_text(encoding="utf-8"))
+    occ = d["occupations"]
+    assert [o["id"] for o in occ] == list(range(len(occ)))
+    assert [o["n"] for o in occ] == sorted((o["n"] for o in occ), reverse=True)
+    assert len({o["label"] for o in occ}) == len(occ)
+    import ocupatii
+
+    for o in occ:
+        assert set(o["grades"]) <= set(ocupatii.GRADE_TOKENS)
+        assert re.fullmatch(r"\d{6}|", o["cor"])
+    assert "*" in d["by_kind"]
+    for kind, pairs in d["by_kind"].items():
+        assert len(pairs) <= 15
+        assert [n for _i, n in pairs] == sorted((n for _i, n in pairs), reverse=True)
+        assert all(0 <= i < len(occ) for i, _n in pairs)
+        if kind:
+            assert kind == "*" or kind in classify.EMPLOYER_KIND_LABELS
+            assert kind == "*" or d["kind_labels"][kind] == classify.EMPLOYER_KIND_LABELS[kind]
 
 
 def test_the_libreoffice_round_trip_is_checked_by_hand():

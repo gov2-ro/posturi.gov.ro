@@ -172,14 +172,15 @@ test('conditional fields: hide, keep the value, leave it out of the payload', as
 
   // Depunere: address <- sediu / posta / online; e-mail <- email
   const ch = (c) => page.locator(`input[data-path="application.channels"][value="${c}"]`);
-  await hidden('#f-ap-address'); await hidden('#f-ap-email');
+  await hidden('#f-ap-address'); await shown('#f-ap-email');
+  await expect(page.getByText('Dosarele se trimit la această adresă.')).toBeHidden();
   await expect(page.locator('[data-no-channel]')).toBeVisible();
   await ch('sediu').check();
-  await shown('#f-ap-address'); await hidden('#f-ap-email');
+  await shown('#f-ap-address'); await shown('#f-ap-email');
   await expect(page.locator('[data-no-channel]')).toBeHidden();
   await page.locator('#f-ap-address').fill('Str. Mare 1');
   await ch('email').check();
-  await shown('#f-ap-email');
+  await expect(page.getByText('Dosarele se trimit la această adresă.')).toBeVisible();
   await page.locator('#f-ap-email').fill('depunere@exemplu.example');
   expect((await built(page)).application_contact).toEqual({ address: 'Str. Mare 1', email: 'depunere@exemplu.example' });
   await ch('sediu').uncheck();
@@ -190,8 +191,11 @@ test('conditional fields: hide, keep the value, leave it out of the payload', as
   await expect(page.locator('#f-ap-address')).toHaveValue('Str. Mare 1');
   await ch('online').uncheck();
   await ch('email').uncheck();
-  await hidden('#f-ap-email');
-  expect((await built(page)).application_contact).toBeUndefined();
+  await shown('#f-ap-email');
+  await expect(page.getByText('Dosarele se trimit la această adresă.')).toBeHidden();
+  // The contact e-mail stays in the payload without the email channel, and the contact check passes with it.
+  expect((await built(page)).application_contact).toEqual({ email: 'depunere@exemplu.example' });
+  expect((await page.evaluate((d) => window.employerBuilder.quality(d).checks.contact, await built(page)))).toBe(1);
   await ch('posta').check();
   await shown('#f-ap-address');
 

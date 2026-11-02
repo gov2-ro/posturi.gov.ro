@@ -222,6 +222,7 @@
     localities: function (d) { return !!(d.meta && d.meta.multi_localities); },
     // The v5 contact has one address field. It holds a postal address or the link of the platform.
     addr: function (d) { var c = channelsOf(d); return c.indexOf('sediu') >= 0 || c.indexOf('posta') >= 0 || c.indexOf('online') >= 0; },
+    // Only the hint: the contact e-mail is always shown and always in the payload (art. 18 alin. 2 b).
     email: function (d) { return channelsOf(d).indexOf('email') >= 0; },
     fee: function (d) { return !!(d.meta && d.meta.fee); }
   };
@@ -237,7 +238,6 @@
     if (!vis.exp && d.experience) { delete d.experience.years_minimum; delete d.experience.in_specialty; }
     if (!vis.localities) delete d.work_localities;
     if (!vis.addr && d.application_contact) delete d.application_contact.address;
-    if (!vis.email && d.application_contact) delete d.application_contact.email;
     if (!vis.fee) delete d.application_fee;
     // The calendar: keep events with a date; the deadline comes from the submission row.
     var cal = d.competition_calendar;

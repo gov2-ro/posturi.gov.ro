@@ -266,7 +266,10 @@ require __DIR__ . '/../inc/header.php';
         <p class="<?= $hint ?>" data-no-channel>Bifează cum se depune dosarul. Câmpurile de depunere apar după alegere.</p>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
           <?php $input('Adresa de depunere (sau adresa web a platformei)', 'application_contact.address', 'f-ap-address', ['req' => true, 'cond' => 'addr']); ?>
-          <?php $input('E-mail pentru depunere și contact', 'application_contact.email', 'f-ap-email', ['type' => 'email', 'cond' => 'email']); ?>
+          <div>
+            <?php $input('E-mail de contact', 'application_contact.email', 'f-ap-email', ['type' => 'email']); ?>
+            <p class="<?= $hint ?>" data-cond="email">Dosarele se trimit la această adresă.</p>
+          </div>
           <?php $input('Telefon de contact', 'application_contact.phone', 'f-ap-phone', ['type' => 'tel']); ?>
           <?php $input('Persoana de contact', 'application_contact.name', 'f-ap-name'); ?>
           <label class="flex items-center gap-2 text-sm text-ink sm:col-span-2"><input type="checkbox" class="accent-gov" data-path="meta.fee" data-kind="bool"> Se percepe taxă de participare</label>

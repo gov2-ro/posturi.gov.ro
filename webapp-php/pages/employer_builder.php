@@ -45,6 +45,7 @@ $input = function (string $label, string $path, string $id, array $o = []) use (
     } else {
         echo '<input id="' . e($id) . '" type="' . e($type) . '" class="' . $field . '" data-path="' . e($path) . '" data-kind="' . e($kind) . '" ' . $attrs . '>';
     }
+    if (!empty($o['after'])) echo $o['after'];
     if (!empty($o['hint'])) echo '<p class="' . $hint . '">' . e($o['hint']) . '</p>';
     echo '</div>';
 };
@@ -78,6 +79,7 @@ $cls = [
     'chipX' => 'min-h-[1.5rem] min-w-[1.5rem] text-ink-muted hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus',
     'opt' => 'cursor-pointer px-3 py-2 text-sm text-ink aria-selected:bg-sunken aria-selected:text-gov',
     'optSub' => 'block text-xs text-ink-muted',
+    'tdRow' => 'block w-full border-b border-line px-3 py-2 text-left text-sm text-ink hover:bg-sunken hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus',
 ];
 
 $v = static fn(string $f): string => '/static/' . $f . '?v=' . (@filemtime(__DIR__ . '/../static/' . $f) ?: '1');
@@ -125,6 +127,38 @@ require __DIR__ . '/../inc/header.php';
       </div>
       <p class="<?= $hint ?>">Exportul conține profilul instituției și toate ciornele, într-un singur fișier .json.</p>
     </section>
+
+    <dialog data-title-dialog aria-labelledby="td-h" class="m-auto w-[calc(100%-1rem)] max-w-xl overflow-hidden border border-line-strong bg-surface p-0 text-ink backdrop:bg-ink/50">
+      <div class="flex max-h-[calc(100dvh-1rem)] flex-col">
+        <div class="border-b border-line px-4 py-3">
+          <h2 id="td-h" class="<?= $h2 ?>">Alege denumirea postului</h2>
+        </div>
+        <div class="min-h-0 flex-1 overflow-y-auto">
+          <h3 class="px-4 pt-3 text-xs font-semibold uppercase tracking-widest text-ink-muted" data-td-top-h></h3>
+          <ul class="mt-2 border-t border-line" data-td-top></ul>
+          <div class="px-4 py-3">
+            <label for="td-q" class="<?= $legend ?>">Caută în toate ocupațiile</label>
+            <input id="td-q" type="search" class="<?= $field ?>" autocomplete="off" data-td-q aria-describedby="td-status">
+            <p id="td-status" class="<?= $hint ?>" role="status" data-td-status></p>
+          </div>
+          <ul class="border-t border-line" data-td-results hidden></ul>
+        </div>
+        <div class="border-t border-line-strong bg-sunken px-4 py-3">
+          <div data-td-pick hidden>
+            <p class="text-sm text-ink">Ocupația aleasă: <strong data-td-label></strong></p>
+            <div data-td-grade-wrap class="mt-2">
+              <label for="td-grade" class="<?= $legend ?>">Grad sau treaptă</label>
+              <select id="td-grade" class="<?= $field ?>" data-td-grade></select>
+            </div>
+            <p class="mt-2 text-sm text-ink">Denumirea postului: <strong data-td-preview></strong></p>
+          </div>
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button type="button" data-action="title-use" class="<?= $btn_main ?>" disabled>Folosește denumirea</button>
+            <button type="button" data-action="title-cancel" class="<?= $btn ?>">Renunță</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
 
     <template data-draft-item>
       <li class="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
@@ -177,7 +211,8 @@ require __DIR__ . '/../inc/header.php';
       <section id="sec-2" class="<?= $sec ?>" aria-labelledby="h-2">
         <h2 id="h-2" class="<?= $h2 ?>">2. Postul</h2>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
-          <?php $input('Denumirea postului', 'occupation_title', 'f-title', ['wrap' => 'sm:col-span-2', 'req' => true]); ?>
+          <?php $input('Denumirea postului', 'occupation_title', 'f-title', ['wrap' => 'sm:col-span-2', 'req' => true,
+            'after' => '<div class="mt-2"><button type="button" data-action="pick-title" aria-haspopup="dialog" class="' . $btn . '">Alege din listă</button></div>']); ?>
           <?php $input('Numărul de posturi', 'vacancies_total', 'f-vacancies', ['type' => 'number', 'kind' => 'int', 'req' => true, 'attrs' => 'min="1" max="5000" step="1" inputmode="numeric"', 'hint' => 'Un singur post pentru fiecare anunț în această versiune. Numărul poate fi mai mare dacă toate posturile sunt la fel.']); ?>
           <?php $input('Structura (compartiment, serviciu)', 'meta.department', 'f-dept', ['req' => true]); ?>
           <?php $select('Statutul postului', 'contract.post_status', 'f-status', ['vacant' => 'Vacant', 'temporar_vacant' => 'Temporar vacant']); ?>

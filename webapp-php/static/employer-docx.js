@@ -220,7 +220,36 @@
     return Object.keys(out).length ? out : undefined;
   }
 
-  function buildPayload(data, created, employer) {
+  function fold(t) {
+    return String(t || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  /** `gradul I A` -> `gradul IA`: the compact spelling of a grade in a title. */
+  function gradeText(token) {
+    return String(token || '').replace(/\s([IVX]+) A$/, ' $1A');
+  }
+
+  /** The title that the dialog composes: the label, then the grade. */
+  function composeTitle(label, grade) {
+    return grade ? label + ', ' + gradeText(grade) : label;
+  }
+
+  /**
+   * The `occupation` block of ADR 0002, or undefined. It needs a pick (meta.occupation) with a COR code,
+   * and a title that still starts with the label: an employer who replaced the text replaced the occupation.
+   */
+  function occupationBlock(meta, data) {
+    var o = (meta || {}).occupation;
+    if (!o || typeof o.label !== 'string' || !o.label || typeof o.cor !== 'string' || !o.cor) return undefined;
+    var title = fold((data || {}).occupation_title);
+    var label = fold(o.label);
+    if (!label || title.indexOf(label) !== 0) return undefined;
+    var out = { cor_code: o.cor, label: o.label };
+    if (typeof o.grade === 'string' && o.grade) out.grade = o.grade;
+    return out;
+  }
+
+  function buildPayload(data, created, employer, occupation) {
     var p = {
       format: FORMAT,
       schema: 'v5',
@@ -228,6 +257,7 @@
       created: created || new Date().toISOString().replace(/\.\d+Z$/, 'Z')
     };
     if (employer) p.employer = employer;
+    if (occupation) p.occupation = occupation;
     p.data = data;
     return p;
   }
@@ -307,7 +337,7 @@
     if (!d || !d.Packer || !d.Packer.compiler || typeof d.Packer.compiler.compile !== 'function') {
       return Promise.reject(new Error('docx.js is not loaded'));
     }
-    var payload = buildPayload(data, null, employerBlock(draft.meta));
+    var payload = buildPayload(data, null, employerBlock(draft.meta), occupationBlock(draft.meta, data));
     var json = JSON.stringify(payload);
     return sha256Hex(json).then(function (hash) {
       var doc = new d.Document({
@@ -329,7 +359,7 @@
     FORMAT: FORMAT, NS: NS,
     DOCUMENT_LABELS: DOCUMENT_LABELS, STUDY_LABELS: STUDY_LABELS, DURATION_LABELS: DURATION_LABELS,
     SCHEDULE_LABELS: SCHEDULE_LABELS, CHANNEL_LABELS: CHANNEL_LABELS, STAGE_LABELS: STAGE_LABELS,
-    COUNTIES: COUNTIES, employerBlock: employerBlock, sections: sections, buildPayload: buildPayload, buildDocx: buildDocx,
+    COUNTIES: COUNTIES, employerBlock: employerBlock, occupationBlock: occupationBlock, composeTitle: composeTitle, gradeText: gradeText, fold: fold, sections: sections, buildPayload: buildPayload, buildDocx: buildDocx,
     sha256Hex: sha256Hex, slug: slug, fileName: fileName, dmy: dmy, today: today, bulletLines: bulletLines
   };
 })();

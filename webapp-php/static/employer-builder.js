@@ -860,7 +860,7 @@
     }
     if (path === 'meta.institution.county' && t.value) loadCounty(t.value);
     if (path === 'meta.institution.name' && ev.type === 'input') {
-      if (draft.meta.institution) delete draft.meta.institution.category;   // typed by hand: the category of an earlier pick no longer applies
+      if (draft.meta.institution) { delete draft.meta.institution.category; delete draft.meta.institution.kind; }   // typed by hand: the category of an earlier pick no longer applies
       suggestInstitutions();
     }
     fillForm(t);
@@ -969,7 +969,7 @@
     },
     'download-json': function () {
       var data = buildData(draft);
-      var json = JSON.stringify(Doc.buildPayload(data, null, Doc.employerBlock(draft.meta)), null, 2);
+      var json = JSON.stringify(Doc.buildPayload(data, null, Doc.employerBlock(draft.meta), Doc.occupationBlock(draft.meta, data)), null, 2);
       download(new Blob([json], { type: 'application/json' }), 'anunt-' + Doc.slug(data.occupation_title) + '-' + Doc.today() + '.json');
     },
     'reset-drafts': function (b) {
@@ -1188,7 +1188,7 @@
   function pickInstitution(r) {
     var i = draft.meta.institution = draft.meta.institution || {};
     i.name = r.name; i.cui = r.cif || ''; i.address = r.address || ''; i.locality = r.locality || '';
-    i.phone = r.phone || ''; i.email = r.email || ''; i.category = r.category || '';
+    i.phone = r.phone || ''; i.email = r.email || ''; i.category = r.category || ''; i.kind = r.kind || '';
     followCategory(i.category);
     closeCombo();
     fillForm(); touch(); refresh();
@@ -1245,6 +1245,151 @@
     var inp = root.querySelector('[data-chip-input]');
     if (inp) inp.focus();
   };
+
+  // ---- title picker (UX-EMP-04) -----------------------------------------------
+  // static/ocupatii.json (ops/build-title-suggestions.py), loaded on the first opening only.
+  // The dialog writes occupation_title and draft.meta.occupation = {id, cor, label, grade}.
+  var titleData = null;       // Promise of the file (or of null when it could not be read)
+  var tdOpener = null;
+  var tdPick = null;          // the occupation entry that the employer picked
+
+  function tdDialog() { return root.querySelector('[data-title-dialog]'); }
+  function tdQ(sel) { return tdDialog().querySelector(sel); }
+  function loadTitles() {
+    if (!titleData) {
+      titleData = fetch('/static/ocupatii.json').then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function (d) {
+        d.occupations.forEach(function (o) { o._f = foldText(o.label); });
+        return d;
+      }).catch(function () { titleData = null; return null; });
+    }
+    return titleData;
+  }
+  function tdRow(o, n) {
+    var li = el('li', '');
+    var b = el('button', CLS.tdRow);
+    b.type = 'button';
+    b.dataset.action = 'title-pick';
+    b.dataset.id = String(o.id);
+    b.appendChild(document.createTextNode(o.label));
+    var sub = [];
+    if (o.cor) sub.push('COR ' + o.cor);
+    if (typeof n === 'number') sub.push('în ' + n + (n === 1 ? ' anunț' : ' anunțuri'));
+    if (sub.length) b.appendChild(el('span', CLS.optSub, sub.join(' · ')));
+    li.appendChild(b);
+    return li;
+  }
+  function tdRenderTop(d) {
+    var kind = ((draft.meta || {}).institution || {}).kind;
+    var label = kind && d.kind_labels && d.kind_labels[kind];
+    var list = label && d.by_kind[kind] ? d.by_kind[kind] : d.by_kind['*'];
+    tdQ('[data-td-top-h]').textContent = label ? 'Cele mai frecvente la ' + label : 'Cele mai frecvente';
+    var ul = tdQ('[data-td-top]');
+    ul.textContent = '';
+    list.slice(0, 12).forEach(function (pair) { ul.appendChild(tdRow(d.occupations[pair[0]], pair[1])); });
+  }
+  function tdSearch() {
+    var ul = tdQ('[data-td-results]'), status = tdQ('[data-td-status]');
+    var q = foldText(tdQ('[data-td-q]').value);
+    ul.textContent = '';
+    if (q.length < 2) { ul.hidden = true; status.textContent = ''; return; }
+    loadTitles().then(function (d) {
+      if (!d || foldText(tdQ('[data-td-q]').value) !== q) return;
+      var words = q.split(' ');
+      var hit = d.occupations.filter(function (o) { return words.every(function (w) { return o._f.indexOf(w) >= 0; }); });
+      var starts = hit.filter(function (o) { return o._f.indexOf(q) === 0; });
+      var rest = hit.filter(function (o) { return o._f.indexOf(q) !== 0; });
+      var shown = starts.concat(rest).slice(0, 20);
+      shown.forEach(function (o) { ul.appendChild(tdRow(o, o.n)); });
+      ul.hidden = !shown.length;
+      status.textContent = shown.length
+        ? (hit.length > shown.length ? 'Primele ' + shown.length + ' din ' + hit.length + ' rezultate.' : hit.length + (hit.length === 1 ? ' rezultat.' : ' rezultate.'))
+        : 'Niciun rezultat. Poți scrie denumirea în câmpul postului.';
+    });
+  }
+  function tdGrade() { return tdQ('[data-td-grade]').value; }
+  function tdPreview() {
+    if (!tdPick) return;
+    tdQ('[data-td-preview]').textContent = Doc.composeTitle(tdPick.label, tdGrade());
+  }
+  function tdShowPick(o) {
+    tdPick = o;
+    tdQ('[data-td-pick]').hidden = false;
+    tdQ('[data-td-label]').textContent = o.label;
+    var sel = tdQ('[data-td-grade]');
+    sel.textContent = '';
+    var none = document.createElement('option');
+    none.value = ''; none.textContent = 'fără grad / treaptă';
+    sel.appendChild(none);
+    (o.grades || []).forEach(function (g) {
+      var opt = document.createElement('option');
+      opt.value = g; opt.textContent = Doc.gradeText(g);
+      sel.appendChild(opt);
+    });
+    tdQ('[data-td-grade-wrap]').hidden = !(o.grades || []).length;
+    tdQ('[data-action="title-use"]').disabled = false;
+    tdPreview();
+    if ((o.grades || []).length) sel.focus(); else tdQ('[data-action="title-use"]').focus();
+  }
+  function tdReset() {
+    tdPick = null;
+    tdQ('[data-td-pick]').hidden = true;
+    tdQ('[data-td-q]').value = '';
+    tdQ('[data-td-results]').textContent = '';
+    tdQ('[data-td-results]').hidden = true;
+    tdQ('[data-td-status]').textContent = '';
+    tdQ('[data-action="title-use"]').disabled = true;
+  }
+  ACTIONS['pick-title'] = function (b) {
+    var dlg = tdDialog();
+    if (!dlg || typeof dlg.showModal !== 'function') { say('Browserul nu poate deschide lista. Scrie denumirea în câmp.'); return; }
+    tdOpener = b;
+    tdReset();
+    tdQ('[data-td-top]').textContent = '';
+    tdQ('[data-td-top-h]').textContent = 'Se încarcă lista…';
+    dlg.showModal();
+    loadTitles().then(function (d) {
+      if (!d) { tdQ('[data-td-top-h]').textContent = 'Lista nu s-a putut încărca. Scrie denumirea în câmpul postului.'; return; }
+      tdRenderTop(d);
+    });
+  };
+  ACTIONS['title-pick'] = function (b) {
+    loadTitles().then(function (d) { if (d) tdShowPick(d.occupations[+b.dataset.id]); });
+  };
+  ACTIONS['title-cancel'] = function () { tdDialog().close(); };
+  ACTIONS['title-use'] = function () {
+    if (!tdPick) return;
+    var grade = tdGrade();
+    var title = Doc.composeTitle(tdPick.label, grade);
+    setPath(draft.data, 'occupation_title', title);
+    draft.meta.occupation = { id: tdPick.id, cor: tdPick.cor, label: tdPick.label };
+    if (grade) draft.meta.occupation.grade = grade;
+    fillForm(); touch(); refresh();
+    tdDialog().close();
+    say('Denumirea postului este „' + title + '”.');
+  };
+  (function wireTitleDialog() {
+    var dlg = tdDialog();
+    if (!dlg) return;
+    dlg.addEventListener('close', function () { if (tdOpener) tdOpener.focus(); });
+    // Focus trap: a native modal dialog lets Tab leave for the browser chrome. Tab wraps here instead.
+    dlg.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab') return;
+      var items = Array.prototype.filter.call(
+        dlg.querySelectorAll('button, input, select, a[href], [tabindex]:not([tabindex="-1"])'),
+        function (n) { return !n.disabled && n.offsetParent !== null; }
+      );
+      if (!items.length) return;
+      var first = items[0], last = items[items.length - 1], cur = document.activeElement;
+      if (ev.shiftKey && (cur === first || !dlg.contains(cur))) { ev.preventDefault(); last.focus(); }
+      else if (!ev.shiftKey && (cur === last || !dlg.contains(cur))) { ev.preventDefault(); first.focus(); }
+    });
+    dlg.querySelector('[data-td-q]').addEventListener('input', tdSearch);
+    dlg.querySelector('[data-td-grade]').addEventListener('change', function (ev) { ev.stopPropagation(); tdPreview(); });
+    dlg.querySelector('[data-td-q]').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ev.preventDefault(); });
+  })();
 
   window.addEventListener('pagehide', flush);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });

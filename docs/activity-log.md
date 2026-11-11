@@ -18,7 +18,7 @@
 **Decided**
 - Do both fixes, not one. The limit alone would pass a 728 KB body to the LLM `schema` step. The strip alone leaves the next unusual field a hard stop.
 - Not run: the pipeline or `import_csvs` by hand. The 18:33 Bucharest cron run reads the working tree and will be the first check. Cost of a hand run: a deploy outside a slot.
-- Open: three failed runs raised no alert. Check whether `run-pipeline.sh` pings `/fail` on exit 1.
+- Wrong turn: the first report said the three failed runs raised no alert. That was an assumption. `run-pipeline.sh` pings `/fail` and calls `ntfy.py` on this exit, and `NTFY_TOPIC` is set. Delivery is unverified: `|| true` hides a failure and the run log has no ntfy record.
 
 ### 2026-11-02 — Footer skin picker fits at 320 px (BUG-DS-FOOTER, BUG-MOBILE-OVERFLOW)
 

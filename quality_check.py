@@ -32,6 +32,7 @@ from llm_config import PROVIDERS, resolve_model, resolve_provider
 load_dotenv()
 
 DATA_DIR = Path("data")
+csv.field_size_limit(2**31 - 1)  # bodies can exceed the 131,072-character default
 CSV_PATH = DATA_DIR / "anunturi" / "anunturi.csv"
 INDEX_CSV_PATH = DATA_DIR / "posturi_gov_ro.csv"
 DOWNLOADS_DIR = DATA_DIR / "downloads"

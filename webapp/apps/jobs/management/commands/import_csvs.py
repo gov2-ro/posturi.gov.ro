@@ -22,6 +22,10 @@ from apps.jobs.judete import COUNTIES as CANONICAL_COUNTIES
 from apps.jobs.judete import normalize_judet
 from apps.jobs.models import CalendarEvent, Employer, JobPosting, Judet
 
+# A body can exceed the csv default of 131,072 characters. parse-anunturi.py
+# raises the same limit when it writes the file (2026-11-10 incident).
+csv.field_size_limit(2**31 - 1)
+
 RO_MONTHS = {
     "ianuarie": 1, "februarie": 2, "martie": 3, "aprilie": 4,
     "mai": 5, "iunie": 6, "iulie": 7, "august": 8,

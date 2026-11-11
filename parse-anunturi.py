@@ -18,6 +18,17 @@ from markdownify import markdownify as md
 
 from posting_urls import build_dated_slug_index, build_slug_index, url_from_slug
 
+
+#: Inline image payloads: `src="data:image/png;base64,…"`, or the same without
+#: the `data:` prefix (a school pasted one on 2026-11-10: 728 KB in one body).
+#: The 200-character floor keeps ordinary text that mentions "base64," intact.
+_INLINE_PAYLOAD_RE = re.compile(r'base64,[A-Za-z0-9+/=\s]{200,}')
+
+
+def strip_inline_payloads(html):
+    """Remove base64 image payloads from HTML before the markdown conversion."""
+    return _INLINE_PAYLOAD_RE.sub('base64,', html)
+
 #: Bump this whenever a change to this file can alter what a given HTML page
 #: parses to — a selector, a regex, a date rule, the markdown conversion, a CSV
 #: column. The incremental parse (LATER-05) reuses the previous rows of every
@@ -25,7 +36,7 @@ from posting_urls import build_dated_slug_index, build_slug_index, url_from_slug
 #: silently survive a parser fix. A bump invalidates the whole cache and the next
 #: run re-parses everything (`--full` does the same on demand). Pure refactors,
 #: comments and log changes do not need one.
-PARSER_VERSION = 3   # 3: date-first calendar rows (DATA-10); 2: URL from sidecar / (date, slug)
+PARSER_VERSION = 4   # 4: strip inline base64 image payloads; 3: date-first calendar rows (DATA-10); 2: URL from sidecar / (date, slug)
 
 #: Name of the reuse cache, written next to the anunturi CSV.
 CACHE_NAME = '.parse-cache.json'
@@ -554,7 +565,7 @@ def extract_job_details(file_path):
     if is_new:
         prose = soup.select_one('.pg-prose')
         if prose:
-            main_body_markdown = md(str(prose)).replace('\n', '\\n')
+            main_body_markdown = md(strip_inline_payloads(str(prose))).replace('\n', '\\n')
     else:
         announcement_link_tag = soup.find('a', string='Anunt')
         if announcement_link_tag:
@@ -563,7 +574,7 @@ def extract_job_details(file_path):
                 if sibling.name == 'nav':
                     break
                 main_body_html += str(sibling)
-            main_body_markdown = md(main_body_html).replace('\n', '\\n')
+            main_body_markdown = md(strip_inline_payloads(main_body_html)).replace('\n', '\\n')
 
     # --- Other links ---
     other_links = []

@@ -2,6 +2,24 @@
 
 ## 2026
 
+### 2026-11-11 — Pipeline stuck at `import` since 11-10 (BUG-IMPORT-FIELD)
+
+**Done**
+- `/pipeline-check` found three cron runs in a row that failed at `import` (exit 1, `ABORT`): `2026-11-10T11:15Z`, `2026-11-10T16:33Z`, `2026-11-11T11:15Z`. The last deploy was `2026-11-09T17:17Z`. No export-check was written after `2026-11-09T16:33Z`.
+- `import_csvs.py` and `quality_check.py` now call `csv.field_size_limit(2**31 - 1)`. `parse-anunturi.py` strips `base64,…` payloads of 200 characters or more before the markdown conversion. `PARSER_VERSION` is 4, so the next parse is a full parse.
+- `webapp/tests/test_oversized_body.py` has four tests. Full suite: 1426 passed, 13 skipped.
+
+**Hard**
+- No code changed before the failure (HEAD `e6fab59` is docs only; `import_csvs.py` last changed 2026-10-25). The data changed: one posting held a 733,367-byte page (two inline `image/emf;base64` images). Its body was 728,713 characters. The default `csv` limit is 131,072.
+- `parse-anunturi.py:765` already raised the limit, so the parser wrote the row and the importer could not read it. The two scripts disagreed until a real page exposed it.
+- The parser reuses old rows for unchanged pages. A parser fix alone would have kept the 728 KB row, so the version had to change.
+- Measured: the same page is 8,967 characters after the strip. It was the only row over 131,072 in 15,654 rows. The step times of `schema`, `infer` and `occupations` fell from 197/33/43 s to 4/3/3 s on the failed runs, because `import` loaded nothing.
+
+**Decided**
+- Do both fixes, not one. The limit alone would pass a 728 KB body to the LLM `schema` step. The strip alone leaves the next unusual field a hard stop.
+- Not run: the pipeline or `import_csvs` by hand. The 18:33 Bucharest cron run reads the working tree and will be the first check. Cost of a hand run: a deploy outside a slot.
+- Open: three failed runs raised no alert. Check whether `run-pipeline.sh` pings `/fail` on exit 1.
+
 ### 2026-11-02 — Footer skin picker fits at 320 px (BUG-DS-FOOTER, BUG-MOBILE-OVERFLOW)
 
 **Done**

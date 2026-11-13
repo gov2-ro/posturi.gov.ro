@@ -2,6 +2,22 @@
 
 ## 2026
 
+### 2026-11-13 — P1 triage: three items closed, one new defect
+
+**Done**
+- BUG-IMPORT-FIELD closed. The posturi-vps session measured three runs that deployed since the fix (11-12 11:15Z, 11-12 16:33Z, 11-13 11:15Z), each with export-check `ok`. The live header reads „Bază generată: azi, 13 nov, 14:02”. No `Main Body Markdown` value is over 131,072 characters; the longest is 102,323.
+- FIX-07 closed. Live `?q[]=medic` and `?page[]=2` return 400 (was 500). `?q=medic` returns 200.
+- CI-01 (D8) closed: `ci.yml` runs on every push to `main`, and the last two runs are green.
+- CI-BROWSER-FLAKE closed. The failed log shows DNS errors for `azure.archive.ubuntu.com` during the `apt` step.
+
+**Hard**
+- Run 11-11 16:33Z had the fix but still failed: `import` exited -9 after 1,067.6 s, with no traceback. It was the first full parse (0 of 15,686 files reused). Normal `import` time is 454–474 s. Logged as BUG-IMPORT-KILL. Assumed OOM (3,819 MB RAM), but the kernel log has no OOM line.
+- BETA-BACKUP: no posturi backup exists anywhere. The VPS schedules none. `ops/pull-backup.sh` never ran on the Mac, and the Mac has no SSH entry for gov2-1.
+
+**Decided**
+- Close CI-BROWSER-FLAKE without a code change. Caching Playwright browsers would not help: the failure was the `apt` step, and it passed on the next two runs.
+- No `ntfy` record exists in `logs/pipeline.log` or `data/pipeline-runs.jsonl`, so alert delivery stays unverified (OPS-ALERT-CHECK).
+
 ### 2026-11-11 — Pipeline stuck at `import` since 11-10 (BUG-IMPORT-FIELD)
 
 **Done**

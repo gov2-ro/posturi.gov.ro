@@ -126,6 +126,7 @@ require __DIR__ . '/../inc/header.php';
         </label>
       </div>
       <p class="<?= $hint ?>">Exportul conține profilul instituției și toate ciornele, într-un singur fișier .json.</p>
+      <p data-io-status role="status" class="mt-2 text-sm text-ink"></p>
     </section>
 
     <dialog data-title-dialog aria-labelledby="td-h" class="m-auto w-[calc(100%-1rem)] max-w-xl overflow-hidden border border-line-strong bg-surface p-0 text-ink backdrop:bg-ink/50">
@@ -367,7 +368,7 @@ require __DIR__ . '/../inc/header.php';
         <h2 id="h-dl" class="<?= $h2 ?>">Descarcă</h2>
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" data-action="download-docx" class="<?= $btn_main ?>">Descarcă anunțul (.docx)</button>
-          <button type="button" data-action="download-json" class="<?= $btn ?>">Descarcă datele (.json)</button>
+          <button type="button" data-action="download-json" class="<?= $btn ?>">Descarcă anunțul (.json)</button>
         </div>
         <p class="mt-2 text-sm leading-snug text-ink">Datele structurate se pierd dacă salvezi anunțul ca PDF. Publică fișierul .docx.</p>
         <p class="<?= $hint ?>">Datele structurate se pierd și dacă copiezi textul în alt document. Dacă schimbi textul din fișier după descărcare, datele încorporate nu se schimbă.</p>

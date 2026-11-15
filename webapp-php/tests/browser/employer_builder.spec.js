@@ -169,14 +169,14 @@ test('drafts: new, duplicate, delete; export, clear storage, import', async ({ p
   await expect(page.locator('[data-employer-builder][data-ready]')).toHaveCount(1);
   await expect(page.locator('#f-title')).toHaveValue('');
   await page.locator('[data-import]').setInputFiles(file);
-  await expect(page.locator('[data-status]')).toContainText('Am importat 2 ciorne');
+  await expect(page.locator('[data-io-status]')).toContainText('Am importat 2 ciorne');
   await expect(page.locator('[data-draft-list]')).toContainText('Post exportat');
   await expect(page.locator('[data-draft-list]')).toContainText('Al doilea post');
 
   // Import again: the existing drafts stay, the imported ones get new ids.
   const before = await page.evaluate((k) => Object.keys(JSON.parse(localStorage.getItem(k)).drafts), DRAFTS);
   await page.locator('[data-import]').setInputFiles(file);
-  await expect(page.locator('[data-status]')).toContainText('Am importat 2 ciorne');
+  await expect(page.locator('[data-io-status]')).toContainText('Am importat 2 ciorne');
   const after = await page.evaluate((k) => Object.keys(JSON.parse(localStorage.getItem(k)).drafts), DRAFTS);
   expect(after.length).toBe(before.length + 2);
   for (const id of before) expect(after).toContain(id);
@@ -347,13 +347,20 @@ test('the .json download holds the payload alone', async ({ page }, testInfo) =>
   await open(page);
   await seed(page, fixtures.find((f) => f.name === 'full'));
   await page.reload();
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Descarcă datele (.json)' }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Descarcă anunțul (.json)' }).click()]);
   const file = testInfo.outputPath('payload.json');
   await dl.saveAs(file);
   const p = JSON.parse(fs.readFileSync(file, 'utf8'));
   expect(Object.keys(p).sort()).toEqual(['created', 'data', 'employer', 'format', 'generator', 'schema']);
   expect(p.data).toEqual(fixtures.find((f) => f.name === 'full').data);
   expect(p.employer).toEqual(fixtures.find((f) => f.name === 'full').employer);
+
+  // BUG-EMP-IMPORT: importing this file names the right file, next to the import control.
+  await page.locator('[data-import]').setInputFiles(file);
+  const io = page.locator('[data-io-status]');
+  await expect(io).toContainText('un singur anunț');
+  await expect(io).toContainText('Exportă datele');
+  await expect(io).toBeVisible();
 });
 
 test('the page states the scope and the PDF warning', async ({ page }) => {

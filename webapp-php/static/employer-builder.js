@@ -570,7 +570,13 @@
 
   // ---- status, messages -------------------------------------------------------
   var statusEl = root.querySelector('[data-status]');
-  function say(msg) { if (statusEl) { statusEl.textContent = ''; setTimeout(function () { statusEl.textContent = msg; }, 20); } }
+  function say(msg, el) {
+    el = el || statusEl;
+    if (el) { el.textContent = ''; setTimeout(function () { el.textContent = msg; }, 20); }
+  }
+  // Import and export messages show next to their controls, at the top of the page (BUG-EMP-IMPORT).
+  var ioStatusEl = root.querySelector('[data-io-status]');
+  function sayIo(msg) { say(msg, ioStatusEl); }
 
   function showStorageState() {
     var unavailable = root.querySelector('[data-unavailable]');
@@ -948,14 +954,14 @@
     'export-all': function () {
       flush();
       draftsStore.load(); profileStore.load();
-      if (draftsStore.blocked) { say('Datele nu pot fi citite, deci nu le exportăm.'); return; }
+      if (draftsStore.blocked) { sayIo('Datele nu pot fi citite, deci nu le exportăm.'); return; }
       var out = {
         format: EXPORT_FORMAT, exportedAt: nowIso(),
         profile: profileStore.blocked ? null : profileStore.value.profile,
         drafts: Object.keys(draftsStore.value.drafts).map(function (k) { return draftsStore.value.drafts[k]; })
       };
       download(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }), 'anunturi-ciorne-' + Doc.today() + '.json');
-      say('Am descărcat profilul și ciornele.');
+      sayIo('Am descărcat profilul și ciornele.');
     },
     'download-docx': function (b) {
       var data = buildData(draft);
@@ -986,17 +992,18 @@
     if (!f) return;
     var r = new FileReader();
     r.onload = function () { doImport(String(r.result)); importInput.value = ''; };
-    r.onerror = function () { say('Nu am putut citi fișierul.'); };
+    r.onerror = function () { sayIo('Nu am putut citi fișierul.'); };
     r.readAsText(f);
   });
 
   function doImport(text) {
     var d;
-    try { d = JSON.parse(text); } catch (e) { say('Fișierul nu este JSON valid.'); return; }
-    if (!isObj(d) || d.format !== EXPORT_FORMAT || !Array.isArray(d.drafts)) { say('Fișierul nu este un export al acestei pagini.'); return; }
+    try { d = JSON.parse(text); } catch (e) { sayIo('Fișierul nu este JSON valid.'); return; }
+    if (isObj(d) && d.format === Doc.FORMAT) { sayIo('Acest fișier conține un singur anunț, din „Descarcă anunțul (.json)”. Importă fișierul descărcat cu „Exportă datele”.'); return; }
+    if (!isObj(d) || d.format !== EXPORT_FORMAT || !Array.isArray(d.drafts)) { sayIo('Fișierul nu este un export al acestei pagini. Importă fișierul descărcat cu „Exportă datele”.'); return; }
     flush();
     draftsStore.load();
-    if (draftsStore.blocked) { say('Datele din browser nu pot fi citite, deci nu importăm peste ele.'); return; }
+    if (draftsStore.blocked) { sayIo('Datele din browser nu pot fi citite, deci nu importăm peste ele.'); return; }
     var added = 0, skipped = 0;
     draftsStore.mutate(function (v) {
       d.drafts.forEach(function (x) {
@@ -1013,7 +1020,7 @@
       profileStore.mutate(function (v) { if (!v.profile) v.profile = d.profile; });
     }
     renderList();
-    say('Am importat ' + added + ' ciorne.' + (skipped ? ' Am sărit ' + skipped + ' (limita este ' + MAX_DRAFTS + ' sau datele sunt greșite).' : ''));
+    sayIo('Am importat ' + added + ' ciorne.' + (skipped ? ' Am sărit ' + skipped + ' (limita este ' + MAX_DRAFTS + ' sau datele sunt greșite).' : ''));
   }
 
   function download(blob, name) {

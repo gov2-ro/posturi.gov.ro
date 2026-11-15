@@ -98,6 +98,12 @@ class FakeHost:
             raise HostError("pull: ssh failed: TimeoutExpired")
         return {"subscriptions": [dict(s) for s in self.subs], "outbox": [dict(o) for o in self.outbox]}
 
+    def list(self):
+        return {"subscriptions": [{"id": s["id"], "status": s.get("status", "confirmed"), "person": s.get("person", s["id"]),
+                                   "email_sealed": s["email_sealed"], "label": s["label"], "search_key": s["search_key"],
+                                   "created_at": s["confirmed_at"], "confirmed_at": s["confirmed_at"],
+                                   "last_digest_at": s["last_digest_at"]} for s in self.subs]}
+
     def outbox_done(self, ids):
         self.calls.append(("outbox-done", sorted(ids)))
 
@@ -472,3 +478,21 @@ def test_python_opens_what_php_sodium_seals(alerts, tmp_path):
         [php, "-r", "echo base64_encode(sodium_crypto_box_seal($argv[1], base64_decode($argv[2])));",
          "--", "Ana.Pop@example.com", public], capture_output=True, text=True, check=True)
     assert alerts.Opener(str(key_file)).open(done.stdout) == "Ana.Pop@example.com"
+
+
+# ---- list (the operator's view) ----
+
+def test_list_counts_people_and_hides_addresses_unless_asked(world, capsys):
+    w = world
+    w.host.subs = [make_sub(w.box, 1, email=SECRET_ADDRESS, label="Cluj"),
+                   {**make_sub(w.box, 2, email=SECRET_ADDRESS, label="Ilfov"), "person": 1},
+                   {**make_sub(w.box, 3, label="Iași"), "status": "pending"}]
+    w.host.subs[0]["person"] = 1
+    w.alerts.run_list(w.host, None, False)
+    out = capsys.readouterr().out
+    assert "subscriptions: 3 (2 confirmed, 1 pending); people: 2 (1 with a confirmed one)" in out
+    assert "@" not in out and "Ilfov" in out
+    w.alerts.run_list(w.host, w.opener, True)
+    out = capsys.readouterr().out
+    assert out.count(SECRET_ADDRESS) == 2
+    assert w.host.mutations() == []                    # read-only

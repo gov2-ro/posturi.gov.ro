@@ -385,6 +385,14 @@ run_suite('bin/alerts.php: pull, outbox-done, delete, digest-done', function () 
     assert_not_contains('token_hash', $raw, 'pull does not leak the token hash');
     assert_same('a@example.com', open_sealed($s['email_sealed'], $c['pair']), 'the VPS key opens the pulled address');
 
+    [$l, $code, $lraw] = cli($cdir, $db_path, ['list']);
+    assert_same(0, $code, 'list exits 0');
+    assert_same(3, count($l['subscriptions']), 'list shows pending rows too');
+    assert_same(['confirmed', 'confirmed', 'pending'], array_column($l['subscriptions'], 'status'), 'list carries the status');
+    assert_same([1, 2, 3], array_column($l['subscriptions'], 'person'), 'three addresses, three people');
+    assert_not_contains('@example.com', $lraw, 'list prints no plain address');
+    foreach (['email_index', 'token_hash', 'token_sealed'] as $f) assert_not_contains($f, $lraw, "list does not leak $f");
+
     [$j, $code] = cli($cdir, $db_path, ['outbox-done', $j['outbox'][0]['id'] . ',' . $j['outbox'][1]['id']]);
     assert_same(2, $j['deleted'], 'outbox-done deletes the rows it names');
     assert_same(1, (int)$pdo->query("SELECT COUNT(*) FROM outbox")->fetchColumn(), 'one outbox row is left');

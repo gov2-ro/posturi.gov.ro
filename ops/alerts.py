@@ -230,6 +230,9 @@ class Host:
     def pull(self) -> dict:
         return self.call("pull")
 
+    def list(self) -> dict:
+        return self.call("list")
+
     def outbox_done(self, ids: list[int]) -> None:
         if ids:
             self.call("outbox-done", [",".join(map(str, ids))])
@@ -583,12 +586,34 @@ def _lock(state_db: str, wait: bool):
     return handle
 
 
+def run_list(host: Host, opener: Opener | None, show_emails: bool) -> None:
+    """Print every subscription for the operator. Addresses only with --emails (pax, 2026-11-16)."""
+    rows = host.list().get("subscriptions", [])
+    statuses: dict[str, int] = {}
+    for r in rows:
+        statuses[r["status"]] = statuses.get(r["status"], 0) + 1
+    people = len({r["person"] for r in rows})
+    confirmed_people = len({r["person"] for r in rows if r["status"] == "confirmed"})
+    parts = ", ".join(f"{n} {s}" for s, n in sorted(statuses.items())) or "none"
+    print(f"subscriptions: {len(rows)} ({parts}); people: {people} ({confirmed_people} with a confirmed one)")
+    for r in rows:
+        line = (f"#{r['id']:<4} {r['status']:<9} person {r['person']:<3} "
+                f"created {(r.get('created_at') or '-')[:10]}  "
+                f"confirmed {(r.get('confirmed_at') or '-')[:10]}  "
+                f"last digest {(r.get('last_digest_at') or '-')[:10]}  {r.get('label') or ''}")
+        if show_emails and opener is not None:
+            line += f"  <{opener.open(r['email_sealed'])}>"
+        print(line)
+
+
 def main(argv: list[str] | None = None,
          make_host: Callable[[Config], Host] | None = None,
          make_brevo: Callable[[Config], Brevo] | None = None,
          now: datetime | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["keygen", "outbox", "digest"])
+    parser.add_argument("command", choices=["keygen", "outbox", "digest", "list"])
+    parser.add_argument("--emails", action="store_true",
+                        help="list: also decrypt and print the addresses (personal data; do not paste them anywhere)")
     parser.add_argument("--dry-run", action="store_true", help="print what would happen; send and change nothing")
     args = parser.parse_args(argv)
     try:
@@ -600,6 +625,11 @@ def main(argv: list[str] | None = None,
             print("Add that file to your manual backup now. Without it every subscriber is lost.")
             print("Public key, for alerts-config.php on the host (vps_public_key):")
             print(public)
+            return 0
+        if args.command == "list":
+            cfg.require("host", "path", *(["key_file"] if args.emails else []))
+            host = make_host(cfg) if make_host else Host(cfg.host, cfg.path)
+            run_list(host, Opener(cfg.key_file) if args.emails else None, args.emails)
             return 0
         cfg.require("brevo_key", "key_file", "host", "path", "site_url")
         opener = Opener(cfg.key_file)
@@ -617,6 +647,8 @@ def main(argv: list[str] | None = None,
         return 0
     except AlertsError as exc:
         print(f"ERROR: {exc}")
+        if args.command == "list":
+            return 1                            # run by hand: no alert
         push_failure(f"posturi alerts {args.command} failed", str(exc))
         return 1
 

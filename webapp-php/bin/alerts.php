@@ -8,6 +8,7 @@
  * a sealed one. Exit code 0 on success, 1 on a failure (the JSON has "error").
  *
  *   pull                       the confirmed subscriptions and the outbox
+ *   list                       every subscription, for the operator (read-only; no tokens)
  *   outbox-done <ids>          delete sent outbox rows
  *   delete <ids>               delete subscriptions (a blocked address)
  *   candidates                 stdin [{id, since}] -> new postings per subscription
@@ -94,6 +95,20 @@ try {
                 FROM subscriptions WHERE status = 'confirmed' ORDER BY id")->fetchAll();
             $out = $pdo->query("SELECT id, kind, payload_sealed, created_at FROM outbox ORDER BY id")->fetchAll();
             al_cli_out(['subscriptions' => $subs, 'outbox' => $out]);
+
+        case 'list':
+            // Every row, pending too. `person` numbers the addresses (1, 2, …) so the VPS can
+            // count people without the email_index itself leaving the host.
+            $rows = $pdo->query("SELECT id, status, email_sealed, email_index, label, search_key,
+                    created_at, confirmed_at, last_digest_at FROM subscriptions ORDER BY id")->fetchAll();
+            $people = [];
+            foreach ($rows as &$r) {
+                $people[$r['email_index']] ??= count($people) + 1;
+                $r['person'] = $people[$r['email_index']];
+                unset($r['email_index']);
+            }
+            unset($r);
+            al_cli_out(['subscriptions' => $rows]);
 
         case 'outbox-done':
             $ids = al_cli_ids($args);

@@ -503,6 +503,11 @@ build session did not change the live crontab or the host.
    the confirmation email, confirm, then run `ops/alerts.py digest --dry-run`. Look at „Show original”
    on the first email: DKIM and the `List-Unsubscribe` header pair (ADR 0003, Open).
 
+**See the subscribers.** `.venv/bin/python ops/alerts.py list` prints the counts and one line per
+subscription: id, status, a person number, the dates and the search name. It changes nothing.
+Add `--emails` to decrypt and print the addresses too. They are personal data: do not paste
+them into a chat, an issue or a log.
+
 The send log is `data/alerts.sqlite` (subscription ids and results, no addresses). The cap
 counts sends per UTC day, so `sqlite3 data/alerts.sqlite "SELECT day, COUNT(*) FROM sends WHERE result='ok' GROUP BY day"` shows the use.
 

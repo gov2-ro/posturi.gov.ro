@@ -72,6 +72,11 @@ test('subscribe from /salvate/, confirm, manage, delete', async ({ page }, testI
   await page.getByRole('button', { name: 'Abonează-mă' }).click();
   await expect(page.getByText('Verifică-ți emailul. Linkul ajunge în cel mult 5 minute.')).toBeVisible();
 
+  // /salvate/ marks the search in this browser, and only that search.
+  await page.goto('/salvate/');
+  await expect(page.locator('[data-search-key]').filter({ hasText: 'Cluj, medici' }).getByText('alertă cerută')).toBeVisible();
+  await expect(page.locator('[data-search-key]').filter({ hasText: 'Ilfov' }).getByText('alertă cerută')).toBeHidden();
+
   const [confirmMail] = outboxFor(email);
   expect(confirmMail.kind).toBe('confirm');
   const link = `/alerte/confirma/${confirmMail.subscription_id}/${confirmMail.token}`;

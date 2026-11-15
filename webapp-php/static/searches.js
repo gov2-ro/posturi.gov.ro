@@ -353,6 +353,12 @@
       : 'Căutările salvate nu pot fi citite din acest browser.';
     var def = API.defaultSearch();
     var tpl = document.getElementById('search-item-tpl');
+    // Written by /alerte/abonare/ after a sent request (UX-14). A local hint, not proof.
+    var alertsAsked = {};
+    try {
+      var a = JSON.parse(window.localStorage.getItem('posturi.alerts.v1') || '{}');
+      if (a && typeof a === 'object' && !Array.isArray(a)) alertsAsked = a;
+    } catch (e) {}
     list.forEach(function (rec) {
       var li = tpl.content.firstElementChild.cloneNode(true);
       li.setAttribute('data-search-key', rec.key);
@@ -366,6 +372,9 @@
       qs('[data-f="alerts"]', li).setAttribute('href', '/alerte/abonare/?cheie=' + encodeURIComponent(rec.qs)
         + '&sort=' + encodeURIComponent(rec.sort) + '&nume=' + encodeURIComponent(rec.label));
       qs('[data-f="sr-alerts"]', li).textContent = ': ' + rec.label;
+      var asked = alertsAsked[rec.key];
+      qs('[data-f="alert-asked"]', li).hidden = !asked;
+      qs('[data-f="alert-asked-date"]', li).textContent = asked ? fmtDate(asked) : '';
       var isEdit = editing === rec.key;
       link.hidden = isEdit;
       form.hidden = !isEdit;

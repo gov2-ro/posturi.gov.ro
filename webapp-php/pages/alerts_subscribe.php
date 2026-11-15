@@ -59,6 +59,16 @@ require __DIR__ . '/../inc/header.php';
   <?= al_notice('alert', 'Prea multe cereri de la această adresă de rețea. Încearcă din nou peste o oră.') ?>
 <?php elseif ($state === 'sent'): ?>
   <?= al_notice('ok', 'Verifică-ți emailul. Linkul ajunge în cel mult 5 minute.') ?>
+  <script>
+  // A hint for /salvate/ in this browser only: the reader asked for an alert on this search.
+  // The server never tells whether the subscription exists (ADR 0003), so this is not proof.
+  try {
+    var k = 'posturi.alerts.v1', s = JSON.parse(localStorage.getItem(k) || '{}');
+    if (!s || typeof s !== 'object' || Array.isArray(s)) s = {};
+    s[<?= json_encode($key, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>] = new Date().toISOString();
+    localStorage.setItem(k, JSON.stringify(s));
+  } catch (e) {}
+  </script>
   <p class="mt-3 max-w-2xl text-sm text-ink-muted">Nu găsești mesajul? Caută în Spam. Abonarea nu este activă până nu confirmi.</p>
   <p class="mt-4"><a href="/salvate/" class="text-sm text-gov hover:underline">← Înapoi la Salvate</a></p>
 <?php else: ?>

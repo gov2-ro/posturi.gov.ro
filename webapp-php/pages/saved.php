@@ -101,7 +101,7 @@ require __DIR__ . '/../inc/header.php';
       <button type="button" data-search-rename-save class="<?= $btn ?>">Salvează</button>
       <button type="button" data-search-rename-cancel class="<?= $btn ?>">Anulează</button>
     </form>
-    <p class="mt-1 text-xs text-ink-muted"><span data-f="meta"></span><span data-f="default" hidden> · <span class="font-medium text-ink">implicită</span></span></p>
+    <p class="mt-1 text-xs text-ink-muted"><span data-f="meta"></span><span data-f="default" hidden> · <span class="font-medium text-ink">implicită</span></span><span data-f="alert-asked" hidden> · alertă cerută <span data-f="alert-asked-date"></span></span></p>
     <div class="mt-2 flex flex-wrap items-center gap-2">
       <button type="button" data-search-rename class="<?= $btn ?>">Redenumește<span class="sr-only" data-f="sr-rename"></span></button>
       <button type="button" data-search-delete class="<?= $btn ?>">Șterge<span class="sr-only" data-f="sr-delete"></span></button>

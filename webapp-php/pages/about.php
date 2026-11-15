@@ -95,7 +95,7 @@ require __DIR__ . '/../inc/header.php';
       Dacă te abonezi la o alertă pe email, vom păstra datele de mai jos. Fără abonare, nu păstrăm nicio adresă de email.
     </p>
     <ul>
-      <li><strong>Cine răspunde de date:</strong> [NUME], persoană fizică (operator). Contact: [ADRESĂ DE CONTACT].</li>
+      <li><strong>Contact:</strong> cancelarie@gov2.ro</li>
       <li><strong>Ce păstrăm:</strong> adresa de email, căutarea abonată (filtrele ei și numele ei), data confirmării și data ultimului rezumat. Pentru limita de cereri păstrăm o amprentă a adresei IP, cel mult 2 ore.</li>
       <li><strong>Unde:</strong> pe serverul de găzduire al site-ului (în SUA) păstrăm adresa criptată și căutarea. Cheia care deschide adresa și jurnalul trimiterilor sunt pe alt server, al nostru. Emailurile pleacă prin Brevo (Franța; datele rămân în UE, jurnalele se șterg după 1 lună).</li>
       <li><strong>Ce primești:</strong> un email de confirmare, apoi cel mult un rezumat la 3 zile, doar când apar anunțuri noi pentru căutarea ta.</li>

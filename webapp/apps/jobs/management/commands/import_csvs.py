@@ -88,6 +88,9 @@ def parse_date(value: str) -> date | None:
 RECENT_WINDOW_DAYS = 30
 MISSING_EXPIRY_RATIO = 0.5
 
+#: Postings loaded per query in the detail pass. Bounds the model memory.
+DETAIL_BATCH = 500
+
 
 def expiry_sanity_warnings(active: int, recent_total: int, recent_without_expiry: int) -> list[str]:
     """Check that expiry parsing still works, and return a warning per problem.
@@ -427,13 +430,19 @@ class Command(BaseCommand):
         if anunt_rows:
             self.stdout.write(f"Importing detail rows ({len(anunt_rows)})…")
             matched = unmatched = d_errors = revised = 0
-            postings_by_url = {
-                p.url: p for p in JobPosting.objects.in_bulk(
-                    [r["Source URL"].strip() for r in anunt_rows if r.get("Source URL")],
-                    field_name="url",
-                ).values()
-            }
-            for r in anunt_rows:
+            # Load the postings in batches. One in_bulk() over every row held every
+            # full model (body, attachment text, JSON) at once: ~900 MB at 9,757 rows
+            # (BUG-IMPORT-KILL). A batch is released before the next one loads.
+            postings_by_url: dict[str, JobPosting] = {}
+            for idx, r in enumerate(anunt_rows):
+                if idx % DETAIL_BATCH == 0:
+                    postings_by_url = {
+                        p.url: p for p in JobPosting.objects.in_bulk(
+                            [x["Source URL"].strip()
+                             for x in anunt_rows[idx:idx + DETAIL_BATCH] if x.get("Source URL")],
+                            field_name="url",
+                        ).values()
+                    }
                 src = r.get("Source URL", "").strip()
                 if not src:
                     d_errors += 1

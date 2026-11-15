@@ -20,6 +20,49 @@ $uri = '/' . trim($uri ?? '/', '/');
 // query string is ignored entirely.
 if ($uri === '/preferinte-posturi.json') { require __DIR__ . '/feeds/preferinte.json.php'; exit; }
 
+// UX-14: email alerts. Routed before the query-string decoder: the subscribe
+// form takes the saved search as ?cheie=, which is not a list filter and must
+// not meet the list validation. Each page sets its own no-store headers and
+// reads POST data from $_POST. A GET here never changes data.
+if ($uri === '/alerte' || str_starts_with($uri, '/alerte/')) {
+    $alerts_get = $_GET;
+    $_GET = [];
+    require_once __DIR__ . '/inc/alerts.php';
+    require_once __DIR__ . '/inc/alerts_view.php';
+    $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+    $tok = '([A-Za-z0-9_-]{20,64})';
+    if (!in_array($method, ['GET', 'HEAD', 'POST'], true)) {
+        http_response_code(405);
+        header('Allow: GET, HEAD, POST');
+        header('Cache-Control: no-store');
+    } elseif ($uri === '/alerte' || $uri === '/alerte/') {
+        require __DIR__ . '/pages/alerts_home.php';
+    } elseif ($uri === '/alerte/abonare') {
+        require __DIR__ . '/pages/alerts_subscribe.php';
+    } elseif (preg_match('#^/alerte/confirma/(\d{1,12})/' . $tok . '$#', $uri, $m)) {
+        [$al_id, $al_token] = [$m[1], $m[2]];
+        require __DIR__ . '/pages/alerts_confirm.php';
+    } elseif (preg_match('#^/alerte/abonari/(\d{1,12})/' . $tok . '$#', $uri, $m)) {
+        [$al_mode, $al_id, $al_token] = ['list', $m[1], $m[2]];
+        require __DIR__ . '/pages/alerts_manage.php';
+    } elseif (preg_match('#^/alerte/sterge/(\d{1,12})/' . $tok . '$#', $uri, $m)) {
+        [$al_mode, $al_id, $al_token] = ['delete', $m[1], $m[2]];
+        require __DIR__ . '/pages/alerts_manage.php';
+    } elseif (preg_match('#^/alerte/intra/' . $tok . '$#', $uri, $m)) {
+        [$al_mode, $al_id, $al_token] = ['login', 0, $m[1]];
+        require __DIR__ . '/pages/alerts_manage.php';
+    } else {
+        http_response_code(404);
+        header('Cache-Control: no-store');
+        $page_title = '404';
+        require __DIR__ . '/inc/header.php';
+        echo '<div class="max-w-screen-xl mx-auto px-4 py-16 text-center"><h1 class="font-display text-4xl italic text-ink-faint mb-4">404</h1>'
+           . '<p class="text-ink-muted">Pagina nu a fost găsită.</p></div>';
+        require __DIR__ . '/inc/footer.php';
+    }
+    exit;
+}
+
 // ---- Request validation: one decoder, one 400 path ----
 // Every page, filter builder and feed reads the normalized $_GET that this
 // produces; a malformed shape (?q[]=medic) never reaches trim() or SQL.

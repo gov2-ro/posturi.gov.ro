@@ -54,6 +54,12 @@ BREVO_URL = "https://api.brevo.com/v3"
 DEFAULT_SENDER = "alerte@dispecerat.gov2.ro"
 SENDER_NAME = "posturi.gov2.ro"
 DEFAULT_CAP = 280
+# The digest leaves this many sends of the daily cap for confirmation and manage emails
+# that arrive later the same UTC day (review 2026-11-15).
+DEFAULT_RESERVE = 20
+# Brevo refusals in one run before the run stops: many refusals mean a fault on our side
+# (sender, payload), not one bad address, and dropping every row would lose them all.
+MAX_REJECTED = 3
 #: A digest is due 3 days after the last one. The cron fires at the same minute each
 #: day, but the time stored is the moment of the search, a few seconds earlier. One
 #: hour of tolerance keeps a subscription on the 3-day beat.
@@ -111,6 +117,7 @@ class Config:
     key_file: str = ""
     sender: str = DEFAULT_SENDER
     cap: int = DEFAULT_CAP
+    reserve: int = DEFAULT_RESERVE
     host: str = ""
     path: str = ""
     site_url: str = ""
@@ -124,11 +131,12 @@ class Config:
             return (merged.get(name) or default).strip()
         try:
             cap = int(get("ALERTS_DAILY_CAP", str(DEFAULT_CAP)))
+            reserve = int(get("ALERTS_CONFIRM_RESERVE", str(DEFAULT_RESERVE)))
         except ValueError as exc:
-            raise ConfigError("ALERTS_DAILY_CAP is not a number") from exc
+            raise ConfigError("ALERTS_DAILY_CAP or ALERTS_CONFIRM_RESERVE is not a number") from exc
         return cls(
             brevo_key=get("BREVO_API_KEY"), key_file=get("ALERTS_KEY_FILE"),
-            sender=get("ALERTS_SENDER", DEFAULT_SENDER), cap=cap,
+            sender=get("ALERTS_SENDER", DEFAULT_SENDER), cap=cap, reserve=reserve,
             host=get("DEPLOY_HOST"), path=get("DEPLOY_PATH", "public_html"),
             site_url=get("SITE_URL").rstrip("/"),
             state_db=get("ALERTS_STATE_DB", str(ROOT / "data" / "alerts.sqlite")))
@@ -451,6 +459,8 @@ def process_outbox(cfg: Config, host: Host, brevo: Brevo, opener: Opener, log: S
                 report.rejected += 1
                 done.append(row["id"])          # Brevo will never take this one: drop it
                 report.say(f"{row['kind']} outbox {row['id']}: rejected by Brevo, dropped")
+                if report.rejected >= MAX_REJECTED:
+                    raise AlertsError(f"Brevo refused {report.rejected} messages in one run: stopping")
                 continue
             except (KeyError, ValueError) as exc:
                 raise AlertsError(f"outbox {row['id']}: unreadable payload ({type(exc).__name__})") from exc
@@ -519,7 +529,7 @@ def run_digest(cfg: Config, host: Host, brevo: Brevo, opener: Opener, log: SendL
     with_news = [s for s in due if results.get(s["id"], {}).get("total", 0) > 0]
     report.say(f"digest: {len(with_news)} with new postings")
     for s in with_news:
-        if log.sent_today(now) >= cfg.cap:
+        if log.sent_today(now) >= cfg.cap - cfg.reserve:
             report.skipped_cap += 1
             continue
         if dry_run:
@@ -533,6 +543,8 @@ def run_digest(cfg: Config, host: Host, brevo: Brevo, opener: Opener, log: SendL
             log.record(now, "digest", s["id"], "rejected")
             report.rejected += 1
             report.say(f"digest subscription {s['id']}: rejected by Brevo")
+            if report.rejected >= MAX_REJECTED:
+                raise AlertsError(f"Brevo refused {report.rejected} messages in one run: stopping")
             continue
         newest = max((it.get("id", 0) for it in results[s["id"]]["items"]), default=0)
         log.record(now, "digest", s["id"], "ok", str(newest))

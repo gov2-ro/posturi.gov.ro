@@ -208,6 +208,13 @@ function al_clean_label(string $label): string {
 // ---- Outbox ----
 
 function al_queue(PDO $pdo, string $kind, string $email, string $token, int $subscription_id): void {
+    // A global ceiling, whatever the client address says (CF-Connecting-IP can be forged at the
+    // origin). It keeps a flood of requests from filling the outbox, mailing one victim
+    // repeatedly, or using up the daily send cap that the digests need (review 2026-11-15).
+    $limit = (int)(al_config()['outbox_per_hour'] ?? 60);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM outbox WHERE created_at >= ?");
+    $stmt->execute([al_iso(al_now() - 3600)]);
+    if ((int)$stmt->fetchColumn() >= $limit) return;
     $payload = json_encode(['email' => $email, 'token' => $token, 'subscription_id' => $subscription_id]);
     $pdo->prepare("INSERT INTO outbox (kind, payload_sealed, created_at) VALUES (?, ?, ?)")
         ->execute([$kind, al_seal((string)$payload), al_iso()]);

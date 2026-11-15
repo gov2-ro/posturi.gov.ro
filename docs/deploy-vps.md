@@ -463,6 +463,7 @@ build session did not change the live crontab or the host.
    ALERTS_KEY_FILE=/home/pax/.alerts-key   # outside the checkout
    ALERTS_SENDER=alerte@dispecerat.gov2.ro
    ALERTS_DAILY_CAP=280                    # Brevo's free plan allows 300
+   ALERTS_CONFIRM_RESERVE=20               # the digest stops 20 sends before the cap
    SITE_URL=https://posturi.gov2.ro        # for the links in the emails
    ```
    `DEPLOY_HOST` and `DEPLOY_PATH` are the settings that `deploy-php.sh` already reads.

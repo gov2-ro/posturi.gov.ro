@@ -166,13 +166,25 @@ def test_cap_stops_the_digest_and_confirmations_go_first(world):
                    make_sub(w.box, 11, digest_age=timedelta(days=7)),
                    make_sub(w.box, 12, digest_age=timedelta(days=5))]
     w.host.news = {10: news(2), 11: news(2), 12: news(2)}
-    cfg = w.alerts.Config(**{**w.cfg.__dict__, "cap": 3})
+    cfg = w.alerts.Config(**{**w.cfg.__dict__, "cap": 3, "reserve": 0})
     report = w.run("digest", cfg=cfg)
     assert [s[1].split(":")[0] for s in w.brevo.sent][:2] == ["Confirmă alerta pe email", "Abonamentele mele"]
     assert len(w.brevo.sent) == 3                      # the cap
     assert [c[1] for c in w.host.calls if c[0] == "digest-done"] == [10]   # the oldest digest only
     assert report.skipped_cap == 2
     assert w.log.sent_today(NOW) == 3
+
+
+def test_the_digest_leaves_the_reserve_for_confirmations(world):
+    w = world
+    w.host.subs = [make_sub(w.box, i, digest_age=timedelta(days=4)) for i in (10, 11, 12)]
+    w.host.news = {10: news(1), 11: news(1), 12: news(1)}
+    cfg = w.alerts.Config(**{**w.cfg.__dict__, "cap": 3, "reserve": 1})
+    w.run("digest", cfg=cfg)
+    assert len(w.brevo.sent) == 2                      # 3 - 1 reserved
+    w.host.outbox = [outbox_row(w.box, 1)]
+    w.run("outbox", cfg=cfg)
+    assert len(w.brevo.sent) == 3                      # the confirmation still goes out
 
 
 def test_the_cap_counts_the_whole_utc_day_across_runs(world):
@@ -305,6 +317,16 @@ def test_a_refused_message_is_dropped_not_retried_forever(world):
     assert ("outbox-done", [1, 2]) in w.host.calls
     assert report.rejected == 1
     assert w.log.sent_today(NOW) == 1                  # a refusal does not use the cap
+
+
+def test_many_refusals_stop_the_run(world):
+    w = world
+    bad = [f"bad{i}@example.com" for i in range(4)]
+    w.host.outbox = [outbox_row(w.box, i + 1, email=e) for i, e in enumerate(bad)]
+    w.brevo.reject = set(bad)
+    with pytest.raises(w.alerts.AlertsError):
+        w.run("outbox")
+    assert ("outbox-done", [1, 2, 3]) in w.host.calls   # row 4 stays for the next run
 
 
 def test_digest_done_carries_the_time_of_the_search(world):

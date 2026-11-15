@@ -164,6 +164,18 @@ run_suite('the rate limit counts per client', function () use ($tmp) {
     putenv('ALERTS_DIR=' . $GLOBALS['dir']);
 });
 
+run_suite('the outbox has a global ceiling per hour', function () use ($tmp) {
+    $dir3 = $tmp . '/ceiling';
+    make_alerts_dir($dir3, ['outbox_per_hour' => 2]);
+    putenv('ALERTS_DIR=' . $dir3);
+    $pdo = al_db();
+    $res = [];
+    for ($i = 0; $i < 4; $i++) $res[] = al_subscribe($pdo, sub_in(KEY_CLUJ, "c$i@example.com"), "7.7.7.$i");
+    assert_same(['sent', 'sent', 'sent', 'sent'], $res, 'the answer does not change at the ceiling');
+    assert_same(2, (int)$pdo->query("SELECT COUNT(*) FROM outbox")->fetchColumn(), 'two emails queued, no more');
+    putenv('ALERTS_DIR=' . $GLOBALS['dir']);
+});
+
 run_suite('pending rows and login tokens expire', function () use ($pair) {
     $pdo = al_db();
     assert_same('sent', al_subscribe($pdo, sub_in(KEY_CLUJ, 'late@example.com'), '4.4.4.4'), 'subscribe');

@@ -66,9 +66,13 @@ CANDIDATES = [
 #: export-check record, so the replay cannot test them: see `UNREPLAYABLE`.
 INCIDENT_WINDOWS = [
     {
-        "name": "schema decline 85.6 -> 60.1%",
-        "start": "2026-09-23T15:33:00Z",
-        "end": "2026-10-02T15:33:00Z",
+        # Set from the recorded coverage (VPS read, 2026-11-15): 96.3% on 09-20T15:33,
+        # 95.0% on 09-21T08:45, 60.1% on 10-02T15:33, 84-86% while recovering on
+        # 10-02T21:11..10-03T15:33, and 99.8% on 10-04T20:57. Every run in between
+        # was below the healthy level, so a check that fires there is a true positive.
+        "name": "schema decline 96.3 -> 60.1%, recovered 10-04",
+        "start": "2026-09-21T08:45:00Z",
+        "end": "2026-10-04T20:00:00Z",
         "checks": {"schema_sustained", "schema_floor", "schema_coverage"},
     },
     {

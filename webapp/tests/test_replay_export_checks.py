@@ -116,20 +116,21 @@ def test_summary_counts_hits_in_a_window_and_false_positives_outside(replay, tmp
     _build_log(log)
     rows = replay.replay(replay.ce.read_run_log(log))
 
-    # The synthetic dates overlap the real September window: runs 5 to 12 are inside it.
-    inside = replay.summarise(rows)
-    assert inside["A"]["in_window"] == 8   # the first five runs are before the window
-    assert inside["A"]["hits"] >= 1
-    assert inside["A"]["first_hit"] is not None
-
-    # Move the window away: the same firings are now false positives.
+    # Pin a window of its own, so the test does not follow the real incident table.
     original = replay.INCIDENT_WINDOWS
     try:
+        replay.INCIDENT_WINDOWS = [dict(original[0], start="2026-09-23T15:33:00Z",
+                                        end="2026-10-02T15:33:00Z")]
+        inside = replay.summarise(rows)   # runs 5 to 12 are inside it
+        # Move the window away: the same firings are now false positives.
         replay.INCIDENT_WINDOWS = [dict(original[0], start="2030-01-01T00:00:00Z",
                                         end="2030-02-01T00:00:00Z")]
         outside = replay.summarise(rows)
     finally:
         replay.INCIDENT_WINDOWS = original
+    assert inside["A"]["in_window"] == 8   # the first five runs are before the window
+    assert inside["A"]["hits"] >= 1
+    assert inside["A"]["first_hit"] is not None
     assert outside["A"]["in_window"] == 0
     names = {n for _, fired in outside["A"]["false_positives"] for n, _ in fired}
     assert {"schema_sustained", "active_band"} <= names

@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-11-15 — FIX-04 thresholds: keep the production values
+
+**Done**
+- Second replay on gov2-1 (`a24397e`, `logs/replay-2026-11-15.txt`): 0 records skipped; 47 records had their fill rates set to 100.0.
+- The posturi-vps session read the coverage of all 49 export-check records of 09-10..10-06. Measured: 96.0–99.6% until 09-20, 95.0% on 09-21T08:45, 94.7% on 09-21T15:33, 60.1% on 10-02T15:33, 84–86% on 10-02T21:11..10-03T15:33, and 99.8% on 10-04T20:57. `no_body` stayed at 0.1–0.4%.
+- The September window in `ops/replay-export-checks.py` is now 09-21T08:45 → 10-04T20:00, from those numbers. It was 09-23T15:33 → 10-02T15:33:00, which also missed the 10-02T15:33:01 run by one second. The summary test now pins its own window.
+- Result, derived from the second replay's false-positive lists with the new window: sets A, B, D and E have 0 false positives; C has 3 (09-18T08:45, 09-18T15:33, 09-19T08:45, at 96.3–96.5%). A fires first, at 09-21T15:33 (`schema_floor`).
+
+**Hard**
+- The fidelity differences are not replay defects. The recorded checks ran under older rules: intake age became Bucharest working days in `2e2c00a` (10-05), and the anomaly step fell from 15 to 1.5 points in `d794c4e` (10-19).
+
+**Decided**
+- Keep set A, the production values. A catches the slide earliest and has no false positives. The cost of C (a 3-point drop): three false warnings in a healthy week. The cost of E (no floor): one run later.
+- Assumed: the new-window counts come from the second replay's lists, not from a third run. A third replay would confirm them. It is cheap, but it is not needed for the decision.
+
 ### 2026-11-15 — FIX-04 replay, first run on gov2-1, and a fix
 
 **Done**

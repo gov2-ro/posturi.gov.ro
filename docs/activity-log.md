@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-11-15 — BUG-IMPORT-KILL: `import` memory measured and cut (Mac, local only)
+
+**Done**
+- `pipeline.py` records `max_rss_mb` for each step (`os.wait4` on one `Popen` child). The first cron run after deploy gives a measured peak for every step, so OPS-RUNTIME gets its numbers. Test: `webapp/tests/test_pipeline_max_rss.py` (5 tests).
+- Measured `import_csvs` on the Mac with `/usr/bin/time -l`, DEBUG=0, a clone of the local September database, and the local `anunturi.csv` (9,757 rows, 60 MB; the server file has 15,942 rows). Peak RSS before the fix: normal 1,323 MB, full 1,328 MB.
+- Measured RSS by phase (full case, instrumented copy, not committed): start 63 MB, after both CSV lists 204 MB, before the detail pass 235 MB, **after `in_bulk()` over all rows 1,121 MB (peak 1,279 MB)**, end 788 MB.
+- Fix: the detail pass loads postings in batches of 500 (`DETAIL_BATCH`). Peak RSS after the fix: normal 440 MB, full 431 MB. Run time is the same (73 s and 87 s against 71 s and 87 s).
+- Result check: a checksum over 22 posting columns (body and attachment text as md5, `inferred`, `search_vector`) is identical before and after, in both cases. Row count 9,756 postings and 19,525 calendar events both times.
+
+**Hard**
+- The full case needs different hashes. The local CSV has no `Detail Content Hash` column, so a plain run revises 1 row. I wrote a scratch copy of the CSV with `new-N` hashes and set `old-<id>` in the clone. Then all 9,757 rows revised.
+- With DEBUG=1 the peak looks 290 MB higher: Django keeps every query in memory. The measurements above use DEBUG=0.
+
+**Decided**
+- Batch the loads. Do not use `.only()`: `invalidate_enrichment` reads `inferred`, `schema_json` and `schema_source_revision`, and a missed deferred field costs one query per row. Batching keeps the code and the result the same.
+- Not changed: the two `list(csv.DictReader(...))` reads (about 130 MB at 9,757 rows). Streaming them needs a second pass over the file for the expiry lookup. The cost does not justify it now.
+- The revision path (`invalidate_enrichment`) adds no memory: full and normal peaks are equal. So the full parse alone does not explain the -9.
+
+**Measured vs assumed**
+- Measured: the peaks, the phases, the equal result. Local data only.
+- Assumed: memory scales linearly to 15,942 rows. Before the fix that is about 2.1 GB for `import`; after it, about 0.7 GB. The server has 3,819 MB shared with Postgres and PHP, so the kill is plausible but not proven. The kernel log (brief item 4) is for pax to read.
+
 ### 2026-11-13 — P1 triage: three items closed, one new defect
 
 **Done**

@@ -559,7 +559,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     if quiet and args.outcome == "ok" and not out_of_credit:
         return 0
     sent = notify(message)
-    record_ntfy_result(args.run_log, run_id, args.outcome, sent)
+    if settings() is not None:   # no topic means no push was tried: record nothing
+        record_ntfy_result(args.run_log, run_id, args.outcome, sent)
     return 0
 
 

@@ -13,6 +13,8 @@ const path = require('path');
 
 const webappDir = path.resolve(__dirname, '..', '..');
 const fixture = path.join(os.tmpdir(), 'posturi-browser-fixture.sqlite');
+// UX-14: the private directory of the email alerts (a test key pair and pepper).
+const alertsDir = path.join(os.tmpdir(), 'posturi-browser-alerts');
 
 module.exports = defineConfig({
   testDir: __dirname,
@@ -26,7 +28,7 @@ module.exports = defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `php tests/fixtures/make.php ${fixture} && php -S 127.0.0.1:8823 router.php`,
+    command: `php tests/fixtures/make.php ${fixture} && php tests/fixtures/make_alerts.php ${alertsDir} '{"rate_per_hour":100000}' && php -S 127.0.0.1:8823 router.php`,
     cwd: webappDir,
     url: 'http://127.0.0.1:8823/',
     reuseExistingServer: false,
@@ -34,6 +36,7 @@ module.exports = defineConfig({
     env: {
       POSTURI_DB: fixture,
       POSTURI_TODAY: '2026-10-03',
+      ALERTS_DIR: alertsDir,
     },
   },
   projects: [

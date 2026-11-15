@@ -450,6 +450,61 @@ Update the crontab in the same step as the `git pull` that brings the new defaul
 Healthchecks.io: with two runs a day, set the check's **period to 20 h** (grace 1 h): the overnight gap is 18h42m (below).
 A 1-day period never notices a single missed run — the next run pings first.
 
+### Email alerts (UX-14)
+
+Design: [ADR 0003](decisions/0003-email-alerts-architecture.md). Build brief:
+[2026-11-15-email-alerts.md](briefs/2026-11-15-email-alerts.md). pax runs these steps. The
+build session did not change the live crontab or the host.
+
+1. **Install PyNaCl** on the VPS if it is missing: `.venv/bin/pip install pynacl`.
+2. **Set the keys.** In `.env` on the VPS:
+   ```
+   BREVO_API_KEY=...                       # the transactional API key
+   ALERTS_KEY_FILE=/home/pax/.alerts-key   # outside the checkout
+   ALERTS_SENDER=alerte@dispecerat.gov2.ro
+   ALERTS_DAILY_CAP=280                    # Brevo's free plan allows 300
+   SITE_URL=https://posturi.gov2.ro        # for the links in the emails
+   ```
+   `DEPLOY_HOST` and `DEPLOY_PATH` are the settings that `deploy-php.sh` already reads.
+3. **Make the key pair.** Run `.venv/bin/python ops/alerts.py keygen`. It writes the private
+   key to `ALERTS_KEY_FILE` (mode 600) and refuses to overwrite one. It prints the public key.
+4. **Back up the private key.** **Add `ALERTS_KEY_FILE` to the manual backup of pax now.**
+   If the key is lost, every subscriber is lost. `ops/pull-backup.sh` does not copy it.
+5. **Make the host config.** On the shared host, make `~/posturi-private/alerts-config.php`
+   (outside the web root, mode 600). `ALERTS_DIR` of `deploy-php.sh` names this directory;
+   the code deploy never deletes it.
+   ```php
+   <?php
+   return [
+       'vps_public_key' => '<the public key from step 3>',
+       'pepper'         => '<run: php -r "echo base64_encode(random_bytes(32));">',
+       'site_url'       => 'https://posturi.gov2.ro',
+   ];
+   ```
+   Make the pepper once. Do not change it later: it breaks „Abonamentele mele” and the
+   limit of 20 subscriptions for every address that exists.
+6. **Check the host.** `ssh "$DEPLOY_HOST" 'php ~/posturi.gov2.ro/bin/alerts.php pull'` prints
+   `{"subscriptions":[],"outbox":[]}`. If it prints an error, the config or the directory is wrong.
+   The web server must be able to write to `~/posturi-private/` (the PHP of the site makes
+   `subscriptions.sqlite` there on first use). If the host sets `open_basedir`, add the directory.
+7. **Try without sending.** `.venv/bin/python ops/alerts.py outbox --dry-run` and
+   `.venv/bin/python ops/alerts.py digest --dry-run` print ids and counts only.
+8. **Add the two cron lines.** The VPS cron ignores `CRON_TZ`, so the digest is listed at both
+   UTC hours and guarded by the Bucharest time (the same rule as the pipeline above):
+   ```cron
+   */5 * * * * cd /home/pax/g2-dev/posturi.gov.ro && .venv/bin/python ops/alerts.py outbox >> logs/alerts.log 2>&1
+   30 16,17 * * * [ "$(TZ=Europe/Bucharest date +\%H\%M)" = "1930" ] && cd /home/pax/g2-dev/posturi.gov.ro && .venv/bin/python ops/alerts.py digest >> logs/alerts.log 2>&1
+   ```
+   The digest has its own line, after the evening run (18:33), so a failed pipeline does not
+   block it and a failed digest does not fail the pipeline. It reads the database the host serves.
+   A run that fails sends nothing more, pushes a message through `ops/ntfy.py` and exits 1.
+9. **First live test.** Subscribe one saved search with a test address, wait up to 5 minutes for
+   the confirmation email, confirm, then run `ops/alerts.py digest --dry-run`. Look at „Show original”
+   on the first email: DKIM and the `List-Unsubscribe` header pair (ADR 0003, Open).
+
+The send log is `data/alerts.sqlite` (subscription ids and results, no addresses). The cap
+counts sends per UTC day, so `sqlite3 data/alerts.sqlite "SELECT day, COUNT(*) FROM sends WHERE result='ok' GROUP BY day"` shows the use.
+
 ### Alternative: the systemd timer
 
 Equivalent to the guarded crontab, but needs `sudo` to install. Only switch if you

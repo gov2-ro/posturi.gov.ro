@@ -57,9 +57,25 @@ DOWNLOAD_SINCE="${DOWNLOAD_SINCE:-7}"
 export POSTURI_RUN_ID="${POSTURI_RUN_ID:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
 export POSTURI_RUN_TRIGGER="${POSTURI_RUN_TRIGGER:-manual}"
 
+# OPS-ALERT-CHECK: `|| true` stays, because a lost alert must not fail the run. The
+# result goes to data/pipeline-runs.jsonl as a `kind: "alert"` record. The record has no
+# URL: the healthcheck URL is a secret.
+record_alert() {         # $1: event (start|success|fail)  $2: HTTP status  $3: curl exit code
+    "$PYTHON" ops/record-alert.py --channel healthcheck --event "$1" \
+        --http-status "$2" --exit-code "$3" || true
+}
+
 ping_health() {          # $1: "" (success) | /start | /fail
     [ -n "${HEALTHCHECK_URL:-}" ] || return 0
-    curl -fsS -m 10 -o /dev/null "${HEALTHCHECK_URL}${1:-}" || true
+    local http_status="" curl_status=0 event
+    case "${1:-}" in
+        /start) event=start ;;
+        /fail)  event=fail ;;
+        *)      event=success ;;
+    esac
+    http_status=$(curl -fsS -m 10 -o /dev/null -w '%{http_code}' \
+        "${HEALTHCHECK_URL}${1:-}") || curl_status=$?
+    record_alert "$event" "$http_status" "$curl_status"
 }
 
 # One push per finished run (OPS-BALANCE): ops/ntfy.py reads this run's records from

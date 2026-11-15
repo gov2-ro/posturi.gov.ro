@@ -302,7 +302,7 @@ class Check:
         return "FAIL" if self.level == "hard" else "WARN"
 
 
-def _age_hours(stamp: str | None) -> float | None:
+def _age_hours(stamp: str | None, now: datetime | None = None) -> float | None:
     if not stamp:
         return None
     try:
@@ -311,7 +311,7 @@ def _age_hours(stamp: str | None) -> float | None:
         return None
     if built.tzinfo is None:
         built = built.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - built).total_seconds() / 3600
+    return ((now or datetime.now(timezone.utc)) - built).total_seconds() / 3600
 
 
 def evaluate(
@@ -325,7 +325,10 @@ def evaluate(
     v3_floor: float | None = None,
     sustained_drop: float = 5.0,
     intake_max_age_days: float = 2.0,
+    now: datetime | None = None,
 ) -> list[Check]:
+    """`now` is for ops/replay-export-checks.py: it pins the clock to the time of
+    the recorded run. Left as None, the checks read the real clock."""
     checks: list[Check] = []
 
     def hard(name, ok, message):
@@ -380,7 +383,7 @@ def evaluate(
 
     # The deploy ships whatever is on disk; a stale file means the export never ran.
     meta = m["build_meta"]
-    age = _age_hours(meta["built_at"]) if meta else None
+    age = _age_hours(meta["built_at"], now) if meta else None
     hard("build_meta_fresh", meta is not None and age is not None and age <= max_age_hours,
          "no build_meta row — this export predates provenance tracking" if not meta
          else f"built_at {meta['built_at']} is {age:.1f}h old (limit {max_age_hours:g}h)"
@@ -494,7 +497,8 @@ def evaluate(
     if newest_day is None:
         soft("intake_fresh", True, "no publication dates in the export — skipped")
     else:
-        today = datetime.now(ZoneInfo("Europe/Bucharest")).date()
+        today = (now or datetime.now(timezone.utc)).astimezone(
+            ZoneInfo("Europe/Bucharest")).date()
         working_age = sum(
             1 for i in range(1, min((today - newest_day).days, 400) + 1)
             if (newest_day + timedelta(days=i)).weekday() < 5
@@ -625,8 +629,36 @@ def print_report(m: dict, previous: dict | None, checks: list[Check]) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+def read_run_log(run_log: Path) -> list[dict]:
+    """Every parseable record of the run log, in file order."""
+    records: list[dict] = []
+    if not run_log.exists():
+        return records
+    try:
+        with run_log.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError as exc:
+        print(f"  WARNING: could not read {run_log}: {exc}", file=sys.stderr)
+    return records
+
+
 def load_baselines(run_log: Path) -> dict:
     """Healthy comparison points, not "whatever ran last".
+
+    Reads the run log and calls baselines_from_records().
+    """
+    return baselines_from_records(read_run_log(run_log))
+
+
+def baselines_from_records(records: list[dict]) -> dict:
+    """Healthy comparison points from a list of run-log records.
 
     Returns {"previous": metrics | None, "window": [metrics, ...]}:
       - `previous` is the most recent export-check whose candidate was actually
@@ -637,27 +669,13 @@ def load_baselines(run_log: Path) -> dict:
       - `window` is the last seven such healthy runs, oldest first, for
         sustained-decline comparison.
     """
-    if not run_log.exists():
-        return {"previous": None, "window": []}
-
     export_checks: list[tuple[str, str, dict]] = []   # (run_id, status, metrics)
     deploy_map: dict[str, bool] = {}
-    try:
-        with run_log.open(encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if rec.get("kind") == "deploy" and "run_id" in rec:
-                    deploy_map[rec["run_id"]] = bool(rec.get("deployed"))
-                elif rec.get("kind") == "export-check" and rec.get("metrics"):
-                    export_checks.append((rec.get("run_id"), rec.get("status"), rec["metrics"]))
-    except OSError as exc:
-        print(f"  WARNING: could not read {run_log}: {exc}", file=sys.stderr)
+    for rec in records:
+        if rec.get("kind") == "deploy" and "run_id" in rec:
+            deploy_map[rec["run_id"]] = bool(rec.get("deployed"))
+        elif rec.get("kind") == "export-check" and rec.get("metrics"):
+            export_checks.append((rec.get("run_id"), rec.get("status"), rec["metrics"]))
 
     have_deploy_records = bool(deploy_map)
     healthy: list[dict] = []

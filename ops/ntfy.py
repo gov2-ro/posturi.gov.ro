@@ -97,6 +97,11 @@ def describe_error(exc: BaseException) -> str:
     return type(exc).__name__
 
 
+#: Result of the last send(): HTTP status (None without a reply) and a short reason
+#: on failure. cmd_run() copies it into the alert record. It never holds the topic.
+LAST_SEND: dict = {"http_status": None, "detail": None}
+
+
 def send(message: Message, *, url: str, topic: str, timeout: float = TIMEOUT_S) -> bool:
     """Publish as JSON to the server root. True when the server accepted it.
 
@@ -112,8 +117,11 @@ def send(message: Message, *, url: str, topic: str, timeout: float = TIMEOUT_S) 
         method="POST")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return 200 <= getattr(response, "status", 200) < 300
+            status = getattr(response, "status", 200)
+            LAST_SEND.update(http_status=status, detail=None)
+            return 200 <= status < 300
     except Exception as exc:   # a notifier must not break the pipeline
+        LAST_SEND.update(http_status=getattr(exc, "code", None), detail=describe_error(exc))
         print(f"WARNING: ntfy push failed: {describe_error(exc)}")
         return False
 
@@ -550,8 +558,24 @@ def cmd_run(args: argparse.Namespace) -> int:
     out_of_credit = end_balance is not None and end_balance < minimum
     if quiet and args.outcome == "ok" and not out_of_credit:
         return 0
-    notify(message)
+    sent = notify(message)
+    record_ntfy_result(args.run_log, run_id, args.outcome, sent)
     return 0
+
+
+def record_ntfy_result(run_log: Path | str, run_id: str, outcome: str, sent: bool) -> None:
+    """OPS-ALERT-CHECK: leave a `kind: "alert"` record, so a lost push is visible."""
+    try:
+        path = ROOT / "ops" / "record-alert.py"
+        spec = importlib.util.spec_from_file_location("record_alert", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.record_alert(
+            Path(run_log), run_id=run_id, channel="ntfy",
+            event="success" if outcome == "ok" else "fail", ok=sent,
+            http_status=LAST_SEND["http_status"], detail=LAST_SEND["detail"])
+    except Exception as exc:    # never change a run's exit status
+        print(f"WARNING: could not record the ntfy result: {type(exc).__name__}")
 
 
 def main(argv: list[str] | None = None) -> int:

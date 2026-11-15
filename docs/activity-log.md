@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-11-15 — FIX-04 calibration tools and alert records (code ready, replay not yet run)
+
+**Done**
+- `ops/replay-export-checks.py` (new, read-only). For each `export-check` record it rebuilds the baselines from the records before it, pins the clock to `checked_at`, and runs `evaluate()` for five knob sets: A (production: floor 95, drop 5, intake 2), B (floor 90), C (drop 3), D (intake 3), and E (no floor, as before 2026-10-16; added to show what the floor adds alone). It prints one row per run, a summary per set, and a fidelity check (set A against the recorded checks).
+- `ops/check-export.py`: `load_baselines()` now calls `baselines_from_records(records)`; new `read_run_log()`; `evaluate()` takes an optional `now`. `main()` behaves as before.
+- `ops/record-alert.py` (new) and `ops/ntfy.py`: every healthcheck ping and every ntfy push now appends a `kind: "alert"` record (`run_id`, `channel`, `event`, `ok`, `http_status`, `exit_code`, `detail`, `at`). The record holds no URL and no topic. `|| true` stays.
+- Tests: `test_replay_export_checks.py` (5) and `test_alert_record.py` (8). Full suite: 1426 passed before, 1439 passed after (13 skipped both times).
+
+**Hard**
+- The Mac has no current run log (`data/pipeline-runs.jsonl` is absent in the worktree), so no threshold was measured. Only synthetic logs were tested. Item 2 of the brief (the replay on gov2-1) is open.
+- `evaluate()` reads the clock (`build_meta_fresh`, `intake_fresh`). Without a pinned `now`, every old record would fail `build_meta_fresh`. This is why `now` was added.
+- The replay cannot test the four failed-run incidents (12 Oct balance abort, three `import` failures, one kill): a failed run writes no `export-check` record. Only the September slide is replayable.
+- The replay uses an empty in-memory database, so `integrity` and `foreign_keys` always pass. It tests the metric checks only.
+- Healthcheck records need `curl -w '%{http_code}'`. With `-f`, curl still prints the status on HTTP errors, and prints `000` when there is no reply.
+
+**Decided**
+- A missing metric field is reported per record and the record is skipped. The replay never invents a value.
+- No threshold changed. Opus decides the values from the VPS replay.
+- The `/pipeline-check` skill is not in this repository, so it does not read the alert record yet. See OPS-ALERT-CHECK in the backlog.
+
+**Controlled failure: options (proposal only; nothing was run)**
+All three spend no LLM tokens, change no database and deploy nothing. pax chooses.
+1. *Wrapper in a scratch root, stub `pipeline.py` that exits 1* (as `test_run_pipeline_sh.py` does), with the real `HEALTHCHECK_URL` and `NTFY_TOPIC`. Runs on the Mac or the VPS, at any time. Proves: the `/fail` ping and the ntfy push leave records, and the alerts arrive. Cost: one real "down" mark on the check and one push. Risk: low. Use a second healthchecks.io check to keep the real one clean. Does not test the real pipeline path.
+2. *The real script on gov2-1, outside the cron slots, with `DOWNLOAD_SINCE=abc`.* `pipeline.py --since` is `type=int`, so argparse exits 2 before any step (read from the code, not run). The migrate check and the balance check are read-only calls. Exit 2 sends `/fail` and an ntfy push. Proves the real wrapper, the real `.env` and the real network path. Cost: one real "down" mark until the next success ping. Risk: medium. A held lock gives exit 75, so check `.pipeline.lock` first. The trigger is `manual`, so `/pipeline-check` ignores it. No run record is written, so the ntfy summary is thin.
+3. *Channels only:* `ops/ntfy.py test`, and `curl` to `$HEALTHCHECK_URL/fail` for a separate test check. Cost: nothing. Risk: none. Proves: the two channels deliver. Does not prove: that the wrapper calls them, or that the records are written.
+Recommendation: option 1 first (no risk to the live check), then option 2 once, after pax pauses the check or accepts one false "down".
+
 ### 2026-11-13 — P1 triage: three items closed, one new defect
 
 **Done**

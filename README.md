@@ -21,74 +21,9 @@ feature scope and recommended sequence toward an application companion.
 
 ## Pipeline
 
-```mermaid
-flowchart LR
-    web(["posturi.gov.ro"])
+![The posturi.gov.ro data pipeline: run-pipeline.sh, pipeline.py steps, data files, gate check and deploy](docs/img/pipeline.png)
 
-    subgraph scrape["① Scrape"]
-        direction TB
-        fetchIdx["fetch-index.py"]
-        indexCSV[/"posturi_gov_ro.csv"/]
-        fetchDetail["fetch-anunturi.py"]
-        htmlCache[/"anunturi/\n**∕*.html"/]
-        download["download-attachments.py"]
-        dlFiles[/"downloads/\n*.docx *.pdf"/]
-
-        fetchIdx --> indexCSV --> fetchDetail --> htmlCache
-        htmlCache --> download --> dlFiles
-    end
-
-    subgraph parse["② Parse"]
-        direction TB
-        parseScript["parse-anunturi.py"]
-        anunturiCSV[/"anunturi.csv"/]
-        calendarCSV[/"calendar.csv"/]
-        parseScript --> anunturiCSV & calendarCSV
-    end
-
-    subgraph db_layer["③ Import → Postgres"]
-        direction TB
-        importCSVs["import_csvs"]
-        extractCmd["extract_attachments"]
-        inferCmd["infer_postings"]
-        pg[("jobs_jobposting\nbody_markdown\nattachment_text\ninferred JSONB")]
-
-        importCSVs --> pg
-        extractCmd -->|"attachment_text"| pg
-        pg --> inferCmd -->|"inferred"| pg
-    end
-
-    subgraph enrich["④ Enrich"]
-        llmSchema["llm-schema.py"]
-    end
-
-    subgraph serve["⑤ Serve"]
-        direction TB
-        pg[/"PostgreSQL"/]
-        sqliteExport["export-to-sqlite.py\n--active-only"]
-        sqliteDB[/"posturi.sqlite\n(active only)"/]
-        webapp["Django admin +\nLLM variant tools\n(local, internal)"]
-        phpApp["PHP webapp\n(shared hosting)"]
-        browser(["browser"])
-        
-        pg --> sqliteExport --> sqliteDB --> phpApp
-        pg --> webapp
-        phpApp --> browser
-        webapp --> browser
-    end
-
-    web -->|"/toate-posturile/?pg_page=N"| fetchIdx
-    web -->|"/joburi/{slug}/"| fetchDetail
-    web -->|"wp-content/uploads/"| download
-
-    htmlCache --> parseScript
-    anunturiCSV & calendarCSV --> importCSVs
-    dlFiles --> extractCmd
-
-    pg -->|"body_markdown\n+ attachment_text"| llmSchema
-    llmSchema -->|"schema_json"| pg
-    pg --> webapp
-```
+*Figure: run-pipeline.sh starts pipeline.py, checks the SQLite export and deploys it to the shared host.*
 
 ### Quick start — run everything
 

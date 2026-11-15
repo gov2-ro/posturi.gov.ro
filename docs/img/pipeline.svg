@@ -1,0 +1,266 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 798" width="1240" height="798"
+  font-family="Arial, Helvetica, sans-serif" role="img" aria-labelledby="f1-titlu f1-desc">
+  <title id="f1-titlu">The posturi.gov.ro data pipeline</title>
+  <desc id="f1-desc">A timer on the VPS starts run-pipeline.sh twice a day. After pre-flight checks, pipeline.py scrapes the listing pages, detail pages and attachments, parses them into CSV files, imports them into PostgreSQL and enriches them with LLM extraction. It then exports the active postings to SQLite. The export goes through a gate check before the deploy copies it to the PHP webapp on the shared host, and the run leaves a run record and alerts.</desc>
+
+  <rect width="1240" height="798" fill="#ffffff" />
+  <defs>
+    <marker id="f1-sageata-gri" viewBox="0 0 10 10" refX="9" refY="5"
+      markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#616161" />
+    </marker>
+    <marker id="f1-sageata-activ" viewBox="0 0 10 10" refX="9" refY="5"
+      markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0058d2" />
+    </marker>
+  </defs>
+
+  <!-- Grid: six columns of 168 with gaps of 36 (centres 112, 316, 520, 724, 928, 1132).
+       Rows: 0 runner + source (24-104), 1 scrape steps (144-224), 2 files (264-324),
+       3 database steps (364-444, right to left), 4 PostgreSQL (484-544),
+       5 export and deploy (584-644), 6 SQLite file (684-744). -->
+
+  <!-- 1. EDGES: run record or alert (grey, dashed) -->
+  <g fill="none" stroke="#616161" stroke-width="1.5" stroke-dasharray="5 4">
+    <path d="M520,584 V564 H1132" />
+    <path d="M724,584 V564" />
+    <path d="M1132,564 V584" marker-end="url(#f1-sageata-gri)" />
+  </g>
+
+  <!-- 1. EDGES: data written or read (grey, solid) -->
+  <g fill="none" stroke="#616161" stroke-width="1.5">
+    <!-- source site to the three fetch steps -->
+    <path d="M316,104 V144" marker-end="url(#f1-sageata-gri)" />
+    <path d="M520,104 V144" marker-end="url(#f1-sageata-gri)" />
+    <path d="M928,104 V144" marker-end="url(#f1-sageata-gri)" />
+    <!-- scrape steps write files -->
+    <path d="M316,224 V264" marker-end="url(#f1-sageata-gri)" />
+    <path d="M520,224 V264" marker-end="url(#f1-sageata-gri)" />
+    <path d="M724,224 V264" marker-end="url(#f1-sageata-gri)" />
+    <path d="M928,224 V264" marker-end="url(#f1-sageata-gri)" />
+    <!-- files read by the database steps; the CSV line hops over the downloads line -->
+    <path d="M928,324 V364" marker-end="url(#f1-sageata-gri)" />
+    <path d="M724,324 V344 H920 A8,8 0 0 1 936,344 H1092 V364" marker-end="url(#f1-sageata-gri)" />
+    <!-- database steps write PostgreSQL -->
+    <path d="M1132,444 V484" marker-end="url(#f1-sageata-gri)" />
+    <path d="M928,444 V484" marker-end="url(#f1-sageata-gri)" />
+    <path d="M724,444 V484" marker-end="url(#f1-sageata-gri)" />
+    <path d="M520,444 V484" marker-end="url(#f1-sageata-gri)" />
+    <path d="M316,444 V484" marker-end="url(#f1-sageata-gri)" />
+    <path d="M160,444 V514 H232" marker-end="url(#f1-sageata-gri)" />
+    <!-- PostgreSQL to the export, the export to the SQLite file -->
+    <path d="M316,544 V584" marker-end="url(#f1-sageata-gri)" />
+    <path d="M316,644 V684" marker-end="url(#f1-sageata-gri)" />
+    <!-- the SQLite file is checked by the gate and shipped by the deploy -->
+    <path d="M400,714 H724" />
+    <path d="M520,714 V644" marker-end="url(#f1-sageata-gri)" />
+    <path d="M724,714 V644" marker-end="url(#f1-sageata-gri)" />
+  </g>
+
+  <!-- 2. EDGES: run order (brand, solid, thick) -->
+  <g fill="none" stroke="#0058d2" stroke-width="2.5">
+    <path d="M112,104 V144" marker-end="url(#f1-sageata-activ)" />
+    <path d="M196,184 H232" marker-end="url(#f1-sageata-activ)" />
+    <path d="M400,184 H436" marker-end="url(#f1-sageata-activ)" />
+    <path d="M604,184 H640" marker-end="url(#f1-sageata-activ)" />
+    <path d="M808,184 H844" marker-end="url(#f1-sageata-activ)" />
+    <path d="M1012,184 H1172 V364" marker-end="url(#f1-sageata-activ)" />
+    <path d="M1048,404 H1012" marker-end="url(#f1-sageata-activ)" />
+    <path d="M844,404 H808" marker-end="url(#f1-sageata-activ)" />
+    <path d="M640,404 H604" marker-end="url(#f1-sageata-activ)" />
+    <path d="M436,404 H400" marker-end="url(#f1-sageata-activ)" />
+    <path d="M232,404 H196" marker-end="url(#f1-sageata-activ)" />
+    <path d="M112,444 V614 H232" marker-end="url(#f1-sageata-activ)" />
+    <path d="M400,614 H436" marker-end="url(#f1-sageata-activ)" />
+    <path d="M604,614 H640" marker-end="url(#f1-sageata-activ)" />
+    <path d="M808,614 H844" marker-end="url(#f1-sageata-activ)" />
+  </g>
+
+  <!-- 3. NODES: data artefacts and the source site (neutral) -->
+  <g>
+    <rect x="232" y="24" width="984" height="80" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="724" y="60">posturi.gov.ro (source site)</tspan>
+      <tspan x="724" y="80">listing pages, detail pages, attachment files</tspan>
+    </text>
+
+    <rect x="232" y="264" width="168" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="316" y="290">Index CSV</tspan>
+      <tspan x="316" y="310">posturi_gov_ro.csv</tspan>
+    </text>
+
+    <rect x="436" y="264" width="168" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="520" y="290">HTML cache</tspan>
+      <tspan x="520" y="310">anunturi/*.html</tspan>
+    </text>
+
+    <rect x="640" y="264" width="168" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="724" y="290">anunturi.csv</tspan>
+      <tspan x="724" y="310">calendar.csv</tspan>
+    </text>
+
+    <rect x="844" y="264" width="168" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="928" y="290">downloads/</tspan>
+      <tspan x="928" y="310">attachment files</tspan>
+    </text>
+
+    <rect x="232" y="484" width="984" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="724" y="520">PostgreSQL: full archive of postings</tspan>
+    </text>
+
+    <rect x="232" y="684" width="168" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="316" y="710">posturi.sqlite</tspan>
+      <tspan x="316" y="730">active only</tspan>
+    </text>
+
+    <rect x="1048" y="584" width="168" height="60" rx="8"
+      fill="#ffffff" stroke="#757575" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="1132" y="610">Run log, alerts</tspan>
+      <tspan x="1132" y="630">(healthcheck, ntfy)</tspan>
+    </text>
+  </g>
+
+  <!-- 3. NODES: process steps (active) and the one filled node -->
+  <g>
+    <rect x="28" y="24" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="112" y="50">run-pipeline.sh</tspan>
+      <tspan x="112" y="70">VPS timer or cron,</tspan>
+      <tspan x="112" y="90">twice a day</tspan>
+    </text>
+
+    <rect x="28" y="144" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="112" y="170">Pre-flight checks</tspan>
+      <tspan x="112" y="190">migrations,</tspan>
+      <tspan x="112" y="210">LLM balance</tspan>
+    </text>
+
+    <rect x="232" y="144" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="316" y="180">fetch-index</tspan>
+      <tspan x="316" y="200">listing pages</tspan>
+    </text>
+
+    <rect x="436" y="144" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="520" y="180">fetch-detail</tspan>
+      <tspan x="520" y="200">detail pages</tspan>
+    </text>
+
+    <rect x="640" y="144" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="724" y="180">parse</tspan>
+      <tspan x="724" y="200">HTML to CSV</tspan>
+    </text>
+
+    <rect x="844" y="144" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="928" y="180">download</tspan>
+      <tspan x="928" y="200">attachments</tspan>
+    </text>
+
+    <rect x="1048" y="364" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="1132" y="390">import</tspan>
+      <tspan x="1132" y="410">import_csvs,</tspan>
+      <tspan x="1132" y="430">normalises județe</tspan>
+    </text>
+
+    <rect x="844" y="364" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="928" y="400">extract</tspan>
+      <tspan x="928" y="420">attachment text</tspan>
+    </text>
+
+    <rect x="640" y="364" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="724" y="390">schema (LLM)</tspan>
+      <tspan x="724" y="410">llm-schema.py,</tspan>
+      <tspan x="724" y="430">pinned prompt</tspan>
+    </text>
+
+    <rect x="436" y="364" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="520" y="400">infer</tspan>
+      <tspan x="520" y="420">metadata</tspan>
+    </text>
+
+    <rect x="232" y="364" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="316" y="400">occupations,</tspan>
+      <tspan x="316" y="420">salary</tspan>
+    </text>
+
+    <rect x="28" y="364" width="168" height="80" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="112" y="400">observe</tspan>
+      <tspan x="112" y="420">(optional)</tspan>
+    </text>
+
+    <rect x="232" y="584" width="168" height="60" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="316" y="610">export-sqlite</tspan>
+      <tspan x="316" y="630">active postings</tspan>
+    </text>
+
+    <rect x="436" y="584" width="168" height="60" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="520" y="610">check-export</tspan>
+      <tspan x="520" y="630">deploy gate</tspan>
+    </text>
+
+    <rect x="640" y="584" width="168" height="60" rx="8"
+      fill="#e8f0fb" stroke="#0058d2" stroke-width="1.5" />
+    <text fill="#121212" text-anchor="middle" font-size="16">
+      <tspan x="724" y="610">deploy-php.sh</tspan>
+      <tspan x="724" y="630">--data-only</tspan>
+    </text>
+
+    <rect x="844" y="584" width="168" height="60" rx="8"
+      fill="#0058d2" stroke="#00357e" stroke-width="1.5" />
+    <text fill="#ffffff" text-anchor="middle" font-size="16">
+      <tspan x="928" y="610">PHP webapp</tspan>
+      <tspan x="928" y="630">shared host</tspan>
+    </text>
+  </g>
+
+  <!-- 5. LEGEND: one entry for each line style in use -->
+  <g>
+    <line x1="28" y1="774" x2="78" y2="774" stroke="#0058d2" stroke-width="2.5" />
+    <text x="88" y="780" fill="#121212" font-size="16">Run order</text>
+    <line x1="232" y1="774" x2="282" y2="774" stroke="#616161" stroke-width="1.5" />
+    <text x="292" y="780" fill="#121212" font-size="16">Data written or read</text>
+    <line x1="500" y1="774" x2="550" y2="774" stroke="#616161" stroke-width="1.5"
+      stroke-dasharray="5 4" />
+    <text x="560" y="780" fill="#616161" font-size="16">Run record or alert</text>
+  </g>
+</svg>

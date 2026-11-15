@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-11-15 — Pipeline figure, backlog triage, „Importă datele” fix
+
+**Done**
+- README: a new pipeline figure (`docs/img/pipeline.svg`, `.png`) under § Pipeline. The old Mermaid chart is deleted: it ran `schema` after `infer` and did not show occupations, salary, observe, check-export or cron.
+- Backlog: ticked LATER-05 and OPS-MAIL / P3. The beta lines UX-06, UX-12, DATA-01 and DATA-06 are now decisions only, so each ID has one checkbox. The 261016 notes moved to `docs/archive-reference/backlog-261016-notes.md`. Their open items became QUAL-01, DATA-11, DATA-QA-01 and UX-17, or notes on BETA-V5, UX-07 and DATA-ORG-06.
+- BUG-EMP-IMPORT: import and export messages now show under „Importă datele” (`[data-io-status]`). A single-posting file gets a message that names „Exportă datele”. „Descarcă datele (.json)” is now „Descarcă anunțul (.json)”. 36/36 employer-builder browser tests pass.
+
+**Hard**
+- The existing browser test already imported an export with success. So the import code worked; the message was out of view, in the „Descarcă” section at the end of the page.
+
+**Decided**
+- pax: RSS on saved searches ships before email (UX-14). The RSS link already exists on /salvate/ (UX-15). Cost of email first: a provider, consent text and key backups before we know that anyone wants alerts.
+- pax: manual local backups (scp) until the bigger machine (BETA-BACKUP).
+- Measured: the Mac `.env` has an empty `CF_ZONE_ID`, so a deploy from the Mac does not purge Cloudflare (BETA-CACHE). Assumed, not checked: the import bug on live has no second cause; Chrome was not available to this session.
+
 ### 2026-11-15 — Controlled alert test passes; FIX-04 and OPS-ALERT-CHECK closed
 
 **Done**

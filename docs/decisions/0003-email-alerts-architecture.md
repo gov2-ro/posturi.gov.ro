@@ -22,6 +22,8 @@ Date: 2026-11-02; amended 2026-11-15. Status: **accepted** (2026-11-15). Applies
 - **Data controller: pax, as a natural person.** gov2 is not an organisation. The privacy text names the controller and a contact address.
 - **Shared host: Dreamhost (US) is accepted for now.** The subscriptions there hold the search filters and the IP-based rate limit in clear text. A later move to an EU host is planned, not scheduled.
 - Brevo is a marketing platform too. Use only its transactional API. Do not upload subscribers to Brevo contact lists.
+- **Accepted for the prototype (pax, 2026-11-15):** the free plan adds the Brevo branding to each email. Brevo records opens and clicks of transactional emails, and we found no setting that turns this off. pax wants the click rate. The subscribe form and the privacy text must say that the provider measures opens and clicks. The consent at subscription covers this measurement.
+- **Brevo settings (read in the dashboard 2026-11-15, nothing changed):** Transactional → Settings → Tracking has „Anonymous email tracking”, set to No. With Yes, Brevo counts opens and clicks but does not link them to an address. Proposal: set it to Yes; the click rate stays. Retention rules: logs are deleted after 1 month, and previews are never stored. The domain setup can also brand the tracking links with our own domain.
 
 
 ### Roles
@@ -49,8 +51,9 @@ Date: 2026-11-02; amended 2026-11-15. Status: **accepted** (2026-11-15). Applies
 2. **Confirmation email.** A VPS cron job runs every 5 minutes. It pulls the pending rows over SSH, decrypts them and sends the confirmation emails. The provider key stays on the VPS only. A confirmation therefore takes up to 5 minutes.
 3. **Confirm.** The link goes to the host. The host sets `confirmed`.
 4. **Digest.** This is the last step of `run-pipeline.sh` (the evening run only). The VPS pulls the confirmed rows. A subscription is due when 3 days have passed since its last digest (or since confirmation) **and** new postings exist (`created_at` > the last digest). The step runs after `deploy-php.sh --data-only` has shipped the new database. The VPS runs `ssh <host> php bin/alert-candidates.php` with the due subscription ids and their last `created_at`. The script returns JSON: the matching postings for each id (id, title, employer, place, deadline, URL). The JSON contains no addresses. The VPS decrypts the addresses, renders the digest and sends it. It sends nothing when nothing is new.
-5. **Unsubscribe.** Each email has a link and the `List-Unsubscribe` + `List-Unsubscribe-Post` headers (RFC 8058). Both go to the host and delete the row immediately.
-6. **Bounces and complaints.** The webhook of the provider goes to the host (a public URL). The host deletes the row. Alternative: the VPS reads the suppression list of the provider before each send.
+5. **Unsubscribe.** Each email has a link to the host that deletes that subscription immediately. The mail-client button (`List-Unsubscribe`) is Brevo's: Brevo adds its own header to transactional emails, and the API does not accept standard headers. That button puts the address on the Brevo blocked list, and step 6 deletes all its subscriptions. To check on the first test email ("Show original"): the header pair and its DKIM signature.
+6. **Bounces, complaints and Brevo unsubscribes (decided 2026-11-15).** Before each send, the VPS reads the Brevo blocked list. For each blocked address, it asks the host over SSH to delete every row with that `email_index`. The host has no webhook endpoint. When a person subscribes again after a block, the VPS removes the address from the blocked list before it sends the confirmation.
+7. **Manage from the website (decided 2026-11-15): no accounts, one-time links.** A page „Abonamentele mele” asks for the address. The host computes `email_index` and stores a one-time login token (hash only, valid 1 hour). The VPS sends the link with the next confirmation pass, so it arrives within 5 minutes. The page always answers the same way, so it does not show whether an address has subscriptions. The link opens a list of the subscriptions of that address, with delete and „delete all”. The manage link in each digest opens the same list.
 
 ### Data on the VPS
 - `alerts.sqlite` holds the send log: `subscription_id`, `last_sent_at`, `last_posting_created_at`, and the result of the provider call. It holds no plain addresses.
@@ -66,12 +69,12 @@ Date: 2026-11-02; amended 2026-11-15. Status: **accepted** (2026-11-15). Applies
 - **Requirements on the VPS:** Python with PyNaCl (1.5.0 is installed; `SealedBox` reads what `sodium_crypto_box_seal` writes), the provider key, and two cron entries (every 5 minutes, and the step after the evening run). PHP is not needed: on 2026-11-02 gov2-1 had no PHP and no web server.
 - **The shared host also needs** shell access over SSH for `php` CLI. The deploy already runs `ssh` on it (`deploy-php.sh`).
 - **Alternatives not taken:**
+  - User accounts with passwords. They add a password store, a reset flow and more personal data. A one-time link proves control of the address, which is all that managing subscriptions needs.
   - The host sends the confirmation itself. That puts a provider key on the shared host, and a leaked key can send spam from our domain.
   - Everything on the VPS. That exposes the box that holds Postgres and the LLM keys.
   - Everything on the host. It has no backups and no alerts, and the host does not know when new data arrives.
 
 ## Open
-- Check on a Brevo account, before the build: an account for a natural person; custom `List-Unsubscribe` and `List-Unsubscribe-Post` headers on the transactional API; open and click tracking off; whether transactional sends create Brevo contacts; Brevo branding on free-plan transactional emails.
+- Check on the Brevo account (opened by pax 2026-11-15) before the build: on a test email, Brevo's `List-Unsubscribe` and `List-Unsubscribe-Post` headers. Answered 2026-11-15 from a search summary, not from the Brevo documentation: transactional sends do not create contacts; tracking cannot be turned off; free-plan emails carry the Brevo branding.
 - Check that the shared host has `php` CLI with `sodium` on the SSH path (`ssh <host> 'php -v; php -m'`).
-- Whether the bounce webhook goes to the host or the VPS reads the suppression list. Proposal: the VPS reads the Brevo list of blocked addresses before each send, and asks the host over SSH to delete those rows. Then the host needs no public webhook endpoint.
 - The privacy text in Romanian: what we store, where, for how long, and how to delete it.

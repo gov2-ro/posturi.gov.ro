@@ -1,6 +1,6 @@
 # 0003 — Email alerts: the shared host keeps subscriptions, the VPS sends
 
-Date: 2026-11-02. Status: **proposed**. The email provider is not chosen yet. Applies to UX-14. Uses the search key of [ADR 0001](0001-saved-search-identity.md).
+Date: 2026-11-02; amended 2026-11-15. Status: **accepted** (2026-11-15). Applies to UX-14. Uses the search key of [ADR 0001](0001-saved-search-identity.md).
 
 ## Context
 
@@ -14,6 +14,15 @@ Date: 2026-11-02. Status: **proposed**. The email provider is not chosen yet. Ap
   - DNS is on Cloudflare.
 
 ## Decision
+
+### Provider, sender and controller (2026-11-15)
+- **Provider: Brevo** (France; data in France and Germany). The free plan allows 300 emails per day. pax chose it over Scaleway TEM (300 per month free). When the cap is too small, first make the digest less frequent. Then consider a paid plan.
+- **The daily cap is a hard limit.** The VPS counts the emails it sends each UTC day. Confirmation emails go first. The digest step sends the due subscriptions with the oldest last digest first, up to the remaining allowance. It carries the rest to the next run. It never sends past the cap.
+- **Sender domain: `dispecerat.gov2.ro`.** SPF, DKIM and DMARC go in Cloudflare. The subdomain keeps the reputation of `gov2.ro` separate.
+- **Data controller: pax, as a natural person.** gov2 is not an organisation. The privacy text names the controller and a contact address.
+- **Shared host: Dreamhost (US) is accepted for now.** The subscriptions there hold the search filters and the IP-based rate limit in clear text. A later move to an EU host is planned, not scheduled.
+- Brevo is a marketing platform too. Use only its transactional API. Do not upload subscribers to Brevo contact lists.
+
 
 ### Roles
 - **The shared host owns the subscriptions.** It serves the subscribe form, the confirmation link and the unsubscribe link. It is the only authority on who is subscribed.
@@ -62,7 +71,7 @@ Date: 2026-11-02. Status: **proposed**. The email provider is not chosen yet. Ap
   - Everything on the host. It has no backups and no alerts, and the host does not know when new data arrives.
 
 ## Open
-- The email provider and the sender subdomain (SPF, DKIM, DMARC on Cloudflare). This needs a separate discussion.
+- Check on a Brevo account, before the build: an account for a natural person; custom `List-Unsubscribe` and `List-Unsubscribe-Post` headers on the transactional API; open and click tracking off; whether transactional sends create Brevo contacts; Brevo branding on free-plan transactional emails.
 - Check that the shared host has `php` CLI with `sodium` on the SSH path (`ssh <host> 'php -v; php -m'`).
-- Whether the bounce webhook goes to the host or the VPS reads the suppression list.
+- Whether the bounce webhook goes to the host or the VPS reads the suppression list. Proposal: the VPS reads the Brevo list of blocked addresses before each send, and asks the host over SSH to delete those rows. Then the host needs no public webhook endpoint.
 - The privacy text in Romanian: what we store, where, for how long, and how to delete it.

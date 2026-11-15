@@ -2,6 +2,19 @@
 
 ## 2026
 
+### 2026-11-15 — Controlled alert test passes; FIX-04 and OPS-ALERT-CHECK closed
+
+**Done**
+- The posturi-vps session ran the fake-pipeline test on gov2-1 at 17:54:47Z, after pax approved it there. Scratch copy from `git archive`, `.env` as a read-only symlink, and a stub `$PYTHON` whose `pipeline.py` exits 1.
+- Measured: exit 1, no `deploy-php.sh` call. Three alert records, all `ok: true`, HTTP 200: healthcheck `start`, healthcheck `fail`, ntfy `fail`. pax saw the push („posturi failed exit 1 - the site is still serving the previous build”) and the check go „down”. A success ping at 17:57:22Z returned 200. The scratch folder is removed.
+
+**Hard**
+- `pgrep -f run-pipeline.sh` in the precondition matches the shell that runs the check itself. The VPS session used `ps` with a filter instead. Fix that line before anyone reuses the script.
+- The alert records went to the scratch run log only, so the real run log has no trace of the test. That is intended.
+
+**Decided**
+- Close FIX-04 although the spec also names backups and log retention. Those are tracked under BETA-BACKUP (deferred by pax until a bigger machine) and OPS-02. Cost of keeping FIX-04 open: a P1 that only waits for an unrelated, deferred decision.
+
 ### 2026-11-15 — FIX-04 thresholds: keep the production values
 
 **Done**

@@ -2,6 +2,35 @@
 
 ## 2026
 
+### 2026-11-15 — UX-14 email alerts built (branch `ux-14-email-alerts`, not deployed)
+
+**Done**
+- Step 0 (read-only, shared host): `PHP 8.2.35 (cli) (NTS)`, `pdo_sqlite` and `sodium` present; the SSH login lands in `/home/pax`. `ssh` with `BatchMode` works from the Mac.
+- Host (`webapp-php/`): `inc/alerts.php` (storage, seal, pepper, limits, outbox), `inc/alerts_view.php`, `pages/alerts_{home,subscribe,confirm,manage}.php`, routes under `/alerte/` in `index.php` (before the query decoder), `bin/alerts.php` (pull, outbox-done, delete, candidates, digest-done), `bin/` denied in `.htaccess` and `router.php`, a footer link, and the „Alertă pe email” button on /salvate/ (`saved.php`, `static/searches.js`).
+- `deploy-php.sh` excludes the private directory by name (`/posturi-private/`, `/alerts-config.php`, `/subscriptions.sqlite*`, and `ALERTS_DIR` when it is inside the web root). Checked with a local `rsync --dry-run --delete`: only a stale file was listed for deletion.
+- VPS: `ops/alerts.py` (keygen, outbox, digest, `--dry-run`, daily cap, send log `data/alerts.sqlite`, ntfy on failure, a file lock).
+- Privacy draft in `/despre/#confidentialitate-alerte`, with `[NUME]` and `[ADRESĂ DE CONTACT]` left open. Operations steps in `docs/deploy-vps.md`.
+- Tests. PHP `tests/alerts_test.php`: 167 assertions (added to CI). Playwright `alerts.spec.js`: 12 tests; full suite 482 passed, 52 skipped, 0 failed (6.5 min). Python `webapp/tests/test_alerts.py`: 21 tests; full `webapp` suite 1479 passed; `ruff check` clean. All other PHP suites pass. A test seals in PHP and opens in Python: the two sealed-box formats agree.
+
+**Hard**
+- A `since` of 05:30Z did not match a posting created at 08:00+03:00 (05:00Z): my test case was wrong, not the code.
+- Playwright treats an `sr-only` input as visible. The honeypot test checks `aria-hidden` and `tabindex=-1` instead, and the width checks skip `.sr-only`.
+- Not checked against the live Brevo API (by rule: no real call). The shapes of `GET /smtp/blockedContacts` (`contacts[].email`, `limit`/`offset`) and of `DELETE .../{email}` (404 when not blocked) are assumed from memory of the documentation.
+
+**Decided**
+- First-seen field: `job_postings.created_at`. Measured on the local database (1848 rows): `2026-05-27T00:37:00.576520+03:00`. The fixture uses `2026-09-01 10:00:00` (no zone, read as UTC). `candidates` compares as times, not strings.
+- A „Abonamentele mele” link (`/alerte/intra/{token}`) works for 1 hour, and the first change marks `used_at`. It is not single-use: deleting one subscription and then another would need a new email each time. Cost of the alternative: more emails.
+- After a reader deletes the subscription whose link they hold, the page issues a new one-hour link to the rest, with no email (the reader has just proved control).
+- The same answer for a full address (20 rows) and for a known address: both queue a `manage` email, so the owner can clean up.
+- Brevo HTTP 400 on one message drops that outbox row and does not stop the run. Any other failure stops the run (brief). Cost of stopping on 400: one bad address would block every later email.
+- A digest is due 3 days minus 1 hour after the last one, because the stored time is the moment of the search, a few seconds before the next cron run.
+- `digest-done` stores the time of the search, not of the send: a posting created in between is not lost.
+- `digest` also runs the outbox pass first, so confirmations go before digests inside one run. The cap is a hard limit for both; a full digest day can delay a confirmation to the next UTC day (no reserve built).
+- The client address for the limit is `CF-Connecting-IP`, else the socket. Assumed: the site sits behind Cloudflare. Without Cloudflare the header can be forged, and the limit weakens.
+- No checkbox for consent: two lines of text next to the button (brief). pax decides when approving the privacy text.
+- The shared host reads `ALERTS_DIR` only from its environment (tests) and otherwise uses `<web root>/../posturi-private`. Assumed: PHP on Dreamhost may write there (no `open_basedir`). Unverified; deploy step 6 tests it.
+- Python tests skip without PyNaCl. CI needs `pynacl` in `webapp/requirements.txt`, a file outside the brief: left for Opus.
+
 ### 2026-11-15 — Pipeline figure, backlog triage, „Importă datele” fix
 
 **Done**

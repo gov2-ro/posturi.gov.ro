@@ -106,6 +106,7 @@ require __DIR__ . '/../inc/header.php';
       <button type="button" data-search-rename class="<?= $btn ?>">Redenumește<span class="sr-only" data-f="sr-rename"></span></button>
       <button type="button" data-search-delete class="<?= $btn ?>">Șterge<span class="sr-only" data-f="sr-delete"></span></button>
       <a data-f="rss" class="<?= $btn ?>">RSS</a>
+      <a data-f="alerts" class="<?= $btn ?>">Alertă pe email<span class="sr-only" data-f="sr-alerts"></span></a>
     </div>
   </li>
 </template>

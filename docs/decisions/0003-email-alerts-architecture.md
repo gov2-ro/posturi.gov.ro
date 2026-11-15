@@ -78,6 +78,6 @@ The [build brief](../briefs/2026-11-15-email-alerts.md) adds four details: an `o
   - Everything on the host. It has no backups and no alerts, and the host does not know when new data arrives.
 
 ## Open
-- Check on the Brevo account (opened by pax 2026-11-15) before the build: on a test email, Brevo's `List-Unsubscribe` and `List-Unsubscribe-Post` headers. Answered 2026-11-15 from a search summary, not from the Brevo documentation: transactional sends do not create contacts; tracking cannot be turned off; free-plan emails carry the Brevo branding.
+- Done 2026-11-15: a test email through the API passed SPF, DKIM (`d=dispecerat.gov2.ro`) and DMARC. Brevo adds `List-Unsubscribe` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`, and its DKIM signature covers both. Transactional sends do not create contacts; free-plan emails carry the Brevo branding.
 - Check that the shared host has `php` CLI with `sodium` on the SSH path (`ssh <host> 'php -v; php -m'`).
 - The privacy text in Romanian: what we store, where, for how long, and how to delete it.

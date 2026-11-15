@@ -64,6 +64,15 @@ SITE_URL="${SITE_URL:-$(env_value SITE_URL)}"
 CF_ZONE_ID="${CF_ZONE_ID:-$(env_value CF_ZONE_ID)}"
 CF_API_TOKEN="${CF_API_TOKEN:-$(env_value CF_API_TOKEN)}"
 : "${DEPLOY_PATH:=public_html}"
+# UX-14: the private directory of the email alerts (subscriptions.sqlite and
+# alerts-config.php). It sits outside the web root by default. The code deploy
+# must never delete it, so it is excluded by name, not only by the *.sqlite pattern.
+ALERTS_DIR="${ALERTS_DIR:-$(env_value ALERTS_DIR)}"
+: "${ALERTS_DIR:=${DEPLOY_PATH}/../posturi-private}"
+alerts_excludes=(--exclude='/posturi-private/' --exclude='/alerts-config.php' --exclude='/subscriptions.sqlite*')
+case "$ALERTS_DIR" in
+    "$DEPLOY_PATH"/*) alerts_excludes+=(--exclude="/${ALERTS_DIR#"$DEPLOY_PATH"/}/") ;;   # inside the web root
+esac
 
 if [[ -z "$DEPLOY_HOST" ]]; then
     echo "Usage: $0 user@host [remote_path] [--code-only|--data-only] [--no-export]"
@@ -254,6 +263,7 @@ if [[ $deploy_code -eq 1 ]]; then
         --exclude='*.sqlite' \
         --exclude='*.sqlite-wal' \
         --exclude='*.sqlite-shm' \
+        "${alerts_excludes[@]}" \
         "$SCRIPT_DIR/webapp-php/" \
         "${DEPLOY_HOST}:${DEPLOY_PATH}/"
 fi

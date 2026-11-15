@@ -11,6 +11,11 @@ if (preg_match('/\.sqlite(-wal|-shm)?$/i', $path)) {
     http_response_code(403);
     exit('Forbidden');
 }
+// Mirror the .htaccess deny of bin/ (command-line tools).
+if (preg_match('#^/bin(/|$)#', $path)) {
+    http_response_code(404);
+    exit('Not found');
+}
 if ($path !== '/' && is_file($file)) {
     return false; // let the built-in server serve it with the right MIME type
 }

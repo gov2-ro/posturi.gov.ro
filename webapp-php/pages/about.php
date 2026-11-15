@@ -88,6 +88,23 @@ require __DIR__ . '/../inc/header.php';
       Datele de contact din anunțuri (nume, telefoane, e-mailuri) sunt cele publicate de instituții pe
       posturi.gov.ro, pentru candidați.
     </p>
+
+    <?php /* UX-14 DRAFT for pax: approve the text and fill the two placeholders before the first deploy. */ ?>
+    <h3 id="confidentialitate-alerte">Alerte pe email</h3>
+    <p>
+      Dacă te abonezi la o alertă pe email, vom păstra datele de mai jos. Fără abonare, nu păstrăm nicio adresă de email.
+    </p>
+    <ul>
+      <li><strong>Cine răspunde de date:</strong> [NUME], persoană fizică (operator). Contact: [ADRESĂ DE CONTACT].</li>
+      <li><strong>Ce păstrăm:</strong> adresa de email, căutarea abonată (filtrele ei și numele ei), data confirmării și data ultimului rezumat. Pentru limita de cereri păstrăm o amprentă a adresei IP, cel mult 2 ore.</li>
+      <li><strong>Unde:</strong> pe serverul de găzduire al site-ului (în SUA) păstrăm adresa criptată și căutarea. Cheia care deschide adresa și jurnalul trimiterilor sunt pe alt server, al nostru. Emailurile pleacă prin Brevo (Franța; datele rămân în UE, jurnalele se șterg după 1 lună).</li>
+      <li><strong>Ce primești:</strong> un email de confirmare, apoi cel mult un rezumat la 3 zile, doar când apar anunțuri noi pentru căutarea ta.</li>
+      <li><strong>Numărarea deschiderilor și a clicurilor:</strong> Brevo numără anonim deschiderile și clicurile din emailuri. Numărătoarea nu este legată de adresa ta. O folosim ca să știm dacă alertele sunt utile.</li>
+      <li><strong>Temeiul:</strong> consimțământul tău, dat prin abonare și confirmare. Îl poți retrage oricând.</li>
+      <li><strong>Cât timp:</strong> până ștergi abonarea. O abonare neconfirmată se șterge după 48 de ore.</li>
+      <li><strong>Cum ștergi:</strong> apasă „Șterge această abonare” în orice email primit sau deschide <a href="/alerte/">Abonamentele mele</a> (primești un link pe email). Dacă folosești butonul de dezabonare al clientului de email, ștergem toate abonările adresei tale.</li>
+      <li><strong>Drepturile tale:</strong> acces, rectificare, ștergere, restrângere și portabilitate. Scrie-ne la adresa de contact. Ai dreptul să depui o plângere la ANSPDCP (<a href="https://www.dataprotection.ro" rel="noopener">dataprotection.ro</a>).</li>
+    </ul>
   </div>
 
   <?php /* Statistici and Angajatori used to be masthead links. They are pages

@@ -363,6 +363,9 @@
       qs('[data-f="meta"]', li).textContent = 'salvată ' + fmtDate(rec.savedAt);
       qs('[data-f="default"]', li).hidden = !(def && def.key === rec.key);
       qs('[data-f="rss"]', li).setAttribute('href', '/posturi.rss?' + rec.qs);
+      qs('[data-f="alerts"]', li).setAttribute('href', '/alerte/abonare/?cheie=' + encodeURIComponent(rec.qs)
+        + '&sort=' + encodeURIComponent(rec.sort) + '&nume=' + encodeURIComponent(rec.label));
+      qs('[data-f="sr-alerts"]', li).textContent = ': ' + rec.label;
       var isEdit = editing === rec.key;
       link.hidden = isEdit;
       form.hidden = !isEdit;

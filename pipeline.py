@@ -244,6 +244,20 @@ def _build_cmd(
     return cmd
 
 
+def _run_child(cmd: list[str | Path]) -> tuple[int, float]:
+    """Run one child; return `(exit code, peak RSS in MB)` for that child only.
+
+    `os.wait4()` gives the rusage of this one child. `RUSAGE_CHILDREN` would give
+    the largest child so far. `ru_maxrss` is in bytes on macOS and in kilobytes
+    on Linux. A child killed by signal N has exit code -N, as in `subprocess`.
+    """
+    proc = subprocess.Popen(cmd, cwd=ROOT)
+    _, status, usage = os.wait4(proc.pid, 0)
+    proc.returncode = os.waitstatus_to_exitcode(status)  # stops Popen from waiting again
+    divisor = 1024 * 1024 if sys.platform == "darwin" else 1024
+    return proc.returncode, round(usage.ru_maxrss / divisor, 1)
+
+
 def _run_step(step: str, cmd: list[str | Path]) -> dict:
     """Run a single step and return its record.
 
@@ -257,24 +271,28 @@ def _run_step(step: str, cmd: list[str | Path]) -> dict:
     started = _utc_now()
     t0 = time.monotonic()
 
+    max_rss_mb: float | None = None
+
     def record(exit_code: int) -> dict:
-        return {
+        rec = {
             "step": step,
             "ok": exit_code == 0,
             "exit": exit_code,
             "started_at": started,
             "duration_s": round(time.monotonic() - t0, 1),
         }
+        if max_rss_mb is not None:
+            rec["max_rss_mb"] = max_rss_mb
+        return rec
 
     try:
-        subprocess.run(cmd, check=True, cwd=ROOT)
-        rec = record(0)
-        print(f"\n  ✓ {step} completed in {rec['duration_s']:.1f}s")
-        return rec
-    except subprocess.CalledProcessError as exc:
-        rec = record(exc.returncode)
-        print(f"\n  ✗ {step} FAILED (exit {exc.returncode}) after {rec['duration_s']:.1f}s",
-              file=sys.stderr)
+        exit_code, max_rss_mb = _run_child(cmd)
+        rec = record(exit_code)
+        if exit_code == 0:
+            print(f"\n  ✓ {step} completed in {rec['duration_s']:.1f}s")
+        else:
+            print(f"\n  ✗ {step} FAILED (exit {exit_code}) after {rec['duration_s']:.1f}s",
+                  file=sys.stderr)
         return rec
     except FileNotFoundError as exc:
         rec = record(127)

@@ -31,6 +31,22 @@
 - The shared host reads `ALERTS_DIR` only from its environment (tests) and otherwise uses `<web root>/../posturi-private`. Assumed: PHP on Dreamhost may write there (no `open_basedir`). Unverified; deploy step 6 tests it.
 - Python tests skip without PyNaCl. CI needs `pynacl` in `webapp/requirements.txt`, a file outside the brief: left for Opus.
 
+### 2026-11-16 — UX-14 email alerts live on posturi.gov2.ro
+
+**Done**
+- pax deployed the code, made the host config and the VPS key, and installed the two cron lines (`docs/deploy-vps.md` § Email alerts).
+- Live test: subscription 1 sent its confirmation at 22:45Z and was confirmed. Subscription 2 got its confirmation from the first `outbox` cron run, at 22:55Z. The VPS session read the host rows and the send log (no addresses).
+- The Brevo test email (2026-11-15) passed SPF, DKIM and DMARC, with the one-click `List-Unsubscribe` pair under DKIM.
+
+**Hard**
+- `pull` said "alerts are not configured": the `pepper` in `alerts-config.php` was not valid base64, so `al_config()` rejected the whole file. pax replaced it with `openssl rand -base64 32`. No data used the old pepper.
+- `logs/alerts.log` was missing after the install. Cause: the lines were new, and the first `*/5` slot had not come yet. Not a fault.
+- The VPS `.env` has `DEPLOY_HOST` and `DEPLOY_PATH` twice. The scripts read the last line (`ops/env.sh`), so they work; a shell `grep` without `tail -1` does not.
+
+**Decided**
+- The host files are private: `posturi-private/` mode 700, `alerts-config.php` mode 600.
+- Not yet measured: the first digest. It is due 3 days after confirmation, at 19:30 Bucharest, if new postings match.
+
 ### 2026-11-15 — Pipeline figure, backlog triage, „Importă datele” fix
 
 **Done**

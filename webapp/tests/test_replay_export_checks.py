@@ -149,9 +149,27 @@ def test_missing_metric_field_is_reported_not_invented(replay, tmp_path):
     log = tmp_path / "runs.jsonl"
     t = datetime(2026, 9, 22, 11, 15, tzinfo=timezone.utc)
     metrics = _metrics(t)
-    del metrics["body_fill_pct"]
+    del metrics["schema_coverage_pct"]
     log.write_text(json.dumps({"kind": "export-check", "run_id": _stamp(t),
                                "checked_at": _stamp(t), "status": "ok",
                                "metrics": metrics, "checks": []}) + "\n")
     rows = replay.replay(replay.ce.read_run_log(log))
-    assert rows[0]["error"] and "body_fill_pct" in rows[0]["error"]
+    assert rows[0]["error"] and "schema_coverage_pct" in rows[0]["error"]
+
+
+
+def test_missing_fill_rate_is_backfilled_not_skipped(replay, tmp_path):
+    """Records from before the fill-rate checks still replay. On 2026-11-15 the VPS
+    replay skipped all 47 records of 2026-09-10..10-03 for `title_fill_pct`, so the
+    September slide was never evaluated."""
+    log = tmp_path / "runs.jsonl"
+    _build_log(log)
+    records = replay.ce.read_run_log(log)
+    for rec in records:
+        if rec.get("kind") == "export-check":
+            for key in ("title_fill_pct", "body_fill_pct"):
+                rec["metrics"].pop(key, None)
+    rows = replay.replay(records)
+    assert rows and not any(r["error"] for r in rows)
+    assert all(set(r["backfilled"]) == {"title_fill_pct", "body_fill_pct"} for r in rows)
+    assert any("schema_sustained" in dict(r["fired"]["A"]) for r in rows)

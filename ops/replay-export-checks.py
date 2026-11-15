@@ -71,6 +71,15 @@ INCIDENT_WINDOWS = [
         "end": "2026-10-02T15:33:00Z",
         "checks": {"schema_sustained", "schema_floor", "schema_coverage"},
     },
+    {
+        # DATA-08: stale `no_body` flags; anomaly_pct.no_body 0.1% -> 2.1% in the
+        # export of run 2026-10-18T15:33:01Z. The end is an assumption: the last
+        # run on which the 2026-11-15 VPS replay still flagged it, plus a margin.
+        "name": "DATA-08 stale no_body flags",
+        "start": "2026-10-18T15:33:00Z",
+        "end": "2026-10-22T00:00:00Z",
+        "checks": {"anomaly_stable", "anomaly_sustained"},
+    },
 ]
 UNREPLAYABLE = [
     "2026-10-12 18:33 abort on a low DeepSeek balance (no export-check record)",
@@ -125,22 +134,36 @@ def replay(records: list[dict], knob_sets=CANDIDATES) -> list[dict]:
                 "checks": {},
                 "error": None,
             }
-            for ks in knob_sets:
+            # Older records (before the fill-rate checks) lack `*_fill_pct`. Fill a
+            # missing rate with 100.0, so its fill check passes and the other checks
+            # still run. The row lists each filled field; any other gap is an error.
+            metrics = dict(rec["metrics"])
+            row["backfilled"] = []
+            while True:
                 try:
-                    checks = ce.evaluate(
-                        con, rec["metrics"], baselines,
-                        prompt_version=prompt_version,
-                        max_age_hours=6.0,
-                        schema_floor=ks.schema_floor,
-                        sustained_drop=ks.sustained_drop,
-                        intake_max_age_days=ks.intake_max_age_days,
-                        now=now,
-                    )
+                    for ks in knob_sets:
+                        checks = ce.evaluate(
+                            con, metrics, baselines,
+                            prompt_version=prompt_version,
+                            max_age_hours=6.0,
+                            schema_floor=ks.schema_floor,
+                            sustained_drop=ks.sustained_drop,
+                            intake_max_age_days=ks.intake_max_age_days,
+                            now=now,
+                        )
+                        row["checks"][ks.name] = {c.name: c for c in checks}
+                        row["fired"][ks.name] = [(c.name, c.level) for c in checks if not c.ok]
+                    break
                 except KeyError as exc:
+                    key = exc.args[0] if exc.args else None
+                    if isinstance(key, str) and key.endswith("_fill_pct") and key not in metrics:
+                        metrics[key] = 100.0
+                        row["backfilled"].append(key)
+                        row["checks"].clear()
+                        row["fired"].clear()
+                        continue
                     row["error"] = f"metric field missing: {exc}"
                     break
-                row["checks"][ks.name] = {c.name: c for c in checks}
-                row["fired"][ks.name] = [(c.name, c.level) for c in checks if not c.ok]
             rows.append(row)
     finally:
         con.close()
@@ -206,6 +229,9 @@ def report(rows, records, knob_sets=CANDIDATES, out=None) -> None:
     p(f"records the replay could not evaluate: {len(skipped)}")
     for r in skipped:
         p(f"  {r['run_id']}: {r['error']}")
+    filled = [r for r in rows if r.get("backfilled")]
+    p(f"records with a missing fill rate set to 100.0: {len(filled)}"
+      + (f" ({', '.join(sorted({k for r in filled for k in r['backfilled']}))})" if filled else ""))
 
     p("\nKnob sets")
     for ks in knob_sets:

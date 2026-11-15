@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-11-15 — FIX-04 replay, first run on gov2-1, and a fix
+
+**Done**
+- The first VPS replay (`logs/replay-2026-11-13.txt`, 248 lines) evaluated none of the September slide: all 47 records of 2026-09-10..10-03 were skipped for a missing `title_fill_pct`. The fill-rate checks are newer than those records.
+- `ops/replay-export-checks.py` now sets a missing `*_fill_pct` to 100.0, so that fill check passes and every other check still runs. The report counts the filled records. Any other missing field is still an error. Test added; full suite 1458 passed.
+- DATA-08 (stale `no_body` flags, from run 2026-10-18T15:33Z) is now an incident window. The seven "false positives" of the first replay were `anomaly_stable` / `anomaly_sustained` on 10-18..10-21, which is that real defect.
+
+**Hard**
+- Fidelity under set A showed 2 differences: 10-04T20:57Z `intake_fresh` (recorded fail, replay pass) and 10-18T15:33Z `anomaly_stable` (recorded pass, replay fail). Not explained yet. Re-check them after the second replay.
+
+**Decided**
+- Backfill with 100.0, not skip. The cost of the alternative: the replay cannot test the one incident it exists for. The cost of this choice: the fill checks are not tested on those records, and the report says so.
+- The end of the DATA-08 window (2026-10-22) is an assumption, taken from the first replay's last flag.
+
 ### 2026-11-15 — FIX-04 calibration tools and alert records (code ready, replay not yet run)
 
 **Done**

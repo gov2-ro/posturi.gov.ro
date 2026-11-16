@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-11-16 — Normalised title casing; calendar named from the filters
+
+**Done**
+- `display_title()`: when `occ_canonical` and the raw title differ only in case, the main title is now `occ_canonical`. Before, the raw casing showed ("infirmier", "ASISTENT SOCIAL"). This affected 1,201 of 9,756 postings in `data/_dev/dev.sqlite`.
+- The "Titlu calendar" box is gone. `feed_calendar_name()` builds X-WR-CALNAME from the active-filter chips: "posturi.gov2.ro Liceală Cluj". A negated or date filter keeps its group word ("Fără studii Licență").
+- `?title=` is ignored. `feed_url()` and `syncFeedLinks()` drop it from old links.
+
+**Decided**
+- The name uses the chip labels, so the calendar, the chips and the saved-search label use the same words. The cost: a subscriber who set a custom name loses it on the next refresh.
+
 ### 2026-11-16 — List page: two-row filter bar, save + follow group, subscription dialog (not deployed)
 
 **Done**

@@ -97,13 +97,12 @@ test('subscription links follow filters through HTMX, chips, pagination and hist
   await expectFeeds(page, { q: ['zzzzqqqq'] });
 });
 
-test('the calendar title goes into the calendar links only; Google and webcal wrap the same ICS URL', async ({ page, baseURL }) => {
-  await page.goto('/?judet%5B%5D=cluj&status=all');
+test('no feed link carries a title, even from an old link; Google and webcal wrap the same ICS URL', async ({ page, baseURL }) => {
+  await page.goto('/?judet%5B%5D=cluj&status=all&title=Vechi');
   await openBlock(page);
-  await page.locator('#feed-title').fill('Posturi Cluj, aprilie');
+  await expect(page.locator('#feed-title')).toHaveCount(0);
   const ics = new URL(await feedHref(page, 'posturi.ics'), baseURL);
-  expect(ics.searchParams.get('title')).toBe('Posturi Cluj, aprilie');
-  for (const f of ['posturi.rss', 'posturi.atom', 'posturi.json']) {
+  for (const f of ['posturi.ics', 'posturi.rss', 'posturi.atom', 'posturi.json']) {
     expect((await feedParams(page, f)).has('title'), f).toBe(false);
   }
   const g = new URL(await page.locator('#gcal-link').getAttribute('href'));
@@ -111,8 +110,6 @@ test('the calendar title goes into the calendar links only; Google and webcal wr
   expect(g.searchParams.get('url')).toBe(ics.href);
   const w = await page.locator('#webcal-link').getAttribute('href');
   expect(w).toBe(ics.href.replace(/^https?:/, 'webcal:'));
-  // The title is a calendar label, not a filter: the address bar does not pick it up.
-  expect(page.url()).not.toContain('title=');
 });
 
 test('copy uses the current absolute URL; a clipboard failure shows a selected, selectable URL', async ({ page, baseURL }) => {
@@ -194,8 +191,7 @@ test('"Urmărește" opens the dialog; layout holds at this width', async ({ page
   await expect(mail).toBeVisible();
   await expect(mail.locator('input[name="cheie"]')).toHaveValue('judet%5B%5D=ilfov');
   await expect(mail.locator('input[name="nume"]')).not.toHaveValue('');
-  await page.locator('#feed-title').fill('x'.repeat(80));
-  await noOverflow(page, 'open with long title');
+  await noOverflow(page, 'open');
   await shot(page, 'subscribe-open');
   // A click on the backdrop closes it; the block goes back, hidden.
   await page.mouse.click(2, 2);

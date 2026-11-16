@@ -1611,9 +1611,8 @@ function feed_url(string $filename): string {
     unset($params['page'], $params['sort']);
     // An emptied search box arrives as `q=`; it selects nothing, so leave it out.
     $params = array_filter($params, fn($v) => !(is_string($v) && $v === ''));
-    // `title` only names the calendar (X-WR-CALNAME); Atom and JSON ignore it,
-    // and list.php's syncFeedLinks() strips it from them too.
-    if (!str_ends_with($filename, '.ics')) unset($params['title']);
+    // Old calendar links carry `?title=`; the calendar now takes its name from the filters.
+    unset($params['title']);
     $qs = http_build_query($params);
     return '/' . $filename . ($qs ? '?' . $qs : '');
 }
@@ -1942,7 +1941,9 @@ function display_title(array $p): array {
     $raw       = trim((string)($p['title'] ?? ''));
     $canonical = trim((string)($p['occ_canonical'] ?? ''));
     if ($canonical === '' || $raw === '' || mb_strtolower($canonical) === mb_strtolower($raw)) {
-        return ['primary' => $raw ?: $canonical, 'secondary' => null, 'normalized' => false];
+        // Same words in a different case ("infirmier", "ASISTENT SOCIAL"): show
+        // the canonical casing, and no second line.
+        return ['primary' => $canonical ?: $raw, 'secondary' => null, 'normalized' => false];
     }
     return ['primary' => $canonical, 'secondary' => $raw, 'normalized' => true];
 }

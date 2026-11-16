@@ -14,17 +14,7 @@ function ical_out(string $line): void {
     echo ical_fold($line);
 }
 
-$scope   = feed_employer($_GET);
-$calname = $scope ? 'posturi.gov2.ro — ' . $scope['name'] : 'posturi.gov2.ro';
-
-// `?title=` overrides the calendar name outright. Someone following several
-// filtered feeds — one per județ, say — needs each to carry its own label in a
-// client that shows X-WR-CALNAME and won't let you rename a subscription
-// (Apple Calendar, Outlook). Strip control chars, cap at 80 chars; ical_text()
-// still handles delimiters and ical_fold() the line folding on the way out.
-if (($t = trim((string)($_GET['title'] ?? ''))) !== '') {
-    $calname = mb_substr(preg_replace('/[\x00-\x1F\x7F]/u', '', $t), 0, 80);
-}
+$calname = feed_calendar_name();
 
 ical_out("BEGIN:VCALENDAR");
 ical_out("VERSION:2.0");

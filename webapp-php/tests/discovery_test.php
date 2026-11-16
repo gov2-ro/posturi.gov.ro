@@ -378,12 +378,12 @@ run_suite('feed links carry every active filter and never page/sort', function (
         assert_false(array_key_exists('page', $q), "$f drops page");
         assert_false(array_key_exists('sort', $q), "$f drops sort");
     }
-    // The calendar title is a calendar label only.
+    // An old ?title= link: no feed link carries it on; the calendar takes its name from the filters.
     $t = get_html($base, '/?title=Calendarul+meu&judet%5B%5D=cluj');
     preg_match('#data-feed="posturi.atom"\s+href="([^"]+)"#', $t, $m);
     assert_not_contains('title=', html_entity_decode($m[1] ?? ''), 'Atom link: title is not a filter');
     preg_match('#data-feed="posturi.ics"\s+href="([^"]+)"#', $t, $m);
-    assert_contains('title=Calendarul', html_entity_decode($m[1] ?? ''), 'iCal link still carries the calendar title');
+    assert_not_contains('title=', html_entity_decode($m[1] ?? ''), 'iCal link: title dropped');
     // Feeds themselves honour the same filters (feed set == list set for EQF).
     $json = json_decode(get_html($base, '/posturi.json?eqf%5B%5D=4&status=all'), true);
     $ids = array_map(fn($r) => (int)($r['id'] ?? 0), $json['results'] ?? []);

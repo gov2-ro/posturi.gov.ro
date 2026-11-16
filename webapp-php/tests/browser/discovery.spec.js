@@ -296,14 +296,6 @@ test('feed links follow filters through HTMX, chips, pagination and history', as
   await page.goBack();
   await expect(page).toHaveURL(/skill%5B%5D=Excel/);
   await expectFeedsKeep(page, { judet: ['ilfov'], skill: ['Excel'] });
-
-  // The calendar title is a calendar label: only iCal carries it.
-  // UX-04-FEEDS moved the title box into the subscription block; for a search it opens in a dialog (261116).
-  await page.locator('[data-active-chips] [data-follow-open]').click();
-  await page.locator('#feed-title').fill('Posturile mele');
-  expect((await feedParams(page, 'posturi.ics')).get('title')).toBe('Posturile mele');
-  expect((await feedParams(page, 'posturi.atom')).has('title')).toBe(false);
-  expect((await feedParams(page, 'posturi.json')).has('title')).toBe(false);
 });
 
 test('a value can be excluded ("fără"), and wanting it clears the exclusion', async ({ page }) => {

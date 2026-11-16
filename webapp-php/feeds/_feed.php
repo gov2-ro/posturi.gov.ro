@@ -35,6 +35,22 @@ function feed_rows(string $order, int $limit, bool $dated_only = false): array {
     return $stmt->fetchAll();
 }
 
+/**
+ * Calendar name (X-WR-CALNAME), built from the filters: "posturi.gov2.ro Liceală
+ * Cluj". Apple Calendar and Outlook do not let you rename a subscription, so
+ * each filtered calendar must carry its own name. A negated or date filter keeps
+ * its group word ("Fără", "Termen până la"), because the value alone misleads.
+ */
+function feed_calendar_name(): string {
+    $parts = ['posturi.gov2.ro'];
+    if ($scope = feed_employer($_GET)) $parts[] = $scope['name'];
+    foreach (active_filter_chips() as $c) {
+        $keep_group = $c['group'] !== '' && (str_ends_with($c['param'], '_not') || str_starts_with($c['param'], 'expires_'));
+        $parts[] = $keep_group ? $c['group'] . ' ' . $c['label'] : $c['label'];
+    }
+    return preg_replace('/[\x00-\x1F\x7F]/u', '', implode(' ', $parts));
+}
+
 /** Newest-first selection shared by RSS and Atom. */
 function feed_item_rows(): array {
     return feed_rows('j.published_at DESC, j.id DESC', FEED_ITEM_LIMIT);

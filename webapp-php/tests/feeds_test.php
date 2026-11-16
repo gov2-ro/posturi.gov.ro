@@ -499,7 +499,7 @@ run_suite('empty filtered feeds stay valid with truthful titles', function () us
 });
 
 run_suite('iCal: escaping, 75-octet folding, UTF-8, CRLF, URI fidelity', function () use ($big, $LONG_TITLE, $COMMA_URL) {
-    [$status, $ics, $h] = fetch($big, '/posturi.ics?status=all&title=' . urlencode("Cal\x07endar, cu; virgulă"));
+    [$status, $ics, $h] = fetch($big, '/posturi.ics?status=all');
     assert_same(200, $status, 'ics 200');
     assert_true(str_starts_with($h['content-type'] ?? '', 'text/calendar'), 'content type');
     assert_true(mb_check_encoding($ics, 'UTF-8'), 'valid UTF-8 overall');
@@ -517,11 +517,12 @@ run_suite('iCal: escaping, 75-octet folding, UTF-8, CRLF, URI fidelity', functio
     assert_true(count(array_filter($phys, fn($l) => ($l[0] ?? '') === ' ')) > 5, 'long lines really were folded');
 
     $logical = ics_lines($ics);
-    $name = array_values(array_filter($logical, fn($l) => str_starts_with($l, 'X-WR-CALNAME:')))[0] ?? '';
-    assert_same('X-WR-CALNAME:Calendar\\, cu\; virgulă', $name, 'custom title: control char stripped, TEXT escaped');
-    // Cap at 80 characters.
-    $long = array_values(array_filter(ics_lines(fetch($big, '/posturi.ics?title=' . urlencode(str_repeat('ă', 120)))[1]), fn($l) => str_starts_with($l, 'X-WR-CALNAME:')))[0];
-    assert_same(80, mb_strlen(substr($long, strlen('X-WR-CALNAME:'))), 'title capped at 80 characters');
+    $calname = fn(string $qs) => array_values(array_filter(ics_lines(fetch($big, '/posturi.ics?' . $qs)[1]), fn($l) => str_starts_with($l, 'X-WR-CALNAME:')))[0] ?? '';
+    // The name comes from the filters; ?title= no longer overrides it.
+    assert_same('X-WR-CALNAME:posturi.gov2.ro', $calname(''), 'unfiltered calendar name');
+    assert_same('X-WR-CALNAME:posturi.gov2.ro a\\, b\\; c Cluj', $calname('judet%5B%5D=cluj&q=' . urlencode('a, b; c') . '&title=Vechi'),
+        'filtered calendar name: chip labels, TEXT escaped, title ignored');
+    assert_same('X-WR-CALNAME:posturi.gov2.ro Fără studii Licență', $calname('studies_level_not%5B%5D=licenta'), 'negated filter keeps its group word');
 
     // The long Romanian title: unfolds to exactly the (escaped) text.
     $ev = ics_event($ics, 3902);
@@ -618,7 +619,7 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
         assert_same('spital', $q['q'] ?? null, "$f: keyword");
         assert_same('all', $q['status'] ?? null, "$f: status");
         assert_false(isset($q['page']) || isset($q['sort']), "$f: no page/sort");
-        assert_same($f === 'posturi.ics', isset($q['title']), "$f: title only on the calendar");
+        assert_false(isset($q['title']), "$f: no title");
         foreach (array_keys($q) as $k) assert_false(str_contains($k, 'sav') || str_contains($k, 'hid'), "$f: no saved/hidden state ($k)");
     }
     assert_same(['posturi.rss' => 'RSS', 'posturi.atom' => 'Atom', 'posturi.ics' => 'Calendar iCal', 'posturi.json' => 'JSON API'], $labels, 'link labels');

@@ -927,9 +927,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 
       <?php /* Calendar subscription. `posturi.ics` is a live query, not a
          download — the browser only saves it because of the .ics filename.
-         `?title=` names the calendar in clients that show X-WR-CALNAME (Apple
-         Calendar, Outlook) and won't let you rename a subscription; it goes
-         into the calendar links only, never RSS/Atom/JSON. */ ?>
+         The feed names the calendar from the filters (feed_calendar_name()). */ ?>
       <div class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 border-t border-line pt-3">
         <span class="font-semibold uppercase tracking-widest">Calendar</span>
         <a id="gcal-link" data-gcal
@@ -939,12 +937,6 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
         <a id="webcal-link" data-webcal
            href="<?= e(preg_replace('#^https?://#', 'webcal://', $ics_abs)) ?>"
            class="inline-flex items-center gap-1.5 py-1 text-gov hover:underline"><svg class="sub-ico" aria-hidden="true"><use href="#i-calendar-add"/></svg>Abonare (Apple / Outlook)</a>
-        <label class="inline-flex items-baseline gap-1.5">
-          <span>Titlu calendar</span>
-          <input id="feed-title" type="text" autocomplete="off"
-                 value="<?= e($_GET['title'] ?? '') ?>" placeholder="posturi.gov2.ro"
-                 class="w-44 rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-        </label>
       </div>
 
       <?php /* UX-14 email alert, straight from the search: the same POST as
@@ -1330,26 +1322,16 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   // feed of whatever you were looking at before — silently, since the link
   // still works. `page` and `sort` are dropped for the same reason feed_url()
   // drops them server-side.
-  //
-  // Collected once: the block is outside every swap target, so this NodeList
-  // stays valid for the life of the page. Moving the block inside #results
-  // would break that, and would rebuild it on every page of pagination for
-  // something that only changes when the filters do.
-  var titleInput  = document.getElementById('feed-title');
-
   function syncFeedLinks() {
     // Looked up on every call: a history restore replaces the body, and a
     // NodeList collected at init would then point at detached links.
     var feedLinks   = document.querySelectorAll('[data-feed]');
     var gcalLink    = document.querySelector('[data-gcal]');
     var webcalLink  = document.querySelector('[data-webcal]');
-    titleInput = document.getElementById('feed-title') || titleInput;
     var params = new URLSearchParams(location.search);
     params.delete('page');
     params.delete('sort');
-    // The title box is the source of truth for ?title=, not the address bar —
-    // a shared link may seed it, but from then on the input drives it.
-    params.delete('title');
+    params.delete('title');   // old calendar links; feed_url() drops it too
     // The filter form serialises an emptied search box as `q=`; an empty value
     // selects nothing, so keep it out of subscription URLs.
     Array.from(params.keys()).forEach(function (k) {
@@ -1360,14 +1342,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       a.setAttribute('href', '/' + a.dataset.feed + (qs ? '?' + qs : ''));
     });
 
-    // The iCal link and the two subscription links also carry the custom title.
-    var ical = new URLSearchParams(qs);
-    var title = titleInput && titleInput.value.trim();
-    if (title) ical.set('title', title);
-    var icalQs = ical.toString();
-    var icsPath = '/posturi.ics' + (icalQs ? '?' + icalQs : '');
-    var icalEl = document.querySelector('[data-feed="posturi.ics"]');
-    if (icalEl) icalEl.setAttribute('href', icsPath);
+    var icsPath = '/posturi.ics' + (qs ? '?' + qs : '');
 
     var icsAbs = location.origin + icsPath;
     if (gcalLink) {
@@ -1521,13 +1496,6 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   document.body.addEventListener('htmx:pushedIntoHistory', syncFeedLinks);
   window.addEventListener('popstate', syncFeedLinks);
   document.body.addEventListener('htmx:historyRestore', syncFeedLinks);
-  if (titleInput) {
-    titleInput.addEventListener('input', syncFeedLinks);
-    // Enter in a lone text field would submit the filter form; nothing to submit.
-    titleInput.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter') ev.preventDefault();
-    });
-  }
   syncFeedLinks();  // server renders correct hrefs on load; this also builds the subscription links from location.origin
 
   // Scroll back to the top of the list after paging.

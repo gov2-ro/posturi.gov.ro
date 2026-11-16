@@ -24,7 +24,8 @@ test.afterEach(async ({ page }) => {
   expect(pageErrors.get(page), 'uncaught page errors').toEqual([]);
 });
 
-const toggle = (page) => page.locator('[data-search-toggle]');
+// 261116: the toggle is in the group at the end of the active-filter chips; #follow-fab holds a copy.
+const toggle = (page) => page.locator('[data-active-chips] [data-search-toggle]');
 const stored = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k)), KEY);
 const storedRaw = (page) => page.evaluate((k) => localStorage.getItem(k), KEY);
 
@@ -114,7 +115,7 @@ test('save two județe: pressed, kept on reload, follows HTMX filter changes', a
   await toggle(page).click();
   await expect(toggle(page)).toHaveAttribute('aria-pressed', 'false');
   expect(Object.keys((await stored(page)).searches)).toEqual([]);
-  await fits(page, '[data-search-bar], [data-search-bar] *', 'toggle');
+  await fits(page, '[data-active-chips] [data-follow-group], [data-active-chips] [data-follow-group] *', 'toggle');
 });
 
 test('the toggle is hidden with no filters', async ({ page }) => {
@@ -194,9 +195,9 @@ test('first visit to / in a session opens the default search; the second does no
   await expect(notice).toBeVisible();
   await expect(notice).toContainText('Afișăm căutarea ta salvată «Cluj · Ilfov».');
   await expect(notice.locator('a')).toHaveText('Vezi toate posturile');
-  await expect(fresh.locator('[data-search-toggle]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(fresh.locator('[data-active-chips] [data-search-toggle]')).toHaveAttribute('aria-pressed', 'true');
   await shot(fresh, 'notice');
-  await fits(fresh, '[data-search-notice], [data-search-bar] *', 'notice and toggle');
+  await fits(fresh, '[data-search-notice], [data-active-chips] [data-follow-group] *', 'notice and toggle');
   // opened-at is recorded.
   expect((await stored(fresh)).searches[TWO_KEY].openedAt).not.toBeNull();
   expect((await stored(fresh)).searches['q=vechi'].openedAt).toBeNull();

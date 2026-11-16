@@ -2635,3 +2635,25 @@ function stats_scope_sentence(): string {
 
 // BETA-V5: reading v5 extractions (facts, calendar, dosar, text fallbacks).
 require_once __DIR__ . '/inc/v5.php';
+
+/**
+ * 261116: "Salvează căutarea" and "Urmărește" in one group. It sits at the end
+ * of the active-filter chips (partials/result_list.php), so it is part of the
+ * search it acts on, and again as #follow-fab at the bottom of the screen
+ * (pages/list.php). The list page's script shows both only for a search; the
+ * fab only while the chips' group is off screen. The save toggle is
+ * static/searches.js's [data-search-toggle]; "Urmărește" opens the
+ * subscription block (#urmareste) in a dialog.
+ */
+function follow_group_html(string $extra_attrs): string {
+    $ico = static fn(string $id): string => '<svg class="sub-ico" aria-hidden="true"><use href="#' . $id . '"/></svg>';
+    return '<div ' . $extra_attrs . ' role="group" aria-label="Căutarea aceasta">'
+        . '<button type="button" data-search-toggle hidden aria-pressed="false" class="follow-btn">'
+        . '<svg class="pref-ico" aria-hidden="true"><use href="#i-bookmark"/></svg>'
+        . '<span data-search-toggle-label>Salvează căutarea</span></button>'
+        . '<button type="button" data-follow-open aria-haspopup="dialog" class="follow-btn follow-btn-primary">'
+        . '<span>Urmărește</span><span class="follow-icons" title="RSS, email, calendar">'
+        . $ico('i-feed') . $ico('i-mail') . $ico('i-calendar') . '</span>'
+        . '<span class="sr-only"> (RSS, email, calendar)</span></button>'
+        . '</div>';
+}

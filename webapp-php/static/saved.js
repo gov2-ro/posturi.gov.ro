@@ -210,6 +210,9 @@
     // "Vezi salvatele" after a save or at a limit; not on /salvate/ itself.
     var link = qs('[data-notice-link]', n);
     if (link) link.hidden = !opts.link || window.location.pathname.indexOf('/salvate/') === 0;
+    // "Urmărește" after a saved search, only where the subscription dialog exists.
+    var follow = qs('[data-notice-follow]', n);
+    if (follow) follow.hidden = !opts.follow || !document.getElementById('follow-dialog');
     n.hidden = false;
     announce(opts.text);
     if (opts.focus) (opts.undo ? undo : n).focus();

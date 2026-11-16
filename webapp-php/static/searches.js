@@ -221,6 +221,8 @@
       });
     },
     sync: function () { syncList(); },
+    /** The label a new saved search gets: the active-filter chips. */
+    defaultLabel: function () { return defaultLabel(); },
     render: function () { renderSavedPage(); }
   };
   window.PosturiSearches = API;
@@ -254,17 +256,19 @@
   function syncList() {
     var bar = qs('[data-search-bar]');
     if (!bar) return;
-    var btn = qs('[data-search-toggle]', bar);
+    // 261116: two toggles (the group after the sort box and its bottom copy), one state.
+    var btns = qsa('[data-search-toggle]');
     var key = searchKey(window.location.search);
     var st = load();
     var usable = st.status === 'ok' && key !== '';
     bar.hidden = !usable;
-    btn.hidden = !usable;
-    if (usable) {
+    btns.forEach(function (btn) {
+      btn.hidden = !usable;
+      if (!usable) return;
       var saved = !!st.recs[key];
       btn.setAttribute('aria-pressed', saved ? 'true' : 'false');
       qs('[data-search-toggle-label]', btn).textContent = saved ? 'Căutare salvată' : 'Salvează căutarea';
-    }
+    });
     syncNotice(st, key);
   }
 
@@ -304,7 +308,7 @@
         window.PosturiSaved.showNotice({ text: LIMIT_TEXT, link: true, focus: true });
       } else if (res.ok && window.PosturiSaved && window.PosturiSaved.showNotice) {
         say('');
-        window.PosturiSaved.showNotice({ text: 'Căutare salvată: ' + defaultLabel() + '.', link: true });
+        window.PosturiSaved.showNotice({ text: 'Căutare salvată: ' + defaultLabel() + '.', link: true, follow: true });
       } else {
         say(res.ok ? 'Căutarea a fost salvată.'
           : res.error === 'limit' ? LIMIT_TEXT

@@ -831,12 +831,8 @@ if (!$is_htmx): ?>
         <?php /* UX-15: browser-local saved search. Above #results (outside it), so HTMX does not rebuild it;
            static/searches.js shows it (JS and storage needed, and at least one filter) and syncFeedLinks() calls
            PosturiSearches.sync() after each push, restore and popstate. */ ?>
-        <div data-search-bar hidden class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <button type="button" data-search-toggle hidden aria-pressed="false"
-                  class="pref-btn pref-save !w-auto gap-1.5 border border-line bg-surface px-2.5 text-sm">
-            <svg class="pref-ico" aria-hidden="true"><use href="#i-bookmark"/></svg>
-            <span data-search-toggle-label>Salvează căutarea</span>
-          </button>
+        <?php /* 261116: the toggle moved to the group after the sort box (follow_group_html()); its message stays here. */ ?>
+        <div data-search-bar hidden class="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span data-search-msg role="status" aria-live="polite" class="text-xs text-ink-muted"></span>
         </div>
         <div id="results">
@@ -862,64 +858,6 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
 <?php if (!$is_htmx): ?>
         </div>
 
-    <?php /* UX-04-FEEDS: the one subscription block. It sits below results
-       but outside #results, so HTMX never rebuilds it; syncFeedLinks()
-       keeps every href in step with the address bar. A native <details>, so it
-       opens and closes with no JavaScript, and the export line below links to
-       the content id inside it (browsers expand a closed <details> for a
-       fragment that targets its content). Hrefs are server-rendered from the same filters (feed_url()), so
-       the links are right without JavaScript too. Saved/hidden announcements
-       are browser-local and are never part of these URLs. */
-       $ics_abs = site_origin() . feed_url('posturi.ics'); ?>
-    <details id="urmareste" class="mt-3 rounded-md border border-line bg-surface">
-      <summary class="cursor-pointer select-none px-3 py-2 text-sm font-medium text-gov hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Urmărește această căutare</summary>
-      <div id="urmareste-linkuri" class="border-t border-line px-3 py-3 text-xs text-ink-muted">
-        <ul class="space-y-1">
-          <?php foreach ([['posturi.rss', 'RSS'], ['posturi.atom', 'Atom'], ['posturi.ics', 'Calendar iCal']] as [$feed_file, $feed_label]): ?>
-          <li class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <a data-feed="<?= e($feed_file) ?>" href="<?= e(feed_url($feed_file)) ?>" class="py-1 text-sm text-gov hover:underline"><?= e($feed_label) ?></a>
-            <button type="button" data-copy="<?= e($feed_file) ?>" hidden
-                    class="rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink hover:border-gov hover:text-gov focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Copiază linkul <?= e($feed_label) ?></button>
-          </li>
-          <?php endforeach; ?>
-        </ul>
-        <p id="feed-copy-status" role="status" aria-live="polite" class="mt-1 min-h-4 text-ink"></p>
-        <label id="feed-copy-fallback" hidden class="mt-1 block">
-          <span class="block">Copiază manual adresa:</span>
-          <input id="feed-copy-url" type="text" readonly
-                 class="mt-1 w-full rounded border border-line-strong bg-sunken px-2 py-1 font-mono text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-        </label>
-
-        <?php /* Calendar subscription. `posturi.ics` is a live query, not a
-           download — the browser only saves it because of the .ics filename.
-           `?title=` names the calendar in clients that show X-WR-CALNAME (Apple
-           Calendar, Outlook) and won't let you rename a subscription; it goes
-           into the calendar links only, never RSS/Atom/JSON. */ ?>
-        <div class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 border-t border-line pt-3">
-          <span class="font-semibold uppercase tracking-widest">Calendar</span>
-          <a id="gcal-link" data-gcal
-             href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=<?= e(rawurlencode($ics_abs)) ?>"
-             target="_blank" rel="noopener"
-             class="py-1 text-gov hover:underline">Adaugă în Google Calendar</a>
-          <a id="webcal-link" data-webcal
-             href="<?= e(preg_replace('#^https?://#', 'webcal://', $ics_abs)) ?>"
-             class="py-1 text-gov hover:underline">Abonare (Apple / Outlook)</a>
-          <label class="inline-flex items-baseline gap-1.5">
-            <span>Titlu calendar</span>
-            <input id="feed-title" type="text" autocomplete="off"
-                   value="<?= e($_GET['title'] ?? '') ?>" placeholder="posturi.gov2.ro"
-                   class="w-44 rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
-          </label>
-        </div>
-
-        <ul id="feed-limits" class="mt-3 list-disc space-y-1 pl-4 leading-snug">
-          <li>RSS/Atom: cele mai noi <?= FEED_ITEM_LIMIT ?> de anunțuri care corespund filtrelor. Calendar: primele <?= FEED_CAL_LIMIT ?> cu dată disponibilă, în ordinea termenului.</li>
-          <li>Cât de des se reîmprospătează o abonare este hotărât de cititorul de fluxuri sau de aplicația de calendar, nu de acest site. Un fișier ICS descărcat sau importat este doar o copie de moment.</li>
-          <li>Fluxurile nu sunt o arhivă completă: într-o căutare cu multe rezultate noi pot lipsi anunțuri apărute între două verificări. Nu trimit notificări imediate.</li>
-        </ul>
-      </div>
-    </details>
-
         <?php /* Export, at the end of the list rather than in the sidebar.
            Deliberately OUTSIDE #results: htmx swaps that element on every
            filter change and on every page of pagination, so a block inside it
@@ -933,11 +871,11 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
            them right afterwards. Saying so in the line of text matters — an
            export that silently means something different from what is on
            screen is worse than no export. */ ?>
-        <div class="mt-8 border-t border-line pt-4">
+        <?php /* 261116: hidden for now (pax). The JSON link stays in the markup, so syncFeedLinks() and the tests still see it. */ ?>
+        <div hidden class="mt-8 border-t border-line pt-4">
           <div class="flex flex-wrap items-baseline gap-x-4 gap-y-2 text-xs text-ink-muted">
             <span class="font-semibold uppercase tracking-widest">Export</span>
             <a data-feed="posturi.json" href="<?= e(feed_url('posturi.json')) ?>" class="py-1 text-gov hover:underline">JSON API</a>
-            <a href="#urmareste-linkuri" data-open-subscribe class="py-1 text-gov hover:underline">Urmărește această căutare (RSS, Atom, calendar)</a>
             <?php /* Phrased so it holds at every moment, filtered or not. A
                server-rendered "cu filtrele active" / "toate anunțurile" pair
                would be stale the instant someone ticks a facet, since this
@@ -948,6 +886,102 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       </div>
     </div>
   </form>
+
+  <?php /* UX-04-FEEDS, 261116: the one subscription block. Outside #filter-form
+     (it holds its own email form, and forms cannot nest) and outside the white
+     results box. With no filters (the landing) it stays here, open. For a
+     search, the script hides it here and shows it in #follow-dialog when the
+     reader presses "Urmărește". Without JavaScript it is always here, open.
+     It is never inside #results, so HTMX never rebuilds it; syncFeedLinks()
+     keeps every href in step with the address bar. Hrefs are server-rendered
+     from the same filters (feed_url()), so the links are right without
+     JavaScript too. Saved/hidden announcements are browser-local and are never
+     part of these URLs. */
+     $ics_abs = site_origin() . feed_url('posturi.ics');
+     require_once __DIR__ . '/../inc/alerts_view.php'; ?>
+  <section id="urmareste" aria-labelledby="urmareste-title" class="follow-block">
+    <div class="flex items-start justify-between gap-3">
+      <h2 id="urmareste-title" class="text-base font-semibold text-ink">Urmărește anunțurile noi</h2>
+      <button type="button" data-follow-close hidden aria-label="Închide"
+              class="pref-btn my-0"><svg class="pref-ico" aria-hidden="true"><use href="#i-close"/></svg></button>
+    </div>
+    <div id="urmareste-linkuri" class="mt-2 text-xs text-ink-muted">
+      <?php /* The three feeds on one row. The name is the link; the icon-only
+         button beside it copies that link (its aria-label says which). */ ?>
+      <ul class="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <?php foreach ([['posturi.rss', 'RSS', 'i-feed'], ['posturi.atom', 'Atom', 'i-feed'], ['posturi.ics', 'Calendar iCal', 'i-calendar']] as [$feed_file, $feed_label, $feed_icon]): ?>
+        <li class="inline-flex items-center gap-1">
+          <a data-feed="<?= e($feed_file) ?>" href="<?= e(feed_url($feed_file)) ?>" class="inline-flex items-center gap-1.5 py-1 text-sm text-gov hover:underline"><svg class="sub-ico" aria-hidden="true"><use href="#<?= $feed_icon ?>"/></svg><?= e($feed_label) ?></a>
+          <button type="button" data-copy="<?= e($feed_file) ?>" hidden
+                  aria-label="Copiază linkul <?= e($feed_label) ?>" title="Copiază linkul <?= e($feed_label) ?>"
+                  class="pref-btn my-0"><svg class="sub-ico" aria-hidden="true"><use href="#i-copy"/></svg></button>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      <p id="feed-copy-status" role="status" aria-live="polite" class="mt-1 min-h-4 text-ink"></p>
+      <label id="feed-copy-fallback" hidden class="mt-1 block">
+        <span class="block">Copiază manual adresa:</span>
+        <input id="feed-copy-url" type="text" readonly
+               class="mt-1 w-full rounded border border-line-strong bg-sunken px-2 py-1 font-mono text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+      </label>
+
+      <?php /* Calendar subscription. `posturi.ics` is a live query, not a
+         download — the browser only saves it because of the .ics filename.
+         `?title=` names the calendar in clients that show X-WR-CALNAME (Apple
+         Calendar, Outlook) and won't let you rename a subscription; it goes
+         into the calendar links only, never RSS/Atom/JSON. */ ?>
+      <div class="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-2 border-t border-line pt-3">
+        <span class="font-semibold uppercase tracking-widest">Calendar</span>
+        <a id="gcal-link" data-gcal
+           href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl?url=<?= e(rawurlencode($ics_abs)) ?>"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center gap-1.5 py-1 text-gov hover:underline"><svg class="sub-ico" aria-hidden="true"><use href="#i-calendar-add"/></svg>Adaugă în Google Calendar</a>
+        <a id="webcal-link" data-webcal
+           href="<?= e(preg_replace('#^https?://#', 'webcal://', $ics_abs)) ?>"
+           class="inline-flex items-center gap-1.5 py-1 text-gov hover:underline"><svg class="sub-ico" aria-hidden="true"><use href="#i-calendar-add"/></svg>Abonare (Apple / Outlook)</a>
+        <label class="inline-flex items-baseline gap-1.5">
+          <span>Titlu calendar</span>
+          <input id="feed-title" type="text" autocomplete="off"
+                 value="<?= e($_GET['title'] ?? '') ?>" placeholder="posturi.gov2.ro"
+                 class="w-44 rounded border border-line-strong bg-surface px-2 py-1 text-xs text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+        </label>
+      </div>
+
+      <?php /* UX-14 email alert, straight from the search: the same POST as
+         /alerte/abonare/ (which answers it), so the search does not have to be
+         saved first. A subscription needs a search key, so this part shows only
+         for a search; the script fills the key, sort and label on every sync. */ ?>
+      <form data-follow-email hidden method="post" action="/alerte/abonare/"
+            class="mt-3 border-t border-line pt-3">
+        <input type="hidden" name="cheie" value="">
+        <input type="hidden" name="sort" value="">
+        <input type="hidden" name="nume" value="">
+        <div class="sr-only" aria-hidden="true">
+          <label for="fl-website">Nu completa acest câmp</label>
+          <input type="text" id="fl-website" name="website" value="" tabindex="-1" autocomplete="off">
+        </div>
+        <label for="fl-email" class="inline-flex items-center gap-1.5 font-semibold uppercase tracking-widest"><svg class="sub-ico" aria-hidden="true"><use href="#i-mail"/></svg>Email</label>
+        <div class="mt-1 flex flex-wrap items-center gap-2">
+          <input type="email" id="fl-email" name="email" required maxlength="254" autocomplete="email" inputmode="email"
+                 placeholder="adresa@exemplu.ro"
+                 class="h-9 w-64 max-w-full rounded border border-line-strong bg-surface px-2 text-sm text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus">
+          <button type="submit" class="h-9 rounded border border-gov bg-gov px-3 text-sm font-medium text-on-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">Abonează-mă</button>
+        </div>
+        <?= al_consent_html() ?>
+      </form>
+
+      <ul id="feed-limits" class="mt-3 list-disc space-y-1 pl-4 leading-snug">
+        <li>RSS/Atom: cele mai noi <?= FEED_ITEM_LIMIT ?> de anunțuri care corespund filtrelor. Calendar: primele <?= FEED_CAL_LIMIT ?> cu dată disponibilă, în ordinea termenului.</li>
+        <li>Cât de des se reîmprospătează o abonare este hotărât de cititorul de fluxuri sau de aplicația de calendar, nu de acest site. Un fișier ICS descărcat sau importat este doar o copie de moment.</li>
+        <li>Fluxurile nu sunt o arhivă completă: într-o căutare cu multe rezultate noi pot lipsi anunțuri apărute între două verificări. Nu trimit notificări imediate.</li>
+      </ul>
+    </div>
+  </section>
+
+  <?php /* The dialog that shows #urmareste for a search (the script moves the
+     block in on open and back on close), and the bottom copy of the group. */ ?>
+  <dialog id="follow-dialog" aria-labelledby="urmareste-title" class="follow-dialog"></dialog>
+  <?= follow_group_html('id="follow-fab" data-follow-group hidden class="follow-group follow-fab"') ?>
 </div>
 
 <script>
@@ -1354,6 +1388,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
     // UX-15: the saved-search toggle and notice follow the address bar too.
     // searches.js loads deferred and syncs itself on load; this covers later pushes.
     if (window.PosturiSearches) window.PosturiSearches.sync();
+    if (typeof syncFollow === 'function') syncFollow();
   }
 
   // ---- Copy a subscription link ----
@@ -1386,18 +1421,100 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
     } catch (err) { showUrl(); }
   });
 
-  // The export line links to the subscription block; a closed <details> does
-  // not open itself for every browser's fragment navigation.
-  function openSubscribe() {
-    var d = document.getElementById('urmareste');
-    if (d) d.open = true;
+  // ---- 261116: "Salvează căutarea" + "Urmărește" -------------------------------
+  // The landing (no filters) shows #urmareste in place, open, and no group. A
+  // search shows the group at the end of the active-filter chips and, while that
+  // group is off screen, its copy #follow-fab at the bottom; "Urmărește" opens
+  // #urmareste in #follow-dialog. The chips live in #results, so every swap
+  // brings a new group: syncFollow() re-observes it. The search key comes from static/searches.js (deferred, so
+  // it may not be there yet on the first call; DOMContentLoaded calls again).
+  var followBlock = document.getElementById('urmareste');
+  var followHome = followBlock && followBlock.parentNode;
+  var followNext = followBlock && followBlock.nextSibling;
+  var followDialog = document.getElementById('follow-dialog');
+  var followFab = document.getElementById('follow-fab');
+  var followTop = null;
+  var topInView = true;
+  var topObserver = ('IntersectionObserver' in window) ? new IntersectionObserver(function (entries) {
+    topInView = entries[entries.length - 1].isIntersecting;
+    syncFollow();
+  }) : null;
+
+  function searchKeyNow() {
+    if (window.PosturiSearches) return window.PosturiSearches.searchKey(location.search);
+    var p = new URLSearchParams(location.search);
+    ['page', 'sort', 'title'].forEach(function (k) { p.delete(k); });
+    return p.toString();
+  }
+  function syncFollow() {
+    if (!followBlock) return;
+    var key = searchKeyNow();
+    var isSearch = key !== '';
+    var inDialog = followDialog && followDialog.open;
+    var top = document.querySelector('[data-active-chips] [data-follow-group]');
+    if (top !== followTop) {
+      followTop = top;
+      // Until the observer reports, a new group counts as on screen; with no
+      // group (a search with no chip), the bottom copy is the only one.
+      topInView = !!top;
+      if (topObserver) { topObserver.disconnect(); if (top) topObserver.observe(top); }
+    }
+    if (top) top.hidden = !isSearch;
+    if (followFab) followFab.hidden = !isSearch || topInView || inDialog;
+    if (!inDialog) followBlock.hidden = isSearch;
+    document.getElementById('urmareste-title').textContent =
+      isSearch ? 'Urmărește această căutare' : 'Urmărește anunțurile noi';
+    var mail = followBlock.querySelector('[data-follow-email]');
+    if (mail) {
+      mail.hidden = !isSearch;
+      var api = window.PosturiSearches;
+      var saved = api && isSearch ? api.get(key) : null;
+      var sort = new URLSearchParams(location.search).get('sort') || '';
+      mail.elements.cheie.value = key;
+      mail.elements.sort.value = sort;
+      mail.elements.nume.value = saved ? saved.label : (api && api.defaultLabel ? api.defaultLabel() : '');
+    }
+  }
+  function openFollow() {
+    if (!followBlock || !followDialog || !followDialog.showModal) return;
+    if (followDialog.open) return;
+    followDialog.appendChild(followBlock);
+    followBlock.hidden = false;
+    followBlock.querySelector('[data-follow-close]').hidden = false;
+    followDialog.showModal();
+    syncFollow();
+  }
+  if (followDialog) {
+    followDialog.addEventListener('close', function () {
+      followBlock.querySelector('[data-follow-close]').hidden = true;
+      followHome.insertBefore(followBlock, followNext);
+      syncFollow();
+    });
+    // A click on the backdrop (the dialog element itself, outside the block) closes it.
+    followDialog.addEventListener('click', function (ev) { if (ev.target === followDialog) followDialog.close(); });
   }
   document.addEventListener('click', function (ev) {
-    if (ev.target.closest && ev.target.closest('[data-open-subscribe]')) openSubscribe();
+    var t = ev.target.closest && ev.target;
+    if (!t) return;
+    if (t.closest('[data-follow-open]')) {
+      ev.preventDefault();
+      var notice = t.closest('#pref-notice');
+      if (notice) notice.hidden = true;     // the save notice's "Urmărește"
+      openFollow();
+    }
+    else if (t.closest('[data-follow-close]') && followDialog && followDialog.open) followDialog.close();
   });
+  // The chips (and their group) arrive with each swap, pagination included.
+  document.body.addEventListener('htmx:afterSettle', function () {
+    if (window.PosturiSearches) window.PosturiSearches.sync();
+    syncFollow();
+  });
+  document.addEventListener('DOMContentLoaded', syncFollow);
+  syncFollow();
   function hashOpens() { return location.hash === '#urmareste' || location.hash === '#urmareste-linkuri'; }
-  window.addEventListener('hashchange', function () { if (hashOpens()) openSubscribe(); });
-  if (hashOpens()) openSubscribe();
+  function onHash() { if (hashOpens() && searchKeyNow() !== '') openFollow(); }
+  window.addEventListener('hashchange', onHash);
+  document.addEventListener('DOMContentLoaded', onHash);
 
   // hx-push-url writes the address bar after the swap settles; both events fire
   // for a filter change, and back/forward only fires the popstate one.

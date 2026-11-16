@@ -169,36 +169,37 @@ test('view switch: lg+ only, three views persist across reload and an HTMX filte
   expect(await page.locator('#result-options').evaluate((el) => !!el.closest('.pg-main'))).toBe(true);
 });
 
-test('filter bar: search, filters, view and sort are one row of equal controls', async ({ page, viewport }) => {
+// 261116: two rows. Row 1 holds the boxed controls (search, view, status, sort)
+// at the bar height; the facet dropdowns follow below, shorter.
+test('filter bar: search, view, status and sort share row 1; the filters follow below', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'the bar is lg+ only');
   for (const mode of ['compact', 'table']) {
     await page.addInitScript((m) => localStorage.setItem('posturi.layout', m), mode);
     await page.goto('/?judet%5B%5D=cluj');
     const bar = page.locator('.pg-side');
     expect(await page.locator('#result-options').evaluate((el) => el.parentElement.classList.contains('pg-side')), mode).toBe(true);
-    const ctl = ['#q', '#facet-list > .facet-group', '#facet-list > .pg-clear', '#layout-switch', '.pg-sort'];
-    const boxes = [];
-    for (const sel of ctl) for (const el of await page.locator(sel).all()) boxes.push([sel, await el.boundingBox()]);
     const b = await bar.boundingBox();
-    for (const [sel, bb] of boxes) {
+    const boxesOf = async (sels) => {
+      const out = [];
+      for (const sel of sels) for (const el of await page.locator(sel).all()) out.push([sel, await el.boundingBox()]);
+      return out;
+    };
+    const row1 = await boxesOf(['#q', '#layout-switch', '.pg-status', '.pg-sort']);
+    const top1 = Math.round(row1[0][1].y);
+    for (const [sel, bb] of row1) {
       expect(Math.round(bb.height), `${mode}: ${sel} height`).toBe(40);
-      expect(bb.y, `${mode}: ${sel} inside the bar`).toBeGreaterThanOrEqual(b.y - 1);
+      expect(Math.abs(Math.round(bb.y) - top1), `${mode}: ${sel} on row 1`).toBeLessThanOrEqual(1);
+    }
+    const row1Bottom = top1 + 40;
+    const filters = await boxesOf(['#facet-list > .facet-group', '#facet-list > .pg-clear']);
+    for (const [sel, bb] of filters) {
+      expect(Math.round(bb.height), `${mode}: ${sel} height`).toBe(30);
+      expect(bb.y, `${mode}: ${sel} below row 1`).toBeGreaterThanOrEqual(row1Bottom);
       expect(bb.y + bb.height, `${mode}: ${sel} inside the bar`).toBeLessThanOrEqual(b.y + b.height + 1);
     }
-    // Every control starts on a bar line (no stray offsets): its top is the top of some line.
-    const tops = [...new Set(boxes.map(([, bb]) => Math.round(bb.y)))];
-    // BETA-FILTERS put every group in the bar (21, plus Localitate here): 3 lines at 1280px
-    // with the Mac's fonts, 4 with the CI runner's wider Linux fallback. More means a stray offset.
-    expect(tops.length, `${mode}: rows ${tops}`).toBeLessThanOrEqual(4);
-    // View and sort follow the last filter with the bar's own gap: no hole before them.
-    const sw = await page.locator('#layout-switch').boundingBox();
-    const prev = await page.locator('#layout-switch').evaluate((el) => {
-      const items = [...document.querySelectorAll('#q, #facet-list > .facet-group, #facet-list > .pg-clear')];
-      const r = items.map((i) => i.getBoundingClientRect()).filter((x) => x.height > 0).pop();
-      return { right: r.right, y: r.y };
-    });
-    if (Math.abs(prev.y - sw.y) < 2) expect(sw.x - prev.right, `${mode}: gap before the view switch`).toBeLessThanOrEqual(9);
-    else expect(Math.abs(sw.x - b.x), `${mode}: the view switch starts a line`).toBeLessThanOrEqual(1);
+    // Filter lines: 3 at 1280px with the Mac's fonts, 4 with the CI runner's wider Linux fallback.
+    const tops = [...new Set(filters.map(([, bb]) => Math.round(bb.y)))];
+    expect(tops.length, `${mode}: filter rows ${tops}`).toBeLessThanOrEqual(4);
     // The results start below the bar; the status select is in the bar.
     const res = await page.locator('#results').boundingBox();
     expect(res.y, mode).toBeGreaterThanOrEqual(b.y + b.height + 8);

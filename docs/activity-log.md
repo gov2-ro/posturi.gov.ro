@@ -2,6 +2,31 @@
 
 ## 2026
 
+### 2026-11-16 — List page: two-row filter bar, save + follow group, subscription dialog (not deployed)
+
+**Done**
+- Grid and table views: the filter bar has two rows. Row 1 holds the boxed controls (search, view, status, sort). Row 2 holds the facet dropdowns at 30 px with no row gap. The bar uses CSS `order` and a zero-height `::before` as the line break; the markup is unchanged.
+- "Salvează căutarea" and "Urmărește" are one group at the end of the active-filter chips (`follow_group_html()` in `helpers.php`, called by `partials/result_list.php`). "Urmărește" is the filled accent button. A copy (`#follow-fab`) sits at the bottom centre. The script shows it only for a search, and only while the chips' group is off screen (IntersectionObserver; the chips arrive with every swap, so the script re-observes the new group).
+- The notice after a saved search has "Vezi salvatele · Urmărește · Închide". "Urmărește" opens the dialog and closes the notice.
+- `#urmareste` is now a `<section>`, not a `<details>`. It is outside `#filter-form` and outside the white results box. On the landing (no filters) it stays in place, open. For a search the script hides it and moves it into `<dialog id="follow-dialog">` when the reader presses "Urmărește"; on close it goes back.
+- The block has RSS, Atom and iCal on one row: the name is the link, and an icon-only button copies it. The calendar links have icons. New sprite glyphs: `i-feed`, `i-copy`, `i-calendar`, `i-calendar-add`, `i-mail`, `i-bell`.
+- Email alert from the search: the block has the `/alerte/abonare/` POST form (same fields and honeypot). The script fills `cheie`, `sort` and `nume` from `PosturiSearches`. The reader does not have to save the search first. The form shows only for a search, because a subscription needs a key.
+- The export line lost its second link to the block. `searches.js` syncs every `[data-search-toggle]` (two now) and exposes `defaultLabel()`.
+- Tests: `feeds_test.php` checks the new structure (3357 assertions). The Playwright specs `feeds`, `compact`, `searches` and `discovery` were updated; new tests cover the landing, the bottom group, the notice and the dialog. Full suite: 488 passed (the bottom-group test re-run alone after a fix to the test).
+
+**Hard**
+- First the group sat after the sort box. At 1280 px that row needed about 1364 px of a 1232 px bar (a flex row wraps by flex-basis before it shrinks). pax then moved the group to the chips, where it belongs to the search it acts on, so the shrink rules went again.
+- At 320 px the group overflowed. The three small icons hide below 360 px.
+- The email form cannot sit inside `#filter-form` (forms cannot nest), so the whole block moved after the form.
+
+**Decided**
+- The dialog moves the existing block instead of holding a copy. The ids stay unique, and `syncFeedLinks()` and the copy buttons keep working. Cost of a copy: duplicate ids and two sets of links to keep in step.
+- Without JavaScript the block is always in place and open, and the group and the email form stay hidden. Both need the script (the key comes from `searches.js`).
+
+**Open**
+- After a sent email request, `/alerte/abonare/` links back to /salvate/, not to the search.
+- Clean URLs (`?lang=hu` instead of `?lang%5B%5D=hu`): needs the query to be read from `QUERY_STRING`, because PHP keeps only the last value of a repeated key. Not started.
+
 ### 2026-11-16 — Feeds: live check, item times, three fixes (UX-04-FEEDS-DETAILS follow-up)
 
 **Done**

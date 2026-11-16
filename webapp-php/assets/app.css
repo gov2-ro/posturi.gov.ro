@@ -131,6 +131,35 @@
   .pref-hide[aria-pressed="true"] { @apply bg-note text-note-ink; }
   .pref-flag { @apply mt-1 block text-xs text-ink-muted; }
 
+  /* 261116: the subscription block (pages/list.php #urmareste) and the
+     "Salvează căutarea" + "Urmărește" group (helpers.php follow_group_html()).
+     The group is one bordered box of two buttons at the end of the active-filter
+     chips; "Urmărește" is the filled accent button, to promote it. #follow-fab is
+     the group's copy at the bottom centre of the screen. */
+  .sub-ico { @apply h-4 w-4 shrink-0 fill-none stroke-current; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .follow-group { @apply inline-flex h-9 items-stretch overflow-hidden rounded-md border border-line-strong bg-surface; }
+  .follow-group[hidden] { display: none; }
+  .follow-btn {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap px-3 text-sm text-ink transition-colors
+           hover:bg-sunken hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus;
+  }
+  .follow-btn + .follow-btn { @apply border-l border-line-strong; }
+  .follow-btn-primary { @apply border-gov bg-gov text-on-gov hover:bg-gov hover:text-on-gov hover:underline; }
+  .follow-btn-primary .follow-icons { @apply text-on-gov; }
+  .follow-btn[aria-pressed="true"] { @apply text-gov; }
+  .follow-btn[aria-pressed="true"] .pref-ico { @apply fill-current; }
+  .follow-btn .pref-ico { @apply h-4 w-4; }
+  .follow-icons { @apply inline-flex items-center gap-0.5 text-gov; }
+  @media (max-width: 359px) { .follow-icons { display: none; } }
+  /* Attached to the bottom edge: no bottom border, square bottom corners. */
+  .follow-fab { @apply fixed bottom-0 left-1/2 z-20 h-11 -translate-x-1/2 rounded-b-none border-b-0 shadow-lg; }
+  .follow-block { @apply mt-6 rounded-md border border-line bg-surface px-4 py-3; }
+  .follow-dialog {
+    @apply w-[40rem] max-w-[calc(100vw-2rem)] rounded-md border border-line-strong bg-surface p-0 text-ink shadow-lg;
+  }
+  .follow-dialog::backdrop { background: rgb(var(--c-ink) / 0.4); }
+  .follow-dialog .follow-block { @apply m-0 border-0; }
+
   /* htmx loading indicator */
   #results { transition: opacity 160ms ease; }
   #results.htmx-request { opacity: 0.65; }
@@ -365,6 +394,19 @@
   html[data-layout] .pg-side > #result-options { margin: 0; flex-wrap: nowrap; }
   html[data-layout] .pg-side > #result-options > * { height: var(--pg-bar-h); }
   html[data-layout] .pg-side > .pg-shortcuts { flex-basis: 100%; margin: 0.25rem 0 0; padding: 0; border: 0; }
+
+  /* 261116: two rows. Row 1: the boxed controls (search, view, status, sort).
+     Row 2: the facet dropdowns, shorter and with no row gap. The ::before is a
+     zero-height, full-width item that breaks the line between the two. */
+  html[data-layout] .pg-side { row-gap: 0; }
+  html[data-layout] .pg-side > .pg-search,
+  html[data-layout] .pg-side > #result-options { order: 0; }
+  html[data-layout] .pg-side::before { content: ""; order: 1; flex-basis: 100%; height: 0.375rem; }
+  html[data-layout] #facet-panel > *,
+  html[data-layout] #facet-list > * { order: 2; }
+  html[data-layout] .pg-side > .pg-shortcuts { order: 3; }
+  html[data-layout] #facet-list > .facet-group > summary,
+  html[data-layout] #facet-list > .pg-clear { height: 1.875rem; }
 
   html[data-layout] .pg-main { width: 100%; }
 

@@ -584,9 +584,28 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
     $seen = []; $dups = [];
     foreach ($x->query('//*[@id]') as $n) { $i = $n->getAttribute('id'); if (isset($seen[$i])) $dups[] = $i; $seen[$i] = true; }
     assert_same([], $dups, 'no duplicate ids');
-    assert_same(1, $x->query('//details[@id="urmareste"]')->length, 'one subscription disclosure');
-    assert_same(1, $x->query('//details[@id="urmareste"]/summary[normalize-space()="Urmărește această căutare"]')->length, 'summary label');
-    assert_same(0, $x->query('//details[@id="urmareste"][@open]')->length, 'closed by default');
+    // 261116: one open block, not a disclosure, outside the filter form and the results box.
+    assert_same(1, $x->query('//section[@id="urmareste"]')->length, 'one subscription block');
+    assert_same(0, $x->query('//details[@id="urmareste"]')->length, 'not a disclosure');
+    assert_same(0, $x->query('//section[@id="urmareste"][@hidden]')->length, 'shown without JavaScript');
+    assert_same(0, $x->query('//form[@id="filter-form"]//section[@id="urmareste"]')->length, 'outside the filter form');
+    assert_same(0, $x->query('//*[contains(@class,"pg-main")]//section[@id="urmareste"]')->length, 'outside the results box');
+    assert_same(1, $x->query('//dialog[@id="follow-dialog"]')->length, 'one dialog for searches');
+    // Email alert straight from the search: the /alerte/abonare/ POST, honeypot included, script-filled key.
+    $mail = $x->query('//section[@id="urmareste"]//form[@data-follow-email][@method="post"][@action="/alerte/abonare/"]');
+    assert_same(1, $mail->length, 'email form posts to /alerte/abonare/');
+    foreach (['cheie', 'sort', 'nume', 'website', 'email'] as $n)
+        assert_same(1, $x->query('.//input[@name="' . $n . '"]', $mail->item(0))->length, "email form: $n field");
+    // Save + follow: the group at the end of the chips and its bottom copy, both script-shown.
+    $groups = $x->query('//*[@data-follow-group]');
+    assert_same(2, $groups->length, 'two follow groups');
+    foreach ($groups as $g) {
+        assert_true($g->hasAttribute('hidden'), 'follow group ships hidden');
+        assert_same(1, $x->query('.//button[@data-search-toggle]', $g)->length, 'group has the save toggle');
+        assert_same(1, $x->query('.//button[@data-follow-open]', $g)->length, 'group has the follow button');
+    }
+    assert_same(1, $x->query('//*[@data-active-chips]/*[@data-follow-group]')->length, 'group sits at the end of the chips');
+    assert_same(0, $x->query('//*[@id="result-options"]//*[@data-follow-group]')->length, 'not beside the sort box');
     // Labels and links, one each.
     $labels = [];
     foreach (['posturi.rss', 'posturi.atom', 'posturi.ics', 'posturi.json'] as $f) {
@@ -611,7 +630,7 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
     $w = html_entity_decode($x->query('//a[@id="webcal-link"]')->item(0)->getAttribute('href'));
     assert_same(preg_replace('#^http://#', 'webcal://', $base . $ics), $w, 'webcal link is the ICS URL');
     // Scope text and caveats.
-    $block = $x->query('//details[@id="urmareste"]')->item(0)->textContent;
+    $block = $x->query('//section[@id="urmareste"]')->item(0)->textContent;
     $block = preg_replace('/\s+/', ' ', $block);
     assert_contains('RSS/Atom: cele mai noi 50 de anunțuri care corespund filtrelor. Calendar: primele 200 cu dată disponibilă, în ordinea termenului.', $block, 'limits sentence');
     assert_contains('hotărât de cititorul de fluxuri sau de aplicația de calendar', $block, 'refresh is the client’s');
@@ -620,7 +639,7 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
     foreach (['imediat', 'garant'] as $bad) assert_not_contains($bad . 'e', str_replace('Nu trimit notificări imediate', '', $block), "no promise: $bad");
     // Copy buttons are script-only; links work without them.
     foreach ($x->query('//button[@data-copy]') as $b) assert_true($b->hasAttribute('hidden'), 'copy buttons ship hidden');
-    assert_same(1, $x->query('//a[@href="#urmareste-linkuri"]')->length, 'export line links to the block (no-JS anchor)');
+    assert_same(0, $x->query('//a[@href="#urmareste-linkuri"]')->length, 'no second link to the block in the export line');
     // Home page, no filters: plain links.
     [, $home] = fetch($base, '/');
     assert_contains('data-feed="posturi.rss" href="/posturi.rss"', $home, 'unfiltered RSS link');

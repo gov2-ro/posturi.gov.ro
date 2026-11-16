@@ -61,6 +61,7 @@ $chips = $active_chips ?? [];
   <?php if (count($chips) > 1): ?>
     <a href="/" class="px-2 py-1 text-xs text-ink-muted underline hover:text-gov">Șterge tot</a>
   <?php endif; ?>
+  <?= follow_group_html('data-follow-group hidden class="follow-group ml-auto"') ?>
 </div>
 <?php endif; ?>
 

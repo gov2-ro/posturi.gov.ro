@@ -13,10 +13,16 @@ async function noOverflow(page, what) {
   expect(o, `horizontal overflow: ${what}`).toBeLessThanOrEqual(1);
 }
 
+// 261116: for a search the block opens in #follow-dialog from "Urmărește".
 async function openBlock(page) {
-  const d = page.locator('details#urmareste');
-  if (!(await d.evaluate((n) => n.open))) await d.locator('> summary').click();
-  await expect(d).toHaveJSProperty('open', true);
+  const dlg = page.locator('#follow-dialog');
+  if (!(await dlg.evaluate((n) => n.open))) await page.locator('[data-active-chips] [data-follow-open]').click();
+  await expect(dlg).toHaveJSProperty('open', true);
+  await expect(page.locator('#follow-dialog #urmareste')).toBeVisible();
+}
+async function closeBlock(page) {
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', false);
 }
 
 async function feedHref(page, feed) {
@@ -56,14 +62,13 @@ function shot(page, name) {
 
 test('subscription links follow filters through HTMX, chips, pagination and history', async ({ page }) => {
   await page.goto('/?judet%5B%5D=ilfov&sort=deadline');
-  await openBlock(page);
   await expectFeeds(page, { judet: ['ilfov'] });
 
   // HTMX: a keyword typed into the search box.
   await page.locator('input[name="q"]').first().fill('volum');
   await expect(page).toHaveURL(/q=volum/);
   await expectFeeds(page, { judet: ['ilfov'], q: ['volum'] });
-  expect(await page.locator('details#urmareste').evaluate((n) => n.open), 'block stays open across a swap').toBe(true);
+  await expect(page.locator('#urmareste'), 'a search keeps the block for the dialog').toBeHidden();
 
   // Chip removal drops only that value.
   await page.locator('[data-chip-param="q"]').first().click();
@@ -147,54 +152,104 @@ test('copy uses the current absolute URL; a clipboard failure shows a selected, 
   await shot(page, 'copy-fallback');
 
   // Changing the filters clears a stale manual URL.
+  await closeBlock(page);
   await page.locator('input[name="q"]').first().fill('');
   await expect(page).not.toHaveURL(/q=spital/);
   await expect(page.locator('#feed-copy-fallback')).toBeHidden();
 });
 
-test('keyboard: the disclosure and the copy buttons work without a pointer', async ({ page }) => {
+test('keyboard: the dialog and the copy buttons work without a pointer', async ({ page }) => {
   await page.addInitScript(() => {
     window.__copied = null;
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: (t) => (window.__copied = t, Promise.resolve()) } });
   });
   await page.goto('/?judet%5B%5D=cluj');
-  const summary = page.locator('details#urmareste > summary');
-  await summary.focus();
+  const opener = page.locator('[data-active-chips] [data-follow-open]');
+  await opener.focus();
   await page.keyboard.press('Enter');
-  await expect(page.locator('details#urmareste')).toHaveJSProperty('open', true);
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', true);
+  await expect(page.locator('[data-follow-close]')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('[data-feed="posturi.rss"]')).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.locator('[data-copy="posturi.rss"]')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect.poll(() => page.evaluate(() => window.__copied)).toContain('/posturi.rss?');
-  await summary.focus();
-  await page.keyboard.press('Space');
-  await expect(page.locator('details#urmareste')).toHaveJSProperty('open', false);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', false);
+  await expect(opener).toBeFocused();
 });
 
-test('export line link opens the block; layout holds at this width', async ({ page }) => {
+test('"Urmărește" opens the dialog; layout holds at this width', async ({ page }) => {
   await page.goto('/?judet%5B%5D=ilfov');
-  await expect(page.locator('details#urmareste')).toHaveJSProperty('open', false);
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', false);
+  await expect(page.locator('#urmareste')).toBeHidden();
   await noOverflow(page, 'closed');
-  await page.locator('[data-open-subscribe]').click();
-  await expect(page.locator('details#urmareste')).toHaveJSProperty('open', true);
+  await openBlock(page);
+  await expect(page.locator('#urmareste-title')).toHaveText('Urmărește această căutare');
   await expect(page.locator('#feed-limits')).toContainText('cele mai noi 50 de anunțuri care corespund filtrelor');
   await expect(page.locator('#feed-limits')).toContainText('primele 200 cu dată disponibilă, în ordinea termenului');
+  // Email straight from the search: the form carries this search's key.
+  const mail = page.locator('[data-follow-email]');
+  await expect(mail).toBeVisible();
+  await expect(mail.locator('input[name="cheie"]')).toHaveValue('judet%5B%5D=ilfov');
+  await expect(mail.locator('input[name="nume"]')).not.toHaveValue('');
   await page.locator('#feed-title').fill('x'.repeat(80));
   await noOverflow(page, 'open with long title');
   await shot(page, 'subscribe-open');
+  // A click on the backdrop closes it; the block goes back, hidden.
+  await page.mouse.click(2, 2);
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', false);
+  await expect(page.locator('#urmareste')).toBeHidden();
   await page.goto('/?judet%5B%5D=ilfov#urmareste-linkuri');
-  await expect(page.locator('details#urmareste')).toHaveJSProperty('open', true);
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', true);
+});
+
+test('landing: the block is in place and open; no group, no email form', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#urmareste')).toBeVisible();
+  await expect(page.locator('#urmareste-title')).toHaveText('Urmărește anunțurile noi');
+  await expect(page.locator('[data-follow-email]')).toBeHidden();
+  await expect(page.locator('[data-active-chips] [data-follow-group]')).toBeHidden();
+  await expect(page.locator('#follow-fab')).toBeHidden();
+  expect(await page.locator('#urmareste').evaluate((el) => !el.closest('.pg-main') && !el.closest('form'))).toBe(true);
+  await noOverflow(page, 'landing');
+});
+
+test('search: the bottom group shows only while the top group is off screen', async ({ page }) => {
+  await page.goto('/?status=all');
+  await page.locator('input[name="q"]').first().fill('spital');
+  await expect(page).toHaveURL(/q=spital/);
+  // A short window, so the chips' group can leave the screen on a fixture page.
+  await page.setViewportSize({ width: page.viewportSize().width, height: 420 });
+  const top = page.locator('[data-active-chips] [data-follow-group]');
+  await expect(top).toBeVisible();
+  await top.scrollIntoViewIfNeeded();
+  await expect(page.locator('#follow-fab')).toBeHidden();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(page.locator('#follow-fab')).toBeVisible();
+  await noOverflow(page, 'bottom group');
+  // Its save toggle and the top one share one state.
+  await page.locator('#follow-fab [data-search-toggle]').click();
+  await expect(page.locator('[data-active-chips] [data-search-toggle]')).toHaveAttribute('aria-pressed', 'true');
+  // The save notice offers "Urmărește"; it opens the dialog and closes the notice.
+  const notice = page.locator('#pref-notice');
+  await expect(notice).toBeVisible();
+  await expect(notice.locator('[data-notice-follow]')).toBeVisible();
+  await notice.locator('[data-notice-follow]').click();
+  await expect(page.locator('#follow-dialog')).toHaveJSProperty('open', true);
+  await expect(notice).toBeHidden();
+  await closeBlock(page);
+  await top.scrollIntoViewIfNeeded();
+  await expect(page.locator('#follow-fab')).toBeHidden();
 });
 
 test.describe('without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
 
-  test('links are server-rendered with the filters and the disclosure still toggles', async ({ page }) => {
+  test('links are server-rendered with the filters and the block is in place', async ({ page }) => {
     await page.goto('/?judet%5B%5D=cluj&judet%5B%5D=bacau&status=all&page=1&sort=deadline');
-    await page.locator('details#urmareste > summary').click();
-    await expect(page.locator('details#urmareste')).toHaveJSProperty('open', true);
+    await expect(page.locator('#urmareste')).toBeVisible();
     for (const f of FEEDS) {
       const p = await feedParams(page, f);
       expect(valuesOf(p, 'judet'), f).toEqual(['cluj', 'bacau']);
@@ -206,10 +261,11 @@ test.describe('without JavaScript', () => {
     await noOverflow(page, 'no-JS open');
   });
 
-  test('the export anchor reaches the links without JavaScript', async ({ page }) => {
+  test('without JavaScript a search shows no save/follow group and no email form', async ({ page }) => {
     await page.goto('/?judet%5B%5D=cluj');
-    await page.locator('[data-open-subscribe]').click();
-    await expect(page.locator('details#urmareste')).toHaveJSProperty('open', true);
+    await expect(page.locator('[data-follow-group]')).toHaveCount(2);
+    for (const g of await page.locator('[data-follow-group]').all()) await expect(g).toBeHidden();
+    await expect(page.locator('[data-follow-email]')).toBeHidden();
     await expect(page.locator('[data-feed="posturi.rss"]')).toBeVisible();
   });
 });

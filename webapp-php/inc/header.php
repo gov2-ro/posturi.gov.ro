@@ -90,11 +90,18 @@ if (!isset($_build_stamp)) {
   <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">
-<?php /* Glyph sprite for the save/hide icon buttons (helpers.php pref_controls). */ ?>
+<?php /* Glyph sprite: the save/hide icon buttons (helpers.php pref_controls)
+   and the subscription block on the list page (pages/list.php #urmareste). */ ?>
 <svg width="0" height="0" class="absolute" aria-hidden="true" focusable="false"><defs>
   <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4.5L6 21z"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
   <symbol id="i-note" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16z M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-feed" viewBox="0 0 24 24"><path d="M5 11a8 8 0 0 1 8 8 M5 4a15 15 0 0 1 15 15"/><circle cx="6" cy="18" r="1.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><path d="M9 9h11v11H9z M15 9V4H4v11h5"/></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"/></symbol>
+  <symbol id="i-calendar-add" viewBox="0 0 24 24"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5 M12 13v5 M9.5 15.5h5"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><path d="M3 6h18v12H3z M3 7l9 6 9-6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z M10 21h4"/></symbol>
 </defs></svg>
 
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gov focus:px-4 focus:py-2 focus:text-on-gov">

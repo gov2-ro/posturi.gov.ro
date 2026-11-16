@@ -61,6 +61,8 @@
   <div class="mt-2 flex flex-wrap gap-2">
     <button type="button" data-notice-undo hidden class="min-h-[2.5rem] border border-gov bg-gov px-3 py-2 text-xs font-medium text-on-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2">Anulează</button>
     <a data-notice-link hidden href="/salvate/" class="inline-flex min-h-[2.5rem] items-center border border-line px-3 py-2 text-xs font-medium text-gov hover:border-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">Vezi salvatele</a>
+    <?php /* 261116: after a saved search, "Urmărește" opens the subscription dialog (pages/list.php). */ ?>
+    <button type="button" data-notice-follow data-follow-open hidden class="min-h-[2.5rem] border border-gov bg-gov px-3 py-2 text-xs font-medium text-on-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2">Urmărește</button>
     <button type="button" data-notice-close class="min-h-[2.5rem] border border-line px-3 py-2 text-xs text-ink-muted hover:border-gov hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus">Închide</button>
   </div>
 </div>

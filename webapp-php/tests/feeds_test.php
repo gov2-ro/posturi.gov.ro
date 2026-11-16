@@ -348,13 +348,10 @@ run_suite('item details: facts, notes and caps in RSS, Atom and iCal', function 
         $dut = preg_split('#\n?Studii\b#u', $dut)[0];
         assert_true(mb_strlen($dut) > 500 && mb_strlen($dut) < $cap + 80, "$fmt: section cut at about $cap characters (" . mb_strlen($dut) . ')');
     }
-    assert_contains('… (continuarea pe pagina anunțului)', $cur_ics, 'ics: cut section ends with the continuation');
-    assert_not_contains($TAIL, $cur_ics, 'ics: text beyond the cap is gone');
-    assert_contains('Studii superioare juridice, cu diplomă de licență.', $cur_ics, 'ics: a short section stays whole');
-    $duties = preg_replace('/^.*?Atribuții principale\n/s', '', $cur_ics);
-    $duties = preg_split('/\n\n/', $duties)[0];
-    assert_true(mb_strlen($duties) <= 300 + mb_strlen('… (continuarea pe pagina anunțului)'), 'ics: section capped at about 300 characters');
-    assert_true(mb_strlen($duties) > 200, 'ics: the cap is not far below its size');
+    // iCal leaves the long text sections out: they stay on the posting page.
+    assert_not_contains('Atribuții principale', $cur_ics, 'ics: no text sections');
+    assert_not_contains($TAIL, $cur_ics, 'ics: no section text');
+    assert_contains('Salariu estimat', $cur_ics, 'ics: the extracted facts stay');
 });
 
 run_suite('item details: hostile text in sections stays text; XML and iCal stay valid', function () use ($det) {
@@ -536,7 +533,7 @@ run_suite('iCal: escaping, 75-octet folding, UTF-8, CRLF, URI fidelity', functio
     assert_same('https://posturi.gov.ro/anunt/test,virgula;punct?x=1,2&y=%C8%9B&z=%C8%99', $ev['URL'] ?? null, 'URI: commas/semicolons verbatim, ș encoded, %C8%9B kept');
     assert_not_contains('\\,', $ev['URL'] ?? '', 'URL has no TEXT escapes');
     // Estimated deadline is visible in both SUMMARY and DESCRIPTION.
-    assert_contains('Termen estimat (data expirării anunțului): 2026-11-21', $ev['DESCRIPTION'], 'estimate in DESCRIPTION');
+    assert_contains('Termen estimat (data expirării anunțului): 21.11.2026', $ev['DESCRIPTION'], 'estimate in DESCRIPTION');
     assert_same('20261121', $ev['DTSTART'], 'all-day start');
     assert_same('20261122', $ev['DTEND'], 'exclusive end is the next day');
     assert_same('posturi-gov2-ro-3902@posturi.gov2.ro', $ev['UID'], 'stable UID');
@@ -631,6 +628,22 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
     // Employer page.
     [, $emp] = fetch($base, '/angajator/spitalul-clinic-judetean-cluj/');
     foreach (['>RSS<', '>Atom<', '>Calendar iCal<', '>JSON API<', '/posturi.rss?employer=spitalul-clinic-judetean-cluj'] as $needle) assert_contains($needle, $emp, "employer page: $needle");
+});
+
+run_suite('item times: the first-seen time on the publication day, else the bare date', function () {
+    // Seen by the evening run on the publication day: that run's time, in Bucharest.
+    [$pub, $upd] = feed_row_times(['published_at' => '2026-11-16', 'created_at' => '2026-11-16T18:33:12.5+02:00', 'updated_at' => '2026-11-16']);
+    assert_same('2026-11-16T18:33:12+02:00', $pub->format(DATE_ATOM), 'evening run time');
+    assert_true($upd >= $pub, 'updated is never before published');
+    // A UTC timestamp still lands on the Bucharest day.
+    [$pub] = feed_row_times(['published_at' => '2026-11-16', 'created_at' => '2026-11-16T04:10:00+00:00']);
+    assert_same('2026-11-16T06:10:00+02:00', $pub->format(DATE_ATOM), 'morning run time, converted');
+    // Seen on a later day (backfill, missed run): the bare date.
+    [$pub] = feed_row_times(['published_at' => '2026-11-10', 'created_at' => '2026-11-16T06:10:00+02:00']);
+    assert_same('2026-11-10T00:00:00+02:00', $pub->format(DATE_ATOM), 'later sighting keeps midnight');
+    // Date-only or missing created_at: the bare date.
+    [$pub] = feed_row_times(['published_at' => '2026-11-16', 'created_at' => '2026-11-16']);
+    assert_same('2026-11-16T00:00:00+02:00', $pub->format(DATE_ATOM), 'date-only created_at');
 });
 
 stop_fixture_server($srv3, $db_path3);

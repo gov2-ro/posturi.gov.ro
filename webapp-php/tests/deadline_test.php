@@ -156,8 +156,8 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
     // Atom: provenance is visible in the summary.
     $atom = $get('/posturi.atom');
     assert_not_contains('Fatal error', $atom, 'atom renders');
-    assert_contains('Termen estimat (data expirării anunțului): 2026-10-20', $atom, 'atom estimate label');
-    assert_contains('Termen depunere: 2026-10-16', $atom, 'atom confirmed label');
+    assert_contains('Termen estimat (data expirării anunțului): 20.10.2026', $atom, 'atom estimate label');
+    assert_contains('Termen depunere: 16.10.2026', $atom, 'atom confirmed label');
 
     // iCal: all-day events must have an EXCLUSIVE end date of the next day.
     $ics = $get('/posturi.ics');
@@ -165,7 +165,7 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
     assert_contains('DTSTART;VALUE=DATE:20261016', $ics, 'ics start');
     assert_contains('DTEND;VALUE=DATE:20261017', $ics, 'ics exclusive end next day');
     assert_not_contains('DTEND;VALUE=DATE:20261016', $ics, 'ics end is never the start day');
-    assert_contains('Termen estimat (data expirării anunțului): 2026-10-20', $ics, 'ics estimate label');
+    assert_contains('Termen estimat (data expirării anunțului): 20.10.2026', $ics, 'ics estimate label');
     // UIDs stay stable across the change.
     assert_contains('UID:posturi-gov2-ro-1001@posturi.gov2.ro', $ics, 'ics stable UID');
     // Every VEVENT spans exactly one day.

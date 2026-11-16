@@ -2,6 +2,22 @@
 
 ## 2026
 
+### 2026-11-16 — Feeds: live check, item times, three fixes (UX-04-FEEDS-DETAILS follow-up)
+
+**Done**
+- Checked the deployed feeds with curl. Measured: `/posturi.rss` 318 KB (50 items; description 2.6–6.9 KB, median 4.8 KB), `/posturi.atom` 328 KB in 1.2 s, `/posturi.ics` 811 KB in 2.0 s (200 events). All 50 RSS items had a current extraction. Cloudflare holds `/posturi.rss` for up to 1 h (`s-maxage=3600`), so a reader can see the old format for an hour after a deploy.
+- iCal: the long text sections are left out. The facts, the calendar and the note stay.
+- Extracted calendar lines: the source wording is dropped when it holds the date already ("Proba scrisă: 09.12.2026 10:00 — Proba scrisă: în data de 09.12.2026, ora 10,00").
+- The deadline lines use `dd.mm.yyyy`, like every other date in the item. The Atom summary and the iCal DESCRIPTION change with them.
+- Item time: `pubDate` / `published` use `created_at` (the time the pipeline first saw the posting) when it falls on the publication day in Bucharest. Otherwise the item keeps the bare date at 00:00.
+
+**Hard**
+- posturi.gov.ro has no publication time. Its WordPress API (`/wp-json/wp/v2/pg_job?slug=…`) gives `date` = 00:00 of the publication day, and `modified` can be earlier than `date` (example: 54126, date 2026-11-16T00:00, modified 2026-11-11T16:27). The posting page has no time either.
+
+**Decided**
+- The time comes from our own first sighting, not from the source. It separates the morning and the evening run, and it stays correct with more runs. A posting seen on a later day (backfill, missed run) keeps 00:00: a later time would claim it was published that day. Cost of the alternative (`modified` from the WP API): one more request per posting, and a value that is not a publication time.
+- Item identity is unchanged, so readers do not show the items again. A reader can re-sort today's items once, because their time changes from 00:00.
+
 ### 2026-11-16 — Richer item details in the RSS, Atom and iCal feeds (UX-04-FEEDS-DETAILS; not deployed)
 
 **Done**

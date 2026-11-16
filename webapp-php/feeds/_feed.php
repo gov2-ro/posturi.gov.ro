@@ -108,8 +108,8 @@ function feed_summary_lines(array $r): array {
     $dl = posting_deadline($r);
     if ($dl['date']) {
         $parts[] = $dl['source'] === 'expirare'
-            ? 'Termen estimat (data expirării anunțului): ' . $dl['date']
-            : 'Termen depunere: ' . $dl['date'];
+            ? 'Termen estimat (data expirării anunțului): ' . fmt_date($dl['date'])
+            : 'Termen depunere: ' . fmt_date($dl['date']);
     } else {
         $parts[] = 'Termen depunere: neprecizat';
     }
@@ -197,7 +197,11 @@ function feed_details(array $r, array $events): array {
     if (!$cal && $has_schema) {
         foreach (llm_calendar_rows($schema) as $row) {
             $when = $row['date'] !== '' ? trim(fmt_date($row['date']) . ' ' . (string)$row['time']) : '';
-            feed_put($cal, $row['label'], trim($when . ($row['detail'] ? ($when !== '' ? ' — ' : '') . $row['detail'] : '')));
+            // The source wording often only repeats the date ("Proba scrisă: în data de
+            // 09.12.2026, ora 10,00"). Keep it only when it does not hold the date already.
+            $detail = trim((string)$row['detail']);
+            if ($when !== '' && $detail !== '' && (str_contains($detail, fmt_date($row['date'])) || str_contains($detail, $row['date']))) $detail = '';
+            feed_put($cal, $row['label'], trim($when . ($detail !== '' ? ($when !== '' ? ' — ' : '') . $detail : '')));
         }
         if ($cal) $heading .= ' (extras automat)';
     }
@@ -308,9 +312,31 @@ function feed_date(?string $s): ?DateTimeImmutable {
     }
 }
 
-/** Publication and last-change instants for a row, from stored facts only. */
+/**
+ * The instant the pipeline first saw the posting (`created_at`, full timestamp
+ * with offset), in Bucharest time. Null when absent or date-only.
+ */
+function feed_first_seen(?string $s): ?DateTimeImmutable {
+    $s = trim((string)$s);
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/', $s)) return null;
+    try {
+        return (new DateTimeImmutable($s, new DateTimeZone('Europe/Bucharest')))->setTimezone(new DateTimeZone('Europe/Bucharest'));
+    } catch (Exception $e) {
+        return null;
+    }
+}
+
+/**
+ * Publication and last-change instants for a row, from stored facts only.
+ * posturi.gov.ro gives a publication date with no time (its API says 00:00).
+ * When the pipeline first saw the posting on that same day, the time of that
+ * run is used, so items from the morning and the evening run differ. A posting
+ * seen on a later day (a backfill, a missed run) keeps the bare date.
+ */
 function feed_row_times(array $r): array {
     $pub = feed_date($r['published_at'] ?? null);
+    $seen = feed_first_seen($r['created_at'] ?? null);
+    if ($pub !== null && $seen !== null && $seen->format('Y-m-d') === $pub->format('Y-m-d')) $pub = $seen;
     $upd = feed_date($r['updated_at'] ?? null) ?? $pub;
     if ($pub === null) $pub = $upd;
     if ($upd !== null && $pub !== null && $upd < $pub) $upd = $pub;

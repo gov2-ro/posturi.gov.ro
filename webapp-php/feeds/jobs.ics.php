@@ -51,9 +51,9 @@ foreach ($rows as $r) {
     $estimated = $dl['source'] === 'expirare';
     $parts = [];
     if ($estimated) {
-        $parts[] = 'Termen estimat (data expirării anunțului): ' . $dl['date'];
+        $parts[] = 'Termen estimat (data expirării anunțului): ' . fmt_date($dl['date']);
     } else {
-        $parts[] = 'Termen depunere: ' . $dl['date'];
+        $parts[] = 'Termen depunere: ' . fmt_date($dl['date']);
     }
     $parts[] = 'Stare: ' . feed_status_label($r);
     if ($r['judet_name_disp'] ?? $r['judet_name']) $parts[] = 'Județ: ' . ($r['judet_name_disp'] ?? $r['judet_name']);
@@ -62,8 +62,9 @@ foreach ($rows as $r) {
     if ($r['contact_email']) $parts[] = 'Email: ' . $r['contact_email'];
     $parts[] = 'URL: ' . $r['url'];
     // The exam dates first, then the facts and the note; a line already above is not repeated.
-    // Calendar clients show DESCRIPTION in a small pane, so a text section stops at 300 characters.
-    $groups = feed_details($r, $events[(int)$r['id']] ?? []);
+    // Calendar clients show DESCRIPTION in a small pane, and 200 events with text sections
+    // made an 811 KB file: the long text sections stay on the posting page (link in URL).
+    $groups = array_values(array_filter(feed_details($r, $events[(int)$r['id']] ?? []), fn($g) => $g['key'] !== 'text'));
     usort($groups, fn($a, $b) => (($b['key'] === 'calendar') <=> ($a['key'] === 'calendar')));
     $more = array_filter(feed_details_text($groups, feed_extraction_note($r), 300), fn($l) => $l === '' || !in_array($l, $parts, true));
     $parts = array_merge($parts, $more);

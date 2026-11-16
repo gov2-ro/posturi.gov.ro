@@ -7,6 +7,7 @@ header('Content-Type: text/calendar; charset=utf-8');
 header('Content-Disposition: inline; filename="posturi.ics"');
 
 $rows = feed_rows('j.apply_deadline ASC, j.id ASC', FEED_CAL_LIMIT, true);
+$events = feed_calendar_events($rows);
 
 /** One CRLF-terminated content line, folded at 75 octets. */
 function ical_out(string $line): void {
@@ -60,6 +61,12 @@ foreach ($rows as $r) {
     if ($r['contact_phone']) $parts[] = 'Tel: ' . $r['contact_phone'];
     if ($r['contact_email']) $parts[] = 'Email: ' . $r['contact_email'];
     $parts[] = 'URL: ' . $r['url'];
+    // The exam dates first, then the facts and the note; a line already above is not repeated.
+    // Calendar clients show DESCRIPTION in a small pane, so a text section stops at 300 characters.
+    $groups = feed_details($r, $events[(int)$r['id']] ?? []);
+    usort($groups, fn($a, $b) => (($b['key'] === 'calendar') <=> ($a['key'] === 'calendar')));
+    $more = array_filter(feed_details_text($groups, feed_extraction_note($r), 300), fn($l) => $l === '' || !in_array($l, $parts, true));
+    $parts = array_merge($parts, $more);
 
     ical_out("BEGIN:VEVENT");
     ical_out("UID:posturi-gov2-ro-{$r['id']}@posturi.gov2.ro");

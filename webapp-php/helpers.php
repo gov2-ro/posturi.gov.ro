@@ -1381,6 +1381,61 @@ function inferred_tags(array $p): array {
     return $out;
 }
 
+/**
+ * The deduced conditions of a posting, label => value: the detail page strip and the feeds
+ * read this one list. A condition nobody could deduce is left out, never shown as "—".
+ *
+ * @return array<string,string>
+ */
+function posting_inferred_conditions(array $p): array {
+    $inferred = inferred_of($p);
+    $wt = $inferred['work_type'] ?? null;
+    $re = $inferred['remote_eligible'] ?? null;
+    $rc = isset($inferred['requires_computer']) ? $inferred['requires_computer'] : null;
+    $exp = $inferred['experience_years'] ?? null;
+    $st = $inferred['studies_required'] ?? null;
+    $smn = $inferred['salary_min'] ?? null;
+    $smx = $inferred['salary_max'] ?? null;
+    $cond = [];
+    if ($wt) $cond['Program'] = work_type_label($wt);
+    if ($re) $cond['Telemuncă'] = 'Da';
+    if ($rc === true || $rc === 1) $cond['Calculator'] = 'Solicitat' . (($inferred['computer_level'] ?? '') === 'advanced' ? ' (avansat)' : '');
+    elseif ($rc === false || $rc === 0) $cond['Calculator'] = 'Nesolicitat';
+    if ($exp) $cond['Experiență'] = 'Min. ' . years_label((int)$exp);
+    if ($st) $cond['Studii'] = STUDIES_LABELS[$st] ?? ucfirst($st);
+    if ($smn || $smx) {
+        if ($smn && $smx && $smn != $smx) $cond['Salariu'] = (int)$smn . '–' . (int)$smx . ' RON';
+        else $cond['Salariu'] = ($smn ? (int)$smn : (int)$smx) . ' RON';
+    }
+    return $cond;
+}
+
+/**
+ * The contract terms of a decoded `schema_json` (v3 and later), label => value, then the v5
+ * who-can-apply-and-how facts. [] when the extraction states none.
+ *
+ * @return array<string,string>
+ */
+function posting_contract_terms(array $schema): array {
+    $ct  = $schema['contract'] ?? null;
+    $sen = $schema['seniority_hint'] ?? null;
+    $terms = [];
+    if ($ct) {
+        if (!empty($ct['duration'])) {
+            $d = CONTRACT_DURATION_LABELS[$ct['duration']] ?? $ct['duration'];
+            if (!empty($ct['duration_months'])) $d .= ' (' . (int)$ct['duration_months'] . ' luni)';
+            $terms['Contract'] = $d;
+        }
+        if (!empty($ct['schedule']))    $terms['Program'] = SCHEDULE_LABELS[$ct['schedule']] ?? $ct['schedule'];
+        if (!empty($ct['hours_per_week'])) $terms['Ore/săptămână'] = rtrim(rtrim(number_format((float)$ct['hours_per_week'], 1, ',', '.'), '0'), ',');
+        if (!empty($ct['probation_months'])) $terms['Perioadă de probă'] = (int)$ct['probation_months'] . ' luni';
+        if (!empty($ct['shift_work']))  $terms['Ture'] = 'Da — ture, gărzi sau weekend';
+    }
+    if ($sen && isset(SENIORITY_HINT_LABELS[$sen])) $terms['Grad'] = SENIORITY_HINT_LABELS[$sen];
+    foreach (v5_facts($schema) as $k => $v) $terms[$k] = $v;
+    return $terms;
+}
+
 // ---- Prompt-v3 structured extraction ----
 
 /**

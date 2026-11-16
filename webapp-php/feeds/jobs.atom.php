@@ -6,6 +6,7 @@ require_once __DIR__ . '/_feed.php';
 header('Content-Type: application/atom+xml; charset=utf-8');
 
 $rows = feed_item_rows();
+$events = feed_calendar_events($rows);
 $ch = feed_channel();
 $updated = feed_updated($rows);
 
@@ -22,6 +23,8 @@ echo '<?xml version="1.0" encoding="utf-8"?>' . "\n";
     $employer = $r['employer_name_disp'] ?? $r['employer_name'] ?? '';
     [$pub, $upd] = feed_row_times($r);
     $summary = implode(' | ', feed_summary_lines($r)) . ' | ' . feed_source_line($r);
+    $content = feed_details_html(feed_details($r, $events[(int)$r['id']] ?? []), feed_extraction_note($r))
+        . '<p>' . htmlspecialchars(feed_source_line($r), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>';
 ?>
   <entry>
     <title><?= xml_text(feed_item_title($r)) ?></title>
@@ -37,6 +40,7 @@ echo '<?xml version="1.0" encoding="utf-8"?>' . "\n";
     <author><name><?= xml_text($employer) ?></name></author>
 <?php endif; ?>
     <summary type="text"><?= xml_text($summary) ?></summary>
+    <content type="html"><?= xml_text($content) ?></content>
   </entry>
 <?php endforeach; ?>
 </feed>

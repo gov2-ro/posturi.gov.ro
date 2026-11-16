@@ -489,48 +489,16 @@ require __DIR__ . '/../inc/header.php';
       <?php /* The automatic summaries — deduced conditions, contract terms, exam topics, estimated
          pay — sit above the posting as plain rows: no boxes, no background (the white sheet
          below is the posting itself), one row per summary with its facts inline. */
-      $wt = $inferred['work_type'] ?? null;
-      $re = $inferred['remote_eligible'] ?? null;
-      $rc = isset($inferred['requires_computer']) ? $inferred['requires_computer'] : null;
-      $exp = $inferred['experience_years'] ?? null;
-      $st = $inferred['studies_required'] ?? null;
-      $smn = $inferred['salary_min'] ?? null;
-      $smx = $inferred['salary_max'] ?? null;
       // A condition nobody could deduce is left out rather than shown as "—".
-      $cond = [];
-      if ($wt) $cond['Program'] = work_type_label($wt);
-      if ($re) $cond['Telemuncă'] = 'Da';
-      if ($rc === true || $rc === 1) $cond['Calculator'] = 'Solicitat' . (($inferred['computer_level'] ?? '') === 'advanced' ? ' (avansat)' : '');
-      elseif ($rc === false || $rc === 0) $cond['Calculator'] = 'Nesolicitat';
-      if ($exp) $cond['Experiență'] = 'Min. ' . years_label((int)$exp);
-      if ($st) $cond['Studii'] = STUDIES_LABELS[$st] ?? ucfirst($st);
-      if ($smn || $smx) {
-          if ($smn && $smx && $smn != $smx) $cond['Salariu'] = (int)$smn . '–' . (int)$smx . ' RON';
-          else $cond['Salariu'] = ($smn ? (int)$smn : (int)$smx) . ' RON';
-      }
+      $cond = posting_inferred_conditions($p);
       $tag_groups = $cond ? inferred_tags($p) : [];
 
       // Contract terms and bibliography — extracted by v3 since it first ran and, until
       // 2026-09-13, displayed nowhere. No new extraction: data the project had already paid for.
       $v3c = ($p['schema_json'] ?? null) ? (json_decode($p['schema_json'], true) ?: []) : [];
-      $ct  = $v3c['contract'] ?? null;
       $bib = $v3c['bibliography_topics'] ?? [];
-      $sen = $v3c['seniority_hint'] ?? null;
-      $terms = [];
-      if ($ct) {
-          if (!empty($ct['duration'])) {
-              $d = CONTRACT_DURATION_LABELS[$ct['duration']] ?? $ct['duration'];
-              if (!empty($ct['duration_months'])) $d .= ' (' . (int)$ct['duration_months'] . ' luni)';
-              $terms['Contract'] = $d;
-          }
-          if (!empty($ct['schedule']))    $terms['Program'] = SCHEDULE_LABELS[$ct['schedule']] ?? $ct['schedule'];
-          if (!empty($ct['hours_per_week'])) $terms['Ore/săptămână'] = rtrim(rtrim(number_format((float)$ct['hours_per_week'], 1, ',', '.'), '0'), ',');
-          if (!empty($ct['probation_months'])) $terms['Perioadă de probă'] = (int)$ct['probation_months'] . ' luni';
-          if (!empty($ct['shift_work']))  $terms['Ture'] = 'Da — ture, gărzi sau weekend';
-      }
-      if ($sen && isset(SENIORITY_HINT_LABELS[$sen])) $terms['Grad'] = SENIORITY_HINT_LABELS[$sen];
-      // BETA-V5: who can apply and how (temporary vacancy, norm, end date, channels…).
-      foreach (v5_facts($v3c) as $k => $v) $terms[$k] = $v;
+      // BETA-V5: who can apply and how (temporary vacancy, norm, end date, channels…) is in the terms too.
+      $terms = posting_contract_terms($v3c);
 
       // Estimated pay from the 2026 draft salary grid. Derived, never scraped: 44 of 9,757
       // postings state a salary in the text. The law is an unadopted draft, so the card never

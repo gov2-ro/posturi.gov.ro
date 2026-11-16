@@ -2,6 +2,42 @@
 
 ## 2026
 
+### 2026-11-16 — Richer item details in the RSS, Atom and iCal feeds (UX-04-FEEDS-DETAILS; not deployed)
+
+**Done**
+- `webapp-php/helpers.php`: `posting_inferred_conditions(array $p)` and `posting_contract_terms(array $schema)`, moved from the inline block in `pages/detail.php`. The page calls them.
+- `webapp-php/feeds/_feed.php`: `feed_rows()` joins `posting_text`. `feed_calendar_events()` loads the calendar of all rows in one query. `feed_details()` builds four groups (official page, calendar, extracted data, text sections). `feed_extraction_note()` returns one of three notes. `feed_details_html()` and `feed_details_text()` render the groups.
+- `jobs.rss.php`: description = details + official link + local link. `jobs.atom.php`: `<content type="html">` added; `<summary>` unchanged. `jobs.ics.php`: DESCRIPTION = the old lines, then the calendar, the facts and the note. Text sections stop at 300 characters.
+- Tests: `tests/feeds_test.php` has a third database copy with three rows (current extraction with pay, stale v5 extraction with scraped calendar, no extraction). 392 → 3336 assertions. All 16 PHP suites pass.
+- Detail page HTML: saved before and after the change for 10 postings (fixture 1001–1008, v5 fixture 1201 and 1202); all identical once the random port in the URLs is normalised.
+- `xmllint --noout` accepts `/posturi.rss` and `/posturi.atom` from the fixture server and from the local export.
+
+**Measured** (bytes of the response)
+
+| Feed | Before | After |
+|---|---|---|
+| fixture `/posturi.rss?status=all` | 25,811 | 57,111 |
+| fixture `/posturi.atom?status=all` | 30,374 | 65,362 |
+| fixture `/posturi.ics?status=all` | 16,433 | 26,149 |
+| local export `posturi.sqlite`, `/posturi.rss` | 4,782 | 19,707 |
+| local export, `/posturi.atom` | 5,388 | 20,758 |
+| local export, `/posturi.ics` | 3,326 | 11,716 |
+
+The local export is the stale copy of 2026-09-09 (few open rows). The default feed has the open rows only. Not measured on the live export.
+
+**Hard**
+- The old cap test counted `/job/<id>-` in the whole feed body. The description now links the local page, so it counted three links per item. The test now reads each item's own `<link>`.
+- In the PHP CLI Parsedown is not loaded, so `render_markdown()` escapes markup. In the web server it loads, and HTMLPurifier drops `<script>` and `<img onerror>` with their text. A first test expected the escaped text and failed in the server only. The test now asserts that the hostile section markup never reaches the item, and uses a hostile contact name to prove the builder escapes data.
+- The same label occurs in the deduced conditions and in the contract terms (`Program`). A term that repeats a label gets „ (contract)”. Calendar events with the same name get „ (2)”.
+- The standing fixture row 1008 has a `schema_source_revision` and an empty `detail_content_hash`. By the brief's rule it counts as an older revision. That is correct for the rule, and no other row is affected.
+
+**Decided**
+- Each group carries a `key` (`official`, `calendar`, `extracted`, `text`) beside `heading`. The iCal handler puts the calendar group first. Cost of the alternative: a comparison on the heading text.
+- iCal does not repeat a line that the old DESCRIPTION already holds (`Termen…`, `Stare`, `Județ`, `Categorie`, `Email`, `URL`).
+- Exam topics come from the schema `bibliography_topics`, like the page. The column `v3_bibliography` is the fallback.
+- A text section has no extraction group when the row has no schema, as the brief says. The body text is not added: it is not selected, and a feed item with the whole announcement would be large.
+- The cap adds the continuation text after the cut, so a section is about 600 (300) characters plus 36.
+
 ### 2026-11-15 — UX-14 email alerts built (branch `ux-14-email-alerts`, not deployed)
 
 **Done**

@@ -53,10 +53,58 @@ for ($i = 1; $i <= 210; $i++) {
 }
 unset($pdo, $ins);
 
+// A third copy for the item-details checks, so the cap tests above keep their exact order. The
+// newest rows are: 3903 (a current v4-shaped extraction with a salary estimate, one text
+// section far over the cap and hostile text in it), 3904 (a v5 extraction of an earlier revision
+// of the page, with scraped calendar rows), then 3901 and 3902 (no extraction).
+$db_path3 = $db_path . '.details';
+copy($db_path2, $db_path3);
+$TAIL = 'COADA-FINALA-DE-TAIAT';
+$LONG_DUTIES = "Atribuții: <script>alert(2)</script> <img src=x onerror=alert(3)> "
+    . str_repeat('Asigură consilierea juridică a conducerii instituției și reprezentarea ei în fața instanțelor. ', 12) . $TAIL;
+$schema_v4 = [
+    'responsibilities' => $LONG_DUTIES,
+    'educationRequirements' => 'Studii superioare juridice, cu diplomă de licență.',
+    'education' => ['minimum_level' => 'superioare', 'eqf_level' => 6,
+        'fields_of_study' => [['isced_field' => '04_afaceri_administratie_drept', 'label_ro' => 'drept']]],
+    'experience' => ['years_minimum' => 3, 'in_specialty' => true, 'none_required' => false],
+    'contract' => ['duration' => 'determinata', 'duration_months' => 6],
+    'bibliography_topics' => ['Legea 53/2003', '<b>Codul civil</b>'],
+    'competition_calendar' => ['events' => [
+        ['stage' => 'proba_scrisa', 'date' => '2026-12-10', 'time' => '10:00', 'relative' => null, 'verbatim' => 'Proba scrisă'],
+    ]],
+];
+$schema_v5 = [
+    'responsibilities' => 'Coordonează echipa de teren.',
+    'recruitment' => ['kind' => 'promovare', 'internal_only' => true], 'vacancies_total' => 3,
+    'application' => ['channels' => ['sediu'], 'window_start' => null],
+];
+$sal = ['lei_min' => 5000, 'lei_max' => 6000, 'disclaimer' => 'Estimare orientativă, pe baza unui proiect de lege.'];
+$pdo = new PDO('sqlite:' . $db_path3);
+$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+$insj = $pdo->prepare("INSERT INTO job_postings
+    (id, url, title, employer_id, employer_name, judet_id, judet_name, judet_slug, locality, published_at, expires_at,
+     apply_deadline, deadline_source, application_status, updated_at, job_type, categorie, contact_email, contact_person,
+     detail_content_hash, schema_source_revision, inferred, has_schema)
+    VALUES (?, ?, ?, 3, 'Administrația de Salubrizare Tunari', 3, 'Ilfov', 'ilfov', 'Tunari', ?, '2026-12-30 23:59:59',
+     ?, 'anunt', 'confirmed_open', ?, 'Permanent', 'Test', ?, 'Ion <i>Popescu</i>', ?, ?, ?, 1)");
+$inst = $pdo->prepare("INSERT INTO posting_text (posting_id, schema_json, sal_json, v3_bibliography) VALUES (?, ?, ?, '[]')");
+$insj->execute([3903, 'https://posturi.gov.ro/anunt/detalii-curent', 'Jurist cu extragere curentă', '2026-10-02 13:00:00',
+    '2026-12-15', '2026-10-02 13:00:00', 'jurist@example.ro', 'rev-curent', 'rev-curent', '{"work_type":"norma_intreaga"}']);
+$inst->execute([3903, json_encode($schema_v4, JSON_UNESCAPED_UNICODE), json_encode($sal, JSON_UNESCAPED_UNICODE)]);
+$insj->execute([3904, 'https://posturi.gov.ro/anunt/detalii-vechi', 'Promovare cu extragere veche', '2026-10-02 12:30:00',
+    '2026-12-16', '2026-10-02 12:30:00', 'vechi@example.ro', 'rev-nou', 'rev-vechi', '{}']);
+$inst->execute([3904, json_encode($schema_v5, JSON_UNESCAPED_UNICODE), null]);
+$pdo->exec("INSERT INTO calendar_events (posting_id, eveniment, data, ora) VALUES
+    (3904, 'Depunere dosare', '2026-12-01', NULL), (3904, 'Interviu', '2026-12-12', '09:00')");
+unset($pdo, $insj, $inst);
+
 $srv = start_fixture_server($db_path);
 $base = $srv['base'];
 $srv2 = start_fixture_server($db_path2);
 $big = $srv2['base'];
+$srv3 = start_fixture_server($db_path3);
+$det = $srv3['base'];
 
 function fetch(string $base, string $path): array {
     $ctx = stream_context_create(['http' => ['ignore_errors' => true, 'follow_location' => 0]]);
@@ -215,6 +263,137 @@ run_suite('hostile text stays text and the XML stays valid', function () use ($b
     assert_true($seen_link, 'hostile official URL survives as an attribute value, not markup');
 });
 
+/** Decoded description (RSS) or content (Atom) of the item with this official-URL id, as text and as HTML. */
+function item_html(DOMDocument $d, string $tag, string $guid): ?string {
+    foreach ($d->getElementsByTagName($tag) as $n) {
+        $p = $n->parentNode;
+        if (!in_array($p->nodeName, ['item', 'entry'], true)) continue;
+        $id = $p->getElementsByTagName($p->nodeName === 'item' ? 'guid' : 'id')->item(0)->textContent;
+        if ($id === $guid) return $n->textContent;
+    }
+    return null;
+}
+
+/** The unescaped DESCRIPTION of one event: the TEXT escapes undone. */
+function ics_description(string $ics, int $id): string {
+    $ev = ics_event($ics, $id);
+    return $ev === null ? '' : str_replace(['\\n', '\\,', '\;', '\\\\'], ["\n", ',', ';', '\\'], $ev['DESCRIPTION'] ?? '');
+}
+
+run_suite('item details: facts, notes and caps in RSS, Atom and iCal', function () use ($det, $TAIL) {
+    $urls = ['cur' => 'https://posturi.gov.ro/anunt/detalii-curent', 'old' => 'https://posturi.gov.ro/anunt/detalii-vechi',
+             'none' => 'https://posturi.gov.ro/anunt/hostil?a=1&b=<2>'];
+    $notes = [
+        'none' => 'Extragerea automată nu a rulat încă pentru acest anunț. Afișăm doar datele din pagina oficială.',
+        'old'  => 'Datele extrase automat provin dintr-o versiune anterioară a anunțului. Pot fi incomplete sau greșite.',
+        'cur'  => 'Datele marcate «extras automat» sunt deduse de un program din textul anunțului.',
+    ];
+    [, $rss] = fetch($det, '/posturi.rss?status=all');
+    [, $atom] = fetch($det, '/posturi.atom?status=all');
+    [, $ics] = fetch($det, '/posturi.ics?status=all');
+    $rd = xml_doc($rss); $ad = xml_doc($atom);
+    assert_true($rd !== null && $ad !== null, 'both feeds parse with the details');
+    $views = [];
+    foreach ($urls as $k => $u) {
+        $views[$k] = ['rss' => item_html($rd, 'description', $u), 'atom' => item_html($ad, 'content', $u)];
+        assert_true($views[$k]['rss'] !== null, "$k: RSS description found");
+        assert_true($views[$k]['atom'] !== null, "$k: Atom content found");
+    }
+    // Each note on its own row, and on no other.
+    foreach (['rss', 'atom'] as $fmt) {
+        foreach ($notes as $k => $note) {
+            foreach (array_keys($urls) as $other) {
+                $has = str_contains((string)$views[$other][$fmt], $note);
+                assert_same($k === $other, $has, "$fmt: note '$k' " . ($k === $other ? 'on' : 'not on') . " row '$other'");
+            }
+        }
+    }
+    foreach (['cur' => 3903, 'old' => 3904, 'none' => 3901] as $k => $id) {
+        $d = ics_description($ics, $id);
+        foreach ($notes as $nk => $note) assert_same($nk === $k, str_contains($d, $note), "ics: note '$nk' " . ($nk === $k ? 'on' : 'not on') . " row '$k'");
+    }
+    // A parsed fact and the extracted facts, in all three formats.
+    $cur_ics = ics_description($ics, 3903);
+    foreach (['rss', 'atom'] as $fmt) {
+        $h = $views['cur'][$fmt];
+        assert_contains('<b>Email:</b> jurist@example.ro', $h, "$fmt: contact email (parsed)");
+        assert_contains('Ion &lt;i&gt;Popescu&lt;/i&gt;', $h, "$fmt: contact person is escaped text");
+        assert_contains('<h3>Extras automat</h3>', $h, "$fmt: extracted group");
+        assert_contains('<b>Nivel de studii (EQF):</b>', $h, "$fmt: studies (extracted)");
+        assert_contains('Drept', $h, "$fmt: field of study");
+        assert_contains('<b>Salariu estimat:</b> 5.000–6.000 lei brut', $h, "$fmt: estimated pay");
+        assert_contains('Estimare orientativă', $h, "$fmt: pay disclaimer");
+        assert_contains('<b>Experiență cerută:</b> Min. 3 ani, în specialitate', $h, "$fmt: structured experience");
+        assert_contains('Legea 53/2003', $h, "$fmt: exam topics");
+        assert_contains('Calendarul concursului (extras automat)', $h, "$fmt: extracted calendar when none is scraped");
+        assert_contains('10.12.2026 10:00', $h, "$fmt: extracted exam date");
+        assert_contains('Atribuții principale', $h, "$fmt: text section heading");
+    }
+    assert_contains('Email: jurist@example.ro', $cur_ics, 'ics: contact email');
+    assert_contains('Nivel de studii (EQF): ', $cur_ics, 'ics: studies');
+    assert_contains('Salariu estimat: 5.000–6.000 lei brut', $cur_ics, 'ics: estimated pay');
+    assert_contains('10.12.2026 10:00', $cur_ics, 'ics: exam date line');
+    // Scraped calendar rows win and carry no "extras automat" mark; the order is calendar first.
+    $old_ics = ics_description($ics, 3904);
+    assert_contains('Interviu: 12.12.2026 09:00', $old_ics, 'ics: scraped calendar line');
+    assert_true(strpos($old_ics, 'Calendarul concursului') < strpos($old_ics, 'Din pagina oficială'), 'ics: calendar before the other facts');
+    assert_not_contains('extras automat)', (string)$views['old']['rss'] . $old_ics, 'scraped calendar is not marked as extracted');
+    assert_contains('Tip concurs', (string)$views['old']['rss'], 'v5 fact on the stale row');
+    // A section over the cap is cut on a word boundary and says where the rest is.
+    foreach (['rss' => 600, 'atom' => 600] as $fmt => $cap) {
+        $h = $views['cur'][$fmt];
+        assert_contains('… (continuarea pe pagina anunțului)</p>', $h, "$fmt: cut section ends with the continuation");
+        assert_not_contains($TAIL, $h, "$fmt: text beyond the cap is gone");
+        $dut = html_entity_decode(strip_tags(preg_replace('#^.*?<h3>Atribuții principale</h3>#s', '', $h)));
+        $dut = preg_split('#\n?Studii\b#u', $dut)[0];
+        assert_true(mb_strlen($dut) > 500 && mb_strlen($dut) < $cap + 80, "$fmt: section cut at about $cap characters (" . mb_strlen($dut) . ')');
+    }
+    assert_contains('… (continuarea pe pagina anunțului)', $cur_ics, 'ics: cut section ends with the continuation');
+    assert_not_contains($TAIL, $cur_ics, 'ics: text beyond the cap is gone');
+    assert_contains('Studii superioare juridice, cu diplomă de licență.', $cur_ics, 'ics: a short section stays whole');
+    $duties = preg_replace('/^.*?Atribuții principale\n/s', '', $cur_ics);
+    $duties = preg_split('/\n\n/', $duties)[0];
+    assert_true(mb_strlen($duties) <= 300 + mb_strlen('… (continuarea pe pagina anunțului)'), 'ics: section capped at about 300 characters');
+    assert_true(mb_strlen($duties) > 200, 'ics: the cap is not far below its size');
+});
+
+run_suite('item details: hostile text in sections stays text; XML and iCal stay valid', function () use ($det) {
+    foreach (['/posturi.rss?status=all', '/posturi.atom?status=all'] as $path) {
+        [, $x] = fetch($det, $path);
+        assert_true(xml_doc($x) !== null, "$path parses");
+        assert_not_contains('<script>', $x, "$path has no raw script");
+        assert_not_contains('<img', $x, "$path has no raw img in the XML");
+    }
+    $rd = xml_doc(fetch($det, '/posturi.rss?status=all')[1]);
+    $ad = xml_doc(fetch($det, '/posturi.atom?status=all')[1]);
+    foreach ([[$rd, 'description', 'item'], [$ad, 'content', 'entry']] as [$d, $tag, $parent]) {
+        $seen = 0;
+        foreach ($d->getElementsByTagName($tag) as $n) {
+            if ($n->parentNode->nodeName !== $parent) continue;
+            $seen++;
+            $h = new DOMDocument();
+            @$h->loadHTML('<?xml encoding="UTF-8"><body>' . $n->textContent . '</body>');
+            assert_same(0, $h->getElementsByTagName('script')->length, "$tag: no <script> after decoding");
+            assert_same(0, $h->getElementsByTagName('img')->length, "$tag: no <img> after decoding");
+            assert_same(0, $h->getElementsByTagName('b')->length - substr_count($n->textContent, '<li><b>'), "$tag: data markup is escaped (only the label <b> tags)");
+            foreach ($h->getElementsByTagName('*') as $el) {
+                assert_false($el->hasAttribute('onerror') || $el->hasAttribute('onclick'), "$tag: no event handler attribute");
+            }
+        }
+        assert_true($seen > 0, "$tag: items seen");
+    }
+    $cur = item_html($rd, 'description', 'https://posturi.gov.ro/anunt/detalii-curent');
+    // The section text went through the sanitiser: the hostile markup in it is dropped, never passed on.
+    assert_not_contains('alert(2)', $cur, 'hostile section markup does not reach the item');
+    assert_not_contains('onerror', $cur, 'no event handler in the item');
+    assert_contains('&lt;b&gt;Codul civil&lt;/b&gt;', $cur, 'exam topic markup shows as text');
+    [, $ics] = fetch($det, '/posturi.ics?status=all');
+    $over = 0;
+    foreach (explode("\r\n", rtrim($ics, "\r\n")) as $l) if (strlen($l) > 75) $over++;
+    assert_same(0, $over, 'ics: every line is at most 75 octets');
+    assert_true(mb_check_encoding($ics, 'UTF-8'), 'ics: valid UTF-8');
+});
+
 run_suite('RSS, Atom, JSON and the list agree on the selection; iCal on its dated subset', function () use ($base) {
     $queries = [
         'judet%5B%5D=cluj&judet%5B%5D=bacau&status=all',
@@ -260,8 +439,14 @@ run_suite('RSS, Atom, JSON and the list agree on the selection; iCal on its date
 
 run_suite('caps: newest 50 for RSS/Atom, earliest 200 dated for iCal', function () use ($big) {
     foreach (['rss' => 'rss_ids', 'atom' => 'atom_ids'] as $fmt => $fn) {
-        preg_match_all('#/job/(\d+)-#', fetch($big, "/posturi.$fmt?status=all")[1], $mm);
-        $ids = array_map('intval', $mm[1]);
+        // The local page of each item: its own <link> (the description also links the page, so the body is not counted).
+        $ids = [];
+        foreach (xml_doc(fetch($big, "/posturi.$fmt?status=all")[1])->getElementsByTagName($fmt === 'rss' ? 'item' : 'entry') as $it) {
+            foreach ($it->getElementsByTagName('link') as $l) {
+                $u = $fmt === 'rss' ? $l->textContent : ($l->getAttribute('rel') === 'alternate' ? $l->getAttribute('href') : '');
+                if (preg_match('#/job/(\d+)-#', $u, $mm)) { $ids[] = (int)$mm[1]; break; }
+            }
+        }
         assert_same(50, count($ids), "$fmt: exactly 50 entries from 300+ matches");
         // 3001..3060 were published 2026-10-02 10:00..10:59; 3901/3902 at 11:00/12:00. Newest first.
         assert_same(3901, $ids[0], "$fmt: newest first");
@@ -448,6 +633,7 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
     foreach (['>RSS<', '>Atom<', '>Calendar iCal<', '>JSON API<', '/posturi.rss?employer=spitalul-clinic-judetean-cluj'] as $needle) assert_contains($needle, $emp, "employer page: $needle");
 });
 
+stop_fixture_server($srv3, $db_path3);
 stop_fixture_server($srv2, $db_path2);
 stop_fixture_server($srv, $db_path);
 finish();

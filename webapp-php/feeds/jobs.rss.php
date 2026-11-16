@@ -6,6 +6,7 @@ require_once __DIR__ . '/_feed.php';
 header('Content-Type: application/rss+xml; charset=utf-8');
 
 $rows = feed_item_rows();
+$events = feed_calendar_events($rows);
 $ch = feed_channel();
 $updated = feed_updated($rows);
 
@@ -26,9 +27,11 @@ echo '<?xml version="1.0" encoding="utf-8"?>' . "\n";
     // RSS descriptions are HTML by convention, so source text is escaped once
     // as HTML here and once more as XML by xml_text(): a title that happens to
     // contain markup is shown, never interpreted, by a reader.
-    $html = '<p>' . htmlspecialchars(implode(' | ', feed_summary_lines($r)), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'
+    $html = feed_details_html(feed_details($r, $events[(int)$r['id']] ?? []), feed_extraction_note($r))
           . '<p>Sursa oficială (posturi.gov.ro): <a href="' . htmlspecialchars($r['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">'
-          . htmlspecialchars($r['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</a></p>';
+          . htmlspecialchars($r['url'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</a></p>'
+          . '<p>Pagina anunțului: <a href="' . htmlspecialchars(feed_local_url($r), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">'
+          . htmlspecialchars(feed_local_url($r), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</a></p>';
 ?>
     <item>
       <title><?= xml_text(feed_item_title($r)) ?></title>

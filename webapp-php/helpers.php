@@ -2914,7 +2914,9 @@ const HOME_DOMAINS = [
     ['key' => 'meseriasi',    'label' => 'Meseriași și muncitori calificați','icon' => 'i-domain-meseriasi',         'family' => 'tehnic', 'cor' => ['7']],
     ['key' => 'paza',         'label' => 'Pază, îngrijire și servicii',      'icon' => 'i-domain-paza',              'family' => 'tehnic', 'cor' => ['5']],
     ['key' => 'soferi',       'label' => 'Șoferi și operatori',              'icon' => 'i-domain-soferi',            'family' => 'tehnic', 'cor' => ['8']],
-    ['key' => 'ingineri',     'label' => 'Ingineri și tehnicieni',           'icon' => 'i-domain-ingineri',          'family' => 'tehnic', 'cor' => ['2', '3']],
+    // Two domains on one row (key `row`): one icon, two links. The row sorts by the sum of its counts.
+    ['key' => 'ingineri',     'label' => 'Ingineri',                         'icon' => 'i-domain-ingineri',          'family' => 'tehnic', 'cor' => ['2'], 'row' => 'ingineri'],
+    ['key' => 'tehnicieni',   'label' => 'Tehnicieni',                       'icon' => 'i-domain-ingineri',          'family' => 'tehnic', 'cor' => ['3'], 'row' => 'ingineri'],
     ['key' => 'necalificati', 'label' => 'Muncitori necalificați',           'icon' => 'i-domain-necalificati',      'family' => 'tehnic', 'cor' => ['9']],
     ['key' => 'social',       'label' => 'Social',                           'icon' => 'i-sector-asistenta_sociala', 'family' => 'social'],
     ['key' => 'financiar',    'label' => 'Financiar',                        'icon' => 'i-domain-financiar',         'family' => 'financiar'],

@@ -652,6 +652,27 @@ run_suite('the detail page: net first with a gross line; with no figure one line
     assert_true(preg_match('/data-pay-net>\s*(≈ [\d.–]+ lei net)/u', $h, $m) === 1, 'the net range is the main figure');
     assert_true(preg_match('/data-pay-gross>brut: ([\d.–]+) lei \/ lună, la gradația 0</u', $h, $m2) === 1, 'the gross range is one smaller line');
     assert_not_contains('data-no-salary', $h, 'a figure: no "no estimate" line');
+    assert_not_contains('data-pay-stated', $h, 'no stated salary: no stated box');
+    // A stated salary wins: one box "Salariu anunțat", the estimate as one note in it, the box first in the strip.
+    $pdo->exec("UPDATE job_postings SET inf_salary_min = 4700, inf_salary_max = 4700 WHERE id = $with");
+    $h = preg_replace('/\s+/', ' ', get_html($sb, '/job/' . $with . '-x/'));
+    assert_contains('data-pay-stated', $h, 'the stated box');
+    assert_contains('Salariu anunțat', $h, 'its heading');
+    assert_true(preg_match('/data-pay-gross>brut: 4\.700 lei \/ lună, din anunț</u', $h) === 1, 'the stated gross line');
+    assert_contains('Conform legii salarizării (propunere): ' . net_label(5036, 6000) . ' (brut 5.036–6.000 lei) / lună, la gradația 0.', $h, 'the estimate as a note');
+    assert_not_contains('Salariu estimat', $h, 'no estimate box');
+    assert_not_contains('Cum a fost calculat', $h, 'no estimate details');
+    $sal_at = strpos($h, 'data-pay-stated');
+    foreach (['Condiții deduse automat', 'Condiții contractuale', 'Tematica examenului'] as $later) {
+        $at = strpos($h, $later);
+        if ($at !== false) assert_true($sal_at < $at, "the salary is before \"$later\"");
+    }
+    // Stated, no estimate: the box with no note.
+    $pdo->prepare("UPDATE posting_text SET sal_json = NULL WHERE posting_id = ?")->execute([$with]);
+    $h = get_html($sb, '/job/' . $with . '-x/');
+    assert_contains('data-pay-stated', $h, 'stated, no estimate: the box');
+    assert_not_contains('data-pay-law', $h, 'stated, no estimate: no note');
+    $pdo->exec("UPDATE job_postings SET inf_salary_min = NULL, inf_salary_max = NULL WHERE id = $with");
 });
 
 stop_fixture_server($sal_srv, $sal_path);

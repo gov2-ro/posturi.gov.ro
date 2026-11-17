@@ -510,51 +510,35 @@ require __DIR__ . '/../inc/header.php';
       // No figure at all (no stated pay, no estimate): the page says so, and why (UX salary-net).
       $no_sal = !$show_sal && list_salary($p) === null;
       $eu_funded = in_array((string)($p['funding_kind'] ?? ''), ['fonduri_europene', 'pnrr'], true);
+      // A salary stated in the posting wins over the estimate (as in the list rows, list_salary()): its box replaces the
+      // estimate box, and the estimate becomes one note in it. The deduced conditions then leave out "Salariu" (the box has it).
+      $stated = (float)($p['inf_salary_min'] ?? 0) > 0 ? list_salary($p) : null;
+      if ($stated) unset($cond['Salariu']);
       ?>
-      <?php if ($cond || $terms || $bib || $show_sal || $no_sal): ?>
+      <?php if ($cond || $tag_groups || $terms || $bib || $show_sal || $no_sal || $stated): ?>
       <div class="mb-4 divide-y divide-line text-sm">
 
-        <?php if ($cond): ?>
-        <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
-          <div class="flex items-baseline gap-1.5">
-            <h2 class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții deduse automat</h2>
-            <a href="/despre/" class="text-xs text-gov hover:underline" title="Cum sunt deduse aceste date">metodologie</a>
+        <?php /* The salary first: a stated figure, else the estimate. */ ?>
+        <?php if ($stated): ?>
+        <section class="py-2" data-pay-stated>
+          <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
+            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
+              <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu anunțat</h2>
+              <p class="text-lg font-semibold text-ink" data-pay-net><?= e($stated['text']) ?> <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
+            </div>
+            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($stated['gross']) ?> / lună, din anunț</p>
+            <?php if ($pl = pay_level($p)): ?>
+            <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
+              <span><?= e($pl['text']) ?></span></p>
+            <?php endif; ?>
+            <?php if ($show_sal):
+                $_lmin = (int)$sal['lei_min']; $_lmax = (int)($sal['lei_max'] ?? $_lmin);
+                $_g = number_format($_lmin, 0, ',', '.') . ($_lmax > $_lmin ? '–' . number_format($_lmax, 0, ',', '.') : ''); ?>
+            <p class="mt-1 text-xs text-ink-muted" data-pay-law>Conform legii salarizării (propunere): <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0.</p>
+            <?php endif; ?>
           </div>
-          <?php foreach ($cond as $label => $value): ?>
-            <span class="whitespace-nowrap"><span class="text-ink-muted"><?= e($label) ?></span> <span class="font-medium text-ink"><?= e($value) ?></span></span>
-          <?php endforeach; ?>
-          <?php foreach ($tag_groups as $group): ?>
-            <span><span class="text-ink-muted"><?= e($group['label']) ?></span>
-              <span class="font-medium text-ink"><?= e(implode(', ', array_map(fn($v) => ucfirst((string)$v), $group['values']))) ?></span></span>
-          <?php endforeach; ?>
         </section>
-        <?php endif; ?>
-
-        <?php if ($terms): ?>
-        <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
-          <h2 class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții contractuale</h2>
-          <?php foreach ($terms as $k => $v): ?>
-            <span><span class="text-ink-muted"><?= e($k) ?></span> <span class="font-medium text-ink"><?= e((string)$v) ?></span></span>
-          <?php endforeach; ?>
-        </section>
-        <?php endif; ?>
-
-        <?php if ($bib): ?>
-        <?php /* Heading, then the topics as one inline-block of comma-separated links: beside the
-           heading while they fit, dropped below it as a whole when they are many. */
-        $topic_links = [];
-        foreach ($bib as $topic) {
-            $t = trim((string)$topic);
-            if ($t !== '') $topic_links[] = '<a href="/?q=' . urlencode($t) . '" class="text-gov hover:underline">' . e($t) . '</a>';
-        } ?>
-        <section class="py-2 leading-[1.1rem]">
-          <h2 class="mr-3 inline-block align-top text-xs font-semibold uppercase tracking-widest text-ink-muted">Tematica examenului</h2>
-          <span class="inline-block max-w-full align-top"><?= implode(', ', $topic_links) ?></span>
-          <p class="mt-0.5 text-xs text-ink-faint">Temele din bibliografie, pe scurt. Caută alte concursuri pe aceeași temă.</p>
-        </section>
-        <?php endif; ?>
-
-        <?php if ($show_sal): ?>
+        <?php elseif ($show_sal): ?>
         <?php /* Highlighted, as wide as its content, three rows: the figure, how it ranks, the
            caveat with the way in to the calculation. */ ?>
         <section class="py-2">
@@ -620,6 +604,46 @@ require __DIR__ . '/../inc/header.php';
               </details>
             </div>
           </div>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($cond || $tag_groups): ?>
+        <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
+          <div class="flex items-baseline gap-1.5">
+            <h2 class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții deduse automat</h2>
+            <a href="/despre/" class="text-xs text-gov hover:underline" title="Cum sunt deduse aceste date">metodologie</a>
+          </div>
+          <?php foreach ($cond as $label => $value): ?>
+            <span class="whitespace-nowrap"><span class="text-ink-muted"><?= e($label) ?></span> <span class="font-medium text-ink"><?= e($value) ?></span></span>
+          <?php endforeach; ?>
+          <?php foreach ($tag_groups as $group): ?>
+            <span><span class="text-ink-muted"><?= e($group['label']) ?></span>
+              <span class="font-medium text-ink"><?= e(implode(', ', array_map(fn($v) => ucfirst((string)$v), $group['values']))) ?></span></span>
+          <?php endforeach; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($terms): ?>
+        <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
+          <h2 class="text-xs font-semibold uppercase tracking-widest text-ink-muted">Condiții contractuale</h2>
+          <?php foreach ($terms as $k => $v): ?>
+            <span><span class="text-ink-muted"><?= e($k) ?></span> <span class="font-medium text-ink"><?= e((string)$v) ?></span></span>
+          <?php endforeach; ?>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($bib): ?>
+        <?php /* Heading, then the topics as one inline-block of comma-separated links: beside the
+           heading while they fit, dropped below it as a whole when they are many. */
+        $topic_links = [];
+        foreach ($bib as $topic) {
+            $t = trim((string)$topic);
+            if ($t !== '') $topic_links[] = '<a href="/?q=' . urlencode($t) . '" class="text-gov hover:underline">' . e($t) . '</a>';
+        } ?>
+        <section class="py-2 leading-[1.1rem]">
+          <h2 class="mr-3 inline-block align-top text-xs font-semibold uppercase tracking-widest text-ink-muted">Tematica examenului</h2>
+          <span class="inline-block max-w-full align-top"><?= implode(', ', $topic_links) ?></span>
+          <p class="mt-0.5 text-xs text-ink-faint">Temele din bibliografie, pe scurt. Caută alte concursuri pe aceeași temă.</p>
         </section>
         <?php endif; ?>
 

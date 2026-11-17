@@ -1,13 +1,13 @@
 </main>
 
-<?php /* 2026-11-16 (UX-05): three groups of links, then the disclaimer. ADR 0005: the DS footer. */
+<?php /* 2026-11-16 (UX-05): four groups of links, then the disclaimer. ADR 0005: the DS footer. */
 $_footer_groups = [
     'Posturi' => [
         ['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'],
         ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'],
-        // The themed pages (inc/themes.php), after the fixed links.
-        ...array_map(fn($slug, $t) => [$t['label'], '/' . $slug . '/'], array_keys(themes()), themes()),
     ],
+    // The themed pages (inc/themes.php), in configuration order.
+    'Pagini tematice' => array_map(fn($slug, $t) => [$t['label'], '/' . $slug . '/'], array_keys(themes()), themes()),
     'Urmărește' => [
         ['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'],
         ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/'],

@@ -3,11 +3,12 @@
  * The notification section: the email, calendar and RSS cards, and the line about saved items.
  *
  * In:  $fc = ['id' => string (the heading is "h-<id>"), 'calendar' => [href, link text], 'rss' => [href, link text]]
+ *      optional 'band' => true: a `sunken` band from edge to edge of the window (.pg-band), in place of the box
  *      $heading = class of the section heading
  */
 declare(strict_types=1);
 ?>
-<section aria-labelledby="h-<?= e($fc['id']) ?>" class="flex flex-col gap-4 bg-sunken p-5 sm:p-6">
+<section aria-labelledby="h-<?= e($fc['id']) ?>" class="flex flex-col gap-4 <?= !empty($fc['band']) ? 'pg-band py-8' : 'bg-sunken p-5 sm:p-6' ?>">
   <h2 id="h-<?= e($fc['id']) ?>" class="<?= $heading ?>">Abonează-te la notificări</h2>
   <p class="max-w-2xl">Alerte pe email și RSS pentru orice combinație de filtre / căutări.</p>
   <div class="grid grid-cols-1 gap-3 md:grid-cols-3">

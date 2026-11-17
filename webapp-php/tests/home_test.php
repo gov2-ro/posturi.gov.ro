@@ -187,8 +187,9 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
         foreach ($x->query('following-sibling::ul[1]//a', $h2) as $a) $links[] = [trim($a->textContent), $a->getAttribute('href')];
         $groups[trim($h2->textContent)] = $links;
     }
-    assert_same(['Posturi', 'Urmărește', 'Proiect'], array_keys($groups), 'three footer groups');
-    assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'], ['Sănătate', '/sanatate/']], $groups['Posturi'], 'footer: Posturi');
+    assert_same(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect'], array_keys($groups), 'four footer groups');
+    assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/']], $groups['Posturi'], 'footer: Posturi');
+    assert_same([['Sănătate', '/sanatate/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
     assert_same([['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'], ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/']], $groups['Urmărește'], 'footer: Urmărește');
     assert_same(['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'], array_column($groups['Proiect'], 0), 'footer: Proiect');
     assert_contains('/despre/#confidentialitate', $home, 'footer: privacy anchor');
@@ -255,21 +256,27 @@ run_suite('each count on the page equals the number of results of its link', fun
 run_suite('every ready-made search and chip link is the canonical URL', function () use ($base) {
     [, $home] = http_page($base, '/');
     $x = xp($home);
-    foreach ($x->query('//section[@aria-labelledby="h-combo"]//a | //section[@aria-labelledby="h-start"]//a | //li[@data-home-tile]//a') as $a) {
+    foreach ($x->query('//li[@data-home-example]//a | //section[@aria-labelledby="h-start"]//a | //*[@data-home-tile]//a') as $a) {
         $href = $a->getAttribute('href');
         parse_str((string)parse_url($href, PHP_URL_QUERY), $params);
         assert_same('/?' . search_key($params), $href, "canonical: $href");
         assert_not_contains('&amp;amp;', $href, 'not double-escaped');
     }
-    $hrefs = array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($x->query('//section[@aria-labelledby="h-combo"]//a')));
+    // The themed page of health comes first: its icon, its link, and the count of its base filter.
+    $th = $x->query('//section[@aria-labelledby="h-combo"]//li')->item(1);
+    assert_true($th->hasAttribute('data-home-theme-example'), 'the second card is the themed page');
+    assert_same('/sanatate/', $x->query('.//a', $th)->item(0)->getAttribute('href'), 'the themed card links to /sanatate/');
+    assert_same(list_count($base, '/?family%5B%5D=s%C4%83n%C4%83tate'), paren_number($x->query('.//*[@data-example-count]', $th)->item(0)->textContent), 'the themed card count is the count of its base filter');
+    assert_same(1, $x->query('.//h3//svg', $th)->length, 'the themed card has the icon of the theme');
+    $hrefs = array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($x->query('//li[@data-home-example]//a')));
     assert_same([
         '/?isced_not%5B%5D=09_sanatate_asistenta_sociala&salary_bucket=net-peste-5000',
         '/?funding%5B%5D=fonduri_europene&funding%5B%5D=pnrr&salary_bucket=net-3000-4000&schedule%5B%5D=norma_partiala',
-        '/?lang%5B%5D=hu',
         '/?exp_level%5B%5D=fara',
         '/?level%5B%5D=Func%C8%9Bii%20de%20conducere',
         '/?duration%5B%5D=determinata&funding%5B%5D=fonduri_europene',
-    ], $hrefs, 'the six ready-made searches, in order');
+        '/?lang%5B%5D=hu',
+    ], $hrefs, 'the six ready-made searches, in order (Hungarian last)');
     // The Hungarian card: a flag before the title, lang="hu" on the title only.
     $hu = $x->query('//section[@aria-labelledby="h-combo"]//li[@data-home-example][.//a[@href="/?lang%5B%5D=hu"]]')->item(0);
     assert_same('hu', $x->query('.//*[@lang]', $hu)->item(0)->getAttribute('lang'), 'lang="hu" on the title');

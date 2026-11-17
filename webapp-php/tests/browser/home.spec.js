@@ -56,7 +56,7 @@ test('the seven sections are present in order; no horizontal overflow', async ({
   // Inline text links in running lines (the examples and the starting-point groups) have their own checks.
   const small = await page.evaluate(() => Array.from(document.querySelectorAll('main a, main button, header a, footer a'))
     .filter((el) => !el.closest('[data-home-js]') || !el.matches('[data-county]'))
-    .filter((el) => !el.matches('[data-home-link]') && !el.closest('[data-home-example]'))
+    .filter((el) => !el.matches('[data-home-link]') && !el.closest('[data-home-example], [data-home-theme-example]'))
     .filter((el) => !el.closest('footer ul'))   // the link lists of the footer have their own check (24 px, no overlap)
     .filter((el) => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
     .map((el) => ({ t: (el.textContent || '').trim().slice(0, 30), h: el.getBoundingClientRect().height }))
@@ -97,11 +97,11 @@ test('the four navigation links are visible and wrap at 320 px; "Salvate" has a 
   await expect(count).toHaveText('(1)');
 });
 
-test('footer: three groups of links, then the disclaimer; no skin picker', async ({ page }) => {
+test('footer: four groups of links, then the disclaimer; no skin picker', async ({ page }) => {
   await page.goto('/');
   const foot = page.locator('footer');
-  await expect(foot.locator('h2')).toHaveText(['Posturi', 'Urmărește', 'Proiect']);
-  await expect(foot.locator('ul li')).toHaveCount(13);   // 12 fixed links + the themed page
+  await expect(foot.locator('h2')).toHaveText(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect']);
+  await expect(foot.locator('ul li')).toHaveCount(13);   // 12 fixed links + the themed page (its own group)
   const order = await foot.evaluate((f) => {
     const q = (s) => f.querySelector(s);
     const pos = (el) => el.getBoundingClientRect().top + window.scrollY;
@@ -601,7 +601,7 @@ test('the hero county select is about 11rem wide and still shows "Toate județel
 test('footer: the links of a list are at least 24 px high, do not overlap, and the rows are 28 to 32 px apart', async ({ page }) => {
   await page.goto('/');
   const lists = await page.locator('footer ul').evaluateAll((uls) => uls.map((ul) => Array.from(ul.querySelectorAll('a')).map((a) => { const r = a.getBoundingClientRect(); return { t: r.top, b: r.bottom, l: r.left, r: r.right, h: r.height, name: a.textContent.trim() }; })));
-  expect(lists.length).toBe(3);
+  expect(lists.length).toBe(4);
   for (const links of lists) {
     links.forEach((a, i) => {
       expect(a.h, `${a.name}: height`).toBeGreaterThanOrEqual(24);
@@ -634,4 +634,22 @@ test('footer: the GitHub mark is before "Cod sursă", decoration, in the text co
   expect(r.color, 'the colour of the text').toBe(r.text);
   await expect.poll(() => svg.locator('use').evaluate((u) => { const b = u.getBBox(); return b.width * b.height; }), { timeout: 5000 }).toBeGreaterThan(50);
   await expect(page.locator('footer ul a svg')).toHaveCount(1);   // the other links: no icon
+});
+
+test('a county in the URL fragment selects it and scrolls to the domains; a selection writes the fragment', async ({ page }) => {
+  await page.goto('/#cluj');
+  await expect(page.locator('#domenii-judet')).toHaveValue('cluj');
+  await expect(page.locator('[data-county="cluj"]')).toHaveAttribute('aria-pressed', 'true');
+  const top = await page.locator('#domenii').evaluate((el) => el.getBoundingClientRect().top);
+  expect(Math.abs(top)).toBeLessThan(40);
+  // A fragment that is not a county changes nothing (a new load: a fragment change on the same page keeps the county).
+  await page.goto('about:blank');
+  await page.goto('/#nu-exista');
+  await expect(page.locator('#domenii-judet')).toHaveValue('');
+  // A click on the map writes the fragment; a second click on the same county clears it.
+  await page.goto('/');
+  await page.locator('[data-county="cluj"]').click();
+  await expect(page).toHaveURL(/\/#cluj$/);
+  await page.locator('[data-county="cluj"]').click();
+  await expect(page).toHaveURL(/\/$/);
 });

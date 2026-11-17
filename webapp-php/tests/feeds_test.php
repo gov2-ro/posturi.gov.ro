@@ -668,6 +668,32 @@ run_suite('item times: the first-seen time on the publication day, else the bare
     assert_same('2026-11-16T00:00:00+02:00', $pub->format(DATE_ATOM), 'date-only created_at');
 });
 
+run_suite('item details: a stated salary comes first and wins over the estimate; net, then gross', function () use ($det, $db_path3) {
+    $url = 'https://posturi.gov.ro/anunt/detalii-curent';
+    $pdo = new PDO('sqlite:' . $db_path3);
+    $pdo->exec("UPDATE job_postings SET inf_salary_min = 4700, inf_salary_max = 4700,
+                inferred = '{\"work_type\":\"norma_intreaga\",\"salary_min\":4700,\"salary_max\":4700}' WHERE id = 3903");
+    [, $rss] = fetch($det, '/posturi.rss?status=all');
+    [, $atom] = fetch($det, '/posturi.atom?status=all');
+    [, $ics] = fetch($det, '/posturi.ics?status=all');
+    $views = ['rss' => item_html(xml_doc($rss), 'description', $url), 'atom' => item_html(xml_doc($atom), 'content', $url),
+              'ics' => ics_description($ics, 3903)];
+    foreach ($views as $fmt => $h) {
+        $t = html_entity_decode(strip_tags((string)$h));
+        assert_contains('Salariu anunțat: ≈ 2.819 lei net / lună', $t, "$fmt: stated, net first");
+        assert_contains('Brut anunțat: 4.700 lei brut / lună, din anunț', $t, "$fmt: stated, the gross line");
+        assert_contains('Conform legii salarizării (propunere): ≈ 2.981–3.523 lei net (5.000–6.000 lei brut) / lună, la gradația 0', $t, "$fmt: the estimate as one line");
+        assert_true(strpos($t, 'Salariu anunțat') < strpos($t, 'Program'), "$fmt: the salary before the deduced conditions");
+        foreach (['Salariu estimat', 'Brut estimat', 'Estimare orientativă', 'Salariu: 4700'] as $gone) assert_not_contains($gone, $t, "$fmt: no \"$gone\"");
+    }
+    // Stated, no estimate: no law line.
+    $pdo->exec("UPDATE posting_text SET sal_json = NULL WHERE posting_id = 3903");
+    [, $ics] = fetch($det, '/posturi.ics?status=all');
+    $t = ics_description($ics, 3903);
+    assert_contains('Salariu anunțat', $t, 'stated, no estimate: the stated line');
+    assert_not_contains('Conform legii', $t, 'stated, no estimate: no law line');
+});
+
 stop_fixture_server($srv3, $db_path3);
 stop_fixture_server($srv2, $db_path2);
 stop_fixture_server($srv, $db_path);

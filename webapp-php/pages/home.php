@@ -34,9 +34,6 @@ $combos = [
     ['title' => '3.000–4.000 lei net, normă parțială, pe proiecte PNRR sau europene',
      'params' => ['salary_bucket' => 'net-3000-4000', 'schedule' => ['norma_partiala'], 'funding' => ['pnrr', 'fonduri_europene']],
      'tags' => ['3.000–4.000 lei net', 'normă parțială', 'PNRR', 'fonduri europene']],
-    ['title' => 'Magyar nyelvtudást igénylő állások', 'lang' => 'hu', 'flag' => true,
-     'params' => ['lang' => ['hu']],
-     'tags' => ['necesită limba maghiară']],
     ['title' => 'Primul job: fără experiență cerută',
      'params' => ['exp_level' => ['fara']],
      'tags' => ['fără experiență']],
@@ -47,6 +44,9 @@ $combos = [
     ['title' => 'Proiecte cu fonduri europene, pe perioadă determinată',
      'params' => ['funding' => ['fonduri_europene'], 'duration' => ['determinata']],
      'tags' => ['fonduri europene', 'perioadă determinată']],
+    ['title' => 'Magyar nyelvtudást igénylő állások', 'lang' => 'hu', 'flag' => true,
+     'params' => ['lang' => ['hu']],
+     'tags' => ['necesită limba maghiară']],   // last
 ];
 foreach ($combos as $i => $c) {
     $combos[$i]['href'] = home_list_url($c['params']);
@@ -74,7 +74,25 @@ foreach (db()->query(
 }
 $domains = array_values(array_filter($domains, fn($d) => $d['n'] > 0));
 foreach ($domains as $i => $d) $domains[$i]['href'] = home_list_url($d['params']);
-usort($domains, fn($a, $b) => ($a['key'] === 'altele') <=> ($b['key'] === 'altele') ?: $b['n'] <=> $a['n'] ?: strcmp($a['label'], $b['label']));
+// Rows of the list: the domains with the same `row` key share one row (one icon, one link each), in HOME_DOMAINS order.
+// A row sorts by the sum of its counts; Altele is last.
+$domain_rows = [];
+foreach ($domains as $d) $domain_rows[$d['row'] ?? $d['key']][] = $d;
+$domain_rows = array_map(fn($ds) => ['key' => $ds[0]['row'] ?? $ds[0]['key'], 'label' => $ds[0]['label'], 'n' => array_sum(array_column($ds, 'n')), 'parts' => $ds],
+    array_values($domain_rows));
+usort($domain_rows, fn($a, $b) => ($a['key'] === 'altele') <=> ($b['key'] === 'altele') ?: $b['n'] <=> $a['n'] ?: strcmp($a['label'], $b['label']));
+
+// The themed page of health, first in the ready-made searches: its count is the count of its base filter.
+$theme_card = null;
+if (isset(themes()['sanatate'])) {
+    $_th = themes()['sanatate'];
+    $theme_card = ['title' => $_th['h1'], 'href' => '/sanatate/', 'icon' => $_th['icon'] ?? null,
+                   'n' => home_count_for($_th['base']), 'tags' => ['specialități', 'ocupații', 'hartă pe județe']];
+    if ($theme_card['n'] === 0) $theme_card = null;
+}
+// The cards in page order: the first list search, then the themed page, then the other list searches.
+$cards = $combos;
+if ($theme_card) array_splice($cards, min(1, count($cards)), 0, [$theme_card + ['theme' => true]]);
 
 // Employer sectors, a row of text links under "Alte puncte de pornire" (count > 0, by count, Altele last).
 $sector_total = [];
@@ -204,31 +222,41 @@ $heading = 'g2-heading-section';
     </div>
   </section>
 
-  <?php /* 3.2 Ready-made searches. No box: a title link, the tags and the count. */ ?>
-  <?php if ($combos): ?>
-  <section aria-labelledby="h-combo" class="flex flex-col gap-2">
+  <?php /* 3.2 Ready-made searches. No box: a title link and the count. The `tags` of each search are kept in the data and not shown. Columns, not a grid: the items
+     flow down each column with the same space between them, whatever their height (masonry). */ ?>
+  <?php if ($cards): ?>
+  <section aria-labelledby="h-combo" class="flex flex-col gap-2 py-2">
     <h2 id="h-combo" class="sr-only">Exemple de căutare</h2>
-    <ul class="grid grid-cols-1 gap-x-8 gap-y-2 md:grid-cols-2 lg:grid-cols-3">
-      <?php foreach ($combos as $c): ?>
-      <li data-home-example class="flex min-w-0 flex-col">
+    <ul class="columns-1 gap-x-8 md:columns-2 lg:columns-3">
+      <?php foreach ($cards as $c): ?>
+      <?php /* Each card is as wide as its text (w-fit), so the border of the themed card fits its title. A card stays block, so
+         two short cards never share a line of a column. 16 px below each card. */ ?>
+      <?php if (!empty($c['theme'])): ?>
+      <?php /* The themed page: its icon before the title. Not a list search, so it has its own hook (data-home-theme-example).
+         A border marks it: the only card that opens a page and not a list. The icon is 30 px (the 24 px of a line, + 25%). */ ?>
+      <li data-home-theme-example class="mb-4 flex w-fit min-w-0 max-w-full break-inside-avoid flex-col border-2 border-gov px-3 py-2">
+        <h3 class="py-0.5">
+          <?php if ($c['icon']): ?><?= icon($c['icon'], 'mr-2 inline-block h-[30px] w-[30px] align-[-7px] text-gov') ?><?php endif; ?><a href="<?= e($c['href']) ?>" class="g2-link-title py-2.5"><?= e($c['title']) ?></a><span data-example-count class="text-base font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
+        </h3>
+      </li>
+      <?php else: ?>
+      <li data-home-example class="mb-4 flex w-fit min-w-0 max-w-full break-inside-avoid flex-col">
         <?php /* One run of inline text: the count follows the last word of the title (a no-break space
            joins them), so it never starts a line alone. The 44 px target is padding on an inline link. */ ?>
         <h3 class="py-0.5">
           <?php if (!empty($c['flag'])): ?><img src="/static/flags/hu.svg" alt="" width="30" height="20" class="mr-2 inline-block border border-line align-middle"><?php endif; ?><a href="<?= e($c['href']) ?>"<?= !empty($c['lang']) ? ' lang="' . e($c['lang']) . '"' : '' ?> class="g2-link-title py-2.5"><?= e($c['title']) ?></a><span data-example-count class="text-base font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
         </h3>
-        <ul class="flex flex-wrap gap-1.5 pb-2">
-          <?php foreach ($c['tags'] as $tag): ?>
-          <li class="g2-tag"><?= e($tag) ?></li>
-          <?php endforeach; ?>
-        </ul>
       </li>
+      <?php endif; ?>
       <?php endforeach; ?>
     </ul>
   </section>
   <?php endif; ?>
 
   <?php /* 3.3 Domains and counties */ ?>
-  <section id="domenii" aria-labelledby="h-dom" tabindex="-1" class="scroll-mt-4 focus:outline-none">
+  <?php /* A full-width band (pg-band) marks the section. A county in the URL fragment (/#cluj) selects that county and
+     scrolls here (static/home.js). */ ?>
+  <section id="domenii" aria-labelledby="h-dom" tabindex="-1" class="pg-band scroll-mt-4 py-8 focus:outline-none">
     <h2 id="h-dom" class="sr-only">Posturi pe domenii profesionale și județe</h2>
     <div class="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-10">
       <div class="flex min-w-0 flex-col gap-3">
@@ -237,20 +265,13 @@ $heading = 'g2-heading-section';
                 require __DIR__ . '/../partials/county_select.php'; ?>
         </div>
         <ul class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-x-4 gap-y-0">
-          <?php foreach ($domains as $d):
+          <?php foreach ($domain_rows as $row):
+              $d = $row['parts'][0];
               $ci = ['id' => $d['key'], 'label' => $d['label'], 'href' => $d['href'], 'n' => $d['n'], 'icon' => $d['icon']];
+              if (count($row['parts']) > 1) $ci['parts'] = array_map(fn($p) => ['id' => $p['key'], 'label' => $p['label'], 'href' => $p['href'], 'n' => $p['n']], $row['parts']);
               require __DIR__ . '/../partials/count_item.php';
           endforeach; ?>
         </ul>
-        <?php /* One line below the grid: the themed pages (inc/themes.php). One run of inline text, as the starting-point groups. */ ?>
-        <div data-home-themes class="py-1 leading-7">
-          <h3 class="mr-3 inline font-bold">Pagini tematice</h3>
-          <ul class="inline">
-            <?php foreach (themes() as $_th_slug => $_th): ?>
-            <li class="mr-5 inline"><a href="/<?= e($_th_slug) ?>/" data-home-link class="py-[3px]"><?= e($_th['label']) ?></a></li>
-            <?php endforeach; ?>
-          </ul>
-        </div>
       </div>
 
       <?php $cm_counts = $county_total;
@@ -281,7 +302,7 @@ $heading = 'g2-heading-section';
   <?php require __DIR__ . '/../partials/new_soon.php'; ?>
 
   <?php /* 3.6 Notifications */ ?>
-  <?php $fc = ['id' => 'follow', 'calendar' => [feed_url('posturi.ics'), 'Calendarul tuturor posturilor'], 'rss' => [feed_url('posturi.rss'), 'Fluxul tuturor posturilor']];
+  <?php $fc = ['id' => 'follow', 'band' => true, 'calendar' => [feed_url('posturi.ics'), 'Calendarul tuturor posturilor'], 'rss' => [feed_url('posturi.rss'), 'Fluxul tuturor posturilor']];
         require __DIR__ . '/../partials/follow_cards.php'; ?>
 
   <?php /* 3.7 Tools */ ?>

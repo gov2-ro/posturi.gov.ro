@@ -123,20 +123,17 @@ run_suite('/sanatate/?… is a 301 to /?… with the base filter and the given p
     assert_same($all['count'], list_count($base, $cases['/sanatate/?judet%5B%5D=cluj&sort=deadline']) + list_count($base, '/?' . HEALTH . '&judet%5B%5D=bacau') + list_count($base, '/?' . HEALTH . '&judet%5B%5D=ilfov'), 'the county lists add up to the theme');
 });
 
-run_suite('the sitemap lists the theme; the landing page and the footer link to it', function () use ($base) {
+run_suite('the sitemap lists the theme; the footer links to it, in the group "Pagini tematice"', function () use ($base) {
     [, $sm] = http_page($base, '/sitemap.xml');
     assert_contains('<loc>' . $base . '/sanatate/</loc>', $sm, 'sitemap entry');
     [, $home] = http_page($base, '/');
     $x = xp($home);
-    $t = $x->query('//*[@data-home-themes]')->item(0);
-    assert_true($t !== null, 'the landing page has the line "Pagini tematice"');
-    assert_same('Pagini tematice', trim($x->query('.//h3', $t)->item(0)->textContent), 'the label of the line');
-    assert_same('/sanatate/', $x->query('.//a', $t)->item(0)->getAttribute('href'), 'its link');
-    assert_same('Sănătate', trim($x->query('.//a', $t)->item(0)->textContent), 'its link text');
-    // Below the domain grid, in the section of the domains.
-    assert_same(1, $x->query('//section[@id="domenii"]//*[@data-home-themes]')->length, 'in the domains section');
-    assert_true(strpos($home, 'data-home-themes') > strrpos(substr($home, 0, (int)strpos($home, 'data-home-themes')), 'data-home-tile'), 'after the last domain item');
-    assert_same(1, $x->query('//footer//a[@href="/sanatate/"]')->length, 'the footer link');
+    assert_same(0, $x->query('//*[@data-home-themes]')->length, 'no line "Pagini tematice" on the landing page');
+    $links = $x->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a');
+    assert_same(1, $links->length, 'one themed page in the footer group');
+    assert_same('/sanatate/', $links->item(0)->getAttribute('href'), 'its link');
+    assert_same('Sănătate', trim($links->item(0)->textContent), 'its link text');
+    assert_same(1, $x->query('//footer//a[@href="/sanatate/"]')->length, 'one footer link');
 });
 
 run_suite('every count equals the result count of its link; an item with count 0 is not on the page', function () use ($base) {
@@ -686,7 +683,7 @@ run_suite('a second theme from the configuration: the same template, no change',
     assert_same('/?family%5B%5D=tehnic&q=x', $hd['location'] ?? '', 'merges its own base filter');
     assert_contains('<loc>' . $base2 . '/justitie/</loc>', http_page($base2, '/sitemap.xml')[1], 'sitemap');
     $home = xp(http_page($base2, '/')[1]);
-    assert_same(['/sanatate/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//*[@data-home-themes]//a'))), 'landing links, in configuration order');
+    assert_same(['/sanatate/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
     assert_same(1, $home->query('//footer//a[@href="/justitie/"]')->length, 'footer link');
     // A theme with no `icon_file`: no icon, no reference to the file (also with `icons` in a section).
     assert_not_contains('health-icons.svg', $h, 'no icon file in a theme with no icon_file');

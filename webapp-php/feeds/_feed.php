@@ -227,19 +227,34 @@ function feed_details(array $r, array $events): array {
 
     // 3. What the automatic extraction deduced.
     $x = [];
-    foreach (posting_inferred_conditions($r) as $k => $v) feed_put($x, $k, $v);
+    // The salary first, as on the detail page: net, then gross. A salary stated in the posting (inf_salary_min > 0, as
+    // list_salary()) wins over the estimate; the estimate is then one line "Conform legii salarizării (propunere)",
+    // and the deduced conditions leave out "Salariu" (the stated lines have it).
+    $sal = ($r['sal_json'] ?? null) ? (json_decode((string)$r['sal_json'], true) ?: []) : [];
+    $est_net = $est_gross = '';
+    if (!empty($sal['lei_min'])) {
+        $lo = number_format((int)$sal['lei_min'], 0, ',', '.');
+        $hi = number_format((int)($sal['lei_max'] ?? $sal['lei_min']), 0, ',', '.');
+        $est_net = net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']));
+        $est_gross = ($lo === $hi ? $lo : $lo . '–' . $hi) . ' lei brut';
+    }
+    $stated = (float)($r['inf_salary_min'] ?? 0) > 0 ? list_salary($r) : null;
+    if ($stated) {
+        feed_put($x, 'Salariu anunțat', $stated['text'] . ' / lună');
+        feed_put($x, 'Brut anunțat', $stated['gross'] . ' brut / lună, din anunț');
+        if ($est_net !== '') feed_put($x, 'Conform legii salarizării (propunere)', $est_net . ' (' . $est_gross . ') / lună, la gradația 0');
+    } elseif ($est_net !== '') {
+        feed_put($x, 'Salariu estimat', $est_net . ' / lună, la gradația 0');
+        feed_put($x, 'Brut estimat', $est_gross . ' / lună, la gradația 0');
+        feed_put($x, 'Despre estimare', (string)($sal['disclaimer'] ?? ''));
+    }
+    $cond = posting_inferred_conditions($r);
+    if ($stated) unset($cond['Salariu']);
+    foreach ($cond as $k => $v) feed_put($x, $k, $v);
     foreach (inferred_tags($r) as $g) {
         feed_put($x, $g['label'], implode(', ', array_map(fn($v) => ucfirst((string)$v), $g['values'])));
     }
     foreach (posting_contract_terms($schema) as $k => $v) feed_put($x, $k, (string)$v, ' (contract)');
-    $sal = ($r['sal_json'] ?? null) ? (json_decode((string)$r['sal_json'], true) ?: []) : [];
-    if (!empty($sal['lei_min'])) {
-        $lo = number_format((int)$sal['lei_min'], 0, ',', '.');
-        $hi = number_format((int)($sal['lei_max'] ?? $sal['lei_min']), 0, ',', '.');
-        feed_put($x, 'Salariu estimat', net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min'])) . ' / lună, la gradația 0');
-        feed_put($x, 'Brut estimat', ($lo === $hi ? $lo : $lo . '–' . $hi) . ' lei brut / lună, la gradația 0');
-        feed_put($x, 'Despre estimare', (string)($sal['disclaimer'] ?? ''));
-    }
     $edu = is_array($schema['education'] ?? null) ? $schema['education'] : [];
     if (!empty($edu['eqf_level'])) feed_put($x, 'Nivel de studii (EQF)', EQF_LABELS[(int)$edu['eqf_level']] ?? ('EQF ' . (int)$edu['eqf_level']));
     $fields = array_filter(array_map(fn($f) => is_array($f) ? ucfirst(trim((string)($f['label_ro'] ?? ''))) : '', (array)($edu['fields_of_study'] ?? [])));

@@ -576,6 +576,15 @@
   .pg-map-swatch[data-step="1"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.30), rgb(var(--c-gov) / 0.30)); }
   .pg-map-swatch[data-step="2"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.55), rgb(var(--c-gov) / 0.55)); }
   .pg-map-swatch[data-step="3"] { background-image: linear-gradient(rgb(var(--c-gov)), rgb(var(--c-gov))); }
+
+  /* 2026-11-17: a section with a `sunken` band from edge to edge of the window, inside a .g2-container.
+     The shadow paints the band past the container; clip-path keeps it to the height of the section.
+     No horizontal scroll: a shadow does not add to the scroll width. Local; DS proposal candidate ("full-width band"). */
+  .pg-band {
+    background: rgb(var(--c-sunken));
+    box-shadow: 0 0 0 100vmax rgb(var(--c-sunken));
+    clip-path: inset(0 -100vmax);
+  }
 }
 
 /* 2026-11-17 (brief nav-toc-theme-hero): the table of contents of Statistici and Despre (partials/toc.php).

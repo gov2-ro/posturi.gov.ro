@@ -2,6 +2,45 @@
 
 ## 2026
 
+### 2026-11-17 — Landing page: health card, column layout, county in the URL, domain band (not deployed)
+
+No brief (owner requests in the session; small changes to the landing page).
+
+**Done** (follow-up 1 below changes the tags and the line "Pagini tematice")
+- Ready-made searches: the first card is the themed page "Posturi în sănătate" (link `/sanatate/`, the theme icon, the count of its base filter, three tags). It has its own hook `data-home-theme-example`, because it is not a list search. The tags of every card are smaller and muted (`.pg-tag-dim`: 13 px, `ink-muted`, next to `.g2-tag`). The list is CSS columns (1, 2 from `md`, 3 from `lg`), with 12 px under each card: the cards flow down each column with the same space, whatever their height.
+- The domains section has a `sunken` band from edge to edge of the window (`.pg-band`: a 100vmax shadow, clipped by `clip-path` to the height of the section). No horizontal scroll at 390 and 1280 px.
+- County in the URL fragment: `/#cluj` selects Cluj (select and map) and scrolls to `#domenii`. A selection writes the fragment with `history.replaceState`; no county removes it. The same script runs on the themed page (`/sanatate/#cluj` selects Cluj; no scroll, the map is in the first screen). A fragment that is not a county changes nothing.
+- "Ingineri și tehnicieni" is two domains on one row: "Ingineri" (COR 2) and "Tehnicieni" (COR 3), one icon. `HOME_DOMAINS` key `row`; `count_item.php` key `parts`; the row (`data-home-group`) sorts by the sum and hides when the county hides both parts. Real data: Ingineri 40, Tehnicieni 18.
+- Tests: `home_test.php` 795 assertions (the themed card; the canonical-URL check reads the list cards only); `home.spec.js` 1 new test (fragment), the 44 px check skips the themed card as it skips the other cards. `home.spec.js` and `theme.spec.js`: 153 passed.
+
+**Hard**
+- A first version of the fragment test changed the fragment on the same page; the old county stayed, which is the right behaviour. The test now loads the page again.
+
+**Decided**
+- Fragment format `#<county slug>` (`#cluj`), not `#judet=cluj`: shorter, and no element id of the page is a county slug. Cost of the alternative: a longer URL to share.
+- The fixture has no `tehnic` posting with COR 2 or 3, so the two-part row is checked on real data (screenshots), not by the PHP suite.
+- "Meseriași și muncitori calificați" (COR 7) and "Muncitori necalificați" (COR 9) stay separate: different requirements (a qualification certificate or none). Not changed.
+
+**Follow-up 1 (same day, owner request)**
+- The line "Pagini tematice" is gone from the domains section. The footer has a fourth group "Pagini tematice" (the themes of `themes()`); "Posturi" keeps its four fixed links.
+- The ready-made searches show no tags. The `tags` stay in the data of `$combos`. `.pg-tag-dim` is removed (no use left). A list card has 8 px below it (12 px before, with the tags).
+- The health card has a 2 px `gov` border and inner padding, and a 30 px icon (24 px + 25 %).
+- "Abonează-te la notificări" on the landing page is a full-width band (`follow_cards.php` key `band`; `.pg-band py-8`). The themed page keeps the box.
+- Tests: `home_test.php` 796, `theme_test.php` 550 assertions; `home.spec.js` (footer: four groups, four lists), `theme.spec.js`, `chrome.spec.js`: passed.
+
+**Follow-up 2 (same day, owner request)**
+- Examples: order "Peste 5.000 lei net…" first, then the health card, then the list searches; "Magyar…" last. Each card is as wide as its text (`w-fit`, still a block, so two short cards never share a line of a column); 16 px below each card; 8 px above and below the list.
+- Detail page, salary: the salary is the first row of the summary strip (before the deduced conditions). A salary stated in the posting (`inf_salary_min` > 0) has its own box "Salariu anunțat" (net first, the gross line "din anunț", the pay meter), in place of the estimate box. The estimate becomes one note in it: "Conform legii salarizării (propunere): ≈ … lei net (brut …) / lună, la gradația 0." The deduced conditions leave out "Salariu" (the box has it). Case found on `/job/17529-…`: stated 4.700 lei, estimate 8.200 lei gross. 17 Oct export: 35 active postings state a salary; 23 of them also have an estimate.
+- Tests: `discovery_test.php` 522 assertions (stated box, the note, the order, stated without estimate). Every PHP suite passed; `home`, `theme`, `salary`, `browser` specs: 177 passed, 3 skipped.
+
+Assumed
+- The stated figure is gross, as the list rows already assume (`list_salary()` computes net from it). Most postings state "salariul de bază brut"; the extraction does not record gross or net.
+
+**Follow-up 3 (same day, owner request)**
+- Feeds (RSS, Atom, iCal; one function, `feed_details()`): the salary is the first fact of "Extras automat". A stated salary gives "Salariu anunțat" (net), "Brut anunțat" ("din anunț") and, when an estimate exists, "Conform legii salarizării (propunere): … net (… brut) / lună, la gradația 0"; the estimate lines and the condition "Salariu" are left out. With no stated salary, the three estimate lines as before.
+- Tests: `feeds_test.php` 3,386 assertions (new suite: the three formats, stated with and without an estimate).
+- Backlog: DATA-SALARY-GROSS-NET now says the goal: both figures everywhere, net first, from a recorded basis (gross or net).
+
 ### 2026-11-17 — Footer link rows, GitHub mark, /llms.txt (not deployed)
 
 Brief: `docs/briefs/2026-11-17-footer-llms-txt.md`.

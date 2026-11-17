@@ -132,6 +132,14 @@
       });
       qs('a', t).setAttribute('href', '/?' + searchKey(p.toString()));
     });
+    // A row of two or more domains (partials/count_item.php, `parts`) hides when it has no visible domain.
+    qsa('[data-home-group]').forEach(function (g) {
+      g.hidden = qsa('[data-home-tile]', g).every(function (t) { return t.hidden; });
+    });
+    // The county is in the URL fragment (/#cluj), so the reader can share the selection. No county: no fragment.
+    if (announce && window.history && history.replaceState) {
+      history.replaceState(null, '', location.pathname + location.search + (slug ? '#' + slug : ''));
+    }
     if (announce && live) {
       var total = slug ? (data.counties[slug] || 0) : data.total;
       live.textContent = (slug ? selectedName() : 'Toate județele') + ': ' + postsLabel(total) + ' active';
@@ -151,5 +159,23 @@
     if (allBox.checked) apply('', true); else allBox.checked = !current;
   });
   if (select) select.addEventListener('change', function () { apply(select.value, true); });
-  apply(current, false);
+
+  /** The county slug of the URL fragment (/#cluj), or '' when the fragment is not a county of the map or the select. */
+  function hashCounty() {
+    var h = decodeURIComponent(location.hash.slice(1));
+    if (!/^[a-z-]+$/.test(h)) return '';
+    if (select) return Array.prototype.some.call(select.options, function (o) { return o.value === h; }) ? h : '';
+    return qs('[data-county="' + h + '"]') ? h : '';
+  }
+  // A county in the fragment selects that county and, on the landing page, scrolls to the domains section.
+  function fromHash(scroll) {
+    var h = hashCounty();
+    if (!h) return false;
+    apply(h, false);
+    var section = document.getElementById('domenii');
+    if (scroll && section) section.scrollIntoView();
+    return true;
+  }
+  window.addEventListener('hashchange', function () { fromHash(true); });
+  if (!fromHash(true)) apply(current, false);
 })();

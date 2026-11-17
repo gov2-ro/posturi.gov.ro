@@ -585,6 +585,10 @@
     box-shadow: 0 0 0 100vmax rgb(var(--c-sunken));
     clip-path: inset(0 -100vmax);
   }
+  /* A band that is the last section of the page (the notifications of a themed page) meets the footer: no white strip
+     from the bottom padding of the container (pb-14) and the top margin of the footer (mt-12). */
+  .g2-container:has(> .pg-band:last-child) { padding-bottom: 0; }
+  body:has(.g2-container > .pg-band:last-child) .g2-footer { margin-top: 0; }
 }
 
 /* 2026-11-17 (brief nav-toc-theme-hero): the table of contents of Statistici and Despre (partials/toc.php).

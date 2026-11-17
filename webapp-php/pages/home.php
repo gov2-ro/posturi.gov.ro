@@ -73,7 +73,13 @@ foreach (db()->query(
     }
 }
 $domains = array_values(array_filter($domains, fn($d) => $d['n'] > 0));
-foreach ($domains as $i => $d) $domains[$i]['href'] = home_list_url($d['params']);
+// A domain that a themed page lists (theme key `domains`, inc/themes.php) links to that page: `/{slug}/` (static/home.js adds `#county`).
+$theme_of_domain = [];
+foreach (themes() as $_slug => $_t) foreach ($_t['domains'] ?? [] as $_key) $theme_of_domain[$_key] ??= $_slug;
+foreach ($domains as $i => $d) {
+    $domains[$i]['theme'] = isset($theme_of_domain[$d['key']]) ? '/' . $theme_of_domain[$d['key']] . '/' : null;
+    $domains[$i]['href'] = $domains[$i]['theme'] ?? home_list_url($d['params']);
+}
 // Rows of the list: the domains with the same `row` key share one row (one icon, one link each), in HOME_DOMAINS order.
 // A row sorts by the sum of its counts; Altele is last.
 $domain_rows = [];
@@ -233,8 +239,9 @@ $heading = 'g2-heading-section';
          two short cards never share a line of a column. 16 px below each card. */ ?>
       <?php if (!empty($c['theme'])): ?>
       <?php /* The themed page: its icon before the title. Not a list search, so it has its own hook (data-home-theme-example).
-         A border marks it: the only card that opens a page and not a list. The icon is 30 px (the 24 px of a line, + 25%). */ ?>
-      <li data-home-theme-example class="mb-4 flex w-fit min-w-0 max-w-full break-inside-avoid flex-col border-2 border-gov px-3 py-2">
+         The icon marks it: the only card that opens a page and not a list (no border, the same spacing as the other cards; owner,
+         2026-11-18). The icon is 30 px (the 24 px of a line, + 25%). */ ?>
+      <li data-home-theme-example class="mb-4 flex w-fit min-w-0 max-w-full break-inside-avoid flex-col">
         <h3 class="py-0.5">
           <?php if ($c['icon']): ?><?= icon($c['icon'], 'mr-2 inline-block h-[30px] w-[30px] align-[-7px] text-gov') ?><?php endif; ?><a href="<?= e($c['href']) ?>" class="g2-link-title py-2.5"><?= e($c['title']) ?></a><span data-example-count class="text-base font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
         </h3>
@@ -267,8 +274,8 @@ $heading = 'g2-heading-section';
         <ul class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-x-4 gap-y-0">
           <?php foreach ($domain_rows as $row):
               $d = $row['parts'][0];
-              $ci = ['id' => $d['key'], 'label' => $d['label'], 'href' => $d['href'], 'n' => $d['n'], 'icon' => $d['icon']];
-              if (count($row['parts']) > 1) $ci['parts'] = array_map(fn($p) => ['id' => $p['key'], 'label' => $p['label'], 'href' => $p['href'], 'n' => $p['n']], $row['parts']);
+              $ci = ['id' => $d['key'], 'label' => $d['label'], 'href' => $d['href'], 'n' => $d['n'], 'icon' => $d['icon'], 'theme' => $d['theme']];
+              if (count($row['parts']) > 1) $ci['parts'] = array_map(fn($p) => ['id' => $p['key'], 'label' => $p['label'], 'href' => $p['href'], 'n' => $p['n'], 'theme' => $p['theme']], $row['parts']);
               require __DIR__ . '/../partials/count_item.php';
           endforeach; ?>
         </ul>
@@ -302,7 +309,7 @@ $heading = 'g2-heading-section';
   <?php require __DIR__ . '/../partials/new_soon.php'; ?>
 
   <?php /* 3.6 Notifications */ ?>
-  <?php $fc = ['id' => 'follow', 'band' => true, 'calendar' => [feed_url('posturi.ics'), 'Calendarul tuturor posturilor'], 'rss' => [feed_url('posturi.rss'), 'Fluxul tuturor posturilor']];
+  <?php $fc = ['id' => 'follow', 'calendar' => [feed_url('posturi.ics'), 'Calendarul tuturor posturilor'], 'rss' => [feed_url('posturi.rss'), 'Fluxul tuturor posturilor']];
         require __DIR__ . '/../partials/follow_cards.php'; ?>
 
   <?php /* 3.7 Tools */ ?>

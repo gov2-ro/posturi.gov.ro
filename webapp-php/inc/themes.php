@@ -22,6 +22,8 @@ declare(strict_types=1);
  *                JSON list of values), `column` (one value in the column) or `labels` (`labels`: value => text,
  *                in page order); `column` and `limit` (source json and column: the column, and how many items);
  *                `more` (source json: the text of the link to the list, when more values exist than `limit`);
+ *                optional `order` ('count': a `labels` section sorts its items by count, largest first, and `limit` then keeps the
+ *                first ones; with no `order` it keeps the order of `labels`; the text of an item is its `labels` text);
  *                optional `columns` (3: three columns from lg; default: as many as fit) and, with the theme key `icon_file`: `icons`
  *                value => symbol id, `icon_default`, `icon_size` (classes, default `h-6 w-6`); a value with none of them has no icon
  *     counties   the county map, in the first screen beside the title and the search (not in the section flow; `id` is
@@ -36,8 +38,11 @@ declare(strict_types=1);
  *                and `except` (exact occupations that a prefix does not take); an occupation is in the first group that holds it.
  *                No `history` = no chart; no `groups` = a chart with no buttons
  *   search_selects optional: selects in the search form, in place of the text field: a list of `param`, `label`, `all` (the
- *                text of the empty option), `source` (`json` or `column`) and `column`; each lists the values that have a posting
- *                inside the theme. The county select stays. No `search_selects` = the text field
+ *                text of the empty option), `source` (`json` or `column`), `column` and an optional `labels` (value => text: the
+ *                option shows the text and sends the value; a value with no text shows itself); each lists the values that have a
+ *                posting inside the theme. The county select stays. No `search_selects` = the text field
+ *   domains      optional: a list of keys of HOME_DOMAINS. On the landing page the item of such a domain links to `/{slug}/`
+ *                (the count does not change). A key is in one theme at most (a test checks it)
  *   other        one more line, before the section `recent` (at the end when there is none): `label`, `params` (a filter that is
  *                not inside the base filter) and an optional `note` (one muted sentence after the line)
  *
@@ -51,6 +56,7 @@ function themes(): array {
         'sanatate' => [
             'label'       => 'Sănătate',
             'icon'        => 'i-sector-sanatate',   // sprite symbol (inc/header.php), shown before the title
+            'domains'     => ['sanatate'],          // the item "Sănătate" of the landing page links to /sanatate/
             // The medical professions wherever they work: a school nurse is here, the accountant of a hospital is not.
             'base'        => ['family' => ['sănătate']],
             // The symbol file of the icons of the `values` sections (static/<file>, ADR 0007).
@@ -63,7 +69,7 @@ function themes(): array {
                                   ['label' => 'Medic', 'prefixes' => ['Medic'], 'except' => ['Medic rezident']],
                                   ['label' => 'Rezident', 'values' => ['Medic rezident']],
                                   ['label' => 'Asistent', 'prefixes' => ['Asistent medical']],
-                                  ['label' => 'Îngrijitor', 'values' => ['Îngrijitor', 'Infirmier', 'Infirmieră', 'Brancardier']],
+                                  ['label' => 'Îngrijitor', 'values' => ['Îngrijitor', 'Infirmier', 'Brancardier']],
                               ]],
             'title'       => 'Posturi în sănătate',
             'h1'          => 'Posturi în sănătate',
@@ -134,6 +140,96 @@ function themes(): array {
             'other'       => ['label'  => 'Posturi nemedicale la angajatori din sănătate',
                               'note'   => 'Economiști, muncitori, șoferi, registratori și alte posturi din spitale și unități sanitare.',
                               'params' => ['sector' => ['sanatate'], 'family_not' => ['sănătate']]],
+        ],
+
+        // Professional domain: the postings of the family `administrație`, wherever they work (a town hall, a school, a hospital).
+        'administratie' => [
+            'label'       => 'Administrație',
+            'icon'        => 'i-domain-administratie',
+            'domains'     => ['administratie'],
+            'base'        => ['family' => ['administrație']],
+            // An occupation is in the first group that holds it, so "Secretar șef" is in "Conducere" and not in "Secretar".
+            'history'     => ['family' => 'administrație',
+                              'groups' => [
+                                  ['label' => 'Conducere', 'prefixes' => ['Șef', 'Director', 'Manager', 'Secretar șef']],
+                                  ['label' => 'Referent', 'prefixes' => ['Referent']],
+                                  ['label' => 'Inspector', 'prefixes' => ['Inspector']],
+                                  ['label' => 'Secretar', 'prefixes' => ['Secretar']],
+                              ]],
+            'title'       => 'Posturi în administrație',
+            'h1'          => 'Posturi în administrație',
+            'description' => 'Posturi în administrație din sectorul public: referenți, inspectori, secretari și funcții de conducere, '
+                           . 'la primării, spitale, școli și alte instituții, pe ocupații, județe și nivel de studii.',
+            'all_label'   => 'Toate anunțurile din administrație',
+            'placeholder' => 'Caută: referent, secretar, inspector…',
+            'search_selects' => [
+                ['param' => 'occupation', 'label' => 'Ocupație', 'all' => 'Toate ocupațiile', 'source' => 'column', 'column' => 'occ_canonical'],
+                ['param' => 'inst', 'label' => 'Instituție', 'all' => 'Toate instituțiile', 'source' => 'column', 'column' => 'employer_kind',
+                 'labels' => EMPLOYER_KIND_LABELS],
+            ],
+            'sections'    => [
+                ['type' => 'stats', 'id' => 'statistici'],
+                // The keys are the stored values of `job_level` (the source sends these phrases).
+                ['type' => 'values', 'id' => 'tip-functie', 'title' => 'Tip funcție', 'param' => 'level', 'source' => 'labels', 'order' => 'count',
+                 'labels' => ['Funcții de conducere' => 'Funcții de conducere', 'Funcții de execuție' => 'Funcții de execuție']],
+                ['type' => 'values', 'id' => 'ocupatii', 'title' => 'Ocupații', 'param' => 'occupation',
+                 'source' => 'column', 'column' => 'occ_canonical', 'limit' => 12],
+                ['type' => 'values', 'id' => 'angajatori', 'title' => 'Angajatori', 'param' => 'inst', 'source' => 'labels', 'order' => 'count',
+                 'labels' => EMPLOYER_KIND_LABELS],
+                ['type' => 'values', 'id' => 'domenii', 'title' => 'Domenii de activitate', 'param' => 'domain', 'source' => 'labels', 'order' => 'count',
+                 'limit' => 8, 'labels' => POLICY_DOMAIN_LABELS],
+                ['type' => 'counties', 'id' => 'judete'],
+                ['type' => 'values', 'id' => 'studii', 'title' => 'Studii', 'param' => 'studies_level',
+                 'source' => 'labels', 'labels' => STUDIES_LABELS],
+                ['type' => 'recent', 'id' => 'noi'],
+                ['type' => 'follow', 'id' => 'notificari'],
+            ],
+        ],
+
+        // Professional domain: finance and accounting, wherever the postings are (schools, hospitals, culture, town halls).
+        'financiar' => [
+            'label'       => 'Financiar',
+            'icon'        => 'i-domain-financiar',
+            'domains'     => ['financiar'],
+            'base'        => ['family' => ['financiar']],
+            // An occupation is in the first group that holds it, so "Contabil-șef" is in "Conducere" and not in "Contabil".
+            'history'     => ['family' => 'financiar',
+                              'groups' => [
+                                  ['label' => 'Conducere', 'values' => ['Contabil-șef', 'Contabil șef'], 'prefixes' => ['Director', 'Șef', 'Manager']],
+                                  ['label' => 'Administrator financiar', 'prefixes' => ['Administrator financiar']],
+                                  ['label' => 'Economist', 'prefixes' => ['Economist']],
+                                  ['label' => 'Contabil', 'prefixes' => ['Contabil']],
+                              ]],
+            'title'       => 'Posturi financiar-contabile',
+            'h1'          => 'Posturi financiar-contabile',
+            'description' => 'Posturi financiar-contabile din sectorul public: administratori financiari, economiști, contabili și funcții de conducere, '
+                           . 'la școli, spitale, instituții de cultură și primării, pe județe și nivel de studii.',
+            'all_label'   => 'Toate anunțurile financiar-contabile',
+            'placeholder' => 'Caută: contabil, economist, administrator financiar…',
+            'search_selects' => [
+                ['param' => 'occupation', 'label' => 'Ocupație', 'all' => 'Toate ocupațiile', 'source' => 'column', 'column' => 'occ_canonical'],
+                ['param' => 'inst', 'label' => 'Instituție', 'all' => 'Toate instituțiile', 'source' => 'column', 'column' => 'employer_kind',
+                 'labels' => EMPLOYER_KIND_LABELS],
+            ],
+            'sections'    => [
+                ['type' => 'stats', 'id' => 'statistici'],
+                ['type' => 'values', 'id' => 'tip-functie', 'title' => 'Tip funcție', 'param' => 'level', 'source' => 'labels', 'order' => 'count',
+                 'labels' => ['Funcții de conducere' => 'Funcții de conducere', 'Funcții de execuție' => 'Funcții de execuție']],
+                ['type' => 'values', 'id' => 'ocupatii', 'title' => 'Ocupații', 'param' => 'occupation',
+                 'source' => 'column', 'column' => 'occ_canonical', 'limit' => 12],
+                ['type' => 'values', 'id' => 'angajatori', 'title' => 'Angajatori', 'param' => 'inst', 'source' => 'labels', 'order' => 'count',
+                 'labels' => EMPLOYER_KIND_LABELS],
+                // Software products and public IT systems with 3 or more postings in the theme; no generic office programs
+                // (reviewed by Opus, 2026-11-18). The filter `skill` compares with LIKE, which ignores the case of
+                // ASCII letters: "FOREXEBUG" also matches the spelling "Forexebug".
+                ['type' => 'values', 'id' => 'programe', 'title' => 'Programe informatice cerute', 'param' => 'skill', 'source' => 'labels', 'order' => 'count',
+                 'labels' => ['FOREXEBUG' => 'FOREXEBUG', 'EDUSAL' => 'EDUSAL', 'SIIIR' => 'SIIIR']],
+                ['type' => 'counties', 'id' => 'judete'],
+                ['type' => 'values', 'id' => 'studii', 'title' => 'Studii', 'param' => 'studies_level',
+                 'source' => 'labels', 'labels' => STUDIES_LABELS],
+                ['type' => 'recent', 'id' => 'noi'],
+                ['type' => 'follow', 'id' => 'notificari'],
+            ],
         ],
     ];
     $extra = getenv('POSTURI_THEMES_EXTRA');

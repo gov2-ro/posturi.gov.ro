@@ -6,7 +6,8 @@
  * (index.php) drops blank values and redirects.
  *
  * In:  $hs = ['placeholder' => string, 'counts' => array<slug,int>, 'hidden' => array<field,list<string>>,
- *             'selects' => optional list of ['id', 'name' (the field, `x[]`), 'label', 'all' (text of the empty option), 'values']]
+ *             'selects' => optional list of ['id', 'name' (the field, `x[]`), 'label', 'all' (text of the empty option), 'values',
+ *                          optional 'labels' (value => text of the option; a value with no text shows itself)]]
  *      With `selects` the form has those selects in place of the text field (theme key `search_selects`).
  *      $county_options, $fmt: see county_select.php
  */
@@ -25,7 +26,7 @@ declare(strict_types=1);
   <select id="<?= e($_hs_sel['id']) ?>" name="<?= e($_hs_sel['name']) ?>" class="g2-input min-h-12 min-w-0 flex-[1_1_13rem] lg:flex-[1_1_10rem]">
     <option value=""><?= e($_hs_sel['all']) ?></option>
     <?php foreach ($_hs_sel['values'] as $_hs_val): ?>
-    <option value="<?= e($_hs_val) ?>"><?= e($_hs_val) ?></option>
+    <option value="<?= e($_hs_val) ?>"><?= e((string)($_hs_sel['labels'][$_hs_val] ?? $_hs_val)) ?></option>
     <?php endforeach; ?>
   </select>
   <?php endforeach; endif; ?>

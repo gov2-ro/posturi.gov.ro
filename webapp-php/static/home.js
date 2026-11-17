@@ -9,12 +9,13 @@
  *     here. A county selected on either one shows, on each item ([data-home-tile]: a
  *     professional domain, a specialty, ...), the count of that county in brackets, hides
  *     an item with no postings, and points the item's link at the list of the item's
- *     filter and that county. The filter of each item and its counts are in the JSON
+ *     filter and that county (an item with `data-theme-href` points at that themed page, `/{slug}/#county`). The filter of each item and its counts are in the JSON
  *     block #home-data: items[id] = {params: {field: [values]}, counties: {slug: n}}
  *     (active postings, the same predicate as the list). An item with no count element
  *     only gets the county in its link. Without script the items show the totals.
  *     A themed page has the select of its search form: the map and that select are one control. Its first
- *     option ("Toate județele") or a second click on the selected cell clears the county;
+ *     option ("Toate județele"), the button "Toate județele" after the title ([data-county-clear], shown while a county is selected) or a second
+ *     click on the selected cell clears the county;
  *     the <h1> gets " → county" ([data-county-title]) and the count of that county ([data-title-count]). Each selection
  *     sends the event `posturi:county` ({slug}) to static/theme-panel.js, which filters the chart.
  *
@@ -81,6 +82,7 @@
   var live = qs('[data-home-live]');
   var title = qs('[data-county-title]');           // inside the <h1> of a themed page
   var titleCount = qs('[data-title-count]');       // the count of active postings after the title
+  var clearBtn = qs('[data-county-clear]');       // after the <h1> of a themed page: "Toate județele", shown while a county is selected
   var current = select ? select.value : '';
   if (!select && !cells.length) return;
   qsa('[data-home-js]').forEach(function (el) { el.hidden = false; });
@@ -113,6 +115,7 @@
         title.appendChild(arrow); title.appendChild(word); title.appendChild(document.createTextNode(selectedName()));
       }
     }
+    if (clearBtn) clearBtn.hidden = !slug;
     cells.forEach(function (c) { c.setAttribute('aria-pressed', c.dataset.county === slug ? 'true' : 'false'); });
     tiles.forEach(function (t) {
       var item = (data.items || {})[t.dataset.domain] || {};
@@ -121,6 +124,11 @@
         var n = slug ? ((item.counties || {})[slug] || 0) : parseInt(t.dataset.total, 10);
         t.hidden = n === 0;
         count.textContent = '\u00a0(' + numLabel(n) + ')';
+      }
+      // An item that links to a themed page keeps that page; the county goes in the fragment (read by hashCounty() there).
+      if (t.dataset.themeHref) {
+        qs('a', t).setAttribute('href', t.dataset.themeHref + (slug ? '#' + slug : ''));
+        return;
       }
       var p = new URLSearchParams();
       if (slug) p.append('judet[]', slug);
@@ -151,6 +159,11 @@
       var slug = c.dataset.county;
       apply(current === slug ? '' : slug, true);
     });
+  });
+  // The button after the title clears the county, as the first option of the select does. It hides itself, so the focus moves to the select.
+  if (clearBtn) clearBtn.addEventListener('click', function () {
+    apply('', true);
+    if (select) select.focus();
   });
   if (select) select.addEventListener('change', function () { apply(select.value, true); });
 

@@ -1953,6 +1953,35 @@ function active_filter_chips(): array {
     return $chips;
 }
 
+/**
+ * The occupation chips above the results of the list (partials/occupation_chips.php): the most frequent occupations of the
+ * filter "Ocupație", as links. Returns the chips (`val`, `cnt`, largest first, at most $max), or [] when the row is not shown:
+ *  - the results fill one page or less ($total <= $page_size);
+ *  - an occupation filter is on ($selected, or $excluded: the facet counts leave `occupation_not` out, so a chip count could
+ *    differ from the result count after the click);
+ *  - fewer than 2 occupations have 2 or more postings each;
+ *  - the largest occupation has more than 90 % of the results.
+ * $options are the rows of the filter list (`val`, `cnt`), which leaves out the occupation filter: a chip count is the result
+ * count after the click. No query.
+ *
+ * @param list<array{val:string,cnt:int|string}> $options
+ * @return list<array{val:string,cnt:int}>
+ */
+function occupation_chips(array $options, int $total, int $page_size, array $selected, array $excluded = [], int $max = 8): array {
+    if ($total <= $page_size) return [];
+    foreach ([$selected, $excluded] as $vals) {
+        foreach ((array)$vals as $v) if (trim((string)$v) !== '') return [];
+    }
+    $rows = [];
+    foreach ($options as $o) {
+        if ((int)$o['cnt'] >= 2 && (string)$o['val'] !== '') $rows[] = ['val' => (string)$o['val'], 'cnt' => (int)$o['cnt']];
+    }
+    if (count($rows) < 2) return [];
+    usort($rows, fn($a, $b) => $b['cnt'] <=> $a['cnt']);
+    if ($rows[0]['cnt'] * 10 > $total * 9) return [];
+    return array_slice($rows, 0, $max);
+}
+
 // ---- URLs ----
 
 /** Romanian-aware slugifier: ă/â/î/ș/ț fold to their ASCII bases, not to "?". */

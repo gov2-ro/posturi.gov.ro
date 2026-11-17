@@ -2,7 +2,7 @@
  * The weekly chart of a themed page (partials/theme_stats.php, partials/weekly_chart.php). Two things need script:
  *
  *  1. The occupation buttons. "Toate" and one button for each occupation; a click shows that series in the same chart (line, area,
- *     line of text, label, vertical scale of the series) and writes a sentence to a polite live region. One button is pressed at a
+ *     line of text, label; one vertical scale for all buttons, from 0 to the largest week of any of them) and writes a sentence to a polite live region. One button is pressed at a
  *     time (aria-pressed).
  *  2. The county selection (static/home.js sends the event `posturi:county` with `detail.slug`, "" for all). Every series shows that
  *     county; a button whose series is 0 in every week of the county is hidden (and "Toate" is pressed when it was the pressed
@@ -51,11 +51,21 @@
   }
   function sum(v) { return v.reduce(function (a, b) { return a + b; }, 0); }
 
+  /** The top of the axis: the largest week of the total and of each series, in the selected county. The same for every button. */
+  function axisMax() {
+    var top = Math.max.apply(null, seriesOf(-1));
+    (data.series || []).forEach(function (s, i) { top = Math.max(top, Math.max.apply(null, seriesOf(i))); });
+    return top;
+  }
+
   function draw(vals, name) {
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    // One axis for every button, from 0 to axisMax() (partials/weekly_chart.php draws the total on the same axis): a series of
+    // 3 a week stays low next to a total of 60. The text keeps the min and max of the series itself.
+    var top = axisMax();
     var pts = vals.map(function (v, i) {
       var x = i / (vals.length - 1) * W;
-      var y = max === min ? H / 2 : P + (1 - (v - min) / (max - min)) * (H - 2 * P);
+      var y = top === 0 ? H / 2 : P + (1 - v / top) * (H - 2 * P);
       return round1(x) + ',' + round1(y);
     });
     line.setAttribute('points', pts.join(' '));

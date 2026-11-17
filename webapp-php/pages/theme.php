@@ -60,7 +60,10 @@ foreach ($theme['sections'] as $sec) {
         $it = home_item($param . ':' . $v, $label, home_merge_params($base, [$param => [$v]]));
         if ($it['n'] > 0) $row[] = $it;
     }
-    if ($sec['source'] !== 'labels') usort($row, fn($a, $b) => $b['n'] <=> $a['n']);   // `labels` keeps its own order
+    // `labels` keeps its own order, unless the section says `order => 'count'` (then `limit` keeps the first items after the sort).
+    $by_count = ($sec['order'] ?? '') === 'count';
+    if ($sec['source'] !== 'labels' || $by_count) usort($row, fn($a, $b) => $b['n'] <=> $a['n']);
+    if ($sec['source'] === 'labels' && $by_count && $limit > 0) $row = array_slice($row, 0, $limit);
     foreach ($row as $it) $items[$it['id']] = $it;
     $sec['items'] = $row;
     if ($has_more && !empty($sec['more'])) {
@@ -113,8 +116,12 @@ require __DIR__ . '/../inc/header.php';
 // The selects of the search form (theme key `search_selects`): every value with a posting inside the theme.
 $hs_selects = [];
 foreach ($theme['search_selects'] ?? [] as $i => $sel) {
+    $vals = theme_select_values($sel, $base_where, $bf['binds']);
+    $sel_labels = (array)($sel['labels'] ?? []);
+    // With `labels` the options sort by the text that the reader sees.
+    if ($sel_labels) usort($vals, fn($a, $b) => strcmp(ro_sort_key((string)($sel_labels[$a] ?? $a)), ro_sort_key((string)($sel_labels[$b] ?? $b))) ?: strcmp($a, $b));
     $hs_selects[] = ['id' => 'home-sel-' . $i, 'name' => param_field((string)$sel['param']), 'label' => $sel['label'], 'all' => $sel['all'],
-                     'values' => theme_select_values($sel, $base_where, $bf['binds'])];
+                     'values' => $vals, 'labels' => $sel_labels];
 }
 
 $home_data = ['total' => $all['n'], 'counties' => $county_total, 'items' => []];
@@ -129,7 +136,12 @@ $heading = 'g2-heading-section';
   <section aria-labelledby="h-theme" class="pt-8">
     <div class="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-10">
       <div class="flex min-w-0 flex-col gap-4">
+<?php /* The title and, with a map, the button "Toate județele": on one line from sm, below the title on a narrow screen. The button is
+           not in the heading. Script only: static/home.js shows it while a county is selected and clears the county on a click. */ ?>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 id="h-theme" class="g2-heading-page mb-1 flex items-center gap-3 text-xl leading-tight sm:text-2xl"><?php if (!empty($theme['icon'])): ?><?= icon($theme['icon'], 'h-8 w-8 shrink-0') ?><?php endif; ?><span><?= e($theme['h1']) ?><?php if ($has_map): ?><span data-county-title></span><span data-title-count class="text-base font-normal text-ink-muted">&nbsp;(<?= e($fmt($all['n'])) ?>)</span><?php endif; ?></span></h1>
+        <?php if ($has_map): ?><button type="button" class="g2-chip" data-county-clear hidden><?= icon('i-x', 'h-4 w-4 shrink-0 self-center') ?>Toate județele</button><?php endif; ?>
+        </div>
         <?php $hs = ['placeholder' => $theme['placeholder'], 'counts' => $county_total, 'hidden' => home_item_fields($base), 'selects' => $hs_selects];
               require __DIR__ . '/../partials/home_search.php'; ?>
         <?php if (!$has_map && $all['n'] > 0): /* A theme with a map has the link to all after the line "other" (below), and the count in the title. */ ?>

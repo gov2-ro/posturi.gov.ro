@@ -1172,6 +1172,13 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       form.addEventListener(t, function () { formEdits++; });
     });
   }
+  // One complete action (an occupation chip, the × of an active filter) sends its request at once. The wait of 500 ms is for the
+  // checkboxes of the filter list only (several quick picks). It counts as one edit of the form (the stale-response guard), then
+  // fires the `submit` trigger of the form: htmx.trigger() sends the custom event that hx-trigger listens for, with no delay.
+  function sendNow() {
+    formEdits++;
+    htmx.trigger(form, 'submit');
+  }
   document.body.addEventListener('htmx:beforeRequest', function (ev) {
     if (form && ev.detail.elt === form) sentAt.set(ev.detail.xhr, formEdits);
   });
@@ -1250,7 +1257,40 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       var def = form.querySelector('[name="status"][value="<?= DEFAULT_STATUS ?>"]');
       if (def) def.checked = true;
     }
-    htmx.trigger(form, 'change');
+    sendNow();
+  });
+
+  // ---- Occupation chips above the results (partials/occupation_chips.php) ----
+  // A chip sets the checkbox of its occupation and re-fires the form: the same request, hx-sync and stale-response guard
+  // as a filter change, so the URL that is pushed is the one of the applied response. Without script (or with a modified click)
+  // the chip is a link to the same list. "Toate ocupațiile" opens the group "Ocupație": the drawer below lg, the sidebar or the
+  // bar panel at lg and wider.
+  document.addEventListener('click', function (ev) {
+    if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    var chip = ev.target.closest && ev.target.closest('[data-occ-chip]');
+    if (chip && form) {
+      var box = Array.prototype.filter.call(form.querySelectorAll('input[name="occupation[]"]'), function (el) {
+        return el.value === chip.dataset.occChip;
+      })[0];
+      if (!box) return;   // no control for it: let the link navigate
+      ev.preventDefault();
+      box.checked = true;
+      sendNow();
+      return;
+    }
+    var all = ev.target.closest && ev.target.closest('[data-occ-all]');
+    if (!all) return;
+    var group = document.querySelector('#facet-list > .facet-group[data-facet="occupation"]');
+    if (!group) return;   // follow the anchor
+    ev.preventDefault();
+    if (!lgQuery.matches) setDrawer(true);
+    if (barOn()) { openKey = 'occupation'; syncPanels(); }
+    else if (!group.open) group.open = true;
+    state['occupation'] = true;   // the group stays open after the next sidebar swap (applyFacetState)
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* private mode */ }
+    group.scrollIntoView({ block: 'nearest' });
+    var sum = topSummary(group);
+    if (sum) sum.focus();
   });
 
   // ---- Export links follow the active filters ----

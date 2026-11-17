@@ -224,7 +224,7 @@ test('no checkbox "Arată toate județele"; the first option of the select clear
   const lab = await page.locator('#map-label').boundingBox();
   expect(lab.width * lab.height, 'the label is not visible').toBeLessThanOrEqual(4);
   await expect(page.getByRole('group', { name: 'Posturi active pe județe' })).toHaveCount(1);
-  await expect(page.locator('[data-county-clear]')).toHaveCount(0);
+  await expect(page.locator('[data-county-clear]'), 'the button after the title (no checkbox): hidden with no county').toBeHidden();
 });
 
 test('the title has the icon of the theme, as decoration', async ({ page }) => {
@@ -323,9 +323,12 @@ test('the chart: "Toate" and the four groups; a click draws the series, the line
   expect(await line.getAttribute('points'), 'the line is the series').not.toBe(total);
   await expect(stats).toHaveText('min 0 · max 1 · ultima 0');
   await expect(live).toHaveText('Medic: 2 anunțuri în ultimele 12 săptămâni');
-  // The scale fits the series: its highest week is at the top of the box (y = 4), its lowest at the bottom (y = 60).
+  // One axis for every button, from 0 to the largest week of any button (the total: 2). Medic's highest week (1) is half way up
+  // (y = 4 + 0.5 × 56 = 32), not at the top (y = 4); a week of 0 is at the bottom (y = 60). Mutation: a scale for each series → 4.
   const ys = (await line.getAttribute('points')).split(' ').map((p) => parseFloat(p.split(',')[1]));
-  expect(Math.min(...ys)).toBe(4); expect(Math.max(...ys)).toBe(60);
+  expect(Math.min(...ys)).toBe(32); expect(Math.max(...ys)).toBe(60);
+  const totalYs = total.split(' ').map((p) => parseFloat(p.split(',')[1]));
+  expect(Math.min(...totalYs), 'the total reaches the top of the axis').toBe(4);
   await expect(fig.locator('svg[role="img"]')).toHaveAttribute('aria-label', /Medic.*între 0 și 1/);
   await btns.first().click();
   expect(await line.getAttribute('points'), 'back to the total').toBe(total);
@@ -542,4 +545,130 @@ test('the link to all postings is after the line of the other employers, not in 
     expect(paren(await link.locator('[data-tile-count]').textContent()), 'the count of the county').toBe(await count(href));
   }
   expect(paren(await all.locator('[data-tile-count]').textContent())).toBe(2);
+});
+
+// ---- The themes /administratie/ and /financiar/ (tests/fixtures/professional_db.php, own port) ----
+// Administrație: 10 postings (cluj 4, ilfov 6); Tip funcție: execuție 7, conducere 3; Angajatori: scoala 5, primarie 3, spital 2.
+// Financiar: 12 postings (cluj 2, ilfov 10); Tip funcție: execuție 10, conducere 2; Programe: EDUSAL 3, FOREXEBUG 2, SIIIR 1.
+const PROFESSIONAL = {
+  administratie: {
+    h1: 'Posturi în administrație', n: 10, base: 'family%5B%5D=administra%C8%9Bie',
+    sections: ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari'],
+    level: ['Funcții de execuție', 'Funcții de conducere'], inst: ['scoala', 'primarie', 'spital'], cluj: 4,
+  },
+  financiar: {
+    h1: 'Posturi financiar-contabile', n: 12, base: 'family%5B%5D=financiar',
+    sections: ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-programe', 'h-studii', 'h-noi', 'h-notificari'],
+    level: ['Funcții de execuție', 'Funcții de conducere'], inst: ['scoala', 'spital', 'primarie', 'cultura'], cluj: 2,
+  },
+};
+for (const [slug, c] of Object.entries(PROFESSIONAL)) {
+  test.describe(`/${slug}/`, () => {
+    test.use({ baseURL: 'http://127.0.0.1:8827' });
+
+    test('the sections are present in order, the items are in order of count; no horizontal overflow', async ({ page }) => {
+      await page.goto(`/${slug}/`);
+      await expect(page.locator('h1#h-theme')).toHaveText(`${c.h1} (${c.n})`);
+      const ids = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-labelledby')));
+      expect(ids).toEqual(c.sections);
+      const tops = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top + window.scrollY));
+      tops.forEach((t, i) => { if (i) expect(t, `section ${c.sections[i]} below ${c.sections[i - 1]}`).toBeGreaterThan(tops[i - 1]); });
+      // order => count: the largest first, not the order of the labels.
+      const level = await page.locator('section[aria-labelledby="h-tip-functie"] li[data-home-tile] a').allTextContents();
+      expect(level).toEqual(c.level);
+      const inst = await page.locator('section[aria-labelledby="h-angajatori"] li[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain.replace('inst:', '')));
+      expect(inst).toEqual(c.inst);
+      await expect(page.locator('[data-domain="other"]')).toHaveCount(0);
+      await noOverflow(page, `/${slug}/`);
+      const wide = await page.evaluate(() => Array.from(document.querySelectorAll('main li, main a')).filter((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1).length);
+      expect(wide, 'items that stick out of the page').toBe(0);
+    });
+
+    test('an item opens a list with the same count, also inside a county', async ({ page }) => {
+      for (const id of ['level:Funcții de conducere', 'inst:scoala']) {
+        await page.goto(`/${slug}/`);
+        const n = paren(await tile(page, id).locator('[data-tile-count]').textContent());
+        await tile(page, id).locator('a').click();
+        await expect(page).toHaveURL(new RegExp(`/\\?${c.base}`));
+        expect(num(await page.locator('#results-status').textContent().then((t) => t.match(/[\d.]+/)[0])), id).toBe(n);
+      }
+      await page.goto(`/${slug}/`);
+      await page.locator('button[data-county="cluj"]').click();
+      await expect(page.locator('h1#h-theme')).toHaveText(new RegExp(`\\(${c.cluj}\\)$`));
+      const inCluj = paren(await tile(page, 'level:Funcții de execuție').locator('[data-tile-count]').textContent());
+      await tile(page, 'level:Funcții de execuție').locator('a').click();
+      expect(num(await page.locator('#results-status').textContent().then((t) => t.match(/[\d.]+/)[0]))).toBe(inCluj);
+    });
+
+    test('the select Instituție shows the text and sends the value', async ({ page }) => {
+      await page.goto(`/${slug}/`);
+      const opt = page.locator('#home-sel-1 option[value="primarie"]');
+      await expect(opt).toHaveText('Primării și consilii locale');
+      await page.locator('#home-sel-1').selectOption('primarie');
+      await page.locator('[data-home-search] button[type="submit"]').click();
+      await expect(page).toHaveURL(new RegExp(`/\\?${c.base}&inst%5B%5D=primarie$`));
+    });
+  });
+}
+
+test.describe('/financiar/ programs', () => {
+  test.use({ baseURL: 'http://127.0.0.1:8827' });
+  test('the programs are in order of count; "FOREXEBUG" counts both spellings and its list has the same count', async ({ page }) => {
+    await page.goto('/financiar/');
+    const ids = await page.locator('section[aria-labelledby="h-programe"] li[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain));
+    expect(ids).toEqual(['skill:EDUSAL', 'skill:FOREXEBUG', 'skill:SIIIR']);
+    expect(paren(await tile(page, 'skill:FOREXEBUG').locator('[data-tile-count]').textContent())).toBe(2);
+    await tile(page, 'skill:FOREXEBUG').locator('a').click();
+    expect(num(await page.locator('#results-status').textContent().then((t) => t.match(/[\d.]+/)[0]))).toBe(2);
+  });
+});
+
+// ---- The button "Toate județele" after the title ----
+test.describe('the button "Toate județele"', () => {
+  const clear = (page) => page.locator('[data-county-clear]');
+
+  test('hidden with no county; visible after a map click and after a select change; a click clears the county', async ({ page }) => {
+    await page.goto('/sanatate/');
+    await expect(clear(page)).toBeHidden();
+    const nationalStats = await page.locator('[data-chart-stats]').textContent();
+    // After a click on the map.
+    await page.locator('button[data-county="cluj"]').click();
+    await expect(clear(page)).toBeVisible();
+    await expect(clear(page)).toHaveText('Toate județele');
+    await expect(page.locator('h1#h-theme')).toHaveText(/→.*Cluj.*\(2\)$/);
+    await expect(page).toHaveURL(/#cluj$/);
+    // Not in the heading, and the icon is decoration.
+    await expect(page.locator('h1 button')).toHaveCount(0);
+    await expect(clear(page).locator('svg[aria-hidden="true"]')).toHaveCount(1);
+    await clear(page).click();
+    await expect(clear(page)).toBeHidden();
+    await expect(page.locator('h1#h-theme')).toHaveText('Posturi în sănătate (6)');
+    await expect(page.locator('#home-judet')).toHaveValue('');
+    await expect(page.locator('button[data-county][aria-pressed="true"]')).toHaveCount(0);
+    expect(new URL(page.url()).hash).toBe('');
+    await expect(page.locator('[data-chart-stats]')).toHaveText(nationalStats);
+    await expect(page.locator('#home-judet')).toBeFocused();
+    // After a change of the select.
+    await page.locator('#home-judet').selectOption('bacau');
+    await expect(clear(page)).toBeVisible();
+    await page.locator('#home-judet').selectOption('');
+    await expect(clear(page)).toBeHidden();
+  });
+
+  test('a reload with a county in the fragment shows the button; no horizontal overflow', async ({ page }) => {
+    await page.goto('/sanatate/#cluj');
+    await expect(clear(page)).toBeVisible();
+    await noOverflow(page, '/sanatate/#cluj');
+    // On one line from sm, below the title on a narrow screen: the button never sticks out of the page.
+    const r = await clear(page).evaluate((b) => { const r = b.getBoundingClientRect(); return { right: r.right, w: document.documentElement.clientWidth }; });
+    expect(r.right).toBeLessThanOrEqual(r.w);
+  });
+
+  test('without script the button is not shown', async ({ browser, baseURL, viewport }) => {
+    const ctx = await browser.newContext({ javaScriptEnabled: false, baseURL, viewport });
+    const p = await ctx.newPage();
+    await p.goto('/sanatate/');
+    await expect(clear(p)).toBeHidden();
+    await ctx.close();
+  });
 });

@@ -142,7 +142,7 @@
             $is_open  = (bool)$selected;      // never hide a filter that is switched on
             $mode     = facet_mode($name);
             ?>
-            <details class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="<?= e($name) ?>"<?= $selected ? ' data-selected="1"' : '' ?><?= $open ? ' data-default-open' : '' ?><?= $is_open ? ' open' : '' ?>>
+            <details id="facet-<?= e($name) ?>" class="facet-group mb-1 border-b border-line/60 pb-1" data-facet="<?= e($name) ?>"<?= $selected ? ' data-selected="1"' : '' ?><?= $open ? ' data-default-open' : '' ?><?= $is_open ? ' open' : '' ?>>
               <summary class="flex cursor-pointer list-none items-center justify-between py-2 text-xs font-semibold uppercase tracking-widest text-ink-muted marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                 <span><?= e($label) ?><?php if ($selected): ?> <span class="font-mono text-gov normal-case tracking-normal">(<?= count($selected) ?>)</span><?php endif; ?></span>
                 <span aria-hidden="true" class="facet-caret text-ink-muted transition-transform">▾</span>

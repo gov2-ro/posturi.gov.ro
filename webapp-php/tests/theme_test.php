@@ -8,6 +8,9 @@
  * second theme, added through POSTURI_THEMES_EXTRA, renders with the same template. Browser behaviour (the county
  * selection, widths) is in tests/browser/theme.spec.js.
  *
+ * The occupation chips of the list (docs/briefs/2026-11-17-themes-admin-financiar-chips.md, step 5) are checked here too: they share
+ * the page helpers and the way of building a fixture; the browser behaviour is in tests/browser/chips.spec.js.
+ *
  * Usage: php tests/theme_test.php
  */
 
@@ -15,6 +18,8 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/../inc/themes.php';
 require_once __DIR__ . '/fixtures/theme_db.php';
+require_once __DIR__ . '/fixtures/chips_db.php';
+require_once __DIR__ . '/fixtures/professional_db.php';
 require_once __DIR__ . '/fixtures/server.php';
 require_once __DIR__ . '/fixtures/page_helpers.php';
 require_once __DIR__ . '/../assets/icons/healthicons/build-sprite.php';
@@ -130,10 +135,13 @@ run_suite('the sitemap lists the theme; the footer links to it, in the group "Pa
     $x = xp($home);
     assert_same(0, $x->query('//*[@data-home-themes]')->length, 'no line "Pagini tematice" on the landing page');
     $links = $x->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a');
-    assert_same(1, $links->length, 'one themed page in the footer group');
-    assert_same('/sanatate/', $links->item(0)->getAttribute('href'), 'its link');
-    assert_same('Sănătate', trim($links->item(0)->textContent), 'its link text');
+    assert_same(3, $links->length, 'three themed pages in the footer group');
+    assert_same(['/sanatate/', '/administratie/', '/financiar/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($links)), 'their links, in configuration order');
+    assert_same(['Sănătate', 'Administrație', 'Financiar'], array_map(fn($a) => trim($a->textContent), iterator_to_array($links)), 'their link texts');
     assert_same(1, $x->query('//footer//a[@href="/sanatate/"]')->length, 'one footer link');
+    foreach (['/administratie/', '/financiar/'] as $slug) assert_contains('<loc>' . $base . $slug . '</loc>', $sm, "sitemap entry $slug");
+    [, $llms] = http_page($base, '/llms.txt');
+    foreach (['/sanatate/', '/administratie/', '/financiar/'] as $slug) assert_contains('](' . $base . $slug . ')', $llms, "llms.txt lists $slug");
 });
 
 run_suite('every count equals the result count of its link; an item with count 0 is not on the page', function () use ($base) {
@@ -212,7 +220,7 @@ run_suite('the search form, the county select and the county JSON', function () 
     assert_not_contains('Alege un județ pe hartă', $h, 'no line under the map');
     assert_not_contains('data-county-hint', $h, 'no hint element');
     assert_same(1, $x->query('//h1/span/span[@data-county-title]')->length, 'the title has the place for the county (the script fills it)');
-    assert_same(0, $x->query('//*[@data-county-clear or @data-county-picked or @data-county-name]')->length, 'no button "Toate județele" and no county name before it');
+    assert_same(0, $x->query('//*[@data-county-picked or @data-county-name]')->length, 'no county name before the title (the button "Toate județele" is after the h1: its own suite)');
     // No checkbox "Arată toate județele" (owner request 2026-11-17): the select and the map clear the county.
     assert_same(0, $x->query('//input[@type="checkbox"]')->length, 'no checkbox under the map');
     assert_not_contains('Arată toate județele', $h, 'no checkbox label');
@@ -282,6 +290,22 @@ run_suite('the short lists are inside the theme', function () use ($base) {
     foreach ($x->query('.//li//a[contains(@href,"/job/")]', $sec) as $a) preg_match('#/job/(\d+)#', $a->getAttribute('href'), $mm) && $ids[] = (int)$mm[1];
     assert_same([], array_values(array_diff($ids, [1001, 1002, 1004, 1006, 2001, 2002])), 'each posting listed is a health posting');
     assert_true(count($ids) >= 2, 'the lists have rows');
+});
+
+run_suite('the button "Toate județele" after the title: in the HTML, hidden, outside the h1, with the text; only on a theme with a map', function () use ($base) {
+    $h = http_page($base, '/sanatate/')[1];
+    $x = xp($h);
+    $b = $x->query('//button[@data-county-clear]');
+    assert_same(1, $b->length, 'one button');
+    assert_true($b->item(0)->hasAttribute('hidden'), 'hidden without script (the script shows it while a county is selected)');
+    assert_same('button', $b->item(0)->getAttribute('type'), 'a button, not a submit');
+    assert_same('Toate județele', trim($b->item(0)->textContent), 'its text');
+    assert_contains('g2-chip', $b->item(0)->getAttribute('class'), 'the DS chip');
+    assert_same(0, $x->query('//h1//button')->length, 'no button inside the heading');
+    assert_same(1, $x->query('//h1/following::button[@data-county-clear]')->length, 'after the h1');
+    assert_same(1, $x->query('//button[@data-county-clear]/svg[@aria-hidden="true"]/use[@href="#i-x"]')->length, 'an x icon before the text, as decoration');
+    assert_same(1, $x->query('//symbol[@id="i-x"]')->length, 'the symbol is in the sprite');
+    assert_same(0, xp(http_page($base, '/')[1])->query('//*[@data-county-clear]')->length, 'not on the landing page');
 });
 
 // ---- the statistics panel, the compact lists and the icons ----
@@ -572,6 +596,289 @@ run_suite('the symbol file is served as SVG by the router', function () use ($ba
 
 stop_fixture_server($srv, $db);
 
+// ---- the themes "administratie" and "financiar", `order => 'count'`, `labels` of a select ----
+
+/** The item ids of a page that start with $prefix, in page order, with their counts. */
+function items_of(array $items, string $prefix): array {
+    $out = [];
+    foreach ($items as $id => $it) if (str_starts_with($id, $prefix)) $out[substr($id, strlen($prefix))] = $it['count'];
+    return $out;
+}
+
+$dbp = theme_db('prof', professional_sql());
+$srvp = start_fixture_server($dbp);
+$basep = $srvp['base'];
+
+run_suite('/administratie/ and /financiar/ render: title, canonical, h1, icon, sections in order, one h1, same bytes for each reader', function () use ($basep) {
+    $cases = [
+        'administratie' => ['Posturi în administrație', 'i-domain-administratie', ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari'], 10],
+        'financiar' => ['Posturi financiar-contabile', 'i-domain-financiar', ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-programe', 'h-studii', 'h-noi', 'h-notificari'], 12],
+    ];
+    foreach ($cases as $slug => [$title, $icon, $sections, $n]) {
+        [$st, $h, $hd] = http_page($basep, "/$slug/");
+        assert_same(200, $st, "/$slug/ answers 200");
+        assert_contains('<link rel="canonical" href="' . $basep . "/$slug/\">", $h, "$slug canonical");
+        assert_contains("<title>$title — posturi.gov2.ro</title>", $h, "$slug title");
+        assert_same(1, preg_match('#<meta name="description" content="Posturi (în administrație|financiar-contabile) din sectorul public: #', $h), "$slug description, in the form of the health one");
+        assert_same(1, preg_match_all('#<h1[ >]#', $h), "$slug has one h1");
+        assert_contains("<span>$title<span data-county-title></span><span data-title-count class=\"text-base font-normal text-ink-muted\">&nbsp;($n)</span></span></h1>", $h, "$slug h1 and count");
+        assert_same(1, xp($h)->query('//h1/svg[@aria-hidden="true"]/use[@href="#' . $icon . '"]')->length, "$slug: the icon of the theme");
+        assert_same(1, xp($h)->query('//symbol[@id="' . $icon . '"]')->length, "$slug: the symbol is in the sprite");
+        preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($h, (int)strpos($h, '<main')), $s);
+        assert_same($sections, $s[1], "$slug: sections, in order");
+        assert_not_contains('health-icons.svg', $h, "$slug: no icon file");
+        assert_same(0, xp($h)->query('//section[@aria-labelledby="h-ocupatii" or @aria-labelledby="h-tip-functie" or @aria-labelledby="h-angajatori" or @aria-labelledby="h-studii"]//li//svg | //section[@aria-labelledby="h-ocupatii"]//li/span[@aria-hidden="true"]')->length, "$slug: no icons and no gaps in the items");
+        assert_well_formed($h, "/$slug/");
+        [, $h2, $hd2] = http_page($basep, "/$slug/", ['Cookie: pg_x=1', 'Accept-Language: en']);
+        assert_same($h, $h2, "$slug: the same bytes for another reader");
+        assert_true(!isset($hd2['set-cookie']), "$slug: no cookie");
+        foreach (['bg-amber', 'text-slate', 'bg-white', '#1d4f91'] as $raw) assert_not_contains($raw, $h, "$slug: no raw palette: $raw");
+        // No line "other".
+        assert_same(0, xp($h)->query('//li[@data-domain="other"]')->length, "$slug: no line other");
+        // The redirect of /{slug}/?… merges the base filter.
+        [$st, , $hd] = http_page($basep, "/$slug/?q=x");
+        assert_same(301, $st, "$slug redirect");
+        assert_same('/?family%5B%5D=' . rawurlencode($slug === 'administratie' ? 'administrație' : 'financiar') . '&q=x', $hd['location'] ?? '', "$slug redirect target");
+    }
+    [, $sm] = http_page($basep, '/sitemap.xml');
+    [, $llms] = http_page($basep, '/llms.txt');
+    foreach (['administratie', 'financiar'] as $slug) {
+        assert_contains("<loc>$basep/$slug/</loc>", $sm, "sitemap: $slug");
+        assert_contains("]($basep/$slug/)", $llms, "llms.txt: $slug");
+    }
+});
+
+run_suite('every count equals the result count of its link: Tip funcție, Ocupații, Angajatori, Domenii, Programe, Studii; no item of count 0', function () use ($basep) {
+    foreach (['administratie', 'financiar'] as $slug) {
+        $x = xp(http_page($basep, "/$slug/")[1]);
+        $items = tile_items($x);
+        assert_true(count($items) >= 12, "$slug: " . count($items) . ' items');
+        foreach ($items as $id => $it) {
+            if ($it['count'] === null) continue;
+            assert_same($it['count'], list_count($basep, $it['href']), "$slug item $id: the count is the result count of its link");
+            assert_same($it['count'], $it['total'], "$slug item $id: data-total");
+            assert_true($it['count'] > 0, "$slug item $id: not 0");
+            assert_same(0, $it['in_link'], "$slug item $id: the count is outside the link");
+        }
+        foreach (['level:', 'occupation:', 'inst:', 'studies_level:'] as $prefix) assert_true(count(items_of($items, $prefix)) > 0, "$slug: has items $prefix");
+        // Each link is the base filter plus one more filter.
+        foreach ($items as $id => $it) {
+            if ($id === 'all') continue;
+            assert_contains($slug === 'administratie' ? 'family%5B%5D=administra%C8%9Bie' : 'family%5B%5D=financiar', $it['href'], "$slug item $id: the base filter");
+        }
+    }
+    // A count of 0 is hidden: no posting of these themes has the level "Doctorat", the domain "turism" is only in the administrație one.
+    $a = xp(http_page($basep, '/administratie/')[1]);
+    assert_same(0, $a->query('//li[@data-domain="studies_level:doctorat"]')->length, 'no study level with 0');
+    assert_same(0, $a->query('//li[@data-domain="skill:FOREXEBUG"]')->length, 'administratie has no programe section');
+});
+
+run_suite('order => count: Tip funcție, Angajatori and Domenii sort by count, largest first; the labels give the texts', function () use ($basep) {
+    $a = tile_items(xp(http_page($basep, '/administratie/')[1]));
+    // The labels come in the order conducere, execuție: by count the order is the other one.
+    assert_same(['Funcții de execuție' => 7, 'Funcții de conducere' => 3], items_of($a, 'level:'), 'administratie, Tip funcție: by count');
+    assert_same('Funcții de execuție', $a['level:Funcții de execuție']['label'], 'the item text is the text of the label');
+    // The order of EMPLOYER_KIND_LABELS is primarie, spital, scoala: by count it is scoala, primarie, spital.
+    assert_same(['scoala' => 5, 'primarie' => 3, 'spital' => 2], items_of($a, 'inst:'), 'administratie, Angajatori: by count');
+    assert_same('Școli, licee, grădinițe', $a['inst:scoala']['label'], 'Angajatori: the text of EMPLOYER_KIND_LABELS');
+    // Domenii: 9 values have a count, 8 are shown (limit after the sort): the smallest value in the order of the labels is left out.
+    $dom = items_of($a, 'domain:');
+    assert_same(['administratie_publica' => 4, 'educatie_cercetare' => 3, 'achizitii_publice' => 2, 'economie_finante' => 2,
+                 'energie' => 1, 'mediu' => 1, 'sanatate_publica' => 1, 'transporturi' => 1], $dom, 'administratie, Domenii: the first 8 by count');
+    assert_same(0, count(array_filter(array_keys($a), fn($k) => $k === 'domain:turism')), 'the 9th value (turism) is cut by the limit');
+    assert_same('Administrație publică', $a['domain:administratie_publica']['label'], 'Domenii: the text of POLICY_DOMAIN_LABELS');
+    assert_same(1, list_count($basep, $a['domain:transporturi']['href']), 'a cut value still has a list (the limit is for the page)');
+    $f = tile_items(xp(http_page($basep, '/financiar/')[1]));
+    assert_same(['Funcții de execuție' => 10, 'Funcții de conducere' => 2], items_of($f, 'level:'), 'financiar, Tip funcție: by count');
+    assert_same(['scoala' => 5, 'spital' => 3, 'primarie' => 2, 'cultura' => 2], items_of($f, 'inst:'), 'financiar, Angajatori: by count, ties in the order of the labels');
+    // Without `order`, the labels keep their order (Studii).
+    assert_same(['licenta'], array_keys(items_of($f, 'studies_level:')), 'Studii: the order of the labels, 0 hidden');
+});
+
+run_suite('Programe informatice cerute: the proposed list, by count; "Forexebug" and "FOREXEBUG" are one item; the count is the result count of the link', function () use ($basep) {
+    $f = tile_items(xp(http_page($basep, '/financiar/')[1]));
+    // Labels: FOREXEBUG, EDUSAL, SIIIR. By count: EDUSAL 3, FOREXEBUG 2 (both spellings), SIIIR 1.
+    assert_same(['EDUSAL' => 3, 'FOREXEBUG' => 2, 'SIIIR' => 1], items_of($f, 'skill:'), 'programs, by count');
+    foreach (['EDUSAL', 'FOREXEBUG', 'SIIIR'] as $v) assert_same($f['skill:' . $v]['count'], list_count($basep, $f['skill:' . $v]['href']), "skill $v: the count equals its list");
+    assert_contains('skill%5B%5D=FOREXEBUG', $f['skill:FOREXEBUG']['href'], 'the link carries the value of the label');
+    // The filter compares with LIKE (the case of ASCII letters is ignored): the list of "FOREXEBUG" holds the posting that says "Forexebug".
+    assert_same(2, list_count($basep, '/?family%5B%5D=financiar&skill%5B%5D=Forexebug'), 'the other spelling gives the same list');
+    assert_same(0, count(items_of($f, 'skill:Excel')), 'no generic office program in the list (Excel: 4 postings, not offered)');
+});
+
+run_suite('labels in a select: the option shows the text and sends the value; the options are in the order of the texts', function () use ($basep) {
+    foreach (['administratie', 'financiar'] as $slug) {
+        $x = xp(http_page($basep, "/$slug/")[1]);
+        $f = $x->query('//form[@data-home-search]')->item(0);
+        $names = [];
+        foreach ($x->query('.//select', $f) as $s) $names[] = $s->getAttribute('name');
+        assert_same(['occupation[]', 'inst[]', 'judet[]'], $names, "$slug: occupation, institution, county");
+        $inst = [];
+        foreach ($x->query('.//select[@name="inst[]"]/option', $f) as $o) $inst[] = [$o->getAttribute('value'), trim($o->textContent)];
+        assert_same(['', 'Toate instituțiile'], $inst[0], "$slug: the first option");
+        // The values with a posting inside the theme, with the text of EMPLOYER_KIND_LABELS, sorted by that text (Romanian order: s before ș).
+        $want = $slug === 'administratie'
+            ? [['primarie', 'Primării și consilii locale'], ['spital', 'Spitale și unități sanitare'], ['scoala', 'Școli, licee, grădinițe']]
+            : [['cultura', 'Cultură (muzee, teatre, biblioteci)'], ['primarie', 'Primării și consilii locale'], ['spital', 'Spitale și unități sanitare'], ['scoala', 'Școli, licee, grădinițe']];
+        assert_same($want, array_slice($inst, 1), "$slug: option value and text");
+        $occ = [];
+        foreach ($x->query('.//select[@name="occupation[]"]/option[@value!=""]', $f) as $o) $occ[] = [$o->getAttribute('value'), trim($o->textContent)];
+        foreach ($occ as [$v, $t]) assert_same($v, $t, "$slug: an option with no label shows its value ($v)");
+        // Each option leads to a non-empty list.
+        foreach ($want as [$v]) assert_true(list_count($basep, '/?' . ($slug === 'administratie' ? 'family%5B%5D=administra%C8%9Bie' : 'family%5B%5D=financiar') . '&inst%5B%5D=' . $v) > 0, "$slug: option $v is not empty");
+    }
+});
+
+run_suite('the chart of each theme: "Toate" and the groups of the configuration, in order', function () use ($basep) {
+    $want = ['administratie' => ['Toate', 'Conducere', 'Referent', 'Inspector', 'Secretar'], 'financiar' => ['Toate', 'Conducere', 'Administrator financiar', 'Economist', 'Contabil']];
+    foreach ($want as $slug => $labels) {
+        $x = xp(http_page($basep, "/$slug/")[1]);
+        $btn = [];
+        foreach ($x->query('//*[@data-theme-stats]//button[@data-chart-series]') as $b) $btn[] = trim($b->textContent);
+        assert_same($labels, $btn, "$slug: the buttons of the chart");
+    }
+    // A group is the first that holds the occupation.
+    $g = themes()['administratie']['history']['groups'];
+    assert_same(0, theme_group_of($g, 'Secretar șef'), '"Secretar șef" is in Conducere, not in Secretar');
+    assert_same(3, theme_group_of($g, 'Secretar'), '"Secretar" is in Secretar');
+    $g = themes()['financiar']['history']['groups'];
+    assert_same(0, theme_group_of($g, 'Contabil-șef'), '"Contabil-șef" is in Conducere');
+    assert_same(0, theme_group_of($g, 'Director financiar-contabil'), '"Director financiar-contabil" is in Conducere');
+    assert_same(1, theme_group_of($g, 'Administrator financiar'), '"Administrator financiar" has its own group');
+    assert_same(3, theme_group_of($g, 'Contabil'), '"Contabil" is in Contabil');
+});
+
+run_suite('the county selection of the two themes: the map and the counts inside the theme', function () use ($basep) {
+    foreach (['administratie' => [['cluj', 4], ['ilfov', 6]], 'financiar' => [['cluj', 2], ['ilfov', 10]]] as $slug => $cs) {
+        $x = xp(http_page($basep, "/$slug/")[1]);
+        foreach ($cs as [$c, $n]) {
+            $o = $x->query('//select[@name="judet[]"]/option[@value="' . $c . '"]');
+            assert_same($n, paren_number($o->item(0)->textContent), "$slug: the county $c in the select");
+        }
+        assert_same(42, $x->query('//button[@data-county]')->length, "$slug: the county map");
+    }
+});
+
+stop_fixture_server($srvp, $dbp);
+
+// ---- the occupation chips of the list ----
+
+const CHIP_BASE = 'family%5B%5D=tehnic&cor%5B%5D=5';
+
+/** The chip row of a list page: ['label' => text, 'chips' => [[value, count, href]], 'all' => href of "Toate ocupațiile"], or null when the page has none. */
+function chip_row(string $html): ?array {
+    $x = xp($html);
+    $row = $x->query('//*[@data-occ-chips]');
+    if (!$row->length) return null;
+    $r = $row->item(0);
+    $chips = [];
+    foreach ($x->query('.//a[@data-occ-chip]', $r) as $a) {
+        $chips[] = [$a->getAttribute('data-occ-chip'), (int)$x->query('.//*[contains(@class,"g2-chip-count")]', $a)->item(0)->textContent, $a->getAttribute('href'), $a->getAttribute('class')];
+    }
+    $all = $x->query('.//a[@data-occ-all]', $r);
+    return ['label_id' => $r->getAttribute('aria-labelledby'), 'role' => $r->getAttribute('role'), 'chips' => $chips,
+            'all' => $all->length ? [$all->item(0)->getAttribute('href'), trim($all->item(0)->textContent)] : null,
+            'label' => ($l = $x->query('//*[@id="' . $r->getAttribute('aria-labelledby') . '"]'))->length ? trim($l->item(0)->textContent) : null];
+}
+
+/** Build a chips fixture with $dist, serve it, and return [base, db, server]. */
+function chips_server(string $tag, array $dist = CHIPS_DEFAULT): array {
+    $path = sys_get_temp_dir() . "/posturi-chips-$tag-" . getmypid() . '.sqlite';
+    build_chips_fixture_db($path, $dist);
+    $srv = start_fixture_server($path);
+    return [$srv['base'], $path, $srv];
+}
+
+[$basec, $dbc, $srvc] = chips_server('main');
+
+run_suite('occupation chips: the row, its label, the chips with their counts, the last link, the place on the page', function () use ($basec) {
+    [, $h] = http_page($basec, '/?' . CHIP_BASE);
+    assert_same(28, list_count($basec, '/?' . CHIP_BASE), 'the fixture list has 28 results (more than one page)');
+    $r = chip_row($h);
+    assert_true($r !== null, 'the row is there');
+    assert_same('Ocupații frecvente', $r['label'], 'the visible label');
+    assert_same('group', $r['role'], 'a group');
+    assert_same('occ-chips-label', $r['label_id'], 'named by its label (aria-labelledby)');
+    assert_same([['Pază', 12], ['Îngrijitor', 8], ['Bucătar', 6]], array_map(fn($c) => [$c[0], $c[1]], $r['chips']), 'the occupations with 2 or more postings, largest first (Brancardier and Frizer have 1)');
+    foreach ($r['chips'] as [$v, $n, $href, $cls]) {
+        assert_contains('g2-chip', $cls, "chip $v: the DS chip");
+        assert_same($n, list_count($basec, '/' . $href), "chip $v: the count equals the result count of its link");
+        assert_not_contains('page=', $href, "chip $v: no page parameter");
+        assert_contains('occupation%5B0%5D=' . rawurlencode($v), $href, "chip $v: the link adds the occupation");
+        assert_contains('family%5B0%5D=tehnic', $href, "chip $v: the link keeps the filter");
+    }
+    assert_same(['#facet-occupation', 'Toate ocupațiile'], $r['all'], 'the last item: the link "Toate ocupațiile", to the anchor of the group');
+    $x = xp($h);
+    assert_same(1, $x->query('//*[@id="facet-occupation"][@data-facet="occupation"]')->length, 'the anchor is the group "Ocupație" of the filter list');
+    assert_same(1, $x->query('//*[@data-occ-chips]/*[contains(@class,"g2-text-meta")][@id="occ-chips-label"]')->length, 'the label is inline text before the chips');
+    // The row is inside the result region, after the active filters and before the first result.
+    $res = $x->query('//*[@id="results"]//*[@data-occ-chips]');
+    assert_same(1, $res->length, 'the row is inside #results (part of the result region)');
+    assert_true(strpos($h, 'data-active-chips') < strpos($h, 'data-occ-chips'), 'after the row of active filters');
+    assert_true(strpos($h, 'data-occ-chips') < strpos($h, 'class="pg-results'), 'before the first result');
+    // A request of the filter form (htmx) brings the row too.
+    [, $frag] = http_page($basec, '/?' . CHIP_BASE, ['HX-Request: true']);
+    assert_true(chip_row($frag) !== null, 'the htmx fragment has the row');
+    // A page after the first: the links have no page parameter.
+    $r2 = chip_row(http_page($basec, '/?' . CHIP_BASE . '&page=2')[1]);
+    assert_true($r2 !== null, 'page 2 has the row');
+    foreach ($r2['chips'] as $c) assert_not_contains('page=', $c[2], "page 2, chip {$c[0]}: no page parameter");
+    // Role tokens only.
+    foreach (['bg-amber', 'text-slate', '#1d4f91'] as $raw) assert_not_contains($raw, (string)substr($h, (int)strpos($h, 'data-occ-chips'), 1500), "no raw palette: $raw");
+});
+
+run_suite('occupation chips: each condition has a positive and a negative case', function () use ($basec) {
+    $has = fn(string $q) => chip_row(http_page($basec, '/?' . $q)[1]) !== null;
+    // 1. More than one page (25): 26 results show the row, 25 do not.
+    assert_same(26, list_count($basec, '/?' . CHIP_BASE . '&judet%5B%5D=cluj&judet%5B%5D=bacau'), 'two counties: 26 results');
+    assert_true($has(CHIP_BASE . '&judet%5B%5D=cluj&judet%5B%5D=bacau'), '26 results: the row is shown');
+    assert_same(25, list_count($basec, '/?' . CHIP_BASE . '&judet%5B%5D=cluj'), 'one county: 25 results');
+    assert_false($has(CHIP_BASE . '&judet%5B%5D=cluj'), '25 results (one page): no row');
+    // 2. No occupation filter: the same 26 results with 3 occupations selected show no row.
+    $occ3 = '&occupation%5B%5D=' . rawurlencode('Pază') . '&occupation%5B%5D=' . rawurlencode('Îngrijitor') . '&occupation%5B%5D=' . rawurlencode('Bucătar');
+    assert_same(26, list_count($basec, '/?' . CHIP_BASE . $occ3), 'three occupations: 26 results (more than one page)');
+    assert_false($has(CHIP_BASE . $occ3), 'an occupation filter is on: no row');
+    assert_same(28, list_count($basec, '/?' . CHIP_BASE . '&occupation_not%5B%5D=Nimic'), 'an exclusion of an occupation that no posting has: 28 results');
+    assert_false($has(CHIP_BASE . '&occupation_not%5B%5D=Nimic'), 'occupation_not is on: no row (the counts of the filter list leave it out)');
+    // 3. At least 2 occupations with 2 or more postings: Pază 25 and three occupations with one posting have one.
+    [$b3, $d3, $s3] = chips_server('one', ['Pază' => 25, 'Brancardier' => 1, 'Frizer' => 1, 'Croitor' => 1]);
+    assert_false(chip_row(http_page($b3, '/?' . CHIP_BASE)[1]) !== null, 'only one occupation has 2 or more postings: no row (the largest has 89 %, so the 90 % rule is not the reason)');
+    stop_fixture_server($s3, $d3);
+    // 4. The largest occupation has 90 % or less: Pază 26 of 28 (93 %) hides the row; Pază 24 of 28 (86 %) shows it.
+    [$b4, $d4, $s4] = chips_server('big', ['Pază' => 26, 'Îngrijitor' => 2]);
+    assert_false(chip_row(http_page($b4, '/?' . CHIP_BASE)[1]) !== null, 'the largest occupation has 93 %: no row (two occupations have 2 or more)');
+    stop_fixture_server($s4, $d4);
+    [$b5, $d5, $s5] = chips_server('ok', ['Pază' => 24, 'Îngrijitor' => 2, 'Bucătar' => 2]);
+    $r5 = chip_row(http_page($b5, '/?' . CHIP_BASE)[1]);
+    assert_true($r5 !== null, 'the largest has 86 %: the row is shown');
+    assert_same([['Pază', 24], ['Îngrijitor', 2], ['Bucătar', 2]], array_map(fn($c) => [$c[0], $c[1]], $r5['chips']), 'its chips (equal counts keep the order of the filter list)');
+    stop_fixture_server($s5, $d5);
+});
+
+run_suite('occupation_chips(): the boundaries of each rule, at most 8 chips', function () {
+    $o = fn(array $counts) => array_map(fn($v, $c) => ['val' => $v, 'cnt' => $c], array_keys($counts), array_values($counts));
+    // Boundary of the 90 % rule: 90 of 100 is allowed, 91 is not.
+    assert_same(2, count(occupation_chips($o(['A' => 90, 'B' => 10]), 100, 25, [])), '90 % of the results: shown');
+    assert_same([], occupation_chips($o(['A' => 91, 'B' => 9]), 100, 25, []), '91 % of the results: no row');
+    // Boundary of the page: 25 results no, 26 yes.
+    assert_same([], occupation_chips($o(['A' => 13, 'B' => 12]), 25, 25, []), '25 results: no row');
+    assert_same(2, count(occupation_chips($o(['A' => 13, 'B' => 13]), 26, 25, [])), '26 results: the row');
+    // 2 or more postings: a value with 1 is left out; two such values are needed.
+    assert_same([['val' => 'A', 'cnt' => 30], ['val' => 'B', 'cnt' => 2]], occupation_chips($o(['A' => 30, 'B' => 2, 'C' => 1]), 40, 25, []), 'C (1 posting) is left out');
+    assert_same([], occupation_chips($o(['A' => 30, 'B' => 1, 'C' => 1]), 40, 25, []), 'only one value with 2 or more: no row');
+    // No filter on the occupation.
+    assert_same([], occupation_chips($o(['A' => 20, 'B' => 20]), 40, 25, ['A']), 'occupation[] is set');
+    assert_same([], occupation_chips($o(['A' => 20, 'B' => 20]), 40, 25, [], ['A']), 'occupation_not[] is set');
+    assert_same(2, count(occupation_chips($o(['A' => 20, 'B' => 20]), 40, 25, [''], [''])), 'blank values do not count as a filter');
+    // At most 8, largest first (the options may come in any order).
+    $nine = ['A' => 10, 'B' => 9, 'C' => 8, 'D' => 7, 'E' => 6, 'F' => 5, 'G' => 4, 'H' => 3, 'I' => 2];
+    $chips = occupation_chips($o(array_reverse($nine, true)), 60, 25, []);
+    assert_same(8, count($chips), 'at most 8 chips');
+    assert_same(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], array_column($chips, 'val'), 'the 8 largest, largest first');
+});
+
+stop_fixture_server($srvc, $dbc);
+
 // ---- the limit of the specialties ----
 
 /** SQL: $n more health postings (2003…) with one distinct specialty each, "Spec NN". */
@@ -655,6 +962,7 @@ run_suite('a second theme from the configuration: the same template, no change',
     assert_contains('<span>Posturi juridice</span></h1>', $h, 'its own h1');
     assert_same(0, xp($h)->query('//h1/svg')->length, 'a theme with no icon: no icon in the title');
     assert_same(0, xp($h)->query('//*[@data-county]')->length, 'a theme with no counties section: no map');
+    assert_same(0, xp($h)->query('//*[@data-county-clear]')->length, 'a theme with no counties section: no button "Toate județele"');
     assert_same(0, xp($h)->query('//*[@data-county-title]')->length, 'no place for the county in its title');
     assert_same(0, xp($h)->query('//form[@data-home-search]//svg')->length, 'the text field form: the button is the text');
     assert_same(1, xp($h)->query('//form[@data-home-search]//input[@type="search"][@name="q"]')->length, 'a theme with no search_selects keeps the text field');
@@ -680,7 +988,7 @@ run_suite('a second theme from the configuration: the same template, no change',
     assert_same('/?family%5B%5D=tehnic&q=x', $hd['location'] ?? '', 'merges its own base filter');
     assert_contains('<loc>' . $base2 . '/justitie/</loc>', http_page($base2, '/sitemap.xml')[1], 'sitemap');
     $home = xp(http_page($base2, '/')[1]);
-    assert_same(['/sanatate/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
+    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
     assert_same(1, $home->query('//footer//a[@href="/justitie/"]')->length, 'footer link');
     // A theme with no `icon_file`: no icon, no reference to the file (also with `icons` in a section).
     assert_not_contains('health-icons.svg', $h, 'no icon file in a theme with no icon_file');

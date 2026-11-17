@@ -14,6 +14,7 @@
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../helpers.php';
+require_once __DIR__ . '/../inc/themes.php';
 require_once __DIR__ . '/fixtures/build_db.php';
 require_once __DIR__ . '/fixtures/server.php';
 require_once __DIR__ . '/fixtures/page_helpers.php';
@@ -189,7 +190,7 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
     }
     assert_same(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect'], array_keys($groups), 'four footer groups');
     assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/']], $groups['Posturi'], 'footer: Posturi');
-    assert_same([['Sănătate', '/sanatate/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
+    assert_same([['Sănătate', '/sanatate/'], ['Administrație', '/administratie/'], ['Financiar', '/financiar/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
     assert_same([['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'], ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/']], $groups['Urmărește'], 'footer: Urmărește');
     assert_same(['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'], array_column($groups['Proiect'], 0), 'footer: Proiect');
     assert_contains('/despre/#confidentialitate', $home, 'footer: privacy anchor');
@@ -205,10 +206,18 @@ run_suite('each count on the page equals the number of results of its link', fun
     [, $home] = http_page($base, '/');
     $x = xp($home);
     $checked = 0;
-    // Domain tiles.
+    preg_match('#<script type="application/json" id="home-data">(.*?)</script>#s', $home, $jm);
+    $jdata = json_decode($jm[1], true);
+    // Domain tiles. An item that links to a themed page counts the postings of the filter of that page: its count is the result count of the
+    // list of its own filter (the JSON), and the page it links to is checked in the suite "the domain items link to their themed page".
     foreach ($x->query('//*[@data-home-tile]') as $a) {
         $n = paren_number($x->query('.//*[@data-tile-count]', $a)->item(0)->textContent);
         $href = $x->query('.//a', $a)->item(0)->getAttribute('href');
+        if ($a->hasAttribute('data-theme-href')) {
+            $pp = [];
+            foreach ($jdata['items'][$a->getAttribute('data-domain')]['params'] as $f => $v) $pp[preg_replace('/\[\]$/', '', $f)] = array_values($v);
+            $href = '/?' . search_key($pp);
+        }
         assert_same(list_count($base, $href), $n, 'domain item ' . $a->getAttribute('data-domain'));
         assert_same(0, $x->query('.//a//*[@data-tile-count]', $a)->length, 'the domain count is outside the link');
         assert_same(1, preg_match('/^\(\d[\d.]*\)$/u', trim($x->query('.//*[@data-tile-count]', $a)->item(0)->textContent, " \t\n\r\0\x0B\xC2\xA0")), 'the domain count is in brackets, with no word');
@@ -258,6 +267,8 @@ run_suite('every ready-made search and chip link is the canonical URL', function
     $x = xp($home);
     foreach ($x->query('//li[@data-home-example]//a | //section[@aria-labelledby="h-start"]//a | //*[@data-home-tile]//a') as $a) {
         $href = $a->getAttribute('href');
+        // A domain item with a themed page links to that page (the suite "the domain items link to their themed page").
+        if (preg_match('#^/[a-z0-9-]+/$#', $href) && $href !== '/posturi/') { assert_true(isset(themes()[trim($href, '/')]), "themed page: $href"); continue; }
         parse_str((string)parse_url($href, PHP_URL_QUERY), $params);
         assert_same('/?' . search_key($params), $href, "canonical: $href");
         assert_not_contains('&amp;amp;', $href, 'not double-escaped');
@@ -404,7 +415,8 @@ run_suite('the (county, domain) JSON sums to the tile counts and to the filters 
         $cor = array_values($dom['params']['cor[]'] ?? []);
         assert_same((int)$a->getAttribute('data-total'), array_sum($dom['counties']), "domain $key: the counties sum to the tile");
         $q = http_build_query(['family' => $family, 'cor' => $cor]);
-        assert_same($x->query('.//a', $a)->item(0)->getAttribute('href'), '/?' . search_key(['family' => $family] + ($cor ? ['cor' => $cor] : [])), "domain $key: the link is its JSON filters");
+        $want = $a->hasAttribute('data-theme-href') ? $a->getAttribute('data-theme-href') : '/?' . search_key(['family' => $family] + ($cor ? ['cor' => $cor] : []));
+        assert_same($x->query('.//a', $a)->item(0)->getAttribute('href'), $want, "domain $key: the link is its JSON filters (or its themed page)");
         foreach ($dom['counties'] as $county => $n) {
             assert_same($n, list_count($base, '/?judet%5B%5D=' . $county . '&' . $q), "$county × $key equals its list");
         }
@@ -506,6 +518,46 @@ run_suite('hero form and figures', function () use ($base) {
     // Wireframe annotations are not on the page.
     foreach (['1 · HERO', '[date ilustrative]', '[ilustrativ', 'CĂUTĂRI COMBINATE', 'NOTIFICĂRI'] as $note) assert_not_contains($note, $home, "no annotation: $note");
     foreach (['bg-amber', 'text-slate', 'bg-white', '#1d4f91'] as $raw) assert_not_contains($raw, $home, "no raw palette: $raw");
+});
+
+run_suite('the domain items link to their themed page; every other item links to the list', function () use ($base) {
+    // A domain key is in one theme at most (a theme lists the HOME_DOMAINS keys it covers; two themes cannot both own an item).
+    $owner = [];
+    foreach (themes() as $slug => $t) foreach ($t['domains'] ?? [] as $key) {
+        assert_true(!isset($owner[$key]), "the domain $key is in one theme at most ($slug and " . ($owner[$key] ?? '') . ')');
+        $owner[$key] = $slug;
+    }
+    $keys = array_column(HOME_DOMAINS, 'key');
+    foreach ($owner as $key => $slug) assert_true(in_array($key, $keys, true), "$slug: $key is a key of HOME_DOMAINS");
+    foreach (['sanatate', 'administratie', 'financiar'] as $k) assert_same($k, $owner[$k] ?? null, "the theme $k lists its own domain");
+    // A financiar posting, so that the third item is on the page.
+    $fdb = home_db('fin', 4);
+    $pdo = new PDO('sqlite:' . $fdb);
+    $pdo->exec("UPDATE job_postings SET inf_profession_family = 'financiar' WHERE id = 2002");
+    $pdo = null;
+    $srv = start_fixture_server($fdb);
+    $x = xp(http_page($srv['base'], '/')[1]);
+    $themed = [];
+    foreach ($x->query('//*[@data-home-tile]') as $li) {
+        $key = $li->getAttribute('data-domain');
+        $href = $x->query('.//a', $li)->item(0)->getAttribute('href');
+        if (isset($owner[$key])) {
+            $themed[$key] = $href;
+            assert_same('/' . $owner[$key] . '/', $href, "$key: the link is its themed page");
+            assert_same('/' . $owner[$key] . '/', $li->getAttribute('data-theme-href'), "$key: data-theme-href, for the script (the county goes in the fragment)");
+        } else {
+            assert_same(1, preg_match('#^/\?#', $href), "$key: a list URL");
+            assert_false($li->hasAttribute('data-theme-href'), "$key: no data-theme-href");
+        }
+    }
+    foreach (['administratie', 'financiar', 'sanatate'] as $k) assert_true(isset($themed[$k]), "the item $k is on the page");
+    // The count of an item does not change: it is the result count of the list of its own filter.
+    foreach ($themed as $key => $_) {
+        $li = $x->query('//*[@data-home-tile][@data-domain="' . $key . '"]')->item(0);
+        $d = array_values(array_filter(HOME_DOMAINS, fn($d) => $d['key'] === $key))[0];
+        assert_same(list_count($srv['base'], home_list_url(['family' => [$d['family']]])), paren_number($x->query('.//*[@data-tile-count]', $li)->item(0)->textContent), "$key: its count is the count of its list");
+    }
+    stop_fixture_server($srv, $fdb);
 });
 
 stop_fixture_server($srv, $db);

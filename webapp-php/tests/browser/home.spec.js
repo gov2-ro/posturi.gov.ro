@@ -31,6 +31,9 @@ const domainHref = (dom, county) => {
   return '/?' + p.map(([k, v]) => `${encodeURIComponent(k)}%5B%5D=${encodeURIComponent(v)}`).join('&');
 };
 const domTotal = (dom) => Object.values(dom.counties).reduce((a, b) => a + b, 0);
+// A domain with a themed page links to it (the county goes in the fragment); the others link to the list.
+const THEMED = ['sanatate', 'administratie', 'financiar'];
+const hrefOf = (d, key, county) => (THEMED.includes(key) ? `/${key}/` + (county ? '#' + county : '') : domainHref(d.items[key], county));
 const tileLink = (page, sector) => tile(page, sector).locator('a');
 /** "(1.197)" → 1197 */
 const paren = (text) => parseInt(text.replace(/\D/g, ''), 10);
@@ -101,7 +104,7 @@ test('footer: four groups of links, then the disclaimer; no skin picker', async 
   await page.goto('/');
   const foot = page.locator('footer');
   await expect(foot.locator('h2')).toHaveText(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect']);
-  await expect(foot.locator('ul li')).toHaveCount(13);   // 12 fixed links + the themed page (its own group)
+  await expect(foot.locator('ul li')).toHaveCount(15);   // 12 fixed links + the three themed pages (their own group)
   const order = await foot.evaluate((f) => {
     const q = (s) => f.querySelector(s);
     const pos = (el) => el.getBoundingClientRect().top + window.scrollY;
@@ -144,7 +147,7 @@ test('a click on a county button sets the counts and the links; a second click c
   const orderAll = await page.locator('[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain));
   await expect(tile(page, 'sanatate')).toBeVisible();
   expect(paren(await tile(page, 'sanatate').locator('[data-tile-count]').textContent())).toBe(domTotal(d.items.sanatate));
-  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', domainHref(d.items.sanatate));
+  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', hrefOf(d, 'sanatate'));
 
   await cluj.click();
   await expect(cluj).toHaveAttribute('aria-pressed', 'true');
@@ -158,7 +161,7 @@ test('a click on a county button sets the counts and the links; a second click c
     } else {
       await expect(tile(page, key)).toBeVisible();
       expect(paren(await tile(page, key).locator('[data-tile-count]').textContent())).toBe(n);
-      await expect(tileLink(page, key)).toHaveAttribute('href', domainHref(d.items[key], 'cluj'));
+      await expect(tileLink(page, key)).toHaveAttribute('href', hrefOf(d, key, 'cluj'));
     }
   }
   // Every county of the data: each visible tile has its count and its own link (family and cor).
@@ -167,7 +170,7 @@ test('a click on a county button sets the counts and the links; a second click c
     for (const key of Object.keys(d.items)) {
       const n = (d.items[key].counties || {})[county] || 0;
       if (n === 0) { await expect(tile(page, key), `${key} hidden in ${county}`).toBeHidden(); continue; }
-      await expect(tileLink(page, key), `${key} in ${county}`).toHaveAttribute('href', domainHref(d.items[key], county));
+      await expect(tileLink(page, key), `${key} in ${county}`).toHaveAttribute('href', hrefOf(d, key, county));
       expect(paren(await tile(page, key).locator('[data-tile-count]').textContent()), `${key} count in ${county}`).toBe(n);
     }
   }
@@ -194,7 +197,7 @@ test('a click on a county button sets the counts and the links; a second click c
   await expect(cluj).toHaveAttribute('aria-pressed', 'false');
   await expect(select).toHaveValue('');
   await expect(tile(page, 'sanatate')).toBeVisible();
-  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', domainHref(d.items.sanatate));
+  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', hrefOf(d, 'sanatate'));
   await expect(live).toContainText('Toate județele:');
 
   // The select drives the map, and the map the select.
@@ -333,7 +336,7 @@ test('without JavaScript: the select and the map are hidden, the tiles and the f
   await expect(page.locator('#domenii-judet')).toBeHidden();
   await expect(page.locator('button[data-county]').first()).toBeHidden();
   await expect(tile(page, 'sanatate')).toBeVisible();
-  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', '/?family%5B%5D=s%C4%83n%C4%83tate');
+  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', '/sanatate/');
   // An empty form: the server sends the reader to the unfiltered list.
   await page.getByRole('button', { name: 'Caută', exact: true }).click();
   await expect(page).toHaveURL(/\/posturi\/$/);
@@ -362,7 +365,14 @@ test('a domain tile opens a list with as many postings as the tile says', async 
   await page.goto('/');
   const t = page.locator('[data-home-tile]').first();
   const shown = paren(await t.locator('[data-tile-count]').textContent());
+  const themed = await t.getAttribute('data-theme-href');
   await t.locator('a').click();
+  // A tile with a themed page opens that page, whose h1 carries the same count.
+  if (themed) {
+    await expect(page).toHaveURL(new RegExp(themed + '$'));
+    expect(paren(await page.locator('h1 [data-title-count]').textContent())).toBe(shown);
+    return;
+  }
   await expect(page).toHaveURL(/\/\?(cor%5B%5D=\d&)*family%5B%5D=[^&]+$/);
   expect(await listCount(page)).toBe(shown);
 });
@@ -652,4 +662,39 @@ test('a county in the URL fragment selects it and scrolls to the domains; a sele
   await expect(page).toHaveURL(/\/#cluj$/);
   await page.locator('[data-county="cluj"]').click();
   await expect(page).toHaveURL(/\/$/);
+});
+
+test('a domain item with a themed page links to it; with a county the link has the fragment, and the themed page selects that county; the other items keep judet[]', async ({ page }) => {
+  await page.goto('/');
+  // A county where a themed item has postings (the JSON block of the page).
+  const county = await page.evaluate(() => Object.keys(JSON.parse(document.getElementById('home-data').textContent).items.administratie.counties)[0]);
+  expect(county).toBeTruthy();
+  const themed = page.locator('[data-home-tile][data-theme-href]');
+  expect(await themed.count(), 'themed items on the page').toBeGreaterThanOrEqual(2);
+  for (const li of await themed.all()) {
+    await expect(li.locator('a')).toHaveAttribute('href', (await li.getAttribute('data-theme-href')));
+  }
+  const plain = page.locator('[data-home-tile]:not([data-theme-href])');
+  expect(await plain.count(), 'items with the list link').toBeGreaterThanOrEqual(1);
+  await page.locator(`[data-county="${county}"]`).click();
+  for (const li of await themed.all()) {
+    if (await li.isHidden()) continue;   // no posting in that county
+    await expect(li.locator('a')).toHaveAttribute('href', (await li.getAttribute('data-theme-href')) + '#' + county);
+  }
+  for (const li of await plain.all()) {
+    if (await li.isHidden()) continue;
+    await expect(li.locator('a')).toHaveAttribute('href', new RegExp('^/\\?.*judet%5B%5D=' + county));
+  }
+  // A second click on the same county clears it: the link is the page again.
+  await page.locator(`[data-county="${county}"]`).click();
+  for (const li of await themed.all()) await expect(li.locator('a')).toHaveAttribute('href', (await li.getAttribute('data-theme-href')));
+  // The link with the county opens the themed page with that county selected.
+  await page.locator(`[data-county="${county}"]`).click();
+  let target = null;
+  for (const li of await themed.all()) if (await li.isVisible()) { target = li; break; }   // a themed item with postings in the county
+  expect(target, 'a visible themed item in the county').not.toBeNull();
+  const slug = await target.getAttribute('data-theme-href');
+  await target.locator('a').click();
+  await expect(page).toHaveURL(new RegExp(slug + '#' + county + '$'));
+  await expect(page.locator('#home-judet')).toHaveValue(county);
 });

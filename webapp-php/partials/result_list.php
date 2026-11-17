@@ -78,6 +78,9 @@ $chips = $active_chips ?? [];
 </div>
 <?php endif; ?>
 
+<?php /* The most frequent occupations, as chips (partials/occupation_chips.php): part of the result region, so a filter change updates it. */
+require __DIR__ . '/occupation_chips.php'; ?>
+
 <!-- Results list -->
 <?php if ($postings): ?>
   <?php /* UX-09: filled by static/saved.js from browser-local state. The server

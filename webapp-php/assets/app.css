@@ -76,6 +76,15 @@
 
     /* The first series of a chart. */
     --c-chart-1: var(--g2-color-chart-1);
+    /* 2026-11-18 (owner): a local categorical palette for the groups of a chart. The DS has two blues and two greys (chart-1 to -4),
+       which do not tell four groups apart. Slot 1 is the DS blue. Checked with the dataviz validator on white, for neighbouring
+       segments: normal vision dE >= 22.9, colour blindness dE >= 9.1. The rest (`--c-cat-rest`) is a neutral grey. Local: replace
+       with DS tokens when the DS has a categorical palette (a DS proposal is not opened yet; the owner decides when). */
+    --c-cat-1: var(--g2-color-chart-1);
+    --c-cat-2: 235 104 52;
+    --c-cat-3: 27 175 122;
+    --c-cat-4: 237 161 0;
+    --c-cat-rest: 177 180 182;
     --c-chart-2: var(--g2-color-chart-2);
     --c-chart-3: var(--g2-color-chart-3);
     --c-chart-4: var(--g2-color-chart-4);
@@ -627,19 +636,19 @@
 }
 
 /* The weekly chart (partials/weekly_chart.php, static/theme-panel.js): thin bars, no grid, one baseline. A bar or a segment is
-   `.pg-seg`; the colour class `.pg-c-N` sets `--pg-c` (the DS chart colours 1 to 4: a single series has chart-1, the groups of a
-   themed page chart-2, chart-1, chart-3, chart-4 in order). "Alte ocupații" is chart-1 at 30 % (light blue). Segments touch: no gap, no border.
+   `.pg-seg`; the colour class `.pg-c-N` sets `--pg-c` (the local categorical palette `--c-cat-1` to `-4`: group N has `.pg-c-N`;
+   a single series has `--c-cat-1`, the DS blue). "Alte ocupații" is `--c-cat-rest`, a neutral grey. Segments touch: no gap, no border.
    The square before a button and before the legend entry uses the same classes. The DS has no categorical chart palette yet
    (a DS proposal is pending). */
 @layer components {
   .pg-seg { fill: rgb(var(--pg-c, var(--c-chart-1))); pointer-events: all; }
   .pg-baseline { stroke: rgb(var(--c-line)); stroke-width: 1; }
-  .pg-c-0 { --pg-c: var(--c-chart-1); }
-  .pg-c-1 { --pg-c: var(--c-chart-2); }
-  .pg-c-2 { --pg-c: var(--c-chart-3); }
-  .pg-c-3 { --pg-c: var(--c-chart-4); }
-  .pg-seg.pg-c-other { fill: rgb(var(--c-chart-1) / 0.3); }
+  .pg-c-0 { --pg-c: var(--c-cat-1); }
+  .pg-c-1 { --pg-c: var(--c-cat-2); }
+  .pg-c-2 { --pg-c: var(--c-cat-3); }
+  .pg-c-3 { --pg-c: var(--c-cat-4); }
+  .pg-seg.pg-c-other { fill: rgb(var(--c-cat-rest)); }
   .pg-chart-sq { display: inline-block; width: 0.625rem; height: 0.625rem; margin-right: 0.375rem; background: rgb(var(--pg-c, var(--c-chart-1))); }
-  .pg-chart-sq.pg-c-other { background: rgb(var(--c-chart-1) / 0.3); }
+  .pg-chart-sq.pg-c-other { background: rgb(var(--c-cat-rest)); }
   .pg-chart-legend { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 0.25rem; font-size: 0.875rem; line-height: 1.5rem; }
 }

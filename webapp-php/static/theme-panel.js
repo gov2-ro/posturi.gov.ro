@@ -45,7 +45,7 @@
   // The geometry of partials/weekly_chart.php: 12 slots in a 320 x 64 box, a bar is half of its slot, the baseline is at y = 63 and the
   // top of the axis at y = 3.
   var W = 320, BASE = 63, PLOT = 60, NS = 'http://www.w3.org/2000/svg';
-  var CLS = [1, 0, 2, 3];   // the colour class of group i (chart-2, chart-1, chart-3, chart-4)
+  var CLS = [0, 1, 2, 3];   // the colour class of group i: the local categorical palette, in order (assets/app.css, --c-cat-1 to -4)
 
   function zeros() { return (data.total || []).map(function () { return 0; }); }
   function seriesOf(index) {

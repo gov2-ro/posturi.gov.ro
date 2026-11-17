@@ -329,7 +329,7 @@ test('the chart: "Toate" is a stacked bar; a group shows its bars in its colour;
     expect(sum(segs.map((s) => s.h)), `week ${i}: the segments add up to the total bar`).toBeCloseTo(posts[i] * 30, 1);
     segs.forEach((s) => expect(s.t, 'each segment has a title: week, group, posts').toMatch(/^săpt\. \d+ [a-z]{3}, [^:]+: \d+ (de )?post(uri)?$/));
   });
-  expect(total[5].map((s) => s.c), 'week 5: Medic (chart-2) under Asistent (chart-3)').toEqual(['pg-seg pg-c-1', 'pg-seg pg-c-2']);
+  expect(total[5].map((s) => s.c), 'week 5: Medic (the first group, pg-c-0) under Asistent (the third, pg-c-2)').toEqual(['pg-seg pg-c-0', 'pg-seg pg-c-2']);
   expect(total[1].map((s) => s.c), 'week 1: the postings of no group, "Alte ocupații"').toEqual(['pg-seg pg-c-other']);
   await expect(other).toBeVisible();
   await expect(other).toHaveText('Alte ocupații');
@@ -337,12 +337,12 @@ test('the chart: "Toate" is a stacked bar; a group shows its bars in its colour;
   // The squares: one for each group, none for "Toate"; the colour of the square is the colour of the bars of its group.
   await expect(btns.first().locator('.pg-chart-sq')).toHaveCount(0);
   await expect(fig.locator('button .pg-chart-sq')).toHaveCount(4);
-  // Fills: "Alte ocupații" has its own fill (chart-1 at 30 %: not transparent, not white) that differs from each group colour; no segment has a
-  // stroke, and segments touch (no gap). Mutations: fill none; the fill of chart-1; a stroke on .pg-seg; a 1 px gap in the script or the partial.
+  // Fills: "Alte ocupații" has its own fill (the grey --c-cat-rest: not transparent, not white) that differs from each group colour; no segment
+  // has a stroke, and segments touch (no gap). Mutations: fill none; the fill of --c-cat-1; a stroke on .pg-seg; a 1 px gap in the script or the partial.
   const look = await fig.locator('[data-chart-bars] rect').evaluateAll((rs) => rs.map((r) => { const c = getComputedStyle(r); return { c: r.getAttribute('class'), fill: c.fill, stroke: c.stroke, sw: c.strokeWidth, y: parseFloat(r.getAttribute('y')), h: parseFloat(r.getAttribute('height')) }; }));
   look.forEach((r) => { expect(r.stroke, 'no border on a segment').toBe('none'); });
   const fills = Object.fromEntries(look.map((r) => [r.c.split(' ')[1], r.fill]));
-  expect(fills['pg-c-other'], 'a fill, not transparent').toMatch(/^(rgba\(.*, 0\.3\)|color\(srgb .* \/ 0\.3\))$/);
+  expect(fills['pg-c-other'], 'a grey fill, not transparent, not white').toBe('rgb(177, 180, 182)');
   ['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'].forEach((k) => { if (fills[k]) expect(fills['pg-c-other'], `differs from ${k}`).not.toBe(fills[k]); });
   const sqOther = await other.locator('.pg-chart-sq').evaluate((n) => getComputedStyle(n).backgroundColor);
   expect(sqOther.replace(/[^\d.,]/g, ''), 'the legend square has the same fill').toBe(fills['pg-c-other'].replace(/[^\d.,]/g, ''));
@@ -366,7 +366,7 @@ test('the chart: "Toate" is a stacked bar; a group shows its bars in its colour;
   // (1 post) is half of the axis (30 of 60), not the whole. Mutation: a scale for each series → 60.
   const medic = (await bars(page)).flat();
   expect(medic.length, 'two bars').toBe(2);
-  medic.forEach((s) => { expect(s.c).toBe('pg-seg pg-c-1'); expect(s.h, 'half of the axis').toBe(30); expect(s.t).toMatch(/^săpt\. \d+ [a-z]{3}, Medic: 1 post$/); });
+  medic.forEach((s) => { expect(s.c).toBe('pg-seg pg-c-0'); expect(s.h, 'half of the axis').toBe(30); expect(s.t).toMatch(/^săpt\. \d+ [a-z]{3}, Medic: 1 post$/); });
   const tallest = Math.max(...total.map((segs) => sum(segs.map((s) => s.h))));
   expect(tallest, 'the total reaches the top of the axis').toBe(60);
   const colours = await page.evaluate(() => ({ sq: getComputedStyle(document.querySelectorAll('[data-chart] button .pg-chart-sq')[0]).backgroundColor, bar: getComputedStyle(document.querySelector('[data-chart-bars] rect')).fill }));

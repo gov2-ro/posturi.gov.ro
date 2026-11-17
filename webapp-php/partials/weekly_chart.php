@@ -35,9 +35,9 @@ if ($_wc_with_data >= 4):
     $_wc_slot = $_wc_w / $_wc_n;
     $_wc_scale = $_wc_hi > 0 ? $_wc_plot / $_wc_hi : 0;
     $_wc_last = end($_wc_vals);
-    // The colour class of group i: chart-2, chart-1, chart-3, chart-4. Written out, so that Tailwind (which reads the PHP files, not
-    // static/theme-panel.js) keeps the classes.
-    $_wc_cls = ['pg-c-1', 'pg-c-0', 'pg-c-2', 'pg-c-3'];
+    // The colour class of group i: the local categorical palette, in order (assets/app.css, --c-cat-1 to -4). Written out, so that
+    // Tailwind (which reads the PHP files, not static/theme-panel.js) keeps the classes.
+    $_wc_cls = ['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'];
 ?>
         <figure class="flex flex-col gap-2 border-t border-line pt-4"<?= $_wc_js ?>>
           <figcaption class="<?= !empty($wc['caption_hidden']) ? 'sr-only' : 'g2-label' ?>"><?= e($wc['caption']) ?></figcaption>

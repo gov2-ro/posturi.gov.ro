@@ -1233,8 +1233,8 @@ run_suite('the chart of a theme: 12 stacks; the segments of each week add up to 
     assert_contains('pg-c-other', $weeks[1][0]['class'], 'week 1: "Alte ocupații"');
     assert_contains('Alte ocupații', $weeks[1][0]['title'], 'its title names it');
     assert_contains('săpt. 13 iul', $weeks[1][0]['title'], 'and the week');
-    // Week 5: Medic 7 (class pg-c-1, chart-2: the first group), Asistent 1 (the third group, pg-c-2). Bottom up: the groups in order.
-    assert_same(['pg-seg pg-c-1', 'pg-seg pg-c-2'], array_column($weeks[5], 'class'), 'week 5: the colours of the groups, in order');
+    // Week 5: Medic 7 (class pg-c-0: the first group), Asistent 1 (the third group, pg-c-2). Bottom up: the groups in order.
+    assert_same(['pg-seg pg-c-0', 'pg-seg pg-c-2'], array_column($weeks[5], 'class'), 'week 5: the colours of the groups, in order');
     assert_same([7, 1], array_column($weeks[5], 'posts'), 'week 5: Medic 7, Asistent 1');
     assert_contains('săpt. 10 aug, Medic: 7 posturi', $weeks[5][0]['title'], 'the title: week, group and posts');
     // The Alte ocupații segment is never below 0: the total minus the groups.
@@ -1250,7 +1250,7 @@ run_suite('the chart of a theme: 12 stacks; the segments of each week add up to 
         $sq = $x->query('./span[contains(@class,"pg-chart-sq")]', $b)->length;
         assert_same($b->getAttribute('data-chart-series') === '-1' ? 0 : 1, $sq, 'the button ' . trim($b->textContent) . ': a square only on a group');
     }
-    assert_same(['pg-c-1', 'pg-c-0', 'pg-c-2', 'pg-c-3'], array_map(fn($n) => preg_replace('/^.*(pg-c-\d).*$/', '$1', $n->getAttribute('class')), iterator_to_array($x->query('//button[@data-chart-series!="-1"]/span'))), 'the squares: chart-2, chart-1, chart-3, chart-4');
+    assert_same(['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'], array_map(fn($n) => preg_replace('/^.*(pg-c-\d).*$/', '$1', $n->getAttribute('class')), iterator_to_array($x->query('//button[@data-chart-series!="-1"]/span'))), 'the squares: the categorical palette in order');
     assert_same(1, $x->query('//span[@data-chart-other][contains(., "Alte ocupații")][not(self::button)]')->length, 'the legend entry "Alte ocupații", not a button');
     assert_not_contains('POSTURI_CHART_BARS', file_get_contents(__DIR__ . '/../partials/weekly_chart.php') . file_get_contents(__DIR__ . '/../static/theme-panel.js') . file_get_contents(__DIR__ . '/../helpers.php'), 'no switch of the prototype');
     assert_not_contains('polyline', file_get_contents(__DIR__ . '/../partials/weekly_chart.php') . file_get_contents(__DIR__ . '/../static/theme-panel.js'), 'no polyline in the sources');

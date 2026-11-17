@@ -2,6 +2,34 @@
 
 ## 2026
 
+### 2026-11-18 — Chart palette and county map scale (Opus; not deployed)
+
+No brief (owner requests; small changes, done by Opus).
+
+**Done**
+- **Local categorical chart palette.** In `assets/app.css`, `:root` gets the tokens `--c-cat-1` (the DS blue `--g2-color-chart-1`), `--c-cat-2` orange `#eb6834`, `--c-cat-3` aqua `#1baf7a`, `--c-cat-4` yellow `#eda100` and `--c-cat-rest` grey `#B1B4B6`. Group N of a chart has `.pg-c-N` and colour N. Before, the order was chart-2, chart-1, chart-3, chart-4: two blues and two greys. "Alte ocupații" is grey; before, it was chart-1 at 30 %.
+- **County map scale.** `home_map_breaks()`, `home_map_step()` and `home_map_legend()` in `helpers.php` replace the fixed steps (0–19, 20–39, 40–79, 80+). The scale is log, between the smallest and the largest non-zero count of the map. A county with 0 has a blank tile and a "0" swatch. The legend lists the ranges of the page. With fewer than 3 breaks, the steps spread so that the largest county is the darkest. With no break, every county with a posting has the middle step.
+
+**Measured**
+- The palette, with the dataviz validator, on white, for neighbouring segments in stack order: normal vision ΔE ≥ 22.9 and colour blindness ΔE ≥ 9.1. All pass.
+  - Orange and yellow are 13.7 apart. They are never neighbours in a stack. The legend squares and the `<title>` of each segment name them.
+  - The grey of the rest is 16.5 from the yellow under it.
+  - Aqua and yellow are below 3:1 against white. The visible legend labels and the titles are the required relief.
+- The map legends on the 17 Oct export:
+
+  | Page | Legend |
+  |---|---|
+  | landing | 5–12, 13–30, 31–74, 75–184 |
+  | `/sanatate/` | 0, 2–4, 5–11, 12–26, 27–64 |
+  | `/social/` | 0, 1, 2, 3, 4–6 |
+
+  Before, almost every county of a themed page was in the first step.
+- Tests: `home_test.php` 914 and `theme_test.php` 1,104 assertions. Mutation: a linear scale in `home_map_breaks()` fails "the county tile map". The browser checks of the chart classes and of the grey fill are updated.
+
+**Decided**
+- **The palette:** the owner chose to go around the DS for now: "we might let it know later". The DS proposal is not opened. Replace the local tokens when the DS has a categorical palette. Cost of the DS colours: four groups in two blues and two greys, hard to tell apart.
+- **Log, not linear and not quartiles:** this follows the measurement of 2026-11-17 (entry "Themed pages for the professional domains", "County map scale").
+
 ### 2026-11-18 — Theme `/social/`: social assistance and counselling (brief 4; not deployed)
 
 **Opus review (2026-11-18): accepted.** Checked against brief 4: the family list in `history.family` still sums posts; the landing items Social and Educație link to `/social/`; the `other` line is kept (43). All 20 PHP suites pass (Opus re-run). The agent's full Playwright run had 6 failures in `home.spec.js` (footer count, theme map), corrected, then `home.spec.js` passed; the next full run is in the palette commit.

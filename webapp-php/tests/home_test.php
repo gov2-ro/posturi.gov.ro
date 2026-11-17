@@ -97,7 +97,16 @@ run_suite('the county tile map: 42 counties, one cell each', function () {
         $have = $pdo->query('SELECT slug FROM judete')->fetchAll(PDO::FETCH_COLUMN);
         assert_same([], array_values(array_diff(array_column(HOME_COUNTY_TILES, 0), $have)), 'all 42 slugs exist in judete');
     }
-    assert_same([0, 0, 1, 1, 2, 2, 3], array_map('home_map_step', [0, 19, 20, 39, 40, 79, 80]), 'steps 0–19, 20–39, 40–79, 80+');
+    // 2026-11-18: a log scale between the smallest and the largest non-zero count of the map (home_map_breaks()).
+    // Mutations: a linear scale gives [49, 94, 139] (most counties in step 0); fixed steps give no relation to the counts.
+    $c = [5, 10, 16, 23, 30, 184];
+    assert_same([13, 31, 75], home_map_breaks($c), 'breaks: a log scale from 5 to 184');
+    assert_same(['0', '0', '1', '1', '1', '3'], array_map(fn($n) => home_map_step($n, home_map_breaks($c)), $c), 'steps of the counts');
+    assert_same(['5–12', '13–30', '31–74', '75–184'], array_column(home_map_legend($c), 'label'), 'the legend follows the counts');
+    assert_same('none', home_map_step(0, [13, 31, 75]), 'no posting: a blank tile');
+    assert_same(['0', '1', '2–3', '4–6', '7–13'], array_column(home_map_legend(array_merge([0, 0], range(1, 13))), 'label'), 'a county with 0 adds "0" to the legend');
+    assert_same(['2', '2'], array_map(fn($n) => home_map_step($n, home_map_breaks([3, 3])), [3, 3]), 'one value: the middle step');
+    assert_same(['3', '0', '1'], array_map(fn($n) => home_map_step($n, home_map_breaks([64, 2, 5])), [64, 2, 5]), 'the largest county is the darkest');
 });
 
 // ---- routes ----
@@ -434,13 +443,16 @@ run_suite('the county map: 42 buttons, labels from the counts, hidden without sc
     $btn = $x->query('//button[@data-county]');
     assert_same(42, $btn->length, '42 county buttons');
     $data = json_decode(preg_match('#id="home-data">(.*?)</script>#s', $home, $m) ? $m[1] : '{}', true);
+    $tile_counts = [];
+    foreach (HOME_COUNTY_TILES as [$ts]) $tile_counts[$ts] = (int)($data['counties'][$ts] ?? 0);
+    $breaks = home_map_breaks($tile_counts);
     foreach ($btn as $b) {
         $slug = $b->getAttribute('data-county');
         $n = $data['counties'][$slug] ?? 0;
         assert_same(posturi_label($n), explode(': ', $b->getAttribute('aria-label'), 2)[1], "$slug: aria-label count");
         assert_same($b->getAttribute('aria-label'), $b->getAttribute('title'), "$slug: title equals aria-label");
         assert_same('false', $b->getAttribute('aria-pressed'), "$slug: not pressed");
-        assert_same((string)home_map_step($n), $b->getAttribute('data-step'), "$slug: step");
+        assert_same(home_map_step((int)$n, $breaks), $b->getAttribute('data-step'), "$slug: step");
         assert_true(in_array(trim($b->textContent), array_keys(HOME_COUNTY_TILES), true), "$slug: code as text");
     }
     foreach ($x->query('//*[@data-home-js]') as $el) assert_true($el->hasAttribute('hidden'), 'the select and the map ship hidden');

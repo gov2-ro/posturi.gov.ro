@@ -2957,9 +2957,57 @@ const HOME_DOMAINS = [
     ['key' => 'altele',       'label' => 'Altele',                           'icon' => 'i-sector-altele',            'family' => 'altele'],
 ];
 
-/** Map step (0–3) of a county by its count of active postings: 0–19, 20–39, 40–79, 80+. */
-function home_map_step(int $n): int {
-    return $n >= 80 ? 3 : ($n >= 40 ? 2 : ($n >= 20 ? 1 : 0));
+/**
+ * The breaks of the county map (owner, 2026-11-18): a log scale between the smallest and the largest non-zero count of the
+ * map, so that the colours spread on every page (the whole country, a themed page), not only on the whole country. Fixed
+ * steps (0–19, 20–39, 40–79, 80+) put almost every county of a themed page in the first step; a linear scale does the same,
+ * because București is far above every other county. Returns the lower bound of each step above the first, in order; a
+ * break that would hold no whole number is left out, so small counts give fewer steps. No break when every non-zero count
+ * is the same.
+ */
+function home_map_breaks(array $counts): array {
+    $nz = array_values(array_filter(array_map('intval', $counts), fn($n) => $n > 0));
+    if (!$nz) return [];
+    [$lo, $hi] = [min($nz), max($nz)];
+    if ($hi <= $lo) return [];
+    $out = [];
+    $prev = $lo;
+    for ($k = 1; $k <= 3; $k++) {
+        $b = (int)ceil(exp(log($lo) + $k / 4 * (log($hi) - log($lo))) - 1e-9);
+        if ($b > $prev && $b <= $hi) { $out[] = $b; $prev = $b; }
+    }
+    return $out;
+}
+
+/**
+ * The map step of a county: "none" for 0 (a blank tile), else 0–3 by the breaks of home_map_breaks(). With fewer than 3
+ * breaks the steps spread over 0–3, so the largest county is always the darkest (step 3); with no break every county with
+ * a posting has the middle step 2.
+ */
+function home_map_step(int $n, array $breaks): string {
+    if ($n <= 0) return 'none';
+    $m = count($breaks);
+    if ($m === 0) return '2';
+    $idx = count(array_filter($breaks, fn($b) => $n >= $b));
+    return (string)(int)round($idx * 3 / $m);
+}
+
+/** The legend of the county map: [['step' => string, 'label' => "1–4"], …], "0" first when a county has no posting. */
+function home_map_legend(array $counts): array {
+    $counts = array_map('intval', $counts);
+    $nz = array_filter($counts, fn($n) => $n > 0);
+    $out = [];
+    if (count($nz) < count($counts)) $out[] = ['step' => 'none', 'label' => '0'];
+    if (!$nz) return $out;
+    [$lo, $hi] = [min($nz), max($nz)];
+    $breaks = home_map_breaks($counts);
+    $m = count($breaks);
+    for ($i = 0; $i <= $m; $i++) {
+        $from = $i === 0 ? $lo : $breaks[$i - 1];
+        $to = $i === $m ? $hi : $breaks[$i] - 1;
+        $out[] = ['step' => home_map_step($from, $breaks), 'label' => $from === $to ? (string)$from : $from . '–' . $to];
+    }
+    return $out;
 }
 
 /** The Mondays of the last $weeks complete ISO weeks (this week is not complete), oldest first. */

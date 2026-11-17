@@ -3029,7 +3029,7 @@ function theme_group_of(array $groups, string $occupation): ?int {
 
 /**
  * The weekly series of the chart of a themed page, for the whole country and for each county: the postings of the profession
- * family in the last $weeks complete weeks, as posts (posts_sql()) (same weeks, same source and same once-only rule as home_weekly_postings(): job_postings
+ * family (or a list of families) in the last $weeks complete weeks, as posts (posts_sql()) (same weeks, same source and same once-only rule as home_weekly_postings(): job_postings
  * and archived_postings, an id in both tables counts for job_postings), split into the occupation groups of the theme. A posting
  * is in one group at most (theme_group_of()), so no series is above the total.
  *
@@ -3038,20 +3038,23 @@ function theme_group_of(array $groups, string $occupation): ?int {
  *         `none` is the number of postings of the weeks that are in no group; `counties` has the weekly total and the group
  *         series of each county (a posting with no county is in no county)
  */
-function theme_group_series(string $family, array $groups, int $weeks = 12): array {
+function theme_group_series(string|array $family, array $groups, int $weeks = 12): array {
     $starts = home_week_starts($weeks);
     $idx = array_flip($starts);
     $from = $starts[0];
     $to = (new DateTimeImmutable(end($starts), new DateTimeZone('Europe/Bucharest')))->modify('+7 days')->format('Y-m-d');
     $pj = posts_sql(); $pa = posts_sql('a.nr_posturi');
+    // One family or a list of families (`IN`): a posting is in one family, so no posting is counted twice.
+    $fams = array_values(array_unique(array_map('strval', (array)$family)));
+    $in = implode(', ', array_fill(0, count($fams), '?'));
     $st = db()->prepare(
         "SELECT j, occ, d, SUM(p) AS c FROM (
-            SELECT judet_slug AS j, occ_canonical AS occ, substr(published_at, 1, 10) AS d, $pj AS p FROM job_postings WHERE inf_profession_family = ?
+            SELECT judet_slug AS j, occ_canonical AS occ, substr(published_at, 1, 10) AS d, $pj AS p FROM job_postings WHERE inf_profession_family IN ($in)
             UNION ALL
             SELECT a.judet_slug, a.occ_canonical, substr(a.published_at, 1, 10), $pa FROM archived_postings a
-            WHERE a.id NOT IN (SELECT id FROM job_postings) AND a.inf_profession_family = ?
+            WHERE a.id NOT IN (SELECT id FROM job_postings) AND a.inf_profession_family IN ($in)
          ) WHERE d >= ? AND d < ? GROUP BY j, occ, d");
-    $st->execute([$family, $family, $from, $to]);
+    $st->execute([...$fams, ...$fams, $from, $to]);
     $zero = array_fill(0, $weeks, 0);
     $out = ['total' => $zero, 'groups' => array_fill(0, count($groups), $zero), 'none' => 0, 'counties' => []];
     foreach ($st->fetchAll() as $r) {

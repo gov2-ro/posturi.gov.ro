@@ -2,6 +2,32 @@
 
 ## 2026
 
+### 2026-11-18 — Theme `/social/`: social assistance and counselling (brief 4; not deployed)
+
+**Opus review (2026-11-18): accepted.** Checked against brief 4: the family list in `history.family` still sums posts; the landing items Social and Educație link to `/social/`; the `other` line is kept (43). All 20 PHP suites pass (Opus re-run). The agent's full Playwright run had 6 failures in `home.spec.js` (footer count, theme map), corrected, then `home.spec.js` passed; the next full run is in the palette commit.
+
+Brief `docs/briefs/2026-11-17-theme-social.md`. Sonnet built it on the tree after briefs 1 and 5. Opus review is open.
+
+**Done**
+- Template rule: `history.family` takes one family (string) or a list. `theme_group_series()` (`helpers.php`) filters with `IN (…)` in both tables. The total, each group, "Alte ocupații" and each county are still sums of posts (`posts_sql()`). `pages/theme.php` accepts a non-empty list. A theme with one family string renders as before.
+- Theme `social` (`inc/themes.php`): "Asistență socială și consiliere", `icon` `i-sector-asistenta_sociala`, `domains` `['social', 'educatie']`, base `family` `['social', 'educație']` (stored spellings checked in the data). Four chart groups: Asistent social, Consilier școlar, Mediator, Psiholog. Selects Ocupație and Instituție. Sections: stats, Ocupații (12), Angajatori (by count), Domenii de activitate (by count, 6), counties, Studii, recent, follow. Line "other" kept.
+- Landing items "Social" and "Educație" both link to `/social/` (the `domains` key of brief 1). The footer, the sitemap and `/llms.txt` list the page (tests updated).
+- Tests: `theme_test.php` 1,104 assertions (new suites for the render, the counts, the chart of two families, the buttons); `home_test.php` 908 (both items link to `/social/`); `theme.spec.js` three new tests on the professional fixture (port 8827; `social_sql()` in `tests/fixtures/professional_db.php`); `home.spec.js` knows the new footer link (16 links) and the two domain items that link to `/social/`. Full Playwright run: 807 passed, 60 skipped, after that fix (the first run had 6 failures in `home.spec.js`, all from the new theme).
+- `docs/backlog.md`: UX-05-THEME-EDUCATION dropped. `README.md`: route list.
+
+**Measured** (dev database `data/_dev/posturi-new.sqlite`, clock 2026-10-19; the 12 chart weeks 27 Jul to 18 Oct)
+- Posts in the 12 weeks, by group: Asistent social 169, Consilier școlar 72, Mediator 89, Psiholog 39; in no group ("Alte ocupații") 215; total 584. Families alone: social 368, educație 216.
+- Active postings of the page: 110. The line "other" (`inst` asistenta-sociala, not the two families): 43, so it stays (the rule leaves it out below 10).
+- `Server-Timing` total of `/social/`, 5 requests after a warm-up (the machine was running Playwright): 36.7, 34.5, 25.7, 23.9, 25.3 ms; median 25.7. `/sanatate/` for comparison: 41 ms.
+
+**Hard**
+- `search_key()` sorts the values of a parameter, so the base filter is `family[]=educație&family[]=social`, not the order of the configuration. The first test expected the configuration order.
+- The theme fixture has no social or educație postings. `social_sql()` adds six postings (2025 to 2030) and five archive rows, one with the id of a live posting. The ids belong to no other themed suite.
+
+**Decided**
+- Four groups, not more: the chart colours allow four.
+- Mutations that the new checks fail against: first family only in `theme_group_series()` (`theme_test.php` 2 suites, Playwright chart test), `domains` without `educatie` (`home_test.php`), `family_not` removed from the line "other" (`theme_test.php`), base `family` with `social` only (`theme_test.php`), `posts_sql()` returning 1 (`theme_test.php`).
+
 ### 2026-11-18 — Weekly chart: posts, bars, a stacked bar under "Toate" (brief 5; not deployed)
 
 **Opus review (2026-11-18): accepted.** Opus took new screenshots on the 17 Oct export (`/sanatate/` "Toate" and "Asistent", `/administratie/`, the landing page; 1280 and 375 px) and checked the three owner changes: no estimate sentence, a light-blue "Alte ocupații", touching segments. No horizontal scroll. All 20 PHP suites pass. Noted, not changed: `tailwind.config.js` does not scan `static/*.js`, so a class that only the script writes is purged. The colour classes are listed in the PHP colour map for this reason. A fifth chart group falls back to the fourth colour; the DS proposal for a categorical palette is not opened yet (owner decision pending).

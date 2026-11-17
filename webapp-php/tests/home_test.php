@@ -190,7 +190,7 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
     }
     assert_same(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect'], array_keys($groups), 'four footer groups');
     assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/']], $groups['Posturi'], 'footer: Posturi');
-    assert_same([['Sănătate', '/sanatate/'], ['Administrație', '/administratie/'], ['Financiar', '/financiar/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
+    assert_same([['Sănătate', '/sanatate/'], ['Administrație', '/administratie/'], ['Financiar', '/financiar/'], ['Asistență socială și consiliere', '/social/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
     assert_same([['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'], ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/']], $groups['Urmărește'], 'footer: Urmărește');
     assert_same(['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'], array_column($groups['Proiect'], 0), 'footer: Proiect');
     assert_contains('/despre/#confidentialitate', $home, 'footer: privacy anchor');
@@ -530,10 +530,14 @@ run_suite('the domain items link to their themed page; every other item links to
     $keys = array_column(HOME_DOMAINS, 'key');
     foreach ($owner as $key => $slug) assert_true(in_array($key, $keys, true), "$slug: $key is a key of HOME_DOMAINS");
     foreach (['sanatate', 'administratie', 'financiar'] as $k) assert_same($k, $owner[$k] ?? null, "the theme $k lists its own domain");
+    // Social and Educație are two domains of one page (brief 4): both items link to /social/.
+    assert_same('social', $owner['social'] ?? null, 'the domain social is in the theme social');
+    assert_same('social', $owner['educatie'] ?? null, 'the domain educatie is in the theme social');
     // A financiar posting, so that the third item is on the page.
     $fdb = home_db('fin', 4);
     $pdo = new PDO('sqlite:' . $fdb);
     $pdo->exec("UPDATE job_postings SET inf_profession_family = 'financiar' WHERE id = 2002");
+    $pdo->exec("UPDATE job_postings SET inf_profession_family = 'educație' WHERE id = 2003");   // so that the item Educație is on the page
     $pdo = null;
     $srv = start_fixture_server($fdb);
     $x = xp(http_page($srv['base'], '/')[1]);
@@ -550,7 +554,9 @@ run_suite('the domain items link to their themed page; every other item links to
             assert_false($li->hasAttribute('data-theme-href'), "$key: no data-theme-href");
         }
     }
-    foreach (['administratie', 'financiar', 'sanatate'] as $k) assert_true(isset($themed[$k]), "the item $k is on the page");
+    foreach (['administratie', 'financiar', 'sanatate', 'social', 'educatie'] as $k) assert_true(isset($themed[$k]), "the item $k is on the page");
+    assert_same('/social/', $themed['social'] ?? null, 'the item "Social" links to /social/');
+    assert_same('/social/', $themed['educatie'] ?? null, 'the item "Educație" links to /social/');
     // The count of an item does not change: it is the result count of the list of its own filter.
     foreach ($themed as $key => $_) {
         $li = $x->query('//*[@data-home-tile][@data-domain="' . $key . '"]')->item(0);

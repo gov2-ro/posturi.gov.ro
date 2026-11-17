@@ -33,7 +33,7 @@ declare(strict_types=1);
  *     recent     the two short lists, "Noi azi" and "Se închid în 3 zile"
  *     follow     the notification cards (calendar and RSS of the base filter)
  *   icon_file    optional: the file in static/ with the symbols of the item icons (no `icon_file` = no icon, no reference)
- *   history      optional: the part of the archive that belongs to the theme: `family` (a profession family) and `groups`,
+ *   history      optional: the part of the archive that belongs to the theme: `family` (a profession family, or a list of them: any of them) and `groups`,
  *                the buttons of the chart after "Toate": each has `label` and any of `values` (exact occupations), `prefixes`
  *                and `except` (exact occupations that a prefix does not take); an occupation is in the first group that holds it.
  *                No `history` = no chart; no `groups` = a chart with no buttons
@@ -230,6 +230,51 @@ function themes(): array {
                 ['type' => 'recent', 'id' => 'noi'],
                 ['type' => 'follow', 'id' => 'notificari'],
             ],
+        ],
+
+        // Professional domains `social` and `educație` together: social workers, school counsellors, mediators, psychologists,
+        // pedagogues and home carers. The "educație" postings are not teacher posts.
+        'social' => [
+            'label'       => 'Asistență socială și consiliere',
+            'icon'        => 'i-sector-asistenta_sociala',
+            'domains'     => ['social', 'educatie'],
+            'base'        => ['family' => ['social', 'educație']],
+            // The archive part takes a list of families (`IN`). An occupation is in the first group that holds it.
+            'history'     => ['family' => ['social', 'educație'],
+                              'groups' => [
+                                  ['label' => 'Asistent social', 'prefixes' => ['Asistent social']],
+                                  ['label' => 'Consilier școlar', 'prefixes' => ['Consilier școlar']],
+                                  ['label' => 'Mediator', 'prefixes' => ['Mediator']],
+                                  ['label' => 'Psiholog', 'prefixes' => ['Psiholog']],
+                              ]],
+            'title'       => 'Posturi în asistență socială și consiliere',
+            'h1'          => 'Posturi în asistență socială și consiliere',
+            'description' => 'Posturi în asistență socială și consiliere din sectorul public: asistenți sociali, consilieri școlari, mediatori școlari, '
+                           . 'psihologi și îngrijitori la domiciliu, la primării, direcții de asistență socială și școli, pe județe și nivel de studii.',
+            'all_label'   => 'Toate anunțurile din asistență socială și consiliere',
+            'placeholder' => 'Caută: asistent social, consilier școlar, psiholog…',
+            'search_selects' => [
+                ['param' => 'occupation', 'label' => 'Ocupație', 'all' => 'Toate ocupațiile', 'source' => 'column', 'column' => 'occ_canonical'],
+                ['param' => 'inst', 'label' => 'Instituție', 'all' => 'Toate instituțiile', 'source' => 'column', 'column' => 'employer_kind',
+                 'labels' => EMPLOYER_KIND_LABELS],
+            ],
+            'sections'    => [
+                ['type' => 'stats', 'id' => 'statistici'],
+                ['type' => 'values', 'id' => 'ocupatii', 'title' => 'Ocupații', 'param' => 'occupation',
+                 'source' => 'column', 'column' => 'occ_canonical', 'limit' => 12],
+                ['type' => 'values', 'id' => 'angajatori', 'title' => 'Angajatori', 'param' => 'inst', 'source' => 'labels', 'order' => 'count',
+                 'labels' => EMPLOYER_KIND_LABELS],
+                ['type' => 'values', 'id' => 'domenii', 'title' => 'Domenii de activitate', 'param' => 'domain', 'source' => 'labels', 'order' => 'count',
+                 'limit' => 6, 'labels' => POLICY_DOMAIN_LABELS],
+                ['type' => 'counties', 'id' => 'judete'],
+                ['type' => 'values', 'id' => 'studii', 'title' => 'Studii', 'param' => 'studies_level',
+                 'source' => 'labels', 'labels' => STUDIES_LABELS],
+                ['type' => 'recent', 'id' => 'noi'],
+                ['type' => 'follow', 'id' => 'notificari'],
+            ],
+            'other'       => ['label'  => 'Alte posturi la direcțiile de asistență socială',
+                              'note'   => 'Infirmieri, îngrijitori, bucătari și alte posturi din centre și cămine.',
+                              'params' => ['inst' => ['asistenta-sociala'], 'family_not' => ['social', 'educație']]],
         ],
     ];
     $extra = getenv('POSTURI_THEMES_EXTRA');

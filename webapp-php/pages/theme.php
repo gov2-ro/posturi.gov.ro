@@ -89,8 +89,8 @@ if (!empty($theme['other'])) {
 
 // ---- The statistics panel (a `stats` section, with the theme key `history`): the weekly chart and the data of the county selection ----
 $ts = null;
-$hist = $theme['history']['family'] ?? null;
-foreach ($theme['sections'] as $sec) if ($sec['type'] === 'stats' && is_string($hist) && $hist !== '') {
+$hist = $theme['history']['family'] ?? null;   // one family (string) or a list of families
+foreach ($theme['sections'] as $sec) if ($sec['type'] === 'stats' && ((is_string($hist) && $hist !== '') || (is_array($hist) && $hist))) {
     $groups = $theme['history']['groups'] ?? [];
     $gs = theme_group_series($hist, $groups, 12);
     $weekly = [];

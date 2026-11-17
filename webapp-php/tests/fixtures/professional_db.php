@@ -12,6 +12,7 @@ function build_professional_fixture_db(string $path): void {
     $db = new PDO('sqlite:' . $path);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->exec(professional_sql());
+    $db->exec(social_sql());   // ids 2025-2030: no administrație or financiar suite counts them
 }
 
 /**
@@ -55,4 +56,46 @@ function professional_sql(): string {
     // One posting a week from 13 July on (ten weeks), so that the chart has weeks with data.
     $sql .= "UPDATE job_postings SET published_at = date('2026-07-13', '+' || (((id - 2003) % 10) * 7) || ' days') || ' 09:00:00' WHERE id BETWEEN 2003 AND 2024;\n";
     return $sql;
+}
+
+/**
+ * SQL for the theme "social" on the shared fixture (docs/briefs/2026-11-17-theme-social.md): the families `social` and `educație` together.
+ * Postings 2025-2030 (ids that no other themed suite uses) and four archive rows. Today is 2026-10-03: the chart covers 2026-07-06 to 2026-09-27.
+ *   2025 social    Asistent social   primarie          cluj    licenta  2026-07-08  domains asistenta_sociala, fonduri_europene
+ *   2026 social    Asistent social   primarie          ilfov   licenta  2026-07-15  asistenta_sociala
+ *   2027 educație  Consilier școlar  scoala            cluj    master   2026-07-15  (3 posts)  educatie_cercetare, asistenta_sociala
+ *   2028 educație  Mediator școlar   primarie          ilfov   liceala  2026-08-05  educatie_cercetare
+ *   2029 social    Psiholog          asistenta-sociala ilfov   master   2026-08-05  asistenta_sociala
+ *   2030 tehnic    Infirmier         asistenta-sociala ilfov            2026-08-05  (the line "other": a social-assistance employer, no family of the theme)
+ * Archive: 9201 social Asistent social (2026-07-08, 12 posts), 9202 educație Consilier școlar (2026-07-22), 9203 educație Profesor (2026-08-12,
+ * in no group), 9204 tehnic (2026-07-08: not counted), 9205 social Asistent social with the id of the live 2025 (counted once).
+ * So the theme has 5 live postings and in the 12 weeks, in posts: Asistent social 1 + 1 + 12 = 14 (9205 has the id of 2025: not counted), Consilier școlar 3 + 1 = 4, Mediator 1, Psiholog 1, no group 1 (Profesor); total 21.
+ */
+function social_sql(): string {
+    $post = [
+        // id => [family, occupation, employer_kind, county, study_level, published_at, domains]
+        2025 => ['social', 'Asistent social', 'primarie', 'cluj', 'licenta', '2026-07-08', '["asistenta_sociala","fonduri_europene"]'],
+        2026 => ['social', 'Asistent social', 'primarie', 'ilfov', 'licenta', '2026-07-15', '["asistenta_sociala"]'],
+        2027 => ['educație', 'Consilier școlar', 'scoala', 'cluj', 'master', '2026-07-15', '["educatie_cercetare","asistenta_sociala"]'],
+        2028 => ['educație', 'Mediator școlar', 'primarie', 'ilfov', 'liceala', '2026-08-05', '["educatie_cercetare"]'],
+        2029 => ['social', 'Psiholog', 'asistenta-sociala', 'ilfov', 'master', '2026-08-05', '["asistenta_sociala"]'],
+        2030 => ['tehnic', 'Infirmier', 'asistenta-sociala', 'ilfov', '', '2026-08-05', '[]'],
+    ];
+    $sql = '';
+    foreach ($post as $id => [$fam, $occ, $kind, $county, $study, $date, $dom]) {
+        $sql .= sprintf("UPDATE job_postings SET inf_profession_family='%s', occ_canonical='%s', employer_kind='%s', judet_slug='%s', judet_name='%s', published_at='%s 09:00:00', v3_policy_domains='%s' WHERE id=%d;\n",
+            $fam, $occ, $kind, $county, ucfirst($county), $date, $dom, $id);
+        if ($study !== '') $sql .= "UPDATE posting_roles SET study_level='$study' WHERE posting_id=$id;\n";
+    }
+    $sql .= "UPDATE job_postings SET nr_posturi=3 WHERE id=2027;\n";
+    $ins = fn(int $id, string $date, string $occ, string $fam, ?int $n) =>
+        "INSERT INTO archived_postings (id, url, title, employer_id, employer_name, judet_name, judet_slug, locality, published_at, expires_at, apply_deadline, cancelled, nr_posturi, occ_canonical, inf_profession_family, sal_min, sal_max, summary)
+         VALUES ($id, 'https://x/$id', 't', 1, 'e', 'Cluj', 'cluj', '', '$date 09:00:00', NULL, NULL, 0, " . ($n ?? 'NULL') . ", '$occ', '$fam', NULL, NULL, '');\n";
+    return $sql
+        . $ins(9201, '2026-07-08', 'Asistent social', 'social', 12)
+        . $ins(9202, '2026-07-22', 'Consilier școlar', 'educație', null)
+        . $ins(9203, '2026-08-12', 'Profesor', 'educație', null)
+        . $ins(9204, '2026-07-08', 'Referent', 'administrație', null)
+        . $ins(9205, '2026-07-08', 'Asistent social', 'social', 7)
+        . "UPDATE archived_postings SET id=2025 WHERE id=9205;\n";   // the id of a live posting: counted once, as the live one
 }

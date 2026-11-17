@@ -137,13 +137,13 @@ run_suite('the sitemap lists the theme; the footer links to it, in the group "Pa
     $x = xp($home);
     assert_same(0, $x->query('//*[@data-home-themes]')->length, 'no line "Pagini tematice" on the landing page');
     $links = $x->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a');
-    assert_same(3, $links->length, 'three themed pages in the footer group');
-    assert_same(['/sanatate/', '/administratie/', '/financiar/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($links)), 'their links, in configuration order');
-    assert_same(['Sănătate', 'Administrație', 'Financiar'], array_map(fn($a) => trim($a->textContent), iterator_to_array($links)), 'their link texts');
+    assert_same(4, $links->length, 'four themed pages in the footer group');
+    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/social/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($links)), 'their links, in configuration order');
+    assert_same(['Sănătate', 'Administrație', 'Financiar', 'Asistență socială și consiliere'], array_map(fn($a) => trim($a->textContent), iterator_to_array($links)), 'their link texts');
     assert_same(1, $x->query('//footer//a[@href="/sanatate/"]')->length, 'one footer link');
-    foreach (['/administratie/', '/financiar/'] as $slug) assert_contains('<loc>' . $base . $slug . '</loc>', $sm, "sitemap entry $slug");
+    foreach (['/administratie/', '/financiar/', '/social/'] as $slug) assert_contains('<loc>' . $base . $slug . '</loc>', $sm, "sitemap entry $slug");
     [, $llms] = http_page($base, '/llms.txt');
-    foreach (['/sanatate/', '/administratie/', '/financiar/'] as $slug) assert_contains('](' . $base . $slug . ')', $llms, "llms.txt lists $slug");
+    foreach (['/sanatate/', '/administratie/', '/financiar/', '/social/'] as $slug) assert_contains('](' . $base . $slug . ')', $llms, "llms.txt lists $slug");
 });
 
 run_suite('every count equals the result count of its link; an item with count 0 is not on the page', function () use ($base) {
@@ -763,6 +763,141 @@ run_suite('the county selection of the two themes: the map and the counts inside
 
 stop_fixture_server($srvp, $dbp);
 
+// ---- the theme "social": the families `social` and `educație` on one page, a chart for a list of families ----
+
+$dbs = theme_db('social', social_sql());
+$srvs = start_fixture_server($dbs);
+$bases = $srvs['base'];
+const SOCIAL_BASE = 'family%5B%5D=educa%C8%9Bie&family%5B%5D=social';   // the order of search_key(): sorted
+
+run_suite('/social/ renders: title, canonical, h1 with the count, icon, sections in order, one h1, same bytes for each reader', function () use ($bases) {
+    [$st, $h, $hd] = http_page($bases, '/social/');
+    assert_same(200, $st, '/social/ answers 200');
+    assert_contains('<link rel="canonical" href="' . $bases . '/social/">', $h, 'canonical');
+    assert_contains('<title>Posturi în asistență socială și consiliere — posturi.gov2.ro</title>', $h, 'title');
+    assert_same(1, preg_match('#<meta name="description" content="Posturi în asistență socială și consiliere din sectorul public: asistenți sociali, consilieri școlari, mediatori#', $h), 'the description names the main occupations');
+    assert_same(1, preg_match_all('#<h1[ >]#', $h), 'one h1');
+    assert_contains('<span>Posturi în asistență socială și consiliere<span data-county-title></span><span data-title-count class="text-base font-normal text-ink-muted">&nbsp;(5)</span></span></h1>', $h, 'h1 and count: 5 postings of the two families');
+    assert_same(1, xp($h)->query('//h1/svg[@aria-hidden="true"]/use[@href="#i-sector-asistenta_sociala"]')->length, 'the icon of the theme');
+    assert_same(1, xp($h)->query('//symbol[@id="i-sector-asistenta_sociala"]')->length, 'the symbol is in the sprite');
+    preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($h, (int)strpos($h, '<main')), $s);
+    assert_same(['h-theme', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari'], $s[1], 'sections, in order');
+    assert_well_formed($h, '/social/');
+    [, $h2, $hd2] = http_page($bases, '/social/', ['Cookie: pg_x=1', 'Accept-Language: en']);
+    assert_same($h, $h2, 'the same bytes for another reader');
+    assert_true(!isset($hd2['set-cookie']), 'no cookie');
+    foreach (['bg-amber', 'text-slate', 'bg-white', '#1d4f91'] as $raw) assert_not_contains($raw, $h, "no raw palette: $raw");
+    [$st, , $hd] = http_page($bases, '/social/?q=x');
+    assert_same(301, $st, 'redirect');
+    assert_same('/?' . SOCIAL_BASE . '&q=x', $hd['location'] ?? '', 'redirect target: both families in the base filter');
+    $names = [];
+    foreach (xp($h)->query('//form[@data-home-search]//select') as $sel) $names[] = $sel->getAttribute('name');
+    assert_same(['occupation[]', 'inst[]', 'judet[]'], $names, 'the selects: occupation, institution, county');
+    assert_same(['social', 'educatie'], themes()['social']['domains'], 'the domains of the theme');
+});
+
+run_suite('/social/: every count equals the result count of its link; the base filter holds both families; the line "other"', function () use ($bases) {
+    $x = xp(http_page($bases, '/social/')[1]);
+    $items = tile_items($x);
+    assert_same(5, $items['all']['count'] ?? paren_number($x->query('//h1//span[@data-title-count]')->item(0)->textContent), 'the base count');
+    assert_same(5, list_count($bases, '/?' . SOCIAL_BASE), 'the base list has both families (OR)');
+    assert_same(3, list_count($bases, '/?family%5B%5D=social'), 'social alone: 3');
+    assert_same(2, list_count($bases, '/?family%5B%5D=educa%C8%9Bie'), 'educație alone: 2');
+    foreach ($items as $id => $it) {
+        if ($it['count'] === null) continue;
+        assert_same($it['count'], list_count($bases, $it['href']), "item $id: the count is the result count of its link");
+        assert_true($it['count'] > 0, "item $id: not 0");
+        if (!in_array($id, ['other'], true)) assert_contains(SOCIAL_BASE, $it['href'], "item $id: the base filter holds both families");
+    }
+    assert_same(['Asistent social' => 2, 'Consilier școlar' => 1, 'Mediator școlar' => 1, 'Psiholog' => 1], items_of($items, 'occupation:'), 'Ocupații, by count');
+    assert_same(['primarie' => 3, 'scoala' => 1, 'asistenta-sociala' => 1], items_of($items, 'inst:'), 'Angajatori, by count, ties in the order of the labels');
+    assert_same(['asistenta_sociala' => 4, 'educatie_cercetare' => 2, 'fonduri_europene' => 1], items_of($items, 'domain:'), 'Domenii, by count');
+    assert_same('Asistență socială', $items['domain:asistenta_sociala']['label'], 'Domenii: the text of POLICY_DOMAIN_LABELS');
+    assert_same(['master' => 2, 'licenta' => 2, 'liceala' => 1], items_of($items, 'studies_level:'), 'Studii, in the order of STUDIES_LABELS');
+    // The line "other": a social-assistance employer, no family of the theme.
+    assert_same(1, $items['other']['count'], 'the line other: 1 posting (2030)');
+    assert_same('Alte posturi la direcțiile de asistență socială', $items['other']['label'], 'its label');
+    assert_same(1, list_count($bases, $items['other']['href']), 'its count is the result count of its link');
+    assert_contains('inst%5B%5D=asistenta-sociala', $items['other']['href'], 'its link carries inst[]');
+    assert_contains('family_not', $items['other']['href'], 'and family_not');
+    assert_contains('Infirmieri, îngrijitori, bucătari și alte posturi din centre și cămine.', http_page($bases, '/social/')[1], 'its note');
+    // The postings of the "other" line are not in the theme: 2029 (a psychologist at the same kind of employer) is in the theme.
+    assert_same(2, list_count($bases, '/?inst%5B%5D=asistenta-sociala'), 'the employer kind has 2 postings: 2029 in the theme, 2030 in "other"');
+});
+
+run_suite('the chart for two families: the total of a week is the sum of the posts of both families in both tables; each group, "none" and each county add up', function () use ($bases, $dbs) {
+    [, $h] = http_page($bases, '/social/');
+    preg_match('#<script type="application/json" id="theme-panel-data">(.*?)</script>#s', $h, $m);
+    $d = json_decode($m[1], true);
+    $pdo = new PDO('sqlite:' . $dbs);
+    $starts = [];
+    for ($i = 0, $t = new DateTimeImmutable('2026-07-06'); $i < 12; $i++) $starts[] = $t->modify("+$i weeks")->format('Y-m-d');
+    $fam = "inf_profession_family IN ('social', 'educație')";
+    $cond = [
+        'Asistent social' => "occ_canonical LIKE 'Asistent social%'",
+        'Consilier școlar' => "occ_canonical LIKE 'Consilier școlar%'",
+        'Mediator' => "occ_canonical LIKE 'Mediator%'",
+        'Psiholog' => "occ_canonical LIKE 'Psiholog%'",
+    ];
+    // The same posts expression as the chart (POSTS_SIDE), over the two families, both tables, an id once.
+    $weekly = fn(string $extra = '') => array_map(fn($w) => (int)$pdo->query("SELECT COALESCE(SUM(p), 0) FROM (
+            SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE $fam$extra
+            UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE $fam$extra AND id NOT IN (SELECT id FROM job_postings))
+            WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
+    $want = $weekly();
+    assert_same($want, $d['total'], 'the total of each week equals a direct sum of posts of the two families');
+    assert_same(21, array_sum($want), 'the 12 weeks hold 21 posts: 14 + 4 + 1 + 1 + 1 (see social_sql())');
+    // Not the first family alone, and not announcements.
+    $first = array_map(fn($w) => (int)$pdo->query("SELECT COALESCE(SUM(p), 0) FROM (
+            SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE inf_profession_family = 'social'
+            UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE inf_profession_family = 'social' AND id NOT IN (SELECT id FROM job_postings))
+            WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
+    assert_true($first !== $d['total'], 'the first family alone is a different series (the second family has postings in the weeks)');
+    $ann = array_map(fn($w) => (int)$pdo->query("SELECT COUNT(*) FROM (
+            SELECT substr(published_at,1,10) d FROM job_postings WHERE $fam
+            UNION ALL SELECT substr(published_at,1,10) FROM archived_postings WHERE $fam AND id NOT IN (SELECT id FROM job_postings))
+            WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
+    assert_true($ann !== $d['total'], 'announcements are not posts (2027 has 3 posts, 9201 has 12)');
+    $names = array_column($d['series'], 'name');
+    assert_same(['Asistent social', 'Consilier școlar', 'Mediator', 'Psiholog'], $names, 'the 4 groups, in order');
+    assert_same([14, 4, 1, 1], array_map(fn($s) => array_sum($s['values']), $d['series']), 'the posts of each group in the 12 weeks');
+    $sum = array_fill(0, 12, 0);
+    foreach ($names as $i => $n) {
+        assert_same($weekly(' AND (' . $cond[$n] . ')'), $d['series'][$i]['values'], "group $n: the weekly posts");
+        foreach ($d['series'][$i]['values'] as $w => $v) $sum[$w] += $v;
+    }
+    foreach ($sum as $w => $v) assert_true($v <= $d['total'][$w], "week $w: the groups do not pass the total");
+    // "Alte ocupații" = the total minus the groups: only the archive row 9203 (Profesor, 12 Aug).
+    $other = array_map(fn($t, $s) => $t - $s, $d['total'], $sum);
+    assert_same(1, array_sum($other), 'the rest ("Alte ocupații"): 1 post (Profesor)');
+    assert_same(0, count(array_filter($other, fn($v) => $v < 0)), 'never below 0');
+    // Each county: the weekly total is the sum of posts of the two families in that county.
+    $by_county = fn(string $c) => array_map(fn($w) => (int)$pdo->query("SELECT COALESCE(SUM(p), 0) FROM (
+            SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE $fam AND judet_slug=" . $pdo->quote($c) . "
+            UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE $fam AND judet_slug=" . $pdo->quote($c) . " AND id NOT IN (SELECT id FROM job_postings))
+            WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
+    foreach ($d['counties'] as $slug => $c) assert_same($by_county($slug), $c['t'], "$slug: the weekly total, in posts");
+    assert_same(['cluj', 'ilfov'], (function () use ($d) { $k = array_keys($d['counties']); sort($k); return $k; })(), 'the counties');
+    // The list of families and the string give the same result for one family.
+    $a = php_on($dbs, 'require "' . __DIR__ . '/../inc/themes.php"; $t = themes()["social"]["history"]; echo json_encode(theme_group_series(["social"], $t["groups"], 12) == theme_group_series("social", $t["groups"], 12));');
+    assert_same('true', $a, 'a list of one family equals the family string');
+    // An id in both tables counts once: 9205 has the id of 2025 (7 posts in the archive; the live one has 1).
+    assert_same(14, array_sum($d['series'][0]['values']), 'the live row counts, not the archive row with the same id');
+});
+
+run_suite('/social/: the buttons of the chart; the sections need no other template rule', function () use ($bases) {
+    $x = xp(http_page($bases, '/social/')[1]);
+    $btn = [];
+    foreach ($x->query('//*[@data-theme-stats]//button[@data-chart-series]') as $b) $btn[] = trim($b->textContent);
+    assert_same(['Toate', 'Asistent social', 'Consilier școlar', 'Mediator', 'Psiholog'], $btn, 'the buttons of the chart');
+    $g = themes()['social']['history']['groups'];
+    assert_same(2, theme_group_of($g, 'Mediator școlar'), '"Mediator școlar" is in Mediator');
+    assert_same(null, theme_group_of($g, 'Profesor'), '"Profesor" is in no group');
+    assert_same(4, count($g), 'four groups: the most that the chart colours allow');
+});
+
+stop_fixture_server($srvs, $dbs);
+
 // ---- the occupation chips of the list ----
 
 const CHIP_BASE = 'family%5B%5D=tehnic&cor%5B%5D=5';
@@ -990,7 +1125,7 @@ run_suite('a second theme from the configuration: the same template, no change',
     assert_same('/?family%5B%5D=tehnic&q=x', $hd['location'] ?? '', 'merges its own base filter');
     assert_contains('<loc>' . $base2 . '/justitie/</loc>', http_page($base2, '/sitemap.xml')[1], 'sitemap');
     $home = xp(http_page($base2, '/')[1]);
-    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
+    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/social/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
     assert_same(1, $home->query('//footer//a[@href="/justitie/"]')->length, 'footer link');
     // A theme with no `icon_file`: no icon, no reference to the file (also with `icons` in a section).
     assert_not_contains('health-icons.svg', $h, 'no icon file in a theme with no icon_file');

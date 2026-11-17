@@ -668,6 +668,52 @@ test.describe('/financiar/ programs', () => {
   });
 });
 
+// ---- The theme /social/ (tests/fixtures/professional_db.php, social_sql(): 5 postings of the families social and educație, own port) ----
+// 5 postings (cluj 2, ilfov 3); the chart has four groups; in posts: Asistent social 14, Consilier școlar 4, Mediator 1, Psiholog 1, the rest 1.
+test.describe('/social/', () => {
+  test.use({ baseURL: 'http://127.0.0.1:8827' });
+
+  test('the sections are in order; the count is both families; the line "other"; no horizontal overflow', async ({ page }) => {
+    await page.goto('/social/');
+    await expect(page.locator('h1#h-theme')).toHaveText('Posturi în asistență socială și consiliere (5)');
+    const ids = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-labelledby')));
+    expect(ids).toEqual(['h-theme', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari']);
+    const inst = await page.locator('section[aria-labelledby="h-angajatori"] li[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain.replace('inst:', '')));
+    expect(inst, 'order => count').toEqual(['primarie', 'scoala', 'asistenta-sociala']);
+    await expect(tile(page, 'other').locator('a')).toHaveText('Alte posturi la direcțiile de asistență socială');
+    expect(paren(await tile(page, 'other').locator('[data-tile-count]').textContent())).toBe(1);
+    await noOverflow(page, '/social/');
+    const wide = await page.evaluate(() => Array.from(document.querySelectorAll('main li, main a')).filter((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1).length);
+    expect(wide, 'items that stick out of the page').toBe(0);
+  });
+
+  test('an item opens a list with the same count, also inside a county', async ({ page }) => {
+    for (const id of ['occupation:Asistent social', 'inst:primarie', 'other']) {
+      await page.goto('/social/');
+      const n = paren(await tile(page, id).locator('[data-tile-count]').textContent());
+      await tile(page, id).locator('a').click();
+      expect(num(await page.locator('#results-status').textContent().then((t) => t.match(/[\d.]+/)[0])), id).toBe(n);
+    }
+    await page.goto('/social/');
+    await page.locator('button[data-county="cluj"]').click();
+    await expect(page.locator('h1#h-theme')).toHaveText(/\(2\)$/);
+  });
+
+  test('the chart: "Toate" stacks the four groups and "Alte ocupații" on the posts of both families', async ({ page }) => {
+    await page.goto('/social/');
+    const d = await panelData(page);
+    expect(d.series.map((s) => s.name)).toEqual(['Asistent social', 'Consilier școlar', 'Mediator', 'Psiholog']);
+    expect(d.series.map((s) => sum(s.values))).toEqual([14, 4, 1, 1]);
+    expect(sum(d.total), 'the total is posts of both families').toBe(21);
+    await expect(page.locator('[data-chart-other]')).toHaveText('Alte ocupații');
+    const buttons = await page.locator('[data-theme-stats] button[data-chart-series]').allTextContents();
+    expect(buttons.map((t) => t.trim())).toEqual(['Toate', 'Asistent social', 'Consilier școlar', 'Mediator', 'Psiholog']);
+    // The stack of the first bar with posts (week 1: 8 Jul and 15 Jul fall in weeks 1 and 2): the segments add up to the total of the week.
+    const b = await bars(page);
+    b.forEach((segs, i) => expect(sum(segs.map((s) => s.h)) > 0 || d.total[i] === 0, `week ${i + 1}`).toBe(true));
+  });
+});
+
 // ---- The button "Toate județele" after the title ----
 test.describe('the button "Toate județele"', () => {
   const clear = (page) => page.locator('[data-county-clear]');

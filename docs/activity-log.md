@@ -2,6 +2,145 @@
 
 ## 2026
 
+### 2026-11-17 — Pipeline: trade in the occupation, COR group in the archive, domain spike (not deployed)
+
+Brief 2 of 4 (`docs/briefs/2026-11-17-pipeline-domain-trade.md`). Report: `docs/audits/2026-11-17-pipeline-domain-trade.md`. Sonnet built it against the local PostgreSQL (`posturi_dev`, September snapshot, 9,756 postings). No production access.
+
+**Done**
+- A1: `parse_title()` keeps the first tail after a dash when the head is generic and the tail starts a COR name (`ocupatii.trade_in()`). `trade_label()` gives the label; `normalize-titles.py` applies it to new rows, and `--relabel-trades` applies it to existing rows with no LLM call. Grade and study hint: 0 differences on 9,756 titles.
+- A1 numbers (17 Oct export, 2,461 active, simulated): "Muncitor calificat" + "Muncitor" in COR 7 went from 128 of 199 (64.3 %) to 87 of 199 (43.7 %). On all 9,756 local postings: 622 of 857 (72.6 %) to 474 of 801 (59.2 %). Distinct occupations: 821 to 836. "Inginer" in COR 2 and "Tehnician" in COR 3: no change.
+- A1 run: 12 new titles, 12 DeepSeek calls, USD 0.0026; 48 rows relabelled with no LLM.
+- A3: `archived_postings` has `occ_group` and `med_specialty`. Local export: 3,064 archive rows, 98.0 % with a group, 6.1 % with a specialty.
+- A2: spelling rule on the label, approved by Opus and applied: `normalize-titles.py --merge-spellings`, 35 labels, 131 postings. Tests with named mutations.
+- B: table of COR prefixes to the 15 landing domains. 32.3 % of all postings (24.0 % of the active ones) change domain; 5 % need the LLM family.
+- Tests: `webapp/tests/test_ocupatii.py` (new), one test in `test_archive_export.py`. Python suite: 1,481 passed, 1 failed (`test_salary_facet_sql`, reads `webapp-php/pages/list.php`, in the work of the other agent).
+
+**Hard**
+- The dash was not the main cause. It changes 60 postings. Most of the loss was the model: it answered "Muncitor calificat" for "Muncitor calificat (electrician)", whose base already held the trade. So the label is corrected after the model, by `trade_label()`.
+- A tail test by "words are in a COR name" let "întreținere" and "ordine" pass. The final test needs the words to start a COR name.
+- The department guard I wrote first was dead code (no COR name starts with "serviciul"). I deleted it; the test of the behaviour stays.
+- The local data is old: 46 postings pass `expires_at >= 2026-10-17`. Active numbers come from the 17 Oct export.
+- Not run, on purpose: PHP suites and Playwright (another agent worked in `webapp-php/`).
+
+**Decided**
+- A2: a rule "one label for each COR code" would erase the specialties ("Medic specialist neurologie") and the qualifiers ("Administrator patrimoniu"). A spelling rule on the label was used instead. Labels that differ by a word stay apart.
+- The grid selector was not touched. 25 postings change grid selector because they move to another dictionary key. No posting loses its estimate: 9 "bucătar" postings get a null `cod` because the grid row "Bucătar calificat" has no code in the source; `select()` finds it by name. 14 estimates change in value.
+
+### 2026-11-17 — Themes administratie and financiar, domain links, occupation chips (brief 1; not deployed)
+
+**Opus review (2026-11-18): accepted.** Checked against the brief: the configuration, the `domains` key, the chip rules, the two owner additions (no wait for a chip or an ×; the button "Toate județele"). Opus re-ran every PHP suite (20, all passed), the PHP lint, `npm run css`, pytest and ruff, and the full Playwright run before the commit. The software list FOREXEBUG, EDUSAL, SIIIR is accepted. Accepted assumption: the chip row also hides when an `occupation_not[]` filter is on. After the review, Opus removed "Infirmieră" from the `/sanatate/` chart group "Îngrijitor" (brief 2, A2, merges it into "Infirmier") and the dead key `'band' => true` in `pages/home.php`. Opus also removed the bar prototype (`POSTURI_CHART_BARS`) before the commit; brief 5 builds the bars.
+
+Brief `docs/briefs/2026-11-17-themes-admin-financiar-chips.md`. Sonnet built it; Opus review is open.
+
+**Done**
+- Template: a `values` section with `source => 'labels'` takes `order => 'count'` (sort by count, then `limit`). An entry of `search_selects` takes `labels` (value => text). `inc/themes.php` documents both, and the new theme key `domains`.
+- Themes `administratie` and `financiar` (configuration only). `Tip funcție` keys are the stored `job_level` phrases ("Funcții de conducere", "Funcții de execuție"); the fixtures use the legacy `executie`, so the tests set the live phrases.
+- The button "Toate județele" after the title (see Decided). Also `i-x` in the sprite.
+- Landing: a domain item of a theme (`domains`) links to `/{slug}/`; with a county the link is `/{slug}/#{county}` (`data-theme-href`, `static/home.js`). Other items keep `judet[]`. The footer, the sitemap and `/llms.txt` show both pages with no change.
+- Occupation chips on the list: helper `occupation_chips()` (rules of step 5), partial `partials/occupation_chips.php`, included in `partials/result_list.php` (so it is in the result region and in the htmx fragment). A chip click sets the checkbox in `#filter-form` and fires `change`: same request, `hx-sync` and stale-response guard. "Toate ocupațiile" opens the group (drawer below lg, sidebar or bar panel from lg); the group got the id `facet-occupation` (`partials/facets.php`) for the anchor.
+- Tests: `theme_test.php` 911 assertions, `home_test.php` 821 (from 795), new fixtures `chips_db.php` and `professional_db.php`, Playwright `chips.spec.js`, `theme.spec.js` and `home.spec.js` extended, two new servers (ports 8826, 8827) in `playwright.config.js`.
+
+**Measured** (dev database `data/_dev/posturi-new.sqlite`, `Server-Timing` total, median of 5, ms)
+- `/posturi/`: 45.7 and 44.4 before; 44.4 and 44.7 after. `/?family[]=administrație`: 19.6 and 20.4 before; 20.2 and 21.0 after. No change above 5 ms.
+- `/administratie/` 28.0 to 32.1; `/financiar/` 12.2 to 12.4; `/sanatate/` 34.4 to 34.8. All below 100 ms.
+- Dev database, 12-week chart groups. Administrație: Conducere 99, Referent 155, Inspector 93, Secretar 72, no group 378. Financiar: Conducere 24, Administrator financiar 42, Economist 67, Contabil 8, no group 25. Every group has postings. The dev export ends mid-October, so the last 4 weeks are 0 on today's clock.
+- Skills of financiar on the dev database (postings, by role): Excel 16, Word 14, Office 13, FOREXEBUG 7 (8 with "Forexebug", same filter), Operare PC 7, SIIIR 5, EDUSAL 4 (5 by the filter), "achiziții publice" 3, "baze de date" 3, SEAP 2, FINANTARE.ORG 2.
+
+**Hard**
+- The `skill` filter is a role fact (`posting_roles.skills`), not a column of `job_postings`. The test fixture needs role rows for the skills.
+- `ro_sort_key` puts "Spitale" before "Școli" (s before ș): a test expectation written in ASCII order failed.
+- A first fixture for the browser spec had one more administrație posting than the PHP fixture (the base fixture). The professional fixture now builds on the theme fixture.
+
+**Decided**
+- The chip row also hides when `occupation_not[]` is set. The facet counts leave that exclusion out, so a chip count could differ from the result count after the click. Cost of the alternative: a count that lies.
+- The chips tests are in `theme_test.php`, not a new suite: a new suite needs a line in `.github/workflows/ci.yml`, which the brief does not allow.
+- "Programe informatice cerute" is a proposal (FOREXEBUG, EDUSAL, SIIIR). Excluded: SEAP and FINANTARE.ORG (2 postings on the dev database; the live count is not measured), and the generic phrases ("programe de contabilitate", "baze de date").
+- Single actions skip the 500 ms wait (owner, same day). The wait of `change delay:500ms` is for several quick checkbox picks. A chip click and the × of an active filter are one complete action: `sendNow()` in `pages/list.php` raises `formEdits` once (the stale-response guard stays) and calls `htmx.trigger(form, 'submit')`, which the existing `hx-trigger` "submit" runs with no delay. `requestSubmit()` was not needed. Measured, click to request, at 320, 375 and 1280 px: chip 558, 573 ms before (375, 1280) and 60, 65, 61 ms after; × 555, 547 ms before and 55, 36, 43 ms after. The checkboxes keep their delay (`multiselect.spec.js` passes).
+- The button "Toate județele" after the title of a themed page (owner, same day; the checkbox of e16f235 stays removed): `<button class="g2-chip" data-county-clear hidden>` with the new Tabler symbol `i-x` (`inc/header.php`, ADR 0006). `static/home.js` shows it while a county is selected; a click runs `apply('', true)` and moves the focus to the county select. Only on a theme with a map.
+
+**Near-duplicate occupation names** (dev database, names with 2 or more postings, by landing domain)
+- Paza: "Îngrijitor de copii" and "Îngrijitor copii" (2 each); "Îngrijitor la domiciliu" (2) and "Îngrijitor bătrâni la domiciliu" (4); both are chips next to "Îngrijitor" (60).
+- Social: "Îngrijitor la domiciliu" (5) and "Îngrijitor" (3).
+- Sănătate: "Asistent medical", "Asistent medical generalist" and "Asistent medical comunitar" are chips side by side; "Infirmier" (chip) and "Infirmieră"; "Asistent medical radiologie" and "Asistent medical de radiologie"; "Medic" and "Medic specialist".
+- Administrație: "Referent" and "Referent de specialitate" are chips side by side; "Administrator patrimoniu" and "Administrator de patrimoniu"; "Inspector" and "Inspector de specialitate".
+- Meseriași: "Muncitor", "Muncitor calificat" and "Muncitor hidrometru".
+- Educație and Altele: "Asistent de cercetare științifică" (3) and "Asistent de cercetare" (3), in two domains.
+- Financiar: "Contabil" and "Contabil-șef" (different jobs, not a spelling pair).
+
+### 2026-11-17 — Themed pages for the professional domains: analysis and four briefs
+
+No code. Opus measured the domains and wrote four briefs:
+- `docs/briefs/2026-11-17-themes-admin-financiar-chips.md`
+- `docs/briefs/2026-11-17-pipeline-domain-trade.md`
+- `docs/briefs/2026-11-17-theme-meserii.md`
+- `docs/briefs/2026-11-17-theme-social.md`
+
+**Done**
+- Profile of each landing domain: occupations, employer kind, area of work, management level, studies, credentials and skills. Sources: the 17 Oct export (1,197 active postings) and the filter counts of the live list for each domain (1,638 active, 2026-11-17).
+- Live counts:
+
+  | Domain | Active |
+  |---|---|
+  | Sănătate | 554 |
+  | Administrație | 280 |
+  | Meseriași | 140 |
+  | Pază, îngrijire și servicii | 129 |
+  | Financiar | 93 |
+  | Social | 85 |
+  | Educație | 63 |
+  | Șoferi | 59 |
+  | Muncitori necalificați | 55 |
+  | Altele | 54 |
+  | Ingineri | 42 |
+  | Tehnicieni | 31 |
+  | Cultură | 25 |
+  | IT | 18 |
+  | Ordine publică | 7 |
+  | Juridic | 3 |
+
+**Hard**
+- The 17 Oct export was one month old: it had 27 % fewer active postings than the live site. Financiar had 55 postings there and 93 live. The first proposal marked Financiar "optional"; the live numbers changed that. Measure on live data before a decision about volume.
+- A first parser of the live filter counts used a lazy regular expression. It matched across rows, and the "fără" (exclude) checkboxes took the counts of the next row. The second parser splits the page at each checkbox.
+- New postings per week come from the export only (August to mid-October). The live site does not show them per domain, so the live decision uses the active count.
+
+**Decided** (owner, 2026-11-17)
+- **Themed pages:** Administrație, Financiar, Meserii și muncitori, and one page for Social and Educație. The rule "enough postings, a distinct audience and a section of its own" excludes the other domains:
+  - Ingineri and Tehnicieni: 73 postings, with nurses and military aviation technicians among them.
+  - Cultură 25, IT 18, Ordine publică 7, Juridic 3: too few postings for sections.
+  - Altele: a leftover group; its caretakers and cooks belong to services.
+
+  Cost of a page for each domain: thin pages for search engines, and pages that show the classification errors.
+- **Tehnic:** one page "Meserii și muncitori". Its four COR groups (7, 5, 8, 9: 383 active postings) are a section of the page, not four pages. Cost of four pages: four thin pages with the same employers and studies.
+- **Social and Educație:** one page, "Asistență socială și consiliere". The "educație" postings are school counsellors at town halls (32 of 63) and not teacher posts (3), so they share the audience and the employers of "social". Cost of two pages: an "Educație" page that promises teacher posts.
+- **Landing links:** a domain item links to its themed page when one exists (theme key `domains`, not equal parameters, because the Social and Meserii pages take more than one item).
+- **Order:** Administrație, Financiar and the occupation chips first; the data of these two domains is good. Then the pipeline brief. Then Meserii, because 70 % of its skilled workers have no trade today. The Social page does not depend on the pipeline.
+- **Occupation chips on the list:** chips with the most frequent occupations (`occ_canonical`, the bold title of a card), not raw titles. A raw title carries grade, post count and part-time notes, and no filter matches it. Rules:
+  - Show the row when the results fill more than one page.
+  - Show it when at least 2 occupations have 2 or more postings each.
+  - Show it when the largest occupation has 90 % of the results or less.
+  - Show it when no occupation filter is on.
+  - Show at most 8 chips. The last link is "Toate ocupațiile".
+
+  The counts come from the occupation filter, which the list computes already: no new query.
+- **Professional domain from COR (after the spike of brief 2, same day):** no change of the `family` vocabulary now. The spike moved 24 % of the active postings (32 % of all). Many of those moves come from wrong COR codes of generic labels, not from a better domain:
+  - "Administrator" carries 515104 (caretaker).
+  - "Referent" and "Consilier" carry 331309 (financial associate).
+
+  Next: correct those codes (backlog UX-05-DOMAIN-COR-FIX), then measure again. If a COR-based domain is still useful, add it as a new field. Cost of a change now: saved searches, alerts, feeds and old `family[]` URLs would change meaning, on a mapping that moves postings for the wrong reason. Meserii (brief 3) keeps `family[]=tehnic` with COR 5, 7, 8 and 9: these groups are the same under both methods.
+- **County map scale (owner request, same day):** the colour steps of the county map become relative to the counts of the page. They use a log scale between the smallest and the largest non-zero count, with a blank tile for 0. Measured on the 17 Oct export, counties in steps 1 to 4:
+
+  | Method | Sănătate | Financiar |
+  |---|---|---|
+  | Fixed steps (today) | 37 / 2 / 1 / 0 | 27 / 0 / 0 / 0 |
+  | Linear min–max | 37 / 2 / 0 / 1 | not measured |
+  | Log min–max | 10 / 23 / 5 / 2 | 16 / 9 / 1 / 1 |
+  | Quartiles | 10 / 10 / 10 / 10 | collapses (breaks 1, 1, 2) |
+
+  Cost of a linear scale: București alone takes the top step, and the map stays flat. Cost of quartiles: the steps collapse when the counts are small. Opus builds it after brief 1, because brief 1 changes the same files.
+- **Notifications band (owner request, same day; done by Opus):** "Abonează-te la notificări" is a full-width `sunken` band (`.pg-band`) on every page. Before, only the landing page had the band and a themed page had a box. `partials/follow_cards.php` has no `band` option now. The key `'band' => true` in `pages/home.php` does nothing; remove it after brief 1. Checked on `/sanatate/` with the 17 Oct export: the band reaches both edges of the window; no horizontal scroll at 375 and 1280 px. A band that is the last section of the page now meets the footer. Before, a white strip of 104 px stayed between them: the container's `pb-14` plus the footer's `mt-12`. The rule is in `assets/app.css` and uses `:has(> .pg-band:last-child)`. Measured: `/sanatate/` 0 px. The landing page keeps 104 px after "Instrumente", because its band is not the last section.
+- **Health card without border (owner request, 2026-11-18; done by Opus):** the card "Posturi în sănătate" in the landing examples has no border and no extra padding now. The icon still marks it as the card that opens a page, not a list. Before, it had a 2 px `gov` border with `px-3 py-2`. Its title starts at the left edge of the column, as the other titles do (measured: 0 px offset at 1280 and 375 px). `home_test.php`: 821 assertions passed.
+- **One chart axis for all buttons (owner request, same day; done by Opus):** on a themed page, every button of the weekly chart uses one vertical axis. The axis goes from 0 to the largest week of the total and of each series, in the selected county. Before, each button had its own scale, from its own minimum to its own maximum: a group of 3 a week filled the same height as a total of 60. The minimum is 0 for all buttons too: with a shared maximum and a minimum for each series, a series could fall below the axis. `partials/weekly_chart.php` draws the total on the same axis (no jump when the script loads). The landing chart has no buttons and keeps its scale. The line of text keeps the min and max of the series itself. Measured on `/sanatate/` (17 Oct export), the top of each line, with y = 4 at the top of the frame and y = 60 at the bottom: Toate 4 (205 a week), Asistent 37.1 (84), Medic 41.4 (68), Îngrijitor 49.3 (39), Rezident 57 (11). Tests: `theme_test.php` 900 and `home_test.php` 821 assertions passed. `theme.spec.js` now expects Medic's top at y = 32 on the fixture (mutation: a scale for each series gives 4). Not run yet: the brief 1 agent was using the Playwright ports.
+
 ### 2026-11-17 — Landing page: health card, column layout, county in the URL, domain band (not deployed)
 
 No brief (owner requests in the session; small changes to the landing page).

@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/query.php';
+require_once __DIR__ . '/inc/themes.php';
 
 // Load Parsedown if present
 if (file_exists(__DIR__ . '/Parsedown.php')) {
@@ -110,7 +111,7 @@ unset($_GET['org_htmx_cache-buster']);
 // then, so Cloudflare may keep a page for an hour; the browser, which nobody
 // purges, for five minutes. Decided at shutdown, once the status is known: an
 // error (a 404, a 500 from an uncaught exception) is never stored, and a route
-// that chose its own Cache-Control (versiuni.json, robots, sitemap) keeps it.
+// that chose its own Cache-Control (versiuni.json, robots, sitemap, llms.txt) keeps it.
 // The buffer holds the headers back until then. Expires is sent too because
 // the host's mod_expires adds its own max-age=600 only when the response has
 // no Expires.
@@ -148,6 +149,7 @@ if ($uri === '/versiuni.json') { require __DIR__ . '/feeds/versiuni.json.php'; e
 // Crawler surface
 if ($uri === '/robots.txt') { require __DIR__ . '/pages/robots.php';  exit; }
 if ($uri === '/sitemap.xml') { require __DIR__ . '/pages/sitemap.php'; exit; }
+if ($uri === '/llms.txt')    { require __DIR__ . '/pages/llms.php';    exit; }   // a text file for language models (llmstxt.org)
 
 // ADR 0004: `/` is the landing page; the list is `/?…` and, unfiltered, `/posturi/`.
 // "Empty" means a parameter whose every value is blank (a form that was sent
@@ -220,6 +222,14 @@ if ($is_root && !$hx_fragment && !$_GET) {
     require __DIR__ . '/pages/employer_builder.php';
 } elseif ($uri === '/despre' || $uri === '/despre/') {
     require __DIR__ . '/pages/about.php';
+} elseif (($theme = theme_for_uri($uri)) !== null) {
+    // A themed landing page (inc/themes.php). `/{slug}/?…` is a filtered list: it has one URL, `/?…` (ADR 0004).
+    if ($_GET) {
+        http_response_code(301);
+        header('Location: ' . theme_redirect_url($theme, $_GET));
+        exit;
+    }
+    require __DIR__ . '/pages/theme.php';
 } else {
     http_response_code(404);
     $page_title = '404';

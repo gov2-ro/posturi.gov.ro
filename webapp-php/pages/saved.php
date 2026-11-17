@@ -25,6 +25,13 @@ require __DIR__ . '/../inc/header.php';
     Salvările și anunțurile ascunse rămân în acest browser. Nu se sincronizează între dispozitive și se pot pierde dacă ștergi datele browserului. Poți salva cel mult 4 căutări și 20 de anunțuri. Exportă anunțurile și notițele ca CSV (mai jos) ca să le păstrezi.
   </p>
 
+  <?php /* 2026-11-17: the masthead has no "Alerte" item; the way to the alerts is here, for each reader (no script). */ ?>
+  <section data-alerts-block aria-labelledby="alerts-block-title" class="mt-4 max-w-2xl">
+    <h2 id="alerts-block-title" class="font-display text-base font-semibold italic text-ink">Alerte pe email</h2>
+    <p class="mt-1 text-sm text-ink-muted">Primești pe email posturile noi dintr-o căutare salvată, o dată la 3 zile.</p>
+    <a href="/alerte/" class="inline-flex min-h-[44px] items-center text-sm font-semibold text-gov underline underline-offset-2 hover:no-underline">Gestionează alertele</a>
+  </section>
+
   <nav aria-label="Vedere" class="mt-5 flex flex-wrap gap-1 border-b border-line text-sm">
     <a data-view-tab="saved" href="/salvate/" class="-mb-px border border-transparent px-2 sm:px-4 py-2 text-ink-muted hover:text-gov aria-[current=page]:border-line aria-[current=page]:border-b-page aria-[current=page]:bg-page aria-[current=page]:font-semibold aria-[current=page]:text-ink">Salvate <span class="font-mono text-xs" data-count="saved"></span></a>
     <a data-view-tab="hidden" href="/salvate/?vedere=ascunse" class="-mb-px border border-transparent px-2 sm:px-4 py-2 text-ink-muted hover:text-gov aria-[current=page]:border-line aria-[current=page]:border-b-page aria-[current=page]:bg-page aria-[current=page]:font-semibold aria-[current=page]:text-ink">Ascunse <span class="font-mono text-xs" data-count="hidden"></span></a>

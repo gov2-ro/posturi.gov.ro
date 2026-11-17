@@ -240,7 +240,7 @@ test('list view: two columns beside the sidebar, the deadline beside the title o
   expect(dl.height, 'days and date on one line').toBeLessThanOrEqual(22);
   expect(meta.y, 'employer line below the title block').toBeGreaterThanOrEqual(title.y + title.height);
   expect(meta.x + meta.width, 'employer line runs under the deadline too').toBeGreaterThan(dl.x);
-  await expect(li.locator('.pg-salary')).toContainText('💰 4.100–5.200 lei (estimat)');
+  await expect(li.locator('.pg-salary')).toContainText('💰 ≈ 2.485–3.090 lei net (estimat)');
   await noOverflow(page, 'two-column list');
 });
 
@@ -257,7 +257,7 @@ test('grid cards: columns, title, employer, pay beside the deadline with the lab
   expect(pay.y - (meta.y + meta.height), 'pay right under the employer').toBeLessThanOrEqual(6);
   // 261016: no boxed badges; the tags (2026-10-18: distinctive facts) follow the pay on the same line of facts.
   expect(badges.y, 'labels start on the pay line').toBeLessThanOrEqual(pay.y + pay.height);
-  await expect(li.locator('.pg-salary')).toContainText('💰 4.100–5.200 lei (estimat)');
+  await expect(li.locator('.pg-salary')).toContainText('💰 ≈ 2.485–3.090 lei net (estimat)');
   // The three cards of the first row sit side by side.
   const ys = await page.locator('ul.pg-results > li.pg-row').evaluateAll((els) => els.slice(0, 3).map((e) => Math.round(e.getBoundingClientRect().y)));
   expect(new Set(ys).size).toBe(1);
@@ -279,7 +279,7 @@ test('table view: one line per posting, cells in their columns, pay labelled', a
   });
   // One line: every cell starts on the row's first line.
   for (const k of Object.keys(cells)) expect(Math.abs(cells[k].y - cells.title.y), `${k} on the row line`).toBeLessThanOrEqual(8);
-  await expect(li.locator('.pg-salary')).toContainText('4.100–5.200 lei');
+  await expect(li.locator('.pg-salary')).toContainText("≈ 2.485–3.090 lei net");
   await expect(li.locator('.pg-salary-kind')).toHaveText('(estimat)');
   await expect(li.locator('.pg-salary-label')).toBeHidden();
   await expect(li.locator('.pg-badges')).toBeHidden();
@@ -293,7 +293,7 @@ test('pay is on every result view, labelled as an estimate', async ({ page, view
     await page.goto('/posturi/');
     const sal = row(page, 1001).locator('.pg-salary');
     await expect(sal, mode).toBeVisible();
-    await expect(sal, mode).toContainText('4.100–5.200 lei');
+    await expect(sal, mode).toContainText("≈ 2.485–3.090 lei net");
     await expect(sal, mode).toContainText('(estimat)');
   }
 });

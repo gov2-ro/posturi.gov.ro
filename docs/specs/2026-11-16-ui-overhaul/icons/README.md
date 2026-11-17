@@ -78,3 +78,43 @@ Assumed:
 - I judged readability from icon names and my knowledge of the shapes. I did not review screenshots of the page in a browser. Check `compare.html` at 20px before the final decision, mainly `tank`, `building-community` and `building-2`.
 - I did not look for a fifth set. I know of no set built for civic sectors that has a licence as clear as these four.
 - Tabler 3.x and Lucide 1.x names can change in later versions. Pin the version when you copy the files.
+
+## Category terms (2026-11-17)
+
+Open `categories.html` in a browser. It needs no network.
+It compares icons for the terms of six filter categories, and for the 30 most frequent occupations.
+Counts are active postings of the 17 Oct 2026 export (1,197 postings).
+Sets: Tabler outline `@tabler/icons` 3.52.0 (MIT) and Health Icons 3.1.0 (CC0), pinned as in ADR 0006 and ADR 0007.
+
+I use three ratings.
+- **Good**: the icon shows the term.
+- **Weak**: the icon shows only part of the term, or the term groups several senses. The page gives a second candidate.
+- **Gap**: no icon shows the term. The app needs a custom icon.
+
+| Category | Terms | Good Tabler icon | Weak | Gaps |
+|---|---|---|---|---|
+| 1. Tip instituție | 18 | 10 | 5 | 3 |
+| 2. Grupă ocupațională (10 major COR groups) | 10 | 5 | 5 | 0 |
+| 3. Studii | 7 | 2 | 4 | 1 |
+| 4. Contract, program, mod de lucru, tip funcție, grad | 35 | 9 | 16 | 10 |
+| 5. Finanțare | 7 | 4 | 2 | 1 |
+| 6. Specialități medicale | 34 | 12 | 17 | 5 |
+| 7. Top 30 ocupații | 30 | not rated | not rated | not rated |
+| 8. Domenii (15) și sectoare (14), reference | 29 | in use | in use | in use |
+
+Gap terms:
+- Tip instituție: Alte direcții publice, Consilii județene, Prefecturi.
+- Grupă ocupațională: none.
+- Studii: Postliceală.
+- Contract and related: Funcții de execuție, Sezonier, Hibrid (work mode), Consilier, Referent, Asistent (grade), Asistent, Practicant, Principal, Superior (career stage).
+- Finanțare: PNRR.
+- Specialități medicale: Medicină internă, Chirurgie (alte specialități), Medicină de familie, Medicină legală, Epidemiologie.
+
+Notes:
+- **Medical specialties.** A term is a gap only when neither set has a good icon. Tabler has a good icon for 12 of the 34 terms. Health Icons has a good icon for 27 terms. Health Icons covers 17 more terms where Tabler is weak or has no icon. Tabler has no icon for gastroenterology, dermatology, urology, nephrology, rheumatology and gynecology.
+- **Studies.** The levels differ by rank, not by object. An icon shows "education", not the level. Only "Generală" and "Licență" have a good icon.
+- **Grade and career stage.** `inf_seniority` still filters by URL but has no visible control. `v3_seniority_hint` is display only. The page rates both because the labels exist.
+- **Values with a count of 0.** Hibrid, Telemuncă, Fracțiune de normă and the "Telemuncă sau hibrid" switch have 0 active postings in this export. Sezonier has 0 as well. The icons stay in the page because the code has the labels.
+- **Studies value without label.** `profesionala` has 17 postings and no entry in `STUDIES_LABELS`. The app shows the raw value.
+- **Occupations.** The top 30 occupations take the domain icon or the COR group icon of their postings. The page shows the share of postings that gives the icon. A domain icon shows the domain, not the person.
+- **Reuse.** Six domain icons are also the best COR group icons: `clipboard-text` (4), `tools` (7), `steering-wheel` (8), and, rated weak, `ruler-2` (3), `user-shield` (5) and `shovel` (9).

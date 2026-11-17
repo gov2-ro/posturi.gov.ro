@@ -192,7 +192,7 @@ test('a saved search never moves the reader off bare /: no redirect, no notice, 
   fresh.on('pageerror', (e) => pageErrors.get(page).push(e.message));
   await fresh.goto('/');
   await expect(fresh).toHaveURL(/\/$/);
-  await expect(fresh.locator('h1')).toHaveText('Anunțuri de angajare din administrația publică');
+  await expect(fresh.locator('h1')).toHaveText('Anunțuri de angajare în administrația publică');
   expect(await fresh.evaluate(() => sessionStorage.getItem('posturi.searchRedirect'))).toBeNull();
   expect(await fresh.evaluate(() => sessionStorage.getItem('posturi.searchApplied'))).toBeNull();
   // A saved search still opens from its own link on the list page, with its toggle pressed.
@@ -271,7 +271,8 @@ test('/salvate/ is one page: Căutări salvate first, Anunțuri salvate after; ?
   await seedSearches(page, [rec('q=prima', { label: 'Prima' })]);
   for (const url of ['/salvate/', '/salvate/?vedere=cautari']) {
     await page.goto(url);
-    const heads = page.locator('[data-saved-page] h2');
+    // The alerts block (2026-11-17, brief nav-toc-theme-hero) is above both; it is not a list of saved things.
+    const heads = page.locator('[data-saved-page] h2:not(#alerts-block-title)');
     await expect(heads.nth(0)).toContainText('Căutări salvate');
     await expect(heads.nth(1)).toContainText('Anunțuri salvate');
     await expect(page.locator('[data-view-tab="saved"]')).toHaveAttribute('aria-current', 'page');

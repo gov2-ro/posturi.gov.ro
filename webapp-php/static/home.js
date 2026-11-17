@@ -1,15 +1,22 @@
 /*
- * The landing page (pages/home.php, ADR 0004). Two things need script:
+ * The landing page (pages/home.php, ADR 0004) and the themed pages (pages/theme.php). Two things need script:
  *
- *  1. The hero form. An empty form opens /posturi/ (the unfiltered list); a
- *     filled one opens the canonical list URL of its fields. Without this
- *     script the server redirects a blank request (index.php).
- *  2. The county select and the county tile map in #domenii. Both are hidden
- *     in the HTML and shown here. A county selected on either one shows, on each
- *     professional-domain item, the count of that county in brackets, hides an item with no postings, and
- *     points the item's link at the list for that county and domain (family[], and cor[] for the split of "tehnic"). The counts are in
- *     the JSON block #home-data (active postings, the same predicate as the
- *     list). Without script the tiles show the totals and link to the domain.
+ *  1. The search form. An empty form opens /posturi/ (the unfiltered list); a
+ *     filled one opens the canonical list URL of its fields (the hidden fields of a
+ *     theme filter included). Without this script the server redirects a blank
+ *     request (index.php).
+ *  2. The county select and the county tile map. Both are hidden in the HTML and shown
+ *     here. A county selected on either one shows, on each item ([data-home-tile]: a
+ *     professional domain, a specialty, ...), the count of that county in brackets, hides
+ *     an item with no postings, and points the item's link at the list of the item's
+ *     filter and that county. The filter of each item and its counts are in the JSON
+ *     block #home-data: items[id] = {params: {field: [values]}, counties: {slug: n}}
+ *     (active postings, the same predicate as the list). An item with no count element
+ *     only gets the county in its link. Without script the items show the totals.
+ *     A themed page has the select of its search form: the map and that select are one control. The checkbox
+ *     [data-county-all] ("Arată toate județele") is checked when no county is selected and clears the county when it is checked;
+ *     the <h1> gets " → county" ([data-county-title]) and the count of that county ([data-title-count]). Each selection
+ *     sends the event `posturi:county` ({slug}) to static/theme-panel.js, which filters the chart.
  *
  * No personal state is read or written here.
  */
@@ -51,11 +58,10 @@
   if (form) {
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
-      var q = form.elements.q.value.trim();
-      var judet = form.elements['judet[]'].value;
       var p = new URLSearchParams();
-      if (q) p.set('q', q);
-      if (judet) p.append('judet[]', judet);
+      new FormData(form).forEach(function (v, k) {
+        if (typeof v === 'string' && v.trim() !== '') p.append(k, v.trim());
+      });
       var key = searchKey(p.toString());
       window.location.assign(key ? '/?' + key : '/posturi/');
     });
@@ -67,47 +73,83 @@
   if (dataEl) { try { data = JSON.parse(dataEl.textContent); } catch (e) { data = null; } }
   if (!data) return;
 
-  var select = document.getElementById('domenii-judet');
+  // The county select: the one of the domains section (landing page) or, on a themed page, the one of the search form. The map and
+  // the select are one control: a click on the map sets the select, a change of the select marks the map and filters the page.
+  var select = document.getElementById('domenii-judet') || qs('[data-home-search] select[name="judet[]"]');
   var cells = qsa('[data-county]');
   var tiles = qsa('[data-home-tile]');
   var live = qs('[data-home-live]');
-  if (!select) return;
+  var allBox = qs('[data-county-all]');            // the checkbox "Arată toate județele" under the map of a themed page
+  var title = qs('[data-county-title]');           // inside the <h1> of a themed page
+  var titleCount = qs('[data-title-count]');       // the count of active postings after the title
+  var current = select ? select.value : '';
+  if (!select && !cells.length) return;
   qsa('[data-home-js]').forEach(function (el) { el.hidden = false; });
 
   function selectedName() {
-    var opt = select.options[select.selectedIndex];
-    return opt ? (opt.dataset.name || opt.textContent) : '';
+    if (select) {
+      var opt = select.options[select.selectedIndex];
+      return opt ? (opt.dataset.name || opt.textContent) : '';
+    }
+    var cell = qs('[data-county="' + current + '"]');
+    return cell ? (cell.getAttribute('aria-label') || '').replace(/:.*$/, '') : '';
   }
 
   /** The values of a JSON list (the server writes lists as objects, JSON_FORCE_OBJECT). */
   function list(o) { return o ? Object.keys(o).map(function (k) { return o[k]; }) : []; }
 
   function apply(slug, announce) {
-    select.value = slug;
+    current = slug;
+    if (select) select.value = slug;
+    if (allBox) allBox.checked = !slug;
+    if (titleCount) {
+      var all = (data.items || {}).all || {};
+      titleCount.textContent = '\u00a0(' + numLabel(slug ? ((all.counties || {})[slug] || 0) : data.total) + ')';
+    }
+    if (title) {
+      // "Posturi în sănătate → Suceava": the arrow is decoration; the word "județul" is for assistive technology only.
+      title.textContent = '';
+      if (slug) {
+        var arrow = document.createElement('span'); arrow.setAttribute('aria-hidden', 'true'); arrow.textContent = ' \u2192 ';
+        var word = document.createElement('span'); word.className = 'sr-only'; word.textContent = ' jude\u021bul ';
+        title.appendChild(arrow); title.appendChild(word); title.appendChild(document.createTextNode(selectedName()));
+      }
+    }
     cells.forEach(function (c) { c.setAttribute('aria-pressed', c.dataset.county === slug ? 'true' : 'false'); });
     tiles.forEach(function (t) {
-      var dom = (data.domains || {})[t.dataset.domain] || {};
-      var n = slug ? ((dom.counties || {})[slug] || 0) : parseInt(t.dataset.total, 10);
-      t.hidden = n === 0;
-      qs('[data-tile-count]', t).textContent = '\u00a0(' + numLabel(n) + ')';
+      var item = (data.items || {})[t.dataset.domain] || {};
+      var count = qs('[data-tile-count]', t);
+      if (count) {
+        var n = slug ? ((item.counties || {})[slug] || 0) : parseInt(t.dataset.total, 10);
+        t.hidden = n === 0;
+        count.textContent = '\u00a0(' + numLabel(n) + ')';
+      }
       var p = new URLSearchParams();
       if (slug) p.append('judet[]', slug);
-      list(dom.family).forEach(function (v) { p.append('family[]', v); });
-      list(dom.cor).forEach(function (v) { p.append('cor[]', v); });
+      var params = item.params || {};
+      Object.keys(params).forEach(function (field) {
+        list(params[field]).forEach(function (v) { p.append(field, v); });
+      });
       qs('a', t).setAttribute('href', '/?' + searchKey(p.toString()));
     });
     if (announce && live) {
       var total = slug ? (data.counties[slug] || 0) : data.total;
       live.textContent = (slug ? selectedName() : 'Toate județele') + ': ' + postsLabel(total) + ' active';
     }
+    // The statistics panel of a themed page (static/theme-panel.js) follows the selection.
+    document.dispatchEvent(new CustomEvent('posturi:county', { detail: { slug: slug } }));
   }
 
   cells.forEach(function (c) {
     c.addEventListener('click', function () {
       var slug = c.dataset.county;
-      apply(select.value === slug ? '' : slug, true);
+      apply(current === slug ? '' : slug, true);
     });
   });
-  select.addEventListener('change', function () { apply(select.value, true); });
-  apply(select.value, false);
+  // The checkbox is checked when no county is selected. Checking it clears the county; a click while none is selected leaves it checked.
+  if (allBox) allBox.addEventListener('change', function () {
+    if (allBox.checked) apply('', true); else allBox.checked = !current;
+  });
+  if (select) select.addEventListener('change', function () { apply(select.value, true); });
+  apply(current, false);
 })();

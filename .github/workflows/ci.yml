@@ -149,6 +149,14 @@ jobs:
         working-directory: webapp-php
         run: php tests/home_test.php
 
+      - name: Themed landing pages, /sanatate/ (docs/briefs/2026-11-17-themed-landing-sanatate.md)
+        working-directory: webapp-php
+        run: php tests/theme_test.php
+
+      - name: llms.txt (the text file for language models)
+        working-directory: webapp-php
+        run: php tests/llms_test.php
+
       - name: One look, the gov2 DS; no skins (ADR 0005)
         working-directory: webapp-php
         run: php tests/ds_test.php

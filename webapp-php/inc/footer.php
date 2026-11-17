@@ -5,6 +5,8 @@ $_footer_groups = [
     'Posturi' => [
         ['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'],
         ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'],
+        // The themed pages (inc/themes.php), after the fixed links.
+        ...array_map(fn($slug, $t) => [$t['label'], '/' . $slug . '/'], array_keys(themes()), themes()),
     ],
     'Urmărește' => [
         ['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'],
@@ -12,7 +14,7 @@ $_footer_groups = [
     ],
     'Proiect' => [
         ['Despre și metodologie', '/despre/'], ['Confidențialitate', '/despre/#confidentialitate'],
-        ['Cod sursă', 'https://github.com/gov2-ro/posturi.gov.ro'], ['Pentru angajatori', '/pentru-angajatori/anunt/'],
+        ['Cod sursă', 'https://github.com/gov2-ro/posturi.gov.ro', 'i-brand-github'], ['Pentru angajatori', '/pentru-angajatori/anunt/'],
     ],
 ]; ?>
 <footer class="g2-footer mt-12">
@@ -21,22 +23,25 @@ $_footer_groups = [
     <div>
       <h2 class="g2-label mb-1"><?= e($_fg_title) ?></h2>
       <ul>
-        <?php foreach ($_fg_links as [$_fl_label, $_fl_href]): $_ext = str_starts_with($_fl_href, 'https://'); ?>
-        <li><a href="<?= e($_fl_href) ?>"<?= $_ext ? ' target="_blank" rel="noopener"' : '' ?> class="inline-flex min-h-[44px] items-center text-sm"><?= e($_fl_label) ?></a></li>
+        <?php /* A link is 26 px high (24 px at least, WCAG 2.5.8) and the rows are 30 px apart: the targets are 4 px apart. */ ?>
+        <?php foreach ($_fg_links as $_fl_row): [$_fl_label, $_fl_href, $_fl_icon] = $_fl_row + [2 => null]; $_ext = str_starts_with($_fl_href, 'https://'); ?>
+        <li class="flex py-0.5"><a href="<?= e($_fl_href) ?>"<?= $_ext ? ' target="_blank" rel="noopener"' : '' ?> class="inline-flex items-center gap-1.5 py-[3px] text-sm leading-5"><?= $_fl_icon ? icon($_fl_icon, 'h-[18px] w-[18px] shrink-0') : '' ?><?= e($_fl_label) ?></a></li>
         <?php endforeach; ?>
       </ul>
     </div>
     <?php endforeach; ?>
+    <?php /* Each part is one inline block, so a line break falls between two parts and not inside one. */ ?>
     <p class="g2-text-meta basis-full">
-      Acesta <b>nu este un proiect oficial</b> al Guvernului României. Versiune beta.
+      <?php $_sep = '<span aria-hidden="true">&ensp;&middot;&ensp;</span>'; ?>
+      <span class="inline-block">Acesta <b>nu este un proiect oficial</b> al Guvernului României. Versiune beta.<?= $_sep ?></span>
       <?php if (!empty($_build_stamp)): ?>
-      &ensp;&middot;&ensp; Bază de date generată
-      <time datetime="<?= e($_build_stamp_iso ?? '') ?>"<?= !empty($_build_tooltip) ? ' title="' . e($_build_tooltip) . '" class="cursor-help"' : '' ?>><?= $_build_stamp ?></time>
+      <span class="inline-block">Bază de date generată
+      <time datetime="<?= e($_build_stamp_iso ?? '') ?>"<?= !empty($_build_tooltip) ? ' title="' . e($_build_tooltip) . '" class="cursor-help"' : '' ?>><?= $_build_stamp ?></time><?= $_sep ?></span>
       <?php if ($_source_label): ?>
-      &ensp;&middot;&ensp; <?= e($_source_label) ?>
+      <span class="inline-block"><?= e($_source_label) ?><?= $_sep ?></span>
       <?php endif; ?>
       <?php endif; ?>
-      &ensp;&middot;&ensp; sursă: <a href="https://posturi.gov.ro" rel="noopener" class="inline-flex min-h-[44px] items-center">posturi.gov.ro</a>
+      <span class="inline-block">sursă: <a href="https://posturi.gov.ro" rel="noopener" class="py-4">posturi.gov.ro</a></span>
     </p>
   </div>
 </footer>

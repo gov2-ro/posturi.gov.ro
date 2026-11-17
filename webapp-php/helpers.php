@@ -199,23 +199,24 @@ function usd_label(float $v): string {
 /**
  * The pay a result row shows (list, grid and table views): the salary the posting states
  * when it states one, else the estimate from the 2026 draft salary grid. The same
- * precedence as SALARY_EXPR, so a row and the salary filter never disagree. Gross lei per
- * month at gradația 0 for the estimate (the detail page says how it was reached), and an
- * estimate is always labelled as one. Null when there is no figure (or an old export
- * without the columns).
+ * precedence as SALARY_EXPR, so a row and the salary filter never disagree. The text is the
+ * net pay per month (net_label()); the gross range is in `gross` (the title of the figure, the
+ * detail page). An estimate is always labelled as one. Null when there is no figure (or an old
+ * export without the columns).
  *
- * @return array{label: string, text: string, estimated: bool}|null
+ * @return array{label: string, text: string, gross: string, estimated: bool}|null
  */
 function list_salary(array $p): ?array {
     foreach ([['inf_salary_min', 'inf_salary_max', 'Salariu anunțat', false],
               ['sal_min', 'sal_max', 'Salariu estimat', true]] as [$lo, $hi, $label, $estimated]) {
         $min = $p[$lo] ?? null;
         if ($min === null || $min === '' || (float)$min <= 0) continue;
-        $min = (int)round((float)$min);
-        $max = ($p[$hi] ?? null) === null || ($p[$hi] ?? '') === '' ? $min : (int)round((float)$p[$hi]);
+        $rawmax = ($p[$hi] ?? null) === null || ($p[$hi] ?? '') === '' ? null : (float)$p[$hi];
+        $imin = (int)round((float)$min);
+        $imax = $rawmax === null ? $imin : (int)round($rawmax);
         $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
-        $text = $max > $min ? $fmt($min) . '–' . $fmt($max) . ' lei' : $fmt($min) . ' lei';
-        return ['label' => $label, 'text' => $text, 'estimated' => $estimated];
+        $gross = $imax > $imin ? $fmt($imin) . '–' . $fmt($imax) . ' lei' : $fmt($imin) . ' lei';
+        return ['label' => $label, 'text' => net_label((float)$min, $rawmax), 'gross' => $gross, 'estimated' => $estimated];
     }
     return null;
 }
@@ -277,11 +278,11 @@ function pay_level(array $p): ?array {
     if ($v <= 0 || !($q = pay_quintiles())) return null;
     $level = 1;
     foreach ($q['cuts'] as $cut) if ($v >= $cut) $level++;
-    $median = number_format($q['median'], 0, ',', '.');
+    $median = number_format(net_from_gross($q['median']), 0, ',', '.');
     $words = [1 => 'printre cele mai mici', 2 => 'sub mediană', 3 => 'în jurul medianei',
               4 => 'peste mediană', 5 => 'printre cele mai mari'][$level];
     return ['level' => $level,
-            'text' => "Salariu $words: treapta $level din 5 față de posturile active (mediana $median lei brut)"];
+            'text' => "Salariu $words: treapta $level din 5 față de posturile active (mediana $median lei net)"];
 }
 
 /** The 1–5 pay meter: five small bars, the first `level` filled. Decorative beside a text title. */
@@ -315,17 +316,6 @@ const QUALITY_CHECKS = [
 
 /** Short regime word for a result row (261016: replaces the source's unreliable `categorie`). */
 const JOB_REGIME_SHORT = ['contractuala' => 'Contractual', 'publica' => 'Funcție publică', 'militara' => 'Funcție militară'];
-
-/** net_label() for the pay a result row shows: the same precedence as list_salary(). */
-function list_salary_net(array $p): string {
-    foreach ([['inf_salary_min', 'inf_salary_max'], ['sal_min', 'sal_max']] as [$lo, $hi]) {
-        $min = $p[$lo] ?? null;
-        if ($min === null || $min === '' || (float)$min <= 0) continue;
-        $max = ($p[$hi] ?? null) === null || ($p[$hi] ?? '') === '' ? null : (float)$p[$hi];
-        return net_label((float)$min, $max);
-    }
-    return '';
-}
 
 /** "≈ 2.981 lei net" (or a range) for a gross min/max, '' when there is none. */
 function net_label(?float $min, ?float $max = null): string {
@@ -1151,13 +1141,90 @@ const DEADLINE_SOURCE_LABELS = [
     'expirare' => 'estimat din data expirării anunțului',
 ];
 
+/**
+ * The old salary buckets: gross lei per month. Not offered in the filter any more (the filter
+ * works in net pay, SALARY_NET_BUCKETS), but every value stays valid with its old meaning, so
+ * that a saved search and an email subscription select the same postings as before.
+ */
 const SALARY_BUCKETS = [
-    ['key' => 'sub-3000',   'label' => 'sub 3000',    'min' => 0,    'max' => 3000],
-    ['key' => '3000-4000',  'label' => '3000 – 4000', 'min' => 3000, 'max' => 4000],
-    ['key' => '4000-5000',  'label' => '4000 – 5000', 'min' => 4000, 'max' => 5000],
-    ['key' => '5000-7000',  'label' => '5000 – 7000', 'min' => 5000, 'max' => 7000],
-    ['key' => 'peste-7000', 'label' => 'peste 7000',  'min' => 7000, 'max' => null],
+    ['key' => 'sub-3000',   'label' => 'sub 3.000 lei brut',        'min' => 0,    'max' => 3000],
+    ['key' => '3000-4000',  'label' => '3.000 – 4.000 lei brut',    'min' => 3000, 'max' => 4000],
+    ['key' => '4000-5000',  'label' => '4.000 – 5.000 lei brut',    'min' => 4000, 'max' => 5000],
+    ['key' => '5000-7000',  'label' => '5.000 – 7.000 lei brut',    'min' => 5000, 'max' => 7000],
+    ['key' => 'peste-7000', 'label' => 'peste 7.000 lei brut',      'min' => 7000, 'max' => null],
 ];
+
+/**
+ * The salary filter: monthly net pay (net_from_gross() of the lower figure SALARY_EXPR gives).
+ * `min` and `max` are net lei; the bucket holds min <= net < max. Order = order in the filter.
+ */
+const SALARY_NET_BUCKETS = [
+    ['key' => 'net-sub-3000',   'label' => 'sub 3.000 lei net',        'min' => null, 'max' => 3000],
+    ['key' => 'net-3000-4000',  'label' => '3.000 – 4.000 lei net',    'min' => 3000, 'max' => 4000],
+    ['key' => 'net-4000-5000',  'label' => '4.000 – 5.000 lei net',    'min' => 4000, 'max' => 5000],
+    ['key' => 'net-peste-5000', 'label' => 'peste 5.000 lei net',      'min' => 5000, 'max' => null],
+];
+
+/** The postings where SALARY_EXPR gives no figure (null or zero). */
+const SALARY_NONE = 'fara-estimare';
+const SALARY_NONE_LABEL = 'fără salariu estimat';
+
+/**
+ * The gross lei (to the cent) from which net_from_gross() gives at least $net: a net threshold
+ * as a gross one, found once per request, so that the SQL compares the stored gross column
+ * (index-friendly). net_from_gross() dips by 1-3 lei at each 50-lei step of the deduction
+ * between 4.325 and 6.325 gross, but it crosses 3.000, 4.000 and 5.000 net once and stays above
+ * (tests/discovery_test.php checks this over every cent around each threshold), so a binary
+ * search finds the one crossing.
+ */
+function gross_for_net(int $net): float {
+    static $memo = [];
+    if (isset($memo[$net])) return $memo[$net];
+    [$lo, $hi] = [0, 100000000];                       // cents; net_from_gross($hi / 100) >= $net
+    while ($lo < $hi) {
+        $mid = intdiv($lo + $hi, 2);
+        if (net_from_gross($mid / 100) >= $net) { $hi = $mid; } else { $lo = $mid + 1; }
+    }
+    return $memo[$net] = $lo / 100;
+}
+
+/**
+ * The SQL of one salary_bucket value: [where fragments, binds], or null for an unknown value
+ * (no filter, as before). One definition for build_filters() and the facet counts. Compares the
+ * stored gross figure. The CAST is load-bearing: see build_filters().
+ *
+ * @return array{0: string[], 1: float[]}|null
+ */
+function salary_bucket_sql(string $key): ?array {
+    if ($key === SALARY_NONE) {
+        return [['(' . SALARY_EXPR . ' IS NULL OR ' . SALARY_EXPR . ' <= 0)'], []];
+    }
+    foreach (SALARY_BUCKETS as $b) {
+        if ($b['key'] !== $key) continue;
+        $w = [SALARY_EXPR . ' IS NOT NULL', SALARY_EXPR . ' >= CAST(? AS REAL)'];
+        $bind = [$b['min']];
+        if ($b['max'] !== null) { $w[] = SALARY_EXPR . ' < CAST(? AS REAL)'; $bind[] = $b['max']; }
+        return [$w, $bind];
+    }
+    foreach (SALARY_NET_BUCKETS as $b) {
+        if ($b['key'] !== $key) continue;
+        $w = [SALARY_EXPR . ' IS NOT NULL', SALARY_EXPR . ' > 0'];
+        $bind = [];
+        if ($b['min'] !== null) { $w[] = SALARY_EXPR . ' >= CAST(? AS REAL)'; $bind[] = gross_for_net($b['min']); }
+        if ($b['max'] !== null) { $w[] = SALARY_EXPR . ' < CAST(? AS REAL)'; $bind[] = gross_for_net($b['max']); }
+        return [$w, $bind];
+    }
+    return null;
+}
+
+/** The label of any salary_bucket value (net, old gross, none); the key itself when unknown. */
+function salary_bucket_label(string $key): string {
+    if ($key === SALARY_NONE) return SALARY_NONE_LABEL;
+    foreach ([SALARY_NET_BUCKETS, SALARY_BUCKETS] as $set) {
+        foreach ($set as $b) if ($b['key'] === $key) return $b['label'];
+    }
+    return $key;
+}
 
 const EXP_BUCKETS = [
     ['key' => 'fara',  'label' => 'Fără experiență', 'min' => 0, 'max' => 1],
@@ -1823,7 +1890,7 @@ function filter_value_label(string $key, string $value): string {
         'anomaly'                          => ANOMALY_LABELS[$value] ?? $value,
         'work_type'                        => WORK_TYPE_LABELS[$value] ?? $value,
         'exp_level'                        => bucket_label(EXP_BUCKETS, $value),
-        'salary_bucket'                    => bucket_label(SALARY_BUCKETS, $value),
+        'salary_bucket'                    => salary_bucket_label($value),
         'status'                           => STATUS_LABELS[$value] ?? ($value === 'all' ? 'Toate' : $value),
         'remote'                           => 'Telemuncă',
         'schema'                           => $value === 'yes' ? 'Structurată' : 'Text brut',
@@ -2034,6 +2101,16 @@ function timing_mark(string $name): void {
 /** A decorative icon from the sprite in inc/header.php: `<svg><use>`, hidden from assistive technology. */
 function icon(string $id, string $class = ''): string {
     return '<svg' . ($class !== '' ? ' class="' . e($class) . '"' : '') . ' aria-hidden="true" focusable="false"><use href="#' . e($id) . '"/></svg>';
+}
+
+/**
+ * A section heading of a page with a table of contents (partials/toc.php): the `<h2>` takes its id and its text from the
+ * array `$toc` of the page (id => label), so the heading and the list cannot differ. `tabindex="-1"` lets a click on the
+ * list move the keyboard position here; `scroll-mt-4` leaves room above it.
+ */
+function toc_h2(array $toc, string $id, string $class = ''): string {
+    return '<h2 id="' . e($id) . '" tabindex="-1" class="scroll-mt-4 focus:outline-none' . ($class !== '' ? ' ' . e($class) : '') . '">'
+         . e($toc[$id]) . '</h2>';
 }
 
 function e(mixed $v): string {
@@ -2351,17 +2428,9 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // SQLite compares a REAL against a TEXT — and a number is always less than
     // a string, making every `>=` false. The old `inf_salary_min >= ?` only
     // worked because a bare column carries REAL affinity and converts the bind.
-    if ($sal_bucket && $excl !== 'salary_bucket') {
-        foreach (SALARY_BUCKETS as $b) {
-            if ($b['key'] !== $sal_bucket) continue;
-            $where[] = SALARY_EXPR . " IS NOT NULL";
-            $where[] = SALARY_EXPR . " >= CAST(? AS REAL)";
-            $binds[] = $b['min'];
-            if ($b['max'] !== null) {
-                $where[] = SALARY_EXPR . " < CAST(? AS REAL)";
-                $binds[] = $b['max'];
-            }
-        }
+    if ($sal_bucket && $excl !== 'salary_bucket' && ($sb = salary_bucket_sql((string)$sal_bucket))) {
+        array_push($where, ...$sb[0]);
+        array_push($binds, ...$sb[1]);
     }
 
     // Shift work is a yes/no a reader either wants or rules out, so it is a
@@ -2706,6 +2775,98 @@ function home_list_url(array $params): string {
     return $key === '' ? '/posturi/' : '/?' . $key;
 }
 
+/**
+ * The number of postings of $params under the default status, and the same number for each
+ * county (judet_slug). One query, built by build_filters() like the list, so the total and each
+ * county count are the result count of the link of $params (see home_count_for()). Used by the
+ * items of the landing page and of the themed pages, which show the count of the selected county.
+ *
+ * @return array{n:int, counties:array<string,int>}
+ */
+function home_item_counts(array $params): array {
+    $f = build_filters($params + ['status' => DEFAULT_STATUS]);
+    $w = $f['where'] ? 'WHERE ' . implode(' AND ', $f['where']) : '';
+    $st = db()->prepare("SELECT j.judet_slug AS j, COUNT(*) AS c FROM job_postings j $w GROUP BY 1");
+    $st->execute($f['binds']);
+    $n = 0;
+    $counties = [];
+    foreach ($st->fetchAll() as $r) {
+        $n += (int)$r['c'];
+        if ((string)$r['j'] !== '') $counties[(string)$r['j']] = (int)$r['c'];
+    }
+    return ['n' => $n, 'counties' => $counties];
+}
+
+/**
+ * One item with a count (a link, and its count in brackets outside the link). `params` are the
+ * filter parameters of the link; the JSON of the page carries them with the county counts, so that
+ * static/home.js can rebuild the link and the count for a selected county.
+ */
+function home_item(string $id, string $label, array $params): array {
+    $c = home_item_counts($params);
+    return ['id' => $id, 'label' => $label, 'params' => $params, 'n' => $c['n'], 'counties' => $c['counties'],
+            'href' => home_list_url($params)];
+}
+
+/** $extra added to $base: the values of a parameter that both have are joined, the others are kept. */
+function home_merge_params(array $base, array $extra): array {
+    foreach ($extra as $k => $v) {
+        $base[$k] = isset($base[$k]) && is_array($base[$k]) && is_array($v)
+            ? array_values(array_unique(array_merge($base[$k], $v))) : $v;
+    }
+    return $base;
+}
+
+/** The filter parameters of an item, as form fields (`family[]` => [values]): the shape of the JSON of the page. */
+function home_item_fields(array $params): array {
+    $out = [];
+    foreach ($params as $k => $v) $out[param_field((string)$k)] = array_values(array_map('strval', (array)$v));
+    return $out;
+}
+
+/** The feed URL (`posturi.rss`, `posturi.ics`) of $params, written as feed_url() writes the URL of the current list. */
+function feed_url_for(string $filename, array $params): string {
+    $saved = $_GET;
+    $_GET = $params;
+    try {
+        return feed_url($filename);
+    } finally {
+        $_GET = $saved;
+    }
+}
+
+/**
+ * The two short lists of the landing page and of the themed pages, inside the filter $base:
+ * "new" = the latest publication day in the data, "soon" = confirmed deadline in the next 3 days.
+ *
+ * @return array{day:string, new:array, soon:array}
+ */
+function home_new_soon(array $base, string $today): array {
+    $tz = new DateTimeZone('Europe/Bucharest');
+    $f = build_filters($base + ['status' => 'all']);
+    $bw = $f['where'] ? ' AND ' . implode(' AND ', $f['where']) : '';
+    $live = 'j.application_status IN (' . OPEN_STATUS_SQL . ')';
+    $st = db()->prepare("SELECT MAX(substr(j.published_at, 1, 10)) FROM job_postings j WHERE $live$bw");
+    $st->execute($f['binds']);
+    $day = (string)$st->fetchColumn();
+    $new = [];
+    if ($day !== '') {
+        $st = db()->prepare("SELECT j.*, e.slug AS employer_slug_display FROM job_postings j
+            LEFT JOIN employers e ON e.id = j.employer_id
+            WHERE $live AND substr(j.published_at, 1, 10) = ?$bw
+            ORDER BY j.published_at DESC, j.id DESC LIMIT 6");
+        $st->execute([$day, ...$f['binds']]);
+        $new = $st->fetchAll();
+    }
+    $in3 = (new DateTimeImmutable($today, $tz))->modify('+3 days')->format('Y-m-d');
+    $st = db()->prepare("SELECT j.*, e.slug AS employer_slug_display FROM job_postings j
+        LEFT JOIN employers e ON e.id = j.employer_id
+        WHERE j.application_status = 'confirmed_open' AND " . DEADLINE_COL . " >= ? AND " . DEADLINE_COL . " <= ?$bw
+        ORDER BY " . DEADLINE_COL . " ASC, j.published_at DESC LIMIT 6");
+    $st->execute([$today, $in3, ...$f['binds']]);
+    return ['day' => $day, 'new' => $new, 'soon' => $st->fetchAll()];
+}
+
 /** Sort key for Romanian names: a < ă < â < b … i < î … s < ș < t < ț < u. */
 function ro_sort_key(string $s): string {
     static $order = null;
@@ -2783,20 +2944,23 @@ function home_week_starts(int $weeks = 12): array {
  * Postings published in each of the last 12 complete ISO weeks, oldest first:
  * [['start' => 'Y-m-d', 'n' => int], …]. Source: `published_at` of
  * job_postings and archived_postings, each posting counted once (an id in
- * both tables counts for job_postings).
+ * both tables counts for job_postings). With $family, only the postings of
+ * that profession family (`inf_profession_family`) count, in both tables.
  */
-function home_weekly_postings(int $weeks = 12): array {
+function home_weekly_postings(int $weeks = 12, ?string $family = null): array {
     $starts = home_week_starts($weeks);
     $from = $starts[0];
     $to = (new DateTimeImmutable(end($starts), new DateTimeZone('Europe/Bucharest')))->modify('+7 days')->format('Y-m-d');
+    $fj = $family === null ? '' : ' WHERE inf_profession_family = ?';
+    $fa = $family === null ? '' : ' AND a.inf_profession_family = ?';
     $st = db()->prepare(
         "SELECT d, COUNT(*) AS c FROM (
-            SELECT substr(published_at, 1, 10) AS d FROM job_postings
+            SELECT substr(published_at, 1, 10) AS d FROM job_postings$fj
             UNION ALL
             SELECT substr(a.published_at, 1, 10) FROM archived_postings a
-            WHERE a.id NOT IN (SELECT id FROM job_postings)
+            WHERE a.id NOT IN (SELECT id FROM job_postings)$fa
          ) WHERE d >= ? AND d < ? GROUP BY d");
-    $st->execute([$from, $to]);
+    $st->execute($family === null ? [$from, $to] : [$family, $family, $from, $to]);
     $by_week = array_fill_keys($starts, 0);
     foreach ($st->fetchAll() as $r) {
         $ts = (new DateTimeImmutable((string)$r['d'], new DateTimeZone('Europe/Bucharest')))->modify('monday this week')->format('Y-m-d');
@@ -2805,6 +2969,100 @@ function home_weekly_postings(int $weeks = 12): array {
     $out = [];
     foreach ($by_week as $start => $n) $out[] = ['start' => $start, 'n' => $n];
     return $out;
+}
+
+/**
+ * The group of an occupation, for the buttons of the chart: the index of the first group of $groups that holds it, or null.
+ * A group has `label` and any of `values` (exact occupations), `prefixes` (the occupation starts with one) and `except` (exact
+ * occupations that a prefix does not take). So an occupation is in one group at most.
+ */
+function theme_group_of(array $groups, string $occupation): ?int {
+    foreach ($groups as $i => $g) {
+        if (in_array($occupation, $g['values'] ?? [], true)) return $i;
+        if (in_array($occupation, $g['except'] ?? [], true)) continue;
+        foreach ($g['prefixes'] ?? [] as $prefix) if (str_starts_with($occupation, (string)$prefix)) return $i;
+    }
+    return null;
+}
+
+/**
+ * The weekly series of the chart of a themed page, for the whole country and for each county: the postings of the profession
+ * family in the last $weeks complete weeks (same weeks, same source and same once-only rule as home_weekly_postings(): job_postings
+ * and archived_postings, an id in both tables counts for job_postings), split into the occupation groups of the theme. A posting
+ * is in one group at most (theme_group_of()), so no series is above the total.
+ *
+ * @param list<array> $groups see theme_group_of()
+ * @return array{total:list<int>, groups:list<list<int>>, none:int, counties:array<string,array{t:list<int>, s:list<list<int>>}>}
+ *         `none` is the number of postings of the weeks that are in no group; `counties` has the weekly total and the group
+ *         series of each county (a posting with no county is in no county)
+ */
+function theme_group_series(string $family, array $groups, int $weeks = 12): array {
+    $starts = home_week_starts($weeks);
+    $idx = array_flip($starts);
+    $from = $starts[0];
+    $to = (new DateTimeImmutable(end($starts), new DateTimeZone('Europe/Bucharest')))->modify('+7 days')->format('Y-m-d');
+    $st = db()->prepare(
+        "SELECT j, occ, d, COUNT(*) AS c FROM (
+            SELECT judet_slug AS j, occ_canonical AS occ, substr(published_at, 1, 10) AS d FROM job_postings WHERE inf_profession_family = ?
+            UNION ALL
+            SELECT a.judet_slug, a.occ_canonical, substr(a.published_at, 1, 10) FROM archived_postings a
+            WHERE a.id NOT IN (SELECT id FROM job_postings) AND a.inf_profession_family = ?
+         ) WHERE d >= ? AND d < ? GROUP BY j, occ, d");
+    $st->execute([$family, $family, $from, $to]);
+    $zero = array_fill(0, $weeks, 0);
+    $out = ['total' => $zero, 'groups' => array_fill(0, count($groups), $zero), 'none' => 0, 'counties' => []];
+    foreach ($st->fetchAll() as $r) {
+        $w = $idx[(new DateTimeImmutable((string)$r['d'], new DateTimeZone('Europe/Bucharest')))->modify('monday this week')->format('Y-m-d')] ?? null;
+        if ($w === null) continue;
+        $c = (int)$r['c'];
+        $g = theme_group_of($groups, (string)$r['occ']);
+        $out['total'][$w] += $c;
+        if ($g === null) $out['none'] += $c; else $out['groups'][$g][$w] += $c;
+        $j = (string)$r['j'];
+        if ($j === '') continue;
+        $out['counties'][$j] ??= ['t' => $zero, 's' => array_fill(0, count($groups), $zero)];
+        $out['counties'][$j]['t'][$w] += $c;
+        if ($g !== null) $out['counties'][$j]['s'][$g][$w] += $c;
+    }
+    return $out;
+}
+
+/**
+ * The options of a select of the search form of a themed page: every value of a filter that has a posting inside the
+ * theme (default status), in Romanian alphabetical order. `source` is `json` (the column holds a JSON list) or `column`.
+ *
+ * @param string $base_where the WHERE of the postings inside the theme, with the alias `j`
+ * @return list<string>
+ */
+function theme_select_values(array $sel, string $base_where, array $binds): array {
+    $col = preg_match('/^[a-z0-9_]+$/', (string)($sel['column'] ?? '')) ? $sel['column'] : '';
+    if ($col === '') return [];
+    $vals = [];
+    if (($sel['source'] ?? '') === 'json') {
+        $st = db()->prepare("SELECT j.$col AS vals FROM job_postings j WHERE $base_where AND j.$col NOT IN ('', '[]')");
+        $st->execute($binds);
+        foreach ($st->fetchAll() as $r) {
+            foreach ((array)(json_decode((string)$r['vals'], true) ?: []) as $v) if ($v !== '' && $v !== null) $vals[(string)$v] = true;
+        }
+    } else {
+        $st = db()->prepare("SELECT DISTINCT j.$col AS v FROM job_postings j WHERE $base_where AND j.$col <> ''");
+        $st->execute($binds);
+        foreach ($st->fetchAll() as $r) $vals[(string)$r['v']] = true;
+    }
+    $vals = array_keys($vals);
+    usort($vals, fn($a, $b) => strcmp(ro_sort_key((string)$a), ro_sort_key((string)$b)) ?: strcmp((string)$a, (string)$b));
+    return $vals;
+}
+
+/** The symbol id for a value of a `values` section (`icons`: value => id, then `icon_default`), or null. */
+function theme_icon_for(array $sec, string $value): ?string {
+    return !empty($sec['icons'][$value]) ? (string)$sec['icons'][$value] : ($sec['icon_default'] ?? null);
+}
+
+/** An icon from a separate SVG file (ADR 0007): `<use href="/static/<file>?v=<mtime>#<id>">`, hidden from assistive technology. */
+function icon_file(string $file, string $id, string $class = ''): string {
+    $v = @filemtime(__DIR__ . '/static/' . $file) ?: '1';
+    return '<svg' . ($class !== '' ? ' class="' . e($class) . '"' : '') . ' aria-hidden="true" focusable="false"><use href="/static/' . e($file) . '?v=' . $v . '#' . e($id) . '"/></svg>';
 }
 
 /** "24 aug" (and the year when it is not this year), for the ends of the chart. */

@@ -16,47 +16,11 @@ require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/fixtures/build_db.php';
 require_once __DIR__ . '/fixtures/server.php';
+require_once __DIR__ . '/fixtures/page_helpers.php';
 
 putenv('POSTURI_TODAY=2026-10-03');
 // The domains with active postings in the home fixture, by count (Altele last): set by the first run of this suite.
 const DOMAINS_IN_FIXTURE = ['administratie', 'juridic', 'necalificati', 'social', 'sanatate'];
-
-/** GET a path; returns [status, body, headers]. Redirects are NOT followed. */
-function http_page(string $base, string $path, array $req_headers = []): array {
-    $ctx = stream_context_create(['http' => ['ignore_errors' => true, 'follow_location' => 0,
-        'header' => implode("\r\n", $req_headers)]]);
-    $body = (string)@file_get_contents($base . $path, false, $ctx);
-    $status = 500;
-    $headers = [];
-    foreach ($http_response_header ?? [] as $h) {
-        if (preg_match('#^HTTP/\S+\s+(\d+)#', $h, $m)) $status = (int)$m[1];
-        if (preg_match('#^([^:]+):\s*(.*)$#', $h, $m)) $headers[strtolower($m[1])] = $m[2];
-    }
-    return [$status, $body, $headers];
-}
-
-function xp(string $html): DOMXPath {
-    $dom = new DOMDocument();
-    @$dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_NOERROR | LIBXML_NOWARNING);
-    return new DOMXPath($dom);
-}
-
-/** The number at the start of "1.197 de posturi", "1 post", "37". */
-function lead_number(string $text): int {
-    return preg_match('/^[\s\x{a0}]*([\d.]+)/u', $text, $m) ? (int)str_replace('.', '', $m[1]) : -1;
-}
-
-/** The number in "(1.197)" or "Alba (15)": the last bracket of the text. */
-function paren_number(string $text): int {
-    return preg_match('/\(([\d.]+)\)\s*$/u', trim($text), $m) ? (int)str_replace('.', '', $m[1]) : -1;
-}
-
-/** How many postings a list URL shows (the count above the results). */
-function list_count(string $base, string $href): int {
-    [, $body] = http_page($base, $href);
-    return preg_match('#<span class="font-mono font-medium text-ink">([\d.]+)</span>\s*anun#u', $body, $m)
-        ? (int)str_replace('.', '', $m[1]) : -1;
-}
 
 /**
  * A fixture database with the landing page's cases: sectors in several counties,
@@ -73,8 +37,8 @@ function home_db(string $tag, int $weeks, bool $enrich = true): string {
             UPDATE job_postings SET v4_employer_sector = 'educatie' WHERE id IN (1004, 1007);
             UPDATE job_postings SET v4_employer_sector = 'altele' WHERE id = 2001;
             UPDATE job_postings SET v4_employer_sector = 'sanatate' WHERE id = 1003;   -- closed: never counted
-            UPDATE job_postings SET sal_min = 7600, v3_isced_fields = '[\"09_sanatate_asistenta_sociala\"]' WHERE id = 1001;
-            UPDATE job_postings SET sal_min = 8200 WHERE id = 1006;
+            UPDATE job_postings SET sal_min = 9200, v3_isced_fields = '[\"09_sanatate_asistenta_sociala\"]' WHERE id = 1001;
+            UPDATE job_postings SET sal_min = 9200 WHERE id = 1006;
             UPDATE job_postings SET v3_languages = '[\"hu:B1\"]' WHERE id = 1007;
             UPDATE job_postings SET job_level = 'Funcții de conducere' WHERE id IN (1002, 1007);
             UPDATE job_postings SET v3_schedule = 'norma_partiala', sal_min = 5500, funding_kind = 'pnrr' WHERE id = 1004;
@@ -213,8 +177,9 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
     $x = xp($home);
     $nav = [];
     foreach ($x->query('//nav[@aria-label="Navigare principală"]/a') as $a) $nav[] = [trim($a->textContent), $a->getAttribute('href')];
-    assert_same([['Posturi', '/posturi/'], ['Salvate', '/salvate/'], ['Alerte', '/alerte/'], ['Statistici', '/statistici/'], ['Despre', '/despre/']],
-        $nav, 'five navigation links, in order');
+    assert_same([['Posturi', '/posturi/'], ['Salvate', '/salvate/'], ['Statistici', '/statistici/'], ['Despre', '/despre/']],
+        $nav, 'four navigation links, in order: no "Alerte" in the masthead');
+    assert_same(1, $x->query('//nav[@aria-label="Navigare principală"]/a[@href="/salvate/"]/svg[@aria-hidden="true"]/use[@href="#i-bell"]')->length, 'the bell icon before "Salvate", as decoration');
     assert_same(1, $x->query('//nav//a[@href="/salvate/"]/span[@data-saved-count]')->length, 'the saved count stays');
     $groups = [];
     foreach ($x->query('//footer//h2') as $h2) {
@@ -223,7 +188,7 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
         $groups[trim($h2->textContent)] = $links;
     }
     assert_same(['Posturi', 'Urmărește', 'Proiect'], array_keys($groups), 'three footer groups');
-    assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/']], $groups['Posturi'], 'footer: Posturi');
+    assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'], ['Sănătate', '/sanatate/']], $groups['Posturi'], 'footer: Posturi');
     assert_same([['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'], ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/']], $groups['Urmărește'], 'footer: Urmărește');
     assert_same(['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'], array_column($groups['Proiect'], 0), 'footer: Proiect');
     assert_contains('/despre/#confidentialitate', $home, 'footer: privacy anchor');
@@ -298,8 +263,8 @@ run_suite('every ready-made search and chip link is the canonical URL', function
     }
     $hrefs = array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($x->query('//section[@aria-labelledby="h-combo"]//a')));
     assert_same([
-        '/?isced_not%5B%5D=09_sanatate_asistenta_sociala&salary_bucket=peste-7000',
-        '/?funding%5B%5D=fonduri_europene&funding%5B%5D=pnrr&salary_bucket=5000-7000&schedule%5B%5D=norma_partiala',
+        '/?isced_not%5B%5D=09_sanatate_asistenta_sociala&salary_bucket=net-peste-5000',
+        '/?funding%5B%5D=fonduri_europene&funding%5B%5D=pnrr&salary_bucket=net-3000-4000&schedule%5B%5D=norma_partiala',
         '/?lang%5B%5D=hu',
         '/?exp_level%5B%5D=fara',
         '/?level%5B%5D=Func%C8%9Bii%20de%20conducere',
@@ -329,8 +294,8 @@ run_suite('an item with count 0 is not on the page', function () use ($base) {
     assert_same(DOMAINS_IN_FIXTURE, $domains, 'only the domains with postings; by count; Altele last');
     foreach (['family%5B%5D=IT', 'family%5B%5D=cultur%C4%83', 'family%5B%5D=financiar'] as $none) assert_not_contains($none, $home, "no tile for $none");
     // The employer-sector row: text links, no icons, in the order of the old grid; a sector with 0 is absent.
-    $row = $x->query('//section[@aria-labelledby="h-start"]//h3[.="După angajator"]/following-sibling::ul[1]')->item(0);
-    assert_true($row !== null, 'the group "După angajator" is on the page');
+    $row = $x->query('//section[@aria-labelledby="h-start"]//h3[.="Domeniu angajator"]/following-sibling::ul[1]')->item(0);
+    assert_true($row !== null, 'the group "Domeniu angajator" is on the page');
     assert_same(['/?sector%5B%5D=sanatate', '/?sector%5B%5D=educatie', '/?sector%5B%5D=justitie', '/?sector%5B%5D=altele'],
         array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($x->query('.//a', $row))), 'sectors with postings, by count, Altele last');
     assert_same(0, $x->query('.//svg', $row)->length, 'no icons in the sector row');
@@ -338,16 +303,59 @@ run_suite('an item with count 0 is not on the page', function () use ($base) {
     foreach ($x->query('//section[@aria-labelledby="h-start"]//*[@data-home-count]') as $c) {
         assert_true(lead_number($c->textContent) > 0, 'chip count > 0');
     }
-    // The base fixture has no management posting, no Hungarian posting, no salary above 7.000.
+    // The base fixture has no management posting, no Hungarian posting, no salary above 5.000 net.
     $bare = home_db('bare', 12, false);
     $s2 = start_fixture_server($bare);
     [, $h2] = http_page($s2['base'], '/');
     assert_not_contains('Func%C8%9Bii%20de%20conducere', $h2, 'no card and no chip for management when it counts 0');
     assert_not_contains('lang%5B%5D=hu', $h2, 'no Hungarian card when it counts 0');
-    assert_not_contains('salary_bucket=peste-7000', $h2, 'no high-salary card or chip when it counts 0');
+    assert_not_contains('salary_bucket=net-peste-5000', $h2, 'no high-salary card or chip when it counts 0');
     assert_not_contains('Telemuncă', $h2, 'no Telemuncă');
     assert_not_contains('Funcție publică', $h2, 'no Funcție publică');
     stop_fixture_server($s2, $bare);
+});
+
+run_suite('the starting-point groups: labels without "După", the salary and institution groups, counts of their links', function () use ($base) {
+    [, $home] = http_page($base, '/');
+    $x = xp($home);
+    $titles = [];
+    foreach ($x->query('//section[@aria-labelledby="h-start"]//h3') as $h) $titles[] = trim($h->textContent);
+    assert_same(['Studii', 'Salariu', 'Ocupație', 'Domeniu angajator', 'Tip instituție', 'Alte filtre'], $titles, 'the six groups, in order');
+    assert_not_contains('După studii', $home, 'no "După studii"');
+    assert_not_contains('După ocupație', $home, 'no "După ocupație"');
+    assert_not_contains('După angajator', $home, 'no "După angajator"');
+    $items = fn(string $title) => $x->query('//section[@aria-labelledby="h-start"]//h3[.="' . $title . '"]/following-sibling::ul[1]/li');
+    // Salary: the four net buckets that count above 0, each with the count of its link; never "fără salariu estimat".
+    $sal = $items('Salariu');
+    assert_true($sal->length >= 2, 'the salary group has items');
+    foreach ($sal as $li) {
+        $a = $x->query('.//a', $li)->item(0);
+        assert_contains('salary_bucket=net-', $a->getAttribute('href'), 'a net bucket link');
+        assert_contains(' lei net', $a->textContent, 'the label says net');
+        assert_same(list_count($base, $a->getAttribute('href')), lead_number($x->query('.//*[@data-home-count]', $li)->item(0)->textContent), 'count = result count of ' . $a->getAttribute('href'));
+    }
+    assert_not_contains('fara-estimare', $home, 'no "fără estimare" on the landing page');
+    // Institution type: each value of the filter "Instituție" with a count above 0, largest first.
+    $inst = $items('Tip instituție');
+    $got = [];
+    foreach ($inst as $li) {
+        $a = $x->query('.//a', $li)->item(0);
+        parse_str((string)parse_url($a->getAttribute('href'), PHP_URL_QUERY), $q);
+        assert_same(1, count($q['inst'] ?? []), 'one inst[] value');
+        assert_same(EMPLOYER_KIND_LABELS[$q['inst'][0]], trim($a->textContent), 'label from EMPLOYER_KIND_LABELS');
+        $n = lead_number($x->query('.//*[@data-home-count]', $li)->item(0)->textContent);
+        assert_true($n > 0, 'count above 0');
+        assert_same(list_count($base, $a->getAttribute('href')), $n, 'count = result count of ' . $a->getAttribute('href'));
+        $got[] = $n;
+    }
+    assert_true(count($got) >= 2, 'the fixture has several institution types');
+    $sorted = $got; rsort($sorted);
+    assert_same($sorted, $got, 'largest first');
+    foreach (array_keys(EMPLOYER_KIND_LABELS) as $k) {
+        $present = str_contains($home, 'inst%5B%5D=' . $k);
+        $n = max(0, list_count($base, home_list_url(['inst' => [$k]])));
+        assert_same($n > 0, $present, "inst $k is on the page only with a count above 0 ($n)");
+    }
 });
 
 run_suite('domain icons: each tile has a hidden icon that points to a symbol in the sprite', function () use ($base) {
@@ -384,10 +392,12 @@ run_suite('the (county, domain) JSON sums to the tile counts and to the filters 
     $x = xp($home);
     foreach ($x->query('//*[@data-home-tile]') as $a) {
         $key = $a->getAttribute('data-domain');
-        $dom = $data['domains'][$key];
+        $dom = $data['items'][$key];
+        $family = array_values($dom['params']['family[]'] ?? []);
+        $cor = array_values($dom['params']['cor[]'] ?? []);
         assert_same((int)$a->getAttribute('data-total'), array_sum($dom['counties']), "domain $key: the counties sum to the tile");
-        $q = http_build_query(['family' => array_values($dom['family']), 'cor' => array_values($dom['cor'])]);
-        assert_same($x->query('.//a', $a)->item(0)->getAttribute('href'), '/?' . search_key(['family' => array_values($dom['family'])] + ($dom['cor'] ? ['cor' => array_values($dom['cor'])] : [])), "domain $key: the link is its JSON filters");
+        $q = http_build_query(['family' => $family, 'cor' => $cor]);
+        assert_same($x->query('.//a', $a)->item(0)->getAttribute('href'), '/?' . search_key(['family' => $family] + ($cor ? ['cor' => $cor] : [])), "domain $key: the link is its JSON filters");
         foreach ($dom['counties'] as $county => $n) {
             assert_same($n, list_count($base, '/?judet%5B%5D=' . $county . '&' . $q), "$county × $key equals its list");
         }
@@ -462,11 +472,11 @@ run_suite('hero form and figures', function () use ($base) {
     assert_same((int)$pdo->query("SELECT COUNT(*) FROM job_postings WHERE $open AND substr(published_at,1,10) >= '2026-09-27'")->fetchColumn(), lead_number($fig[2][0]), 'published in the last 7 days (today 2026-10-03, 7 days with today)');
     assert_not_contains('Date actualizate:', $home, 'no freshness line in the hero (the header has it)');
     assert_not_contains('Adunăm zilnic', $home, 'no lead paragraph');
-    assert_same('Anunțuri de angajare din administrația publică', trim($x->query('//h1')->item(0)->textContent), 'the h1');
-    assert_contains('<title>Anunțuri de angajare din administrația publică — posturi.gov2.ro</title>', $home, 'page title');
-    $off = $x->query('//strong[.="Nu este un site oficial"]')->item(0);
-    assert_same('Proiect independent. Preluăm datele de pe posturi.gov.ro. Nu este un site oficial al Guvernului României.', preg_replace('/\s+/', ' ', trim($off->parentNode->textContent)), 'the last line of the hero');
-    assert_same('https://posturi.gov.ro', $x->query('.//a', $off->parentNode)->item(0)->getAttribute('href'), 'posturi.gov.ro is a link');
+    assert_same('Anunțuri de angajare în administrația publică', trim($x->query('//h1')->item(0)->textContent), 'the h1');
+    assert_contains('<title>Anunțuri de angajare în administrația publică — posturi.gov2.ro</title>', $home, 'page title');
+    $off = $x->query('//strong[.="nu este afiliat"]')->item(0);
+    assert_same('Date preluate de pe posturi.gov.ro. Proiectul nu este afiliat Guvernului României.', preg_replace('/\s+/', ' ', trim($off->parentNode->parentNode->textContent)), 'the last line of the hero');
+    assert_same('https://posturi.gov.ro', $x->query('.//a', $off->parentNode->parentNode)->item(0)->getAttribute('href'), 'posturi.gov.ro is a link');
     assert_same(0, $x->query('//h3[.="După județ"]')->length + $x->query('//*[@aria-labelledby="h-start"]//a[.="Toate județele"]')->length, 'no group "După județ"');
     assert_not_contains('După județ', $home, 'no group "După județ"');
     $stats = $x->query('//section[@aria-labelledby="h-hero"]//a[@data-home-stats]');
@@ -478,6 +488,9 @@ run_suite('hero form and figures', function () use ($base) {
     $to = $x->query('//section[@aria-labelledby="h-hero"]//a[@data-home-to-domains]');
     assert_same('#domenii', $to->item(0)->getAttribute('href'), '"După domeniu" points to #domenii');
     assert_same(1, $x->query('//section[@id="domenii"][@tabindex="-1"]')->length, 'the target exists and takes focus');
+    $lab = $x->query('//label[@for="domenii-judet"]');
+    assert_same(1, $lab->length, 'the domains select has a label');
+    assert_same('sr-only', trim($lab->item(0)->getAttribute('class')), 'the label is visually hidden, not removed');
     assert_not_contains('Mai multe statistici', $home, 'the old statistics link is gone');
     // Section order.
     preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($home, (int)strpos($home, '<main')), $s);
@@ -533,6 +546,14 @@ run_suite('the weekly chart: shown from 4 weeks with data, counted once, 12 comp
     $html = home_html($db);
     assert_contains('min ' . min($per_week) . ' · max ' . max($per_week) . ' · ultima ' . end($per_week), $html, 'min, max and last');
     assert_contains('între ' . min($per_week) . ' și ' . max($per_week), $html, 'the svg label');
+    // The polyline, drawn on the side from the counts: the shared partial (partials/weekly_chart.php) draws the landing chart as before.
+    [$lo, $hi] = [min($per_week), max($per_week)];
+    $pts = [];
+    foreach ($per_week as $i => $v) $pts[] = round($i / 11 * 320, 1) . ',' . round($hi === $lo ? 32 : 4 + (1 - ($v - $lo) / ($hi - $lo)) * 56, 1);
+    assert_contains('points="' . implode(' ', $pts) . '"', $html, 'the polyline of the landing chart');
+    assert_contains('<figcaption class="g2-label">Posturi publicate pe săptămână</figcaption>', $html, 'the caption of the landing chart');
+    assert_contains('aria-label="Posturi publicate pe săptămână, ultimele 12 săptămâni complete: între ', $html, 'the label of the landing chart');
+    assert_same(home_weekly_postings_on($db), home_weekly_postings_on($db, true), 'a null family is the landing result');
     assert_contains('6 iul', $html, 'first week: Monday 2026-07-06');
     assert_contains('21 sep', $html, 'last week: Monday 2026-09-21');
     assert_same(12, count($per_week), 'twelve weeks');
@@ -540,10 +561,10 @@ run_suite('the weekly chart: shown from 4 weeks with data, counted once, 12 comp
 });
 
 /** home_weekly_postings() against another database file. */
-function home_weekly_postings_on(string $path): array {
+function home_weekly_postings_on(string $path, bool $null_family = false): array {
     $cmd = escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg(
         'putenv("POSTURI_DB=' . $path . '"); putenv("POSTURI_TODAY=2026-10-03"); require "' . __DIR__ . '/../db.php"; require "' . __DIR__ . '/../helpers.php";'
-        . 'echo json_encode(home_weekly_postings());');
+        . 'echo json_encode(home_weekly_postings(12' . ($null_family ? ', null' : '') . '));');
     return json_decode((string)shell_exec($cmd), true) ?: [];
 }
 

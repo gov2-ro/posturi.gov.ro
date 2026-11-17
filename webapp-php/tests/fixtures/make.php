@@ -3,11 +3,21 @@
  * CLI: build the deterministic fixture database at the given path.
  *   php tests/fixtures/make.php /tmp/posturi-fixture.sqlite
  *   php tests/fixtures/make.php /tmp/posturi-evidence.sqlite evidence   # role + evidence cases (UX-13)
+ *   php tests/fixtures/make.php /tmp/posturi-theme.sqlite theme         # health postings for the themed pages
+ *   php tests/fixtures/make.php /tmp/posturi-salary.sqlite salary       # postings with no salary figure (tests/browser/salary.spec.js)
  * Used by the request tests and by the Playwright global setup.
  */
 require_once __DIR__ . '/build_db.php';
+require_once __DIR__ . '/theme_db.php';
 
 $path = $argv[1] ?? (sys_get_temp_dir() . '/posturi-fixture.sqlite');
 $evidence = ($argv[2] ?? '') === 'evidence';
-build_fixture_db($path, $evidence, $evidence);
+if (($argv[2] ?? '') === 'theme') build_theme_fixture_db($path);
+else build_fixture_db($path, $evidence, $evidence);
+if (($argv[2] ?? '') === 'salary') {
+    // 12 postings with no figure (none, and a zero): the filter has an option for them and the note a count.
+    $pdo = new PDO('sqlite:' . $path);
+    $pdo->exec("UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = NULL, inf_salary_max = NULL WHERE id BETWEEN 2011 AND 2020");
+    $pdo->exec("UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = 0, inf_salary_max = 0 WHERE id IN (2021, 2022)");
+}
 echo "$path\n";

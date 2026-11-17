@@ -577,3 +577,35 @@
   .pg-map-swatch[data-step="2"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.55), rgb(var(--c-gov) / 0.55)); }
   .pg-map-swatch[data-step="3"] { background-image: linear-gradient(rgb(var(--c-gov)), rgb(var(--c-gov))); }
 }
+
+/* 2026-11-17 (brief nav-toc-theme-hero): the table of contents of Statistici and Despre (partials/toc.php).
+   Local; the DS has no such component. DS proposal candidate: "table of contents / in-page navigation".
+   Below lg a block of links above the content; from lg a sticky 14rem column. The link of the section in
+   view has aria-current="true" (static/toc.js): bold, with a bar, so the mark does not rest on colour alone. */
+@layer components {
+  .pg-toc-layout { @apply flex flex-col gap-6; }
+  .pg-toc { @apply min-w-0; }
+  .pg-toc-title { @apply mb-1 pl-[calc(0.5rem+3px)] text-xs font-semibold uppercase tracking-widest text-ink-muted; }
+  .pg-toc ul { @apply flex flex-wrap gap-x-4 gap-y-0; }
+  .pg-toc a {
+    @apply inline-flex min-h-[44px] items-center border-l-[3px] border-transparent text-sm text-ink;
+    padding-left: 0.5rem;
+  }
+  .pg-toc a:hover { @apply text-gov underline; }
+  .pg-toc a[aria-current="true"] { @apply border-gov font-bold text-gov; }
+  @media (min-width: 1024px) {
+    .pg-toc-layout { display: grid; grid-template-columns: 14rem minmax(0, 1fr); column-gap: 2.5rem; align-items: start; }
+    .pg-toc { position: sticky; top: 1rem; }
+    .pg-toc ul { @apply flex-col gap-0; }
+    .pg-toc a { @apply w-full; }
+  }
+}
+
+/* Themed page: the occupation buttons of the weekly chart look like normal text in each state: no box, no border, no background
+   (the DS has no such toggle yet; a DS proposal is pending). Only the pressed one is marked, bold and underlined, so it does not
+   rely on colour. A target is 24 px high, and two rows are 4 px apart. The focus ring is the DS one. */
+@layer app {
+  .pg-chart-btn { @apply inline-block min-h-6 cursor-pointer border-0 bg-transparent px-1 text-sm leading-6 text-ink; }
+  .pg-chart-btn:hover { @apply bg-transparent; }
+  .pg-chart-btn[aria-pressed="true"] { @apply font-bold underline decoration-2 underline-offset-4; }
+}

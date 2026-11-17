@@ -26,8 +26,7 @@ const tile = (page, domain) => page.locator(`[data-home-tile][data-domain="${dom
 const domainHref = (dom, county) => {
   const p = [];
   if (county) p.push(['judet', county]);
-  Object.values(dom.family).forEach((v) => p.push(['family', v]));
-  Object.values(dom.cor).forEach((v) => p.push(['cor', v]));
+  Object.entries(dom.params).forEach(([field, vals]) => Object.values(vals).forEach((v) => p.push([field.replace(/\[\]$/, ''), v])));
   p.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : 1));
   return '/?' + p.map(([k, v]) => `${encodeURIComponent(k)}%5B%5D=${encodeURIComponent(v)}`).join('&');
 };
@@ -43,49 +42,66 @@ const listCount = async (page) => num(await page.locator('#results-status').text
 
 test('the seven sections are present in order; no horizontal overflow', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle(/^Anunțuri de angajare din administrația publică/);
+  await expect(page).toHaveTitle(/^Anunțuri de angajare în administrația publică/);
   const ids = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-labelledby')));
   expect(ids).toEqual(SECTIONS);
   await expect(page.locator('section#domenii')).toHaveCount(1);
-  await expect(page.locator('h1')).toHaveText('Anunțuri de angajare din administrația publică');
+  await expect(page.locator('h1')).toHaveText('Anunțuri de angajare în administrația publică');
   // Document order is the visual order: each section starts below the one before it.
   const tops = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top + window.scrollY));
   tops.forEach((t, i) => { if (i) expect(t, `section ${SECTIONS[i]} below ${SECTIONS[i - 1]}`).toBeGreaterThan(tops[i - 1]); });
   await noOverflow(page, 'landing page');
-  // Every link and button of the page is at least 44 px high, except the county cells
+  // Every link and button of the page is at least 44 px high, except the county cells and the link lists of the footer
   // (buttons in a map: at least 24 px each way, WCAG 2.5.8).
   // Inline text links in running lines (the examples and the starting-point groups) have their own checks.
   const small = await page.evaluate(() => Array.from(document.querySelectorAll('main a, main button, header a, footer a'))
     .filter((el) => !el.closest('[data-home-js]') || !el.matches('[data-county]'))
     .filter((el) => !el.matches('[data-home-link]') && !el.closest('[data-home-example]'))
+    .filter((el) => !el.closest('footer ul'))   // the link lists of the footer have their own check (24 px, no overlap)
     .filter((el) => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
     .map((el) => ({ t: (el.textContent || '').trim().slice(0, 30), h: el.getBoundingClientRect().height }))
     .filter((o) => o.h < 43.5));
   expect(small, 'targets under 44 px').toEqual([]);
 });
 
-test('the five navigation links are visible and wrap at 320 px', async ({ page, viewport }) => {
+test('the four navigation links are visible and wrap at 320 px; "Salvate" has a bell and the saved count', async ({ page, viewport }) => {
   for (const url of ['/', '/posturi/']) {
     await page.goto(url);
     const links = page.locator('nav[aria-label="Navigare principală"] a');
-    await expect(links).toHaveText(['Posturi', /^Salvate/, 'Alerte', 'Statistici', 'Despre']);
-    for (let i = 0; i < 5; i++) {
+    // No "Alerte" item in the masthead: /salvate/ carries the way to the alerts.
+    await expect(links).toHaveText(['Posturi', /^Salvate/, 'Statistici', 'Despre']);
+    await expect(links).toHaveCount(4);
+    expect(await links.evaluateAll((els) => els.map((e) => e.getAttribute('href')))).toEqual(['/posturi/', '/salvate/', '/statistici/', '/despre/']);
+    for (let i = 0; i < 4; i++) {
       await expect(links.nth(i)).toBeVisible();
       const b = await links.nth(i).boundingBox();
       expect(b.height).toBeGreaterThanOrEqual(44);
       expect(b.x + b.width, `link ${i} inside the viewport`).toBeLessThanOrEqual(viewport.width + 1);
       expect(b.x).toBeGreaterThanOrEqual(0);
     }
+    // The bell is decoration, before the text of "Salvate"; none of the other items has an icon.
+    const bell = links.nth(1).locator('svg');
+    await expect(bell).toHaveCount(1);
+    await expect(bell).toHaveAttribute('aria-hidden', 'true');
+    await expect(bell.locator('use')).toHaveAttribute('href', '#i-bell');
+    expect((await bell.boundingBox()).width).toBeGreaterThan(8);
+    await expect(links.nth(0).locator('svg')).toHaveCount(0);
     await expect(page.locator('header a[href="/"]')).toContainText('posturi');
     await noOverflow(page, url + ' header');
   }
+  // The saved count still updates in the item (saved.js).
+  await page.goto('/posturi/');
+  const count = page.locator('nav[aria-label="Navigare principală"] [data-saved-count]');
+  await expect(count).toHaveText('(0)');
+  await page.locator('[data-pref="save"]').first().click();
+  await expect(count).toHaveText('(1)');
 });
 
 test('footer: three groups of links, then the disclaimer; no skin picker', async ({ page }) => {
   await page.goto('/');
   const foot = page.locator('footer');
   await expect(foot.locator('h2')).toHaveText(['Posturi', 'Urmărește', 'Proiect']);
-  await expect(foot.locator('ul li')).toHaveCount(12);
+  await expect(foot.locator('ul li')).toHaveCount(13);   // 12 fixed links + the themed page
   const order = await foot.evaluate((f) => {
     const q = (s) => f.querySelector(s);
     const pos = (el) => el.getBoundingClientRect().top + window.scrollY;
@@ -127,31 +143,31 @@ test('a click on a county button sets the counts and the links; a second click c
   // All counties: the totals.
   const orderAll = await page.locator('[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain));
   await expect(tile(page, 'sanatate')).toBeVisible();
-  expect(paren(await tile(page, 'sanatate').locator('[data-tile-count]').textContent())).toBe(domTotal(d.domains.sanatate));
-  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', domainHref(d.domains.sanatate));
+  expect(paren(await tile(page, 'sanatate').locator('[data-tile-count]').textContent())).toBe(domTotal(d.items.sanatate));
+  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', domainHref(d.items.sanatate));
 
   await cluj.click();
   await expect(cluj).toHaveAttribute('aria-pressed', 'true');
   await expect(select).toHaveValue('cluj');
   await expect(live).toHaveText(`Cluj: ${posts(d.counties.cluj)} active`);
   // The tiles with a posting in Cluj show its count and link to county × domain; the others are hidden.
-  for (const key of Object.keys(d.domains)) {
-    const n = (d.domains[key].counties || {}).cluj || 0;
+  for (const key of Object.keys(d.items)) {
+    const n = (d.items[key].counties || {}).cluj || 0;
     if (n === 0) {
       await expect(tile(page, key), `${key} hidden in Cluj`).toBeHidden();
     } else {
       await expect(tile(page, key)).toBeVisible();
       expect(paren(await tile(page, key).locator('[data-tile-count]').textContent())).toBe(n);
-      await expect(tileLink(page, key)).toHaveAttribute('href', domainHref(d.domains[key], 'cluj'));
+      await expect(tileLink(page, key)).toHaveAttribute('href', domainHref(d.items[key], 'cluj'));
     }
   }
   // Every county of the data: each visible tile has its count and its own link (family and cor).
   for (const county of Object.keys(d.counties)) {
     await select.selectOption(county);
-    for (const key of Object.keys(d.domains)) {
-      const n = (d.domains[key].counties || {})[county] || 0;
+    for (const key of Object.keys(d.items)) {
+      const n = (d.items[key].counties || {})[county] || 0;
       if (n === 0) { await expect(tile(page, key), `${key} hidden in ${county}`).toBeHidden(); continue; }
-      await expect(tileLink(page, key), `${key} in ${county}`).toHaveAttribute('href', domainHref(d.domains[key], county));
+      await expect(tileLink(page, key), `${key} in ${county}`).toHaveAttribute('href', domainHref(d.items[key], county));
       expect(paren(await tile(page, key).locator('[data-tile-count]').textContent()), `${key} count in ${county}`).toBe(n);
     }
   }
@@ -178,7 +194,7 @@ test('a click on a county button sets the counts and the links; a second click c
   await expect(cluj).toHaveAttribute('aria-pressed', 'false');
   await expect(select).toHaveValue('');
   await expect(tile(page, 'sanatate')).toBeVisible();
-  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', domainHref(d.domains.sanatate));
+  await expect(tileLink(page, 'sanatate')).toHaveAttribute('href', domainHref(d.items.sanatate));
   await expect(live).toContainText('Toate județele:');
 
   // The select drives the map, and the map the select.
@@ -302,7 +318,7 @@ test('with a saved search in localStorage, bare / shows the landing page (no red
     const fresh = await context.newPage();       // a new page: an empty sessionStorage, as a new session
     fresh.on('pageerror', (e) => errors.get(page).push(e.message));
     await fresh.goto('/');
-    await expect(fresh.locator('h1')).toHaveText('Anunțuri de angajare din administrația publică');
+    await expect(fresh.locator('h1')).toHaveText('Anunțuri de angajare în administrația publică');
     await expect(fresh).toHaveURL(/\/$/);
     expect(await fresh.evaluate(() => sessionStorage.getItem('posturi.searchRedirect')), `visit ${attempt}`).toBeNull();
     await expect(fresh.locator('html')).toHaveCSS('visibility', 'visible');
@@ -399,7 +415,7 @@ test('the county select shows the count of the map in each option; the domain co
   // Poison each sector count, so that only a script that writes the count again can pass.
   await page.locator('[data-tile-count]').evaluateAll((els) => els.forEach((el) => { el.textContent = '(999)'; }));
   await page.locator('#domenii-judet').selectOption('cluj');
-  for (const [key, dom] of Object.entries(d.domains)) {
+  for (const [key, dom] of Object.entries(d.items)) {
     if (dom.counties.cluj) await expect(tile(page, key).locator('[data-tile-count]')).toHaveText(new RegExp(`^\\s*\\(${dom.counties.cluj}\\)$`));
   }
   await expect(page.locator('[data-home-live]')).toHaveText(`Cluj: ${posts(d.counties.cluj)} active`);
@@ -548,4 +564,74 @@ test('starting-point groups: a wrapped line starts at the left edge; each link i
   expect(r.touching, 'overlapping targets').toEqual([]);
   expect(r.minGapY, 'vertical gap between targets of two lines').toBeGreaterThanOrEqual(1);
   expect(r.minGapX, 'horizontal gap between targets on one line').toBeGreaterThanOrEqual(8);
+});
+
+// ---- Follow-up 3 (2026-11-17) ----
+
+test('the "Județ" select of the domains has an accessible name but no visible label text', async ({ page }) => {
+  await page.goto('/');
+  const sel = page.locator('#domenii-judet');
+  await expect(sel).toBeVisible();
+  await expect(page.locator('#domenii').getByRole('combobox', { name: 'Județ', exact: true })).toHaveCount(1);
+  const label = page.locator('label[for="domenii-judet"]');
+  await expect(label).toHaveCount(1);
+  // Visually hidden: a clipped box of 1 px, not display:none (which would drop the name).
+  const box = await label.evaluate((el) => { const s = getComputedStyle(el); const r = el.getBoundingClientRect(); return { w: r.width, h: r.height, display: s.display, pos: s.position }; });
+  expect(box.display).not.toBe('none');
+  expect(box.w).toBeLessThanOrEqual(1);
+  expect(box.h).toBeLessThanOrEqual(1);
+  // No visible text "Județ" next to the select.
+  const visible = await sel.evaluate((el) => Array.from(el.parentElement.childNodes).filter((n) => n !== el && n.nodeType === 1 && n.tagName !== 'LABEL'
+    && n.getBoundingClientRect().width > 1).map((n) => n.textContent.trim()));
+  expect(visible).toEqual([]);
+});
+
+test('the hero county select is about 11rem wide and still shows "Toate județele" in full', async ({ page, viewport }) => {
+  await page.goto('/');
+  const r = await page.locator('#home-judet').evaluate((el) => {
+    const c = document.createElement('canvas').getContext('2d');
+    const s = getComputedStyle(el);
+    c.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+    return { w: el.getBoundingClientRect().width, text: c.measureText('Toate județele').width, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) };
+  });
+  if (viewport.width >= 1024) expect(r.w, 'about 11 rem').toBeLessThanOrEqual(11.5 * r.rem);
+  expect(r.text + 40, 'text, padding and arrow fit').toBeLessThanOrEqual(r.w);
+});
+
+test('footer: the links of a list are at least 24 px high, do not overlap, and the rows are 28 to 32 px apart', async ({ page }) => {
+  await page.goto('/');
+  const lists = await page.locator('footer ul').evaluateAll((uls) => uls.map((ul) => Array.from(ul.querySelectorAll('a')).map((a) => { const r = a.getBoundingClientRect(); return { t: r.top, b: r.bottom, l: r.left, r: r.right, h: r.height, name: a.textContent.trim() }; })));
+  expect(lists.length).toBe(3);
+  for (const links of lists) {
+    links.forEach((a, i) => {
+      expect(a.h, `${a.name}: height`).toBeGreaterThanOrEqual(24);
+      if (i) {
+        const prev = links[i - 1];
+        expect(a.t - prev.t, `${a.name}: distance from the row above`).toBeGreaterThanOrEqual(28);
+        expect(a.t - prev.t, `${a.name}: distance from the row above`).toBeLessThanOrEqual(32);
+        expect(a.t, `${a.name}: does not touch the link above`).toBeGreaterThan(prev.b);
+      }
+    });
+  }
+  // The links of the page outside the lists keep 44 px: the disclaimer link has its own padding.
+  const src = await page.locator('footer p a').evaluate((a) => a.getBoundingClientRect().height);
+  expect(src).toBeGreaterThanOrEqual(43.5);
+});
+
+test('footer: the GitHub mark is before "Cod sursă", decoration, in the text colour and drawn; the other links have no icon', async ({ page }) => {
+  await page.goto('/');
+  const link = page.locator('footer a[href="https://github.com/gov2-ro/posturi.gov.ro"]');
+  await expect(link).toHaveText('Cod sursă');
+  const svg = link.locator('svg');
+  await expect(svg).toHaveCount(1);
+  await expect(svg).toHaveAttribute('aria-hidden', 'true');
+  await expect(svg).toHaveAttribute('focusable', 'false');
+  const r = await svg.evaluate((e) => { const b = e.getBoundingClientRect(); const t = e.nextSibling; const a = e.parentElement.getBoundingClientRect();
+    return { w: b.width, h: b.height, before: b.right <= a.right && b.left <= a.left + 1, color: getComputedStyle(e).color, text: getComputedStyle(e.parentElement).color, nextText: t && t.nodeType === 3 }; });
+  expect(r.w).toBe(18); expect(r.h).toBe(18);
+  expect(r.before, 'the icon is at the start of the link').toBe(true);
+  expect(r.nextText, 'the text follows the icon').toBe(true);
+  expect(r.color, 'the colour of the text').toBe(r.text);
+  await expect.poll(() => svg.locator('use').evaluate((u) => { const b = u.getBBox(); return b.width * b.height; }), { timeout: 5000 }).toBeGreaterThan(50);
+  await expect(page.locator('footer ul a svg')).toHaveCount(1);   // the other links: no icon
 });

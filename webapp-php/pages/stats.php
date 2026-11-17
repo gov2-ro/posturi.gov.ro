@@ -130,13 +130,24 @@ $max_llm_day = $llm_days ? max(array_map(fn($d) => (float)$d['usd'], $llm_days))
 $ttl = $total ?: 1;
 
 $page_title = 'Statistici';
+// The table of contents and the headings of the sections come from this one array (heading id => text).
+$toc = [
+    'h-export-curent' => 'Export curent',
+    'h-istoric'       => 'Istoric: anunțuri publicate pe lună',
+    'h-costuri'       => 'Costuri inferență',
+];
+$head_extra = '<script src="/static/toc.js?v=' . (@filemtime(__DIR__ . '/../static/toc.js') ?: '1') . '" defer></script>';
 require __DIR__ . '/../inc/header.php';
 ?>
-<div class="max-w-screen-lg mx-auto px-4 sm:px-6 py-10">
+<div class="max-w-screen-xl mx-auto px-4 sm:px-6 py-10">
 
   <h1 class="font-display text-[2rem] italic font-semibold text-ink mb-1">Statistici</h1>
   <p class="text-ink-muted text-sm mb-2 font-mono">Distribuție agregată a anunțurilor de angajare din sectorul public</p>
   <p class="text-sm mb-6"><a href="/angajatori/" class="text-gov hover:underline">Mergi la statistici Angajatori →</a></p>
+
+  <div class="pg-toc-layout">
+  <?php require __DIR__ . '/../partials/toc.php'; ?>
+  <div class="min-w-0">
 
   <!-- Which numbers describe what -->
   <div class="bg-neutral border border-neutral-line rounded-lg p-4 mb-8 text-sm text-neutral-ink" id="domeniu">
@@ -148,7 +159,7 @@ require __DIR__ . '/../inc/header.php';
   </div>
 
   <section id="export-curent" aria-labelledby="h-export-curent" class="mb-12">
-  <h2 id="h-export-curent" class="font-display text-2xl italic font-semibold text-ink mb-1">Export curent</h2>
+  <?= toc_h2($toc, 'h-export-curent', 'font-display text-2xl italic font-semibold text-ink mb-1') ?>
   <p class="text-xs text-ink-faint mb-5">Numărătoare peste anunțurile din acest export: <?= (int)$total ?> în total. Procentele sunt din acest total.</p>
 
   <!-- Status of the announcements in the export (FIX-05 vocabulary) -->
@@ -402,7 +413,7 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- Historical publication intake (publication_monthly) -->
   <section id="istoric" aria-labelledby="h-istoric" class="mb-12">
-    <h2 id="h-istoric" class="font-display text-2xl italic font-semibold text-ink mb-1">Istoric: anunțuri publicate pe lună</h2>
+    <?= toc_h2($toc, 'h-istoric', 'font-display text-2xl italic font-semibold text-ink mb-1') ?>
     <?php if ($hist === null): ?>
       <p class="text-ink-muted text-sm italic" id="istoric-indisponibil">Istoric indisponibil: acest export nu conține agregatele istorice. Cifrele de mai sus descriu doar exportul curent și nu se pot folosi ca istoric.</p>
     <?php else: ?>
@@ -419,11 +430,14 @@ require __DIR__ . '/../inc/header.php';
           <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Din care anulate</div>
           <div class="text-xs text-ink-faint mt-0.5">incluse în totalul de mai sus</div>
         </div>
-        <div class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">
+        <?php /* Shown only above 0: it explains a difference between the total and the months. */ ?>
+        <?php if ((int)$hist['unknown_date'] > 0): ?>
+        <div data-unknown-date class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">
           <div class="text-2xl font-display font-semibold text-ink"><?= (int)$hist['unknown_date'] ?></div>
           <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Fără dată de publicare</div>
           <div class="text-xs text-ink-faint mt-0.5">incluse în total, în nicio lună</div>
         </div>
+        <?php endif; ?>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
         <section class="bg-surface border border-line rounded-lg p-6" id="luna-istoric">
@@ -469,7 +483,7 @@ require __DIR__ . '/../inc/header.php';
 
   <!-- LLM extraction spend -->
   <section class="bg-surface border border-line rounded-lg p-6 mb-8">
-    <h2 class="font-display text-lg italic font-semibold text-ink mb-1">Costuri inferență</h2>
+    <?= toc_h2($toc, 'h-costuri', 'font-display text-lg italic font-semibold text-ink mb-1') ?>
     <p class="text-xs text-ink-faint mb-4">Apelurile către modelul LLM, în USD, pe zile. Cuprinde toate apelurile din baza de date, nu doar anunțurile din exportul curent.</p>
     <?php if ($llm === null): ?>
       <p class="text-ink-muted text-sm italic">Date indisponibile.</p>
@@ -526,5 +540,7 @@ require __DIR__ . '/../inc/header.php';
     <?php endif; ?>
   </section>
 
+  </div>
+  </div>
 </div>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

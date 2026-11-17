@@ -1,1 +1,2 @@
 @tabler/icons 3.52.0 (MIT), outline; mediu.svg is "trees", the other files are as in docs/specs/2026-11-16-ui-overhaul/icons/README.md; the sprite in inc/header.php is built from these files.
+`brand-github.svg` (2026-11-17, brief footer-llms-txt) is the file of @tabler/icons 3.52.0, outline, not modified; its symbol `i-brand-github` is in the sprite of `inc/header.php` (the footer link "Cod sursă").

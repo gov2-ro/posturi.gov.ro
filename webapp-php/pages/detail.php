@@ -507,8 +507,11 @@ require __DIR__ . '/../inc/header.php';
       // part of the claim, and "cum a fost calculat" is open to anyone who wants to check it.
       $sal = ($p['sal_json'] ?? null) ? (json_decode($p['sal_json'], true) ?: []) : [];
       $show_sal = !empty($sal['lei_min']);
+      // No figure at all (no stated pay, no estimate): the page says so, and why (UX salary-net).
+      $no_sal = !$show_sal && list_salary($p) === null;
+      $eu_funded = in_array((string)($p['funding_kind'] ?? ''), ['fonduri_europene', 'pnrr'], true);
       ?>
-      <?php if ($cond || $terms || $bib || $show_sal): ?>
+      <?php if ($cond || $terms || $bib || $show_sal || $no_sal): ?>
       <div class="mb-4 divide-y divide-line text-sm">
 
         <?php if ($cond): ?>
@@ -558,18 +561,14 @@ require __DIR__ . '/../inc/header.php';
           <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
               <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu estimat</h2>
-              <p class="text-lg font-semibold text-ink">
-                <?php if ((int)$sal['lei_min'] === (int)$sal['lei_max']): ?>
-                  <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?> lei
-                <?php else: ?>
-                  <?= number_format((int)$sal['lei_min'], 0, ',', '.') ?>–<?= number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei
-                <?php endif; ?>
-                <span class="text-sm font-normal text-ink-muted">brut / lună, la gradația 0</span>
+              <?php /* Net first: the main figure. The gross range is one smaller line below. */ ?>
+              <p class="text-lg font-semibold text-ink" data-pay-net>
+                <?= e(net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']))) ?>
+                <span class="text-sm font-normal text-ink-muted">/ lună, la gradația 0</span>
               </p>
-              <?php if (($net = net_label((float)$sal['lei_min'], (float)$sal['lei_max'])) !== ''): ?>
-              <p class="text-ink"><?= e($net) ?> <span class="text-xs text-ink-muted">(estimare)</span></p>
-              <?php endif; ?>
             </div>
+            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= (int)$sal['lei_min'] === (int)$sal['lei_max']
+                ? number_format((int)$sal['lei_min'], 0, ',', '.') : number_format((int)$sal['lei_min'], 0, ',', '.') . '–' . number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei / lună, la gradația 0</p>
             <?php if ($pl = pay_level($p)): ?>
             <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
               <span><?= e($pl['text']) ?></span></p>
@@ -621,6 +620,12 @@ require __DIR__ . '/../inc/header.php';
               </details>
             </div>
           </div>
+        </section>
+        <?php endif; ?>
+
+        <?php if ($no_sal): ?>
+        <section class="py-2" data-no-salary>
+          <p class="text-ink-muted">Fără estimare de salariu. Titlul postului nu corespunde unei funcții din grila de salarizare.<?= $eu_funded ? ' Posturile pe proiecte cu fonduri europene sunt plătite de obicei în afara grilei.' : '' ?></p>
         </section>
         <?php endif; ?>
 

@@ -34,7 +34,7 @@ run_suite('an expired posting keeps a page: what it was, that it closed, similar
     assert_contains('Anunț expirat', $html, 'says it expired');
     assert_contains('<meta name="robots" content="noindex">', $html, 'never indexed');
     assert_contains('Spitalul Clinic Județean Cluj', $html, 'employer kept');
-    assert_contains('4.800 lei (estimat)', $html, 'pay kept');
+    assert_contains('≈ 2.873 lei net (estimat)', $html, 'pay kept, net first');
     assert_contains('<strong>asistent medical principal</strong>', $html, 'summary rendered as Markdown');
     assert_contains('Posturi asemănătoare, deschise acum', $html, 'similar jobs section');
     assert_contains('href="/job/1001-asistent-medical-generalist/"', $html, 'an open posting of the same occupation');

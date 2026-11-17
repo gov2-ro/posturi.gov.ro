@@ -1,9 +1,27 @@
 <?php
 $page_title = 'Despre';
+// The table of contents and the headings come from this one array (heading id => text). Keep each id: other pages link to them.
+$toc = [
+    'ce-ofera'             => 'Ce oferă acest site',
+    'cum-functioneaza'     => 'Cum funcționează',
+    'termene'              => 'Termene și starea înscrierilor',
+    'salarii'              => 'Salarii',
+    'anunturi-inchise'     => 'Anunțuri închise sau dispărute',
+    'aplicare'             => 'Cum aplic?',
+    'confidentialitate'    => 'Confidențialitate',
+    'vezi-si'              => 'Vezi și',
+    'versiunea-datelor'    => 'Versiunea acestor date',
+    'contact'              => 'Contact',
+];
+$head_extra = '<script src="/static/toc.js?v=' . (@filemtime(__DIR__ . '/../static/toc.js') ?: '1') . '" defer></script>';
 require __DIR__ . '/../inc/header.php';
 ?>
-<div class="max-w-screen-md mx-auto px-4 sm:px-6 py-10">
+<div class="max-w-screen-lg mx-auto px-4 sm:px-6 py-10">
   <h1 class="font-display text-[2rem] italic font-semibold text-ink mb-6">Despre</h1>
+
+  <div class="pg-toc-layout">
+  <?php require __DIR__ . '/../partials/toc.php'; ?>
+  <div class="min-w-0 max-w-screen-md">
 
   <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
 <p>
@@ -15,7 +33,7 @@ require __DIR__ . '/../inc/header.php';
       Datele sunt preluate periodic de pe portalul oficial <a href="https://posturi.gov.ro" class="text-gov hover:underline" target="_blank" rel="noopener">posturi.gov.ro</a>
       și procesate automat pentru a permite căutare avansată, filtrare și statistici.
     </p>
-    <h2>Ce oferă acest site</h2>
+    <?= toc_h2($toc, 'ce-ofera') ?>
     <ul>
       <li>Căutare full-text și filtrare după județ, nivel, tip, domeniu, grad, studii etc.</li>
       <li>Statistici agregate despre piața muncii în sectorul public</li>
@@ -24,7 +42,7 @@ require __DIR__ . '/../inc/header.php';
       <li>Calendarul iCal se poate <strong>abona</strong> (nu doar descărca): adaugă adresa <code>/posturi.ics?…</code> în Google Calendar (<em>Alte calendare → Prin URL</em>) sau într-un client care acceptă <code>webcal://</code>. Filtrează cu aceiași parametri ca lista (<code>?judet[]=cluj&amp;judet[]=timis</code>). Calendarul primește numele din filtre (de exemplu „posturi.gov2.ro Liceală Cluj”), deci fiecare abonament filtrat are un nume propriu.</li>
     </ul>
 
-    <h2 id="cum-functioneaza">Cum funcționează</h2>
+    <?= toc_h2($toc, 'cum-functioneaza') ?>
     <p>
       De două ori pe zi citim lista de anunțuri de pe posturi.gov.ro, descărcăm paginile noi sau modificate
       și documentele atașate, apoi un model de inteligență artificială (un „robot”) le restructurează:
@@ -38,7 +56,7 @@ require __DIR__ . '/../inc/header.php';
       Dacă găsiți o greșeală, folosiți butonul <b>?!</b> din colțul paginii.
     </p>
 
-    <h2 id="termene">Termene și starea înscrierilor</h2>
+    <?= toc_h2($toc, 'termene') ?>
     <p>
       Pentru fiecare anunț căutăm data-limită de depunere a dosarelor. Când o găsim în anunț, postul apare
       ca „înscrieri deschise” până la acea dată. Când anunțul nu o precizează clar, folosim data de expirare
@@ -47,22 +65,25 @@ require __DIR__ . '/../inc/header.php';
       mult o oră după miezul nopții.
     </p>
 
-    <h2 id="salarii">Salarii</h2>
+    <?= toc_h2($toc, 'salarii') ?>
     <p>
       Foarte puține anunțuri menționează salariul. Când îl menționează, îl afișăm ca „salariu anunțat”.
-      Altfel afișăm un <strong>salariu estimat</strong> (brut), calculat din grila de salarizare din
-      proiectul legii salarizării, după funcție, studii, grad și mărimea localității. Este o estimare
-      orientativă, nu o ofertă: sporurile, vechimea și încadrarea exactă le stabilește angajatorul.
+      Altfel afișăm un <strong>salariu net estimat</strong>, calculat din grila de salarizare din
+      proiectul legii salarizării, după funcție, studii, grad și mărimea localității. Calculăm netul din
+      salariul brut al grilei, la gradația 0, fără persoane în întreținere. Filtrul „Salariu” folosește tot netul.
+      Salariul brut este pe pagina fiecărui anunț. Este o estimare orientativă, nu o ofertă: sporurile,
+      vechimea și încadrarea exactă le stabilește angajatorul. Un anunț al cărui titlu nu corespunde
+      unei funcții din grilă nu are estimare; filtrul „fără salariu estimat” îl arată.
     </p>
 
-    <h2 id="anunturi-inchise">Anunțuri închise sau dispărute</h2>
+    <?= toc_h2($toc, 'anunturi-inchise') ?>
     <p>
       Păstrăm un anunț în listă cât timp este publicat pe posturi.gov.ro. După ce expiră sau este anulat,
       dispare din căutare. Anunțurile salvate rămân în lista dvs. de <a href="/salvate/" class="text-gov hover:underline">Salvate</a>,
       marcate ca indisponibile.
     </p>
 
-    <h2 id="aplicare">Cum aplic?</h2>
+    <?= toc_h2($toc, 'aplicare') ?>
     <p>
       Nu se poate aplica prin acest site. Dosarul se depune la instituția care organizează concursul,
       exact cum cere anunțul oficial (la sediu, prin poștă sau electronic). Lista de documente și
@@ -70,7 +91,7 @@ require __DIR__ . '/../inc/header.php';
       decide cine este admis.
     </p>
 
-    <h2 id="confidentialitate">Confidențialitate</h2>
+    <?= toc_h2($toc, 'confidentialitate') ?>
     <p>
       Site-ul nu are conturi și nu setează cookie-uri. Ce salvați — anunțurile salvate sau ascunse,
       bifele din lista de pregătire, modul de afișare, stilul vizual și data ultimei vizite (pentru mesajul
@@ -116,7 +137,7 @@ require __DIR__ . '/../inc/header.php';
      underlines every link it contains, which a utility class cannot override.
      Hence also the hand-set heading size, matching `.prose-body h2`. */ ?>
   <section class="my-6">
-    <h2 class="mb-3 font-display text-[1.15rem] font-semibold italic text-ink">Vezi și</h2>
+    <?= toc_h2($toc, 'vezi-si', 'mb-3 font-display text-[1.15rem] font-semibold italic text-ink') ?>
     <div class="grid gap-3 sm:grid-cols-2">
       <?php foreach ([
         ['/statistici/', 'Statistici', 'Distribuția anunțurilor pe județe, domenii, grade și termene.'],
@@ -132,7 +153,7 @@ require __DIR__ . '/../inc/header.php';
   </section>
 
   <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
-    <h2 id="versiunea-datelor">Versiunea acestor date</h2>
+    <?= toc_h2($toc, 'versiunea-datelor') ?>
     <p>
       Site-ul nu interoghează portalul oficial în timp real: servește o bază de date
       generată periodic din arhiva noastră. Pipeline-ul rulează de două ori pe zi, iar
@@ -195,13 +216,15 @@ require __DIR__ . '/../inc/header.php';
     </p>
 <?php endif; ?>
 
-    <h2 id="contact">Contact</h2>
+    <?= toc_h2($toc, 'contact') ?>
     <p>
       Sugestii și greșeli: <a href="https://forms.gle/96WusM2qr4pbUXhW7" target="_blank" rel="noopener">formular</a>,
       <a href="mailto:<?= e(FEEDBACK_EMAIL) ?>"><?= e(FEEDBACK_EMAIL) ?></a>
       sau <a href="https://github.com/gov2-ro/posturi.gov.ro/issues" target="_blank" rel="noopener">GitHub</a>.
       Codul sursă este public: <a href="https://github.com/gov2-ro/posturi.gov.ro" target="_blank" rel="noopener">gov2-ro/posturi.gov.ro</a>.
     </p>
+  </div>
+  </div>
   </div>
 </div>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

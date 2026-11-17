@@ -132,8 +132,23 @@ bounded follow-ups, not permission for broad paid backfills.
 - [ ] **QUAL-01 / P3 — Posting quality score: decide on public display.** From the 261016 notes. `classify.quality` scores 15 checks for 100 points (completeness 45, pay and terms 20, timing 20, clarity 15), only for postings with an extraction. `/statistici#calitate` shows it internally. On 2026-10-18 the live median was 83; checks near 100% (text, attachment, contact, calendar) do not discriminate and are the first to revisit. Open: pax decides on public display.
 - [ ] **DATA-11 / P3 — Prose competition calendars as tables.** From the 261016 notes. The extracted calendar (v4/v5) is already one normalised table, and the scraped calendar is the fallback. Still open: a posting without an extraction shows its calendar as prose in the body. Survey the table types in the corpus first (example: `/joburi/asistent-medical-comunitar-168/`).
 - [ ] **DATA-QA-01 — Manual data QA pass.** Owner: pax, with the notes feature. The notes CSV is the input to BETA-V5.
+- [ ] **DATA-DETERMINATE-DURATION** — for fixed-term postings (perioadă determinată), find how long the contract or the project runs, and show it. The export has `v3_contract_duration` and `v5_end_date`; measure their fill rate first. Found 2026-11-17.
 
 ## Product follow-ups
+
+- [x] **UX-SALARY-NET (2026-11-17)** — net pay first in every place that shows a salary; the filter "Salariu" in net pay with the option "fără salariu estimat"; a note above a salary-filtered list; landing group "Salariu" (brief `docs/briefs/2026-11-17-salary-net.md`). Not deployed.
+- [ ] **PIPELINE-PROJECT-PAY** — extract the stated pay of project posts (EU or PNRR funding) in the pipeline. The salary grid has no row for them: 0 of 371 postings without an occupation match have an estimate (17 Oct export), so the filter option "fără salariu estimat" lists them and the detail page says so. Stated pay would fill the gap.
+- [ ] **UX-SALARY-NET-SORT** — `net_from_gross()` is not monotonic: between 4.325 and 6.325 lei gross it drops 1–3 lei at each 50-lei step of the personal deduction (40 drops). Sort by salary orders by gross, so two rows can show net figures that are 1–3 lei out of order. Decide: accept, or sort by a net expression.
+- [x] **UX-05-THEMES (2026-11-17)** — themed landing pages: one template (`pages/theme.php`) and a configuration (`inc/themes.php`); first theme `/sanatate/` (brief `docs/briefs/2026-11-17-themed-landing-sanatate.md`). Not deployed.
+- [x] **UX-NAV-TOC-HERO (2026-11-17)** — one "Salvate" item with the bell (no "Alerte" in the masthead; alerts block on `/salvate/`); table of contents on Statistici and Despre; the county map in the first screen of a themed page (brief `docs/briefs/2026-11-17-nav-toc-theme-hero.md`). Not deployed.
+- [ ] **DS-PROPOSAL-TOC-MAP** — open a DS proposal for the table of contents (`.pg-toc`) and the county tile map (`.pg-map`); both are local now. Brief 2026-11-17 did not allow the `gh` call.
+- [ ] **UX-NAV-CURRENT** — the masthead marks no current item (`aria-current="page"` is in the DS `.g2-nav` style but no page sets it). Decide whether `/salvate/` and `/alerte/…` mark "Salvate", `/posturi/` marks "Posturi", and so on.
+- [ ] **UX-05-THEME-LOCAL-ADMIN** — theme "administrație locală". Candidate; open.
+- [ ] **UX-05-THEME-EDUCATION** — theme "educație". Candidate; open.
+  Rule for a new theme: add it when it has enough postings, a distinct audience and a section of its own. A theme is a base filter of existing parameters plus a list of sections in `inc/themes.php`; no template change.
+- [x] **UX-05-THEME-STATS (2026-11-17)** — statistics panel (figures and one weekly chart with occupation chips), compact lists, Health Icons for specialties, selects in the search form, on `/sanatate/` (brief `docs/briefs/2026-11-17-theme-stats-icons.md` with follow-up 1, [ADR 0007](decisions/0007-health-icons.md)). Not deployed.
+- [ ] **UX-05-THEME-SPECIALTY-HISTORY** — add the specialty (`med_specialty`) to `archived_postings` in the export, so that the themed page can show specialties over time. Today the archive has `inf_profession_family` and `occ_canonical` only, so the chart of a themed page can filter by occupation and not by specialty. Found 2026-11-17.
+- [ ] **UX-05-THEME-COUNTY-SECTIONS** — on a themed page the lists of values (specialties, occupations) keep the order of the whole theme when a county is selected; a value that is large in one county only can sit below the first 24. Decide whether the county should re-rank them.
 
 The user confirmed on 2026-10-03 that we should aim to implement or address all
 the user-facing capabilities discussed in [the product direction](product-direction.md),

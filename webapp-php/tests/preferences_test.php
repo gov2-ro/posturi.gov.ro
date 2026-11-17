@@ -247,6 +247,14 @@ run_suite('/salvate/ shell: layout, states, no export data, no indexing', functi
     foreach (['data-saved-empty', 'data-saved-list', 'data-saved-pager', 'data-clear-confirm'] as $a) {
         assert_same(1, $x->query('//*[@' . $a . ']')->length, "$a present");
     }
+    // The masthead has no "Alerte" item; the way to the alerts is a block on this page, for each reader.
+    $blk = $x->query('//section[@data-alerts-block]');
+    assert_same(1, $blk->length, 'the alerts block');
+    assert_same('Alerte pe email', trim($x->query('.//h2', $blk->item(0))->item(0)->textContent ?? ''), 'alerts block: heading');
+    assert_contains('Primești pe email posturile noi dintr-o căutare salvată, o dată la 3 zile.', $html, 'alerts block: the sentence');
+    $al = $x->query('.//a[@href="/alerte/"]', $blk->item(0));
+    assert_same(1, $al->length, 'alerts block: one link to /alerte/');
+    assert_same('Gestionează alertele', trim($al->item(0)->textContent), 'alerts block: link text');
     assert_contains('Șterge lista de salvate', $html, 'clear saved');
     assert_contains('Restabilește toate anunțurile ascunse', $html, 'restore all hidden');
     assert_contains('<noscript>', $html, 'no-JS state');

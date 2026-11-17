@@ -151,8 +151,14 @@ site shows must stay traceable to a sheet and row, including under an older
 variant. `python build-salary-grid.py --report` prints coverage and the rows
 flagged for manual review.
 
-Every estimate is gross, at gradation 0, and carries its legal status. Net pay,
-sporuri and the 20% cap are deliberately out of scope — see the activity log.
+Every estimate in the export is gross, at gradation 0, and carries its legal status.
+The web app shows net pay first (`net_from_gross()` in `webapp-php/helpers.php`) and the
+gross range on the detail page only. The filter "Salariu" (`salary_bucket`) works in net
+pay: `net-sub-3000`, `net-3000-4000`, `net-4000-5000`, `net-peste-5000`, and `fara-estimare`
+for the postings with no figure. Each net threshold is converted to a gross threshold once
+(`gross_for_net()`), so the SQL compares the stored gross column. The old gross values
+(`sub-3000` … `peste-7000`) stay valid with their old meaning, for saved searches and email
+subscriptions. Sporuri and the 20% cap are deliberately out of scope — see the activity log.
 
 ### Județe (counties)
 
@@ -688,7 +694,7 @@ the `.htaccess` deny rules. Apache never loads it.
 
 | Path | Purpose |
 |------|---------|
-| `index.php` | Front controller — routes `/` (the landing page; with any parameter, the list), `/posturi/` (the unfiltered list; `/posturi/?…` is a 301 to `/?…`; ADR 0004), `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/robots.txt`, `/sitemap.xml` |
+| `index.php` | Front controller — routes `/` (the landing page; with any parameter, the list), `/posturi/` (the unfiltered list; `/posturi/?…` is a 301 to `/?…`; ADR 0004), `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/sanatate/` and each other themed page of `inc/themes.php` (`/{slug}/?…` is a 301 to `/?…` with the base filter), `/robots.txt`, `/sitemap.xml`, `/llms.txt` (a Markdown text for language models, built from the code: pages, themes, filter parameters, data date; llmstxt.org) |
 | `db.php` | PDO singleton for `posturi.sqlite` |
 | `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |

@@ -321,7 +321,8 @@ run_suite('item details: facts, notes and caps in RSS, Atom and iCal', function 
         assert_contains('<h3>Extras automat</h3>', $h, "$fmt: extracted group");
         assert_contains('<b>Nivel de studii (EQF):</b>', $h, "$fmt: studies (extracted)");
         assert_contains('Drept', $h, "$fmt: field of study");
-        assert_contains('<b>Salariu estimat:</b> 5.000–6.000 lei brut', $h, "$fmt: estimated pay");
+        assert_contains('<b>Salariu estimat:</b> ≈ 2.981–3.523 lei net / lună, la gradația 0', $h, "$fmt: estimated pay, net first");
+        assert_contains('<b>Brut estimat:</b> 5.000–6.000 lei brut', $h, "$fmt: the gross range after it");
         assert_contains('Estimare orientativă', $h, "$fmt: pay disclaimer");
         assert_contains('<b>Experiență cerută:</b> Min. 3 ani, în specialitate', $h, "$fmt: structured experience");
         assert_contains('Legea 53/2003', $h, "$fmt: exam topics");
@@ -331,7 +332,8 @@ run_suite('item details: facts, notes and caps in RSS, Atom and iCal', function 
     }
     assert_contains('Email: jurist@example.ro', $cur_ics, 'ics: contact email');
     assert_contains('Nivel de studii (EQF): ', $cur_ics, 'ics: studies');
-    assert_contains('Salariu estimat: 5.000–6.000 lei brut', $cur_ics, 'ics: estimated pay');
+    assert_contains('Salariu estimat: ≈ 2.981–3.523 lei net', $cur_ics, 'ics: estimated pay, net first');
+    assert_contains('Brut estimat: 5.000–6.000 lei brut', $cur_ics, 'ics: the gross range after it');
     assert_contains('10.12.2026 10:00', $cur_ics, 'ics: exam date line');
     // Scraped calendar rows win and carry no "extras automat" mark; the order is calendar first.
     $old_ics = ics_description($ics, 3904);

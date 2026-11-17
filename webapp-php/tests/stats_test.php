@@ -243,5 +243,30 @@ run_suite('a long history shows 24 months and sums the rest', function () use ($
     assert_same('60', card_number($x, 'Anunțuri publicate, în total'), '30 months x 2');
 });
 
+// ---- the "no publication date" card: only above 0; the table of contents ----
+
+run_suite('the card "Fără dată de publicare" is shown above 0 and absent at 0', function () use ($tmp, $x) {
+    assert_same(1, $x->query('//*[@data-unknown-date]')->length, 'the fixture has 3 postings with no date: the card is there');
+    [$html0, $x0] = stats_page("$tmp-nodate.sqlite", function (PDO $p) {
+        $p->exec("DELETE FROM publication_monthly WHERE month = 'unknown'");
+    });
+    assert_same(0, $x0->query('//*[@data-unknown-date]')->length, 'with 0 the card is not rendered');
+    assert_not_contains('Fără dată de publicare', $html0, 'with 0 the line is not on the page');
+    assert_same(1, $x0->query('//*[@id="istoric"]')->length, 'the history section stays');
+});
+
+run_suite('the table of contents of Statistici: one link for each h2, in page order, to an id that exists', function () use ($x) {
+    $nav = $x->query('//nav[@aria-label="Cuprins"]');
+    assert_same(1, $nav->length, 'one table of contents');
+    $hrefs = [];
+    foreach ($x->query('.//a', $nav->item(0)) as $a) $hrefs[] = ltrim($a->getAttribute('href'), '#');
+    $h2 = [];
+    foreach ($x->query('//main//h2') as $h) $h2[] = $h->getAttribute('id');
+    assert_same($h2, $hrefs, 'the links are the h2 ids, in order');
+    assert_same(['h-export-curent', 'h-istoric', 'h-costuri'], $hrefs, 'the three sections');
+    foreach ($x->query('//main//h2') as $h) assert_same('-1', $h->getAttribute('tabindex'), $h->getAttribute('id') . ' takes focus');
+    assert_same(1, $x->query('//*[@id="export-curent"]')->length, 'the old anchor stays');
+});
+
 foreach (glob("$tmp-*") ?: [] as $f) @unlink($f);
 finish();

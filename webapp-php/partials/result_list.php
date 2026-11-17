@@ -33,6 +33,19 @@ $chips = $active_chips ?? [];
   <?php endif; ?>
 </div>
 
+<?php /* UX salary-net: what a salary filter leaves out. Part of the fragment, so it follows the filter state. */ ?>
+<?php if (!empty($salary_note)): ?>
+<div class="g2-inset mb-3 text-sm" data-salary-note role="note">
+  <?php if ($salary_note['none']): ?>
+  <p>Aceste anunțuri nu au un salariu anunțat și nu au putut fi estimate din grilă. De obicei titlul postului nu corespunde unei funcții din grila de salarizare.</p>
+  <?php else: ?>
+  <p>Filtrul de salariu arată doar anunțurile cu salariu anunțat sau estimat.<?php if ($salary_note['n'] > 0): ?>
+    <span data-salary-note-count><?= (int)$salary_note['n'] ?></span> <?= $salary_note['n'] === 1 ? 'anunț care se potrivește' : 'anunțuri care se potrivesc' ?> cu celelalte filtre nu <?= $salary_note['n'] === 1 ? 'are' : 'au' ?> o estimare.
+    <a href="<?= e($salary_note['href']) ?>" data-salary-note-link class="inline-block py-2">Vezi-le</a><?php endif; ?></p>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
 <!-- Active filter chips — one per value, each removing only itself.
      The connectives between them are the only place the filter's logic is
      stated: values inside one group are alternatives ("sau"), groups narrow
@@ -127,7 +140,7 @@ $chips = $active_chips ?? [];
           <?php if ($sal || $labels || $meta): ?>
           <p class="pg-facts mt-1 text-xs leading-relaxed text-ink-muted">
             <?php if ($sal): ?>
-              <span class="pg-salary whitespace-nowrap" title="<?= e($sal['label']) ?> (brut lunar)<?= ($n = list_salary_net($p)) !== '' ? ' · ' . e($n) . ', estimat' : '' ?>">
+              <span class="pg-salary whitespace-nowrap" title="<?= e($sal['label']) ?> (net lunar) · brut: <?= e($sal['gross']) ?>">
                 <span class="pg-salary-label" role="img" aria-label="<?= e($sal['label']) ?>">💰</span>
                 <span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
                 <span class="pg-salary-kind">(estimat)</span><?php endif; ?>

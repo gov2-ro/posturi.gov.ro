@@ -2,6 +2,159 @@
 
 ## 2026
 
+### 2026-11-17 — Footer link rows, GitHub mark, /llms.txt (not deployed)
+
+Brief: `docs/briefs/2026-11-17-footer-llms-txt.md`.
+
+**Done**
+- Footer lists: each link is 26 px high (`py-[3px] leading-5`, in a flex `li` with `py-0.5`); the rows are 30 px apart (44 px before). The targets are 4 px apart. The link "Cod sursă" has the Tabler `brand-github` mark (18 px, `aria-hidden`, text colour; symbol `i-brand-github` in `inc/header.php`, source `assets/icons/tabler/brand-github.svg`, `@tabler/icons` 3.52.0, not modified). The other links have no icon. The check "every link is 44 px" in `home.spec.js` now skips the footer lists, which have their own check (24 px, no overlap, rows 28 to 32 px apart); the disclaimer link keeps 44 px.
+- `/llms.txt` (`pages/llms.php`, one route in `index.php`): title, summary, "Pagini" (each themed page from `themes()`), "Date și fluxuri" (RSS, Atom, calendar, sitemap), "Căutare prin URL" (10 parameters, each read by `build_filters()`, examples from `home_list_url()`), "Despre date" (build date, active postings from `home_count_for()`), "Cod sursă". Cache `public, max-age=86400`. `robots.txt` is unchanged. Route added to the README. New suite `tests/llms_test.php` (88 assertions) in `.github/workflows/ci.yml`.
+
+**Hard**
+- The first footer rows were 31 px apart, 33 px at the icon: an inline-flex link in a block `li` leaves space under the baseline. A flex `li` gives 30 px.
+- The parameters of `build_filters()` are read in two ways (`$p['x']` and loops over `'x' => column`); the test accepts both.
+
+**Decided**
+- `sort` and `page` are not in the list: `build_filters()` does not read them (`index.php` does).
+- The absolute URLs use `site_origin()`, as the sitemap does; on a local server they start with `http://localhost:PORT`.
+
+### 2026-11-17 — Themed page: statistics panel, compact lists, medical icons (not deployed; follow-up 1 at the end)
+
+Brief: `docs/briefs/2026-11-17-theme-stats-icons.md`. ADR 0007 (changed during the work: one separate SVG file).
+
+**Done**
+- Statistics panel on `/sanatate/` (section type `stats`, left column of the first screen, below the link to all postings; below `lg` it comes before the map): three figures (active postings, employers, postings that close in 7 days), the weekly chart of the theme (12 weeks), the table "Ocupații, pe luni" (5 occupations; the last 3 complete months and the current one), one caption line. The theme key `history` (`family`, optional `note`) names the part of the archive. A theme with no `history` shows the figures only; a theme with no `stats` section renders as before.
+- Shared partials: `partials/figures.php` and `partials/weekly_chart.php` (the landing page uses both; its HTML is the same as before, measured on real data), `partials/theme_stats.php`. `home_weekly_postings()` takes an optional family. New helpers: `theme_months()`, `theme_occupation_months()`, `theme_icon_for()`, `icon_file()`.
+- The figure "se închid în 7 zile" links to the list with `status=soon`: the same predicate (open, deadline today to today + 7). Employers has no list with that predicate, so it is not a link.
+- Compact lists: `compact` flag of `partials/count_item.php` (28 px line, link `py-[3px]`, 24 px icon).
+- Icons: `webapp-php/assets/icons/healthicons/` (47 outline files, `LICENSE`, `README.md`, `build-sprite.php`); the generated file `webapp-php/static/health-icons.svg`; the theme key `icon_file` names it; a `values` section has `icons` (exact value), `icon_prefixes` and `icon_default`. An item with none of them has no icon; a gap of 24 px keeps its text in line.
+- Tests: `theme_test.php` (398 -> 411 assertions with the fixture history in `tests/fixtures/theme_db.php`), `home_test.php` (landing chart pinned), `tests/browser/theme.spec.js` (4 new tests, 3 widths).
+
+**Hard**
+- The first plan put the 47 symbols inline: 133,828 bytes raw, 49,472 gzip, above the 40 kB gate of the brief. The owner chose a separate cacheable file (option 3) and changed ADR 0007. Measured now: file 133,483 bytes raw, 49,209 gzip (one request, cached for a month by `.htaccess`); the 37 icon elements add 5,288 bytes raw (about 0.4 kB gzip) to the HTML of `/sanatate/`; the whole panel and icons together add 10.3 kB raw, 1.4 kB gzip.
+- The archive starts in July 2026 and its first week is thin (07-01: 1 posting, 07-02: 1, 07-03: 2, then 8 a day from 07-06), and one health posting is dated 06-30. The template cannot state "the archive starts in July" from the data (the first month of the history is June). The sentence is the `note` of the theme configuration.
+- A first version of the weekly clause kept the family filter in one table only. Test mutations found it.
+
+**Decided**
+- Icons by rule, not by 75 exact values: the exact value first (`Asistent medical comunitar`), then the first matching prefix (`Asistent medical` nurse, `Medic` doctor, `Farmacist` pharmacy), then `icon_default`. Rationale: the values change with the data. Cost of the alternative: a list that grows with each new occupation.
+- The panel is a `stats` section type and not a theme-level key, so a theme chooses its place by its list of sections. `history` is a theme key because it names data, not a place.
+- The table counts each posting once; `job_postings` (all statuses) wins over `archived_postings` for the same id; the family filter applies to both tables.
+- Not done: a history of specialties (the archive has no such column; backlog UX-05-THEME-SPECIALTY-HISTORY).
+
+**Follow-up 1 (same day, owner request)**
+
+Done
+- One chart instead of chart plus table. The table "Ocupații, pe luni", `theme_months()`, `theme_occupation_months()` and the note „Arhiva începe în iulie 2026.” (`note` of `history`) are gone. Above the chart: a row of DS chips (`g2-chip`, `aria-pressed`): "Toate" and the 5 occupations with the most postings in the 12 weeks (`theme_occupation_weeks()`). `static/theme-chart.js` draws the series of the pressed chip in the same chart (line, area, line of text, label, vertical scale of the series) and writes a sentence to a polite live region. The series are in the JSON block `#theme-chart-data`; the buttons ship hidden. Caption: „Toată țara. Anunțuri publicate, și cele expirate.”
+- Icons: the section "Ocupații" has none (settings, `icon_prefixes` and its code are removed). The 10 symbols that no section uses are removed from `assets/icons/healthicons/outline/` and from `static/health-icons.svg` (47 -> 37 symbols; 133,483 -> 108,203 bytes raw, 49,209 -> 40,151 gzip). "Specialități medicale": 3 columns from `lg` (section key `columns`), 32 px icon (section key `icon_size`); the section is 330 px high at 1280 px (322 px before with 4 columns and 24 px icons; 358.7 px at the start of the work).
+- Search form: theme key `search_selects` (a list of `param`, `label`, `all`, `source`, `column`). `/sanatate/` has the selects "Toate specialitățile", "Toate ocupațiile", "Toate județele" and "Caută", no text field. Options: every value with a posting inside the theme, Romanian order, no count (`theme_select_values()`). A theme with no `search_selects` keeps the field. The submit uses the existing form script and the clean-URL redirect.
+- The line "Posturi nemedicale la angajatori din sănătate" is before "Noi și pe terminate", with the muted sentence (`note` of `other`).
+- Tests: `theme_test.php` 411 -> 488 assertions; `theme.spec.js` has 8 new tests (chart chips, no-script chart, selects, columns and icon size) and 5 changed.
+
+Hard
+- The first one-row form wrapped the county select and the button on one row at 320 px; the button is now full width below `sm` when the form has selects.
+- Fixture: Kinetoterapeut and Psiholog moved from 3-4 Jul to 14-15 Jul, so that 5 occupations have a posting in the 12 weeks.
+
+Decided
+- The chips are DS chips as toggle buttons (COMPONENTS.md, Chips): no local class.
+- The five occupations are chosen by the postings of the 12 weeks, not of the active list, so that the chips and the chart agree.
+- The vertical scale of a series fits that series (the brief), so the same height means different numbers; the line of text shows min and max.
+- `columns` is a section setting (3 or the default `auto-fill`), not a theme-wide one.
+- ADR 0007 still says 47 symbols; the ADR was not in the files of the brief. The file now has 37.
+
+**Follow-ups 2 to 5 (same day, owner requests; the later one wins where they differ)**
+
+Done
+- Form (2.1, 3.1): at `lg` the three selects and the search icon button are one row, with no wrap at 1280 and 1024 px; the left column of the first screen is 60% (`3fr 2fr`). Measured on real data: at 1280 px each select is 211.2 px and the button 48 x 48 px; at 1024 px each select is 160.5 px and the button 48 px (a long option truncates). The icon is Tabler `search` (symbol `i-search` in `inc/header.php`); the button name is the text "Caută", visible below `lg` and hidden from `lg`.
+- Chart (2.2 to 2.4, 3.2): the heading is `sr-only`; the buttons are text only (`.pg-chart-btn`: no border, no background, in each state; the pressed one is bold and underlined); the caption is gone.
+- One county control (2.2, 3, 4): the map and the form's county select are one control (`static/home.js` uses the select of the form). The chart follows the county (`static/theme-panel.js`, event `posturi:county`, data in `#theme-panel-data`). The county data adds 6,792 bytes raw, 1,800 gzip to the page (42 counties; the JSON of the whole panel). Sum rule tested on the fixture. The checkbox "Arată toate județele" replaces the line under the map, the county name and the button "Toate județele"; the label of the map is `sr-only` and the map keeps its name. The title shows the county and its count: "Posturi în sănătate → Suceava (12)".
+- Follow-up 4: the figures row and its county data are gone (the landing page keeps `partials/figures.php`).
+- Follow-up 5: the buttons of the chart are fixed groups of the theme key `history.groups` (Medic without "Medic rezident", Rezident, Asistent, Îngrijitor); `theme_group_series()` replaces the top-5 occupations. Real data, 12 weeks (20 Jul to 4 Oct 2026): Medic 435, Rezident 45, Asistent 680, Îngrijitor 265, in no group 164, total 1,589. Specialty icons are 40 px (section 402 px high at 1280 px, 3 columns). The link "Toate anunțurile din sănătate (375)" is the right column of the row of the line "Posturi nemedicale…", with its count outside the link; both carry `judet[]` and the county count.
+- Sprite file after the unused symbols were removed (follow-up 1): 37 symbols, 108,203 bytes raw, 40,151 gzip.
+- Backlog: DATA-DETERMINATE-DURATION (follow-up 3, item 5).
+
+Hard
+- The county count of the title and of both links is the count of `home_item_counts()`, which counts the postings of a county; a posting with no county is only in the national count.
+- "Medic" takes "Medic veterinar" and "Medic de familie" by prefix; only "Medic rezident" is excepted, as the brief says.
+
+Decided
+- The title count and the move of the link to all apply to a theme with a `counties` section (the setting that already adds the map); a theme without it renders as before.
+- A theme with `stats` but no `history` has no panel (the chart needs the archive family).
+- The checkbox is a native one: the DS has none (DS proposal pending, not opened; the text buttons too).
+- The Tabler source file `search.svg` is not added to `assets/icons/tabler/` (outside the files of the brief).
+
+
+### 2026-11-17 — One "Salvate" item, table of contents, themed-page hero (not deployed)
+
+Brief: `docs/briefs/2026-11-17-nav-toc-theme-hero.md`.
+
+**Done**
+- Navigation: four items (Posturi, Salvate, Statistici, Despre). "Alerte" is gone from the masthead. "Salvate" has the bell (`i-bell`, `aria-hidden`) and keeps `data-saved-count`. The footer keeps "Alerte pe email". `/salvate/` has a block "Alerte pe email" (one sentence, link "Gestionează alertele" to `/alerte/`). The navigation marks no current item today, so step 1.5 changed nothing.
+- Statistici: the card "Fără dată de publicare" shows only when its number is above 0 (`data-unknown-date`).
+- Table of contents: `partials/toc.php`, `toc_h2()` in `helpers.php`, `static/toc.js`, `.pg-toc` in `assets/app.css`. Each page has one array `$toc` (heading id => text); the headings and the list both read it. Despre has 10 entries (new ids `ce-ofera` and `vezi-si`; the old ids stay). Statistici has 3 (`h-export-curent`, `h-istoric`, new `h-costuri`).
+- Themed page: two columns from `lg` (title, search, link to all | map, legend, line). The section "Pe județe" and its select are gone. The line under the map: hint, or the county name and the button "Toate județele". The title has the icon `i-sector-sanatate` (new theme key `icon`).
+- Tests: updated `home_test.php`, `theme_test.php`, `preferences_test.php`, `stats_test.php`, `home.spec.js`, `theme.spec.js`; new `toc.spec.js`.
+
+**Hard**
+- Click on a table-of-contents link of a short section: with the "current" line at 30 % of the window height, the next heading was above the line too, so the clicked section was not the marked one. Measured on `/despre/#salarii`: the mark was on the next section. The line is now at 12 %.
+- `home.js` needed the select (`#domenii-judet`) to start. It now starts with the map alone (state in a variable). The landing page still has its select and the same behaviour.
+- The button "Toate județele" hides itself on click. The script moves the focus to the cell that was selected.
+
+**Decided**
+- Where the map goes: the rule "a `counties` section renders in the first screen" (not a setting for each theme). Alternative: a `map_placement` key. Cost: one more key that every theme must set, with one allowed value in practice. The section keeps its `id` and no title.
+- The icon of the theme is the sprite symbol `i-sector-sanatate` (the sprite has no health symbol in the `i-domain-*` set; it has `i-sector-sanatate`). It is already in the sprite, so no new Tabler file was added.
+- Table-of-contents target is the heading (`tabindex="-1"`, `scroll-mt-4`), not the section, so the keyboard focus lands on the heading. Statistici keeps the section ids (`#export-curent`, `#istoric`) that the intro links to.
+- Below `lg` the list is a row of wrapping links (44 px high), not a long column: Despre has 10 entries.
+- Statistici container widened from `max-w-screen-lg` to `max-w-screen-xl`, and Despre from `max-w-screen-md` to `max-w-screen-lg` (text column stays `max-w-screen-md`), so the 14 rem column does not narrow the content.
+- `.pg-toc` and the county map stay local. Both are DS proposal candidates (comment in `assets/app.css`); no issue opened.
+- The case "0 postings with no date" is tested in `stats_test.php` only (it needs its own database); the browser test covers the case "3".
+
+**Measured**
+- Baseline before the work: every PHP suite passed; Playwright 644 passed, 58 skipped, 0 failed (7.6 min).
+- After the work: every PHP suite passed (`home_test` 786, `theme_test` 250, `stats_test` 89, `preferences_test` 201 assertions); Playwright 686 passed, 58 skipped, 0 failed (8.1 min). The first full run after the work had 3 failures in `searches.spec.js` (the new alerts block is the first `h2` of `/salvate/`); the test now skips that heading.
+
+### 2026-11-17 — Net salary, postings with no estimate, the salary note (not deployed)
+
+Brief: `docs/briefs/2026-11-17-salary-net.md`, with its Follow-up 1.
+
+**Done**
+- The reader sees net pay first: list rows (three views), the pay meter text (median in net), the detail page (net range main, one gross line below), the archived page, the feeds ("Salariu estimat" net, then "Brut estimat"), the About page. Statistics shows counts only; it needed no change. The employer builder keeps its gross inputs (the employer types gross).
+- Filter "Salariu": `net-sub-3000`, `net-3000-4000`, `net-4000-5000`, `net-peste-5000`, `fara-estimare`. Each net threshold is a gross threshold, found once by `gross_for_net()` (binary search on `net_from_gross()`): 3.000 net = 5.036 gross, 4.000 = 6.837, 5.000 = 8.548. The SQL compares the stored gross column. The old gross values stay valid with the old meaning (their chip says "brut"); the ids they select are identical on the 17 Oct export (checked against a baseline taken first) and on the fixture.
+- Note above a salary-filtered list (part of the HTMX fragment, not in the feeds), with the count of "Vezi-le"; the other note on `fara-estimare`.
+- Landing: examples 1 and 2 in net, "Alte filtre" entry, group "Salariu". Follow-up 1: group labels without "După", new group "Tip instituție" (`inst[]`), the themed-page title "Studii" (in `inc/themes.php`).
+- Measured on the 17 Oct export (1.197 active): net under 3.000 = 356; 3.000–4.000 = 397; 4.000–5.000 = 85; 5.000 and above = 157; no estimate = 202. Sum 1.197. The counts of the filter and the counts from the displayed figures agree. (The brief's estimate was 357 and 396, from a factor of 0.585.)
+
+**Hard**
+- `net_from_gross()` is not monotonic (see backlog UX-SALARY-NET-SORT): 40 drops of 1–3 lei between 4.325 and 6.325 gross. No drop crosses 3.000, 4.000 or 5.000 net: a test scans every cent within 30 lei of each threshold. So the filter and the displayed figure agree at the edges. Sort by salary still orders by gross.
+- The fixture has a figure on every active posting, so the browser spec uses a third fixture (`make.php … salary`, port 8825).
+- Baseline before the change: PHP suites all passed except `home_test.php` (4 assertions: hero h1, title, last hero line, link); Playwright 626 passed, 9 failed, 58 skipped (home.spec.js:43 and :294, searches.spec.js:186, at three widths). Those are the uncommitted landing work, not this brief.
+
+**Decided**
+- A zero figure counts as no figure for the new values (`fara-estimare` is `IS NULL OR <= 0`; the net buckets need `> 0`). Cost of the alternative: a posting with a zero would show no pay in the row and still sit in "sub 3.000 lei net".
+- The facet gate (`>= 100` postings with a figure) is now `> 0`, so the small fixtures show the filter.
+- The note says "1 anunț care se potrivește … nu are" for N = 1.
+
+### 2026-11-17 — Themed landing page: /sanatate/ (not deployed)
+
+Brief: `docs/briefs/2026-11-17-themed-landing-sanatate.md`.
+
+**Done**
+- Baseline before any change, in a clean copy of the tree: every PHP suite passed (`home_test` 707 assertions in the copy; `eligibility_test` needs `../../schema_models.py`, so it only passes in the real tree); lint clean; the full Playwright run 620 passed, 58 skipped, 0 failed.
+- `inc/themes.php`: the configuration (`themes()`), keyed by slug: base filter, title, h1, description, section list, one "other" line. `pages/theme.php` renders any theme from it. `index.php` routes `/{slug}/`; `/{slug}/?…` is a 301 to `/?…` with the base filter merged in. Sitemap, landing line "Pagini tematice" and the footer group "Posturi" follow the configuration.
+- Shared markup moved to `partials/`: `count_item`, `county_select`, `county_map`, `home_search`, `home_data`, `new_soon`, `follow_cards`. The landing page uses the same partials. New helpers in `helpers.php`: `home_item_counts`, `home_item`, `home_merge_params`, `home_item_fields`, `feed_url_for`, `home_new_soon`.
+- `home.js` is generic: the JSON block is `items[id] = {params, counties}` (was `domains[key] = {family, cor, counties}`); the form sends all its fields, hidden ones included.
+- Tests: `tests/theme_test.php` (235 assertions), `tests/browser/theme.spec.js` (5 specs x 3 widths, on a second server, port 8824, with `tests/fixtures/theme_db.php`), shared `tests/fixtures/page_helpers.php`.
+- Real export (`posturi-new.sqlite`, clock 2026-10-17): 375 postings in the theme; 24 specialty items shown (more exist: link to the list); 12 occupations; 6 study levels; 140 "other postings of health employers". `Server-Timing` total about 17 ms (5 requests after the first).
+
+**Hard**
+- The first baseline run was spoiled: I edited files while Playwright ran. I repeated it on a copy of the tree.
+- Counts per county for every item: one `GROUP BY judet_slug` query per item, built by `build_filters()`, so each count is the result count of its link. About 45 queries on the real export, 17 ms.
+
+**Decided**
+- A section or the "all" link with no item above 0 is not rendered. Cost of the alternative: an empty heading.
+- The county section ships hidden and needs script (select and map are script features). The search form has its own county select that works without script.
+- Tests add a theme through the environment variable `POSTURI_THEMES_EXTRA` (a PHP file). It only adds; it never replaces a theme. Cost of the alternative (an in-process render): the template needs globals and headers.
+- Kept the DOM names `data-home-tile`, `data-domain`, `data-tile-count` for the items of both pages: a rename touches about 40 test lines for no visible gain.
+
 ### 2026-11-17 — Professional domains, filter order, multi-select fix (not deployed)
 
 Brief: `docs/briefs/2026-11-17-domains-filters-multiselect.md` (with follow-ups 1 and 2).
@@ -14,12 +167,15 @@ Brief: `docs/briefs/2026-11-17-domains-filters-multiselect.md` (with follow-ups 
 - Filter list order: Județ, Localitate, Domeniu profesional, Instituție, Sector angajator, Nivel angajator, Grupă ocupațională, Ocupație, ...; Specialitate medicală is above Documente necesare.
 - Multi-select: `hx-trigger="change delay:500ms"`, `hx-sync="this:replace"`, and a stale-response guard in `list.php`: each edit of the form raises a counter, each request keeps the counter value it left with, and `htmx:beforeSwap` sets `shouldSwap = false` for a response whose value is old (results, out-of-band facet list and pushed URL all stay as they are). Controls stay enabled; the existing `#results` indicator shows.
 - Follow-up 1: the example count and the domain count are joined to the last word by a no-break space (the title is inline text, no flex row); "Statistici →" with a chart icon ends the figures row; the first option of both county selects has no count; the starting-point groups are inline text (a wrapped line starts at the left edge, line height 28 px). Measured on the groups: the smallest link fragment is 26 px high, the gap between two lines of targets is 2 px, and the gap between targets on a line is at least 43 px. Follow-up 2: "După domeniu" link to `#domenii` (the target has `tabindex="-1"`, `scroll-mt-4`); the h1 spans both hero columns and is 34 px at 1280 (one line).
+- Follow-up 3: the hero county select has a basis of 11 rem (was 14 rem), so the search field is wider; "Toate județele" still shows in full. The visible label "Județ" of the select in the domain section is gone (`sr-only`; the `for` link stays, so the select keeps its name).
 - New backlog items: UX-05-DOMAIN (derive the domain from COR in the pipeline) and UX-18 (Hungarian landing page).
 
 **Hard**
 - I started the baseline run, then edited `list.php` and `facets.php` while it ran. That polluted the run. I stopped it, put both files back to the baseline state, and ran it again.
 - The multi-select test passes only with all three parts. Without the 500 ms wait, three picks send three requests. Without the guard, a pick made while a request is in flight is lost when its response arrives before the next request leaves. Without `hx-sync`, the old request still completes (the guard hides this in the UI, so a test counts completed requests).
 - `home.js` writes the count text again on load, so a test with script cannot see the no-break space of the server markup. A PHP check covers it.
+- Two full Playwright runs, between the first and the last, lost the test server (`ERR_CONNECTION_REFUSED` from a point in the run on; about 150 and 210 failures). `mobile-375` alone passed (198), and the next full run passed. I did not find the cause; the server printed no error.
+- My mutation script restored `home.php`, `helpers.php` and `home.js` from copies after each mutation. At the end `home.php` held an h1 of `text-xl sm:text-2xl` inside the left hero column, and a domain grid of `minmax(min(100%,15rem),1fr)` with `gap-y-0`. That is not what I wrote (full-width h1 of 34 px, 22 rem columns). I did not make those edits after a restore, so another session probably edited the file while I worked. All checks pass with that content, so I kept it.
 - Tailwind builds only the classes that exist in the sources. A mutation test that adds a new class needs `npm run css` first, or it passes for the wrong reason.
 
 **Decided**

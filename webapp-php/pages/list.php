@@ -454,32 +454,37 @@ $exp_options = [];
 }
 
 timing_mark('f-exp');
-// Salary buckets, over the estimate from the draft salary grid.
-//
-// The >= 100 gate that used to guard this never opened: it counted
-// `inf_salary_min`, the announced salary, and only 44 of 9,757 postings state
-// one. The gate stays — the facet should still hide itself before
-// `estimate-salaries.py` has ever run — but it now counts what the filter
-// actually matches on.
+// Salary filter: net pay of the figure the row shows (stated, else the draft-grid estimate), as a gross
+// threshold in SQL (gross_for_net()), and the option "fără salariu estimat". The facet hides itself
+// while no posting has a figure (before `estimate-salaries.py` has ever run).
 $salary_options = [];
 {
     $sal_total = (int)db()->query(
         "SELECT COUNT(*) FROM job_postings j WHERE " . SALARY_EXPR . " IS NOT NULL"
     )->fetchColumn();
-    if ($sal_total >= 100) {
+    if ($sal_total > 0) {
         $s = facet_scope('salary_bucket');
-        foreach (SALARY_BUCKETS as $bk) {
-            // CAST(? AS REAL): see the note in build_filters() — a COALESCE
-            // expression has no column affinity and PDO binds text.
-            $extra_w = [SALARY_EXPR . " IS NOT NULL", SALARY_EXPR . " >= CAST(? AS REAL)"];
-            $extra_b = [$bk['min']];
-            if ($bk['max'] !== null) {
-                $extra_w[] = SALARY_EXPR . " < CAST(? AS REAL)";
-                $extra_b[] = $bk['max'];
-            }
+        // The net buckets, then the postings with no figure. Each count uses the SQL of its own
+        // filter value (salary_bucket_sql()), so the count is the result count of the option.
+        $sal_opts = array_merge(SALARY_NET_BUCKETS, [['key' => SALARY_NONE, 'label' => SALARY_NONE_LABEL]]);
+        foreach ($sal_opts as $bk) {
+            [$extra_w, $extra_b] = salary_bucket_sql($bk['key']);
             $cnt = scope_count($s, $extra_w, $extra_b);
             if ($cnt) $salary_options[] = ['val' => $bk['key'], 'cnt' => $cnt, 'label' => $bk['label']];
         }
+    }
+}
+
+// The note above the results when a salary filter is on (UX salary-net): what the filter leaves out.
+// N = the postings that match the other filters and have no figure = the count of "Vezi-le".
+$salary_note = null;
+if ($sal_bucket !== '' && salary_bucket_sql((string)$sal_bucket) !== null) {
+    if ($sal_bucket === SALARY_NONE) {
+        $salary_note = ['none' => true];
+    } else {
+        [$nw, $nb] = salary_bucket_sql(SALARY_NONE);
+        $salary_note = ['none' => false, 'n' => scope_count(facet_scope('salary_bucket'), $nw, $nb),
+                        'href' => qs_with('salary_bucket', SALARY_NONE)];
     }
 }
 

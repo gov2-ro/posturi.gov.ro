@@ -236,8 +236,8 @@ function feed_details(array $r, array $events): array {
     if (!empty($sal['lei_min'])) {
         $lo = number_format((int)$sal['lei_min'], 0, ',', '.');
         $hi = number_format((int)($sal['lei_max'] ?? $sal['lei_min']), 0, ',', '.');
-        feed_put($x, 'Salariu estimat', ($lo === $hi ? $lo : $lo . '–' . $hi) . ' lei brut / lună, la gradația 0');
-        feed_put($x, 'Net estimat', net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min'])));
+        feed_put($x, 'Salariu estimat', net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min'])) . ' / lună, la gradația 0');
+        feed_put($x, 'Brut estimat', ($lo === $hi ? $lo : $lo . '–' . $hi) . ' lei brut / lună, la gradația 0');
         feed_put($x, 'Despre estimare', (string)($sal['disclaimer'] ?? ''));
     }
     $edu = is_array($schema['education'] ?? null) ? $schema['education'] : [];

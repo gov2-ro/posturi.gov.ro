@@ -17,6 +17,7 @@ require_once __DIR__ . '/../helpers.php';
 require_once __DIR__ . '/fixtures/build_db.php';
 require_once __DIR__ . '/fixtures/server.php';
 require_once __DIR__ . '/old_urls.php';
+require_once __DIR__ . '/fixtures/page_helpers.php';
 
 putenv('POSTURI_TODAY=2026-10-03');
 
@@ -98,6 +99,11 @@ run_suite('old filter URLs return the same postings as before the regroup', func
         'anomaly+shift+schema' => [1005],
         'shift' => [1004],
         'salary bucket' => [1002, 1007, 1008],
+        // Recorded with the gross buckets as they were before the net buckets (2026-11-17), by a direct SQL query.
+        'salary sub-3000' => [1004, 1005, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030],
+        'salary 4000-5000' => [1001, 1003],
+        'salary 5000-7000' => [1006],
+        'salary peste-7000' => [],
         'employer_cat' => [1002, 1006],
         'free text' => [1001, 1006, 1007],
         'unknown value' => [1004],
@@ -319,16 +325,16 @@ run_suite('labels: Romanian for known values, unfamiliar values kept visible', f
     assert_contains('Funcții de conducere', $chips, 'level chip label');
     assert_contains('Domeniu profesional: Sănătate', $chips, 'family chip label');
     assert_contains('zz_nou', $chips, 'unmapped chip value kept');
-    assert_contains('(estimat)', get_html($base, '/?status=all&salary_bucket=3000-4000'), 'salary stays labelled as an estimate');
+    assert_contains('(estimat)', get_html($base, '/?status=all&salary_bucket=net-3000-4000'), 'salary stays labelled as an estimate');
 });
 
 run_suite('result rows show pay: the stated salary first, else the labelled estimate', function () use ($base) {
     // Same precedence as SALARY_EXPR (the salary filter), so a row and a bucket never disagree.
-    assert_same(['label' => 'Salariu estimat', 'text' => '4.100–5.200 lei', 'estimated' => true],
-        list_salary(['sal_min' => 4100.0, 'sal_max' => 5200.0]), 'grid estimate, a range');
-    assert_same('3.300 lei', list_salary(['sal_min' => 3300, 'sal_max' => 3300])['text'], 'one figure when min = max');
-    assert_same('3.300 lei', list_salary(['sal_min' => 3300, 'sal_max' => null])['text'], 'no max: the min alone');
-    assert_same(['label' => 'Salariu anunțat', 'text' => '6.000 lei', 'estimated' => false],
+    assert_same(['label' => 'Salariu estimat', 'text' => '≈ 2.485–3.090 lei net', 'gross' => '4.100–5.200 lei', 'estimated' => true],
+        list_salary(['sal_min' => 4100.0, 'sal_max' => 5200.0]), 'grid estimate, a range: net first, the gross range kept');
+    assert_same('≈ 2.017 lei net', list_salary(['sal_min' => 3300, 'sal_max' => 3300])['text'], 'one figure when min = max');
+    assert_same('≈ 2.017 lei net', list_salary(['sal_min' => 3300, 'sal_max' => null])['text'], 'no max: the min alone');
+    assert_same(['label' => 'Salariu anunțat', 'text' => '≈ 3.523 lei net', 'gross' => '6.000 lei', 'estimated' => false],
         list_salary(['inf_salary_min' => 6000, 'inf_salary_max' => 6000, 'sal_min' => 4100, 'sal_max' => 5200]), 'a stated salary wins');
     assert_same(null, list_salary(['sal_min' => null]), 'nothing to show');
     assert_same(null, list_salary(['inf_salary_min' => 0, 'sal_min' => null]), 'a zero is not a salary');
@@ -338,15 +344,14 @@ run_suite('result rows show pay: the stated salary first, else the labelled esti
     assert_same(3802, net_from_gross(6500), 'above minimum wage + 2.000 there is no deduction: 58.5 %');
     assert_same(2616, net_from_gross(4325), 'at the minimum wage: 20 % deduction (facility left out on purpose)');
     assert_same('≈ 2.485–3.090 lei net', net_label(4100, 5200), 'a range stays a range');
-    assert_same('', list_salary_net(['sal_min' => null]), 'no gross, no net');
-    assert_same(net_label(6000, 6000), list_salary_net(['inf_salary_min' => 6000, 'inf_salary_max' => 6000, 'sal_min' => 4100]), 'net follows the stated salary first');
+    assert_same('', net_label(null), 'no gross, no net');
 
     $html = get_html($base, '/?status=all');
     $x = xpath_for($html);
     $row = $x->query('//li[@data-pref-id="1001"]//span[contains(@class,"pg-salary") and not(contains(@class,"pg-salary-"))]');
     assert_same(1, $row->length, 'posting 1001 has a pay item');
     $text = preg_replace('/\s+/', ' ', trim($row->item(0)->textContent));
-    assert_contains('💰 4.100–5.200 lei (estimat)', $text, '261016: 💰, the amount, "(estimat)" after it');
+    assert_contains('💰 ≈ 2.485–3.090 lei net (estimat)', $text, '261016: 💰, the net amount, "(estimat)" after it');
     assert_same('Salariu estimat', $x->query('//li[@data-pref-id="1001"]//span[contains(@class,"pg-salary-label")]')->item(0)?->getAttribute('aria-label'),
         'the icon carries the words for screen readers');
     assert_same(1, $x->query('//div[contains(@class,"pg-thead")]')->length, 'table heads ship with the rows (shown only in the table view)');
@@ -455,6 +460,11 @@ run_suite('pay meter: 1–5 against the median of open postings, said in words',
         assert_true($lvl >= 1 && $lvl <= 5, 'level in 1..5');
         assert_same($lvl, $x->query('.//i[@class="on"]', $el)->length, 'as many bars on as the level');
         assert_contains('din 5 față de posturile active (mediana', $el->getAttribute('aria-label'), 'said in words');
+        assert_contains(' lei net)', $el->getAttribute('aria-label'), 'the median is net');
+        $pdo = new PDO('sqlite:' . $GLOBALS['db_path']);
+        $vals = $pdo->query("SELECT COALESCE(inf_salary_min, sal_min) FROM job_postings WHERE application_status IN (" . OPEN_STATUS_SQL . ") AND COALESCE(inf_salary_min, sal_min) > 0 ORDER BY 1")->fetchAll(PDO::FETCH_COLUMN);
+        preg_match('/mediana ([\d.]+) lei net/', $el->getAttribute('aria-label'), $mm);
+        assert_same(net_from_gross((float)$vals[(int)floor(0.5 * count($vals))]), (int)str_replace('.', '', $mm[1] ?? ''), 'the median is the net of the gross median');
     }
     $top = get_html($base, '/?status=all&sort=salary');
     assert_contains('data-level="5"', $top, 'the best-paid rows are in the top fifth');
@@ -473,6 +483,178 @@ run_suite('filter list order: Județ, Localitate, Domeniu profesional, then the 
     assert_same(1, count(array_keys($labels, 'Domeniu profesional', true)), 'Domeniu profesional appears once');
     assert_same(1, count(array_keys($labels, 'Specialitate medicală', true)), 'Specialitate medicală appears once');
 });
+
+// ---- UX salary-net: the net buckets, the postings with no estimate, the note ----
+
+run_suite('net thresholds as gross thresholds: the filter and the displayed figure agree at every edge', function () {
+    foreach ([3000 => 5036.0, 4000 => 6837.0, 5000 => 8548.0] as $net => $gross) {
+        assert_same($gross, gross_for_net($net), "gross threshold of $net lei net");
+        assert_true(net_from_gross($gross) >= $net, "the threshold itself shows $net or more");
+        assert_true(net_from_gross($gross - 0.01) < $net, "one cent below shows less than $net");
+        // net_from_gross() dips by a few lei at some steps of the deduction; none of them crosses a threshold.
+        $bad = 0;
+        for ($c = (int)round($gross * 100) - 3000; $c <= (int)round($gross * 100) + 3000; $c++) {
+            $above = net_from_gross($c / 100) >= $net;
+            if ($above !== ($c / 100 >= $gross)) $bad++;
+        }
+        assert_same(0, $bad, "no cent within 30 lei of $gross disagrees with the threshold");
+    }
+    assert_same(salary_bucket_label('net-peste-5000'), 'peste 5.000 lei net', 'net label');
+    assert_same('peste 7.000 lei brut', salary_bucket_label('peste-7000'), 'an old value says "brut"');
+    assert_same('fără salariu estimat', salary_bucket_label('fara-estimare'), 'none label');
+});
+
+/** A fixture database whose figures sit on the edges of the net buckets. Returns [path, rows id => gross|null]. */
+function salary_db(): array {
+    $path = sys_get_temp_dir() . '/posturi-salary-' . getmypid() . '.sqlite';
+    build_fixture_db($path);
+    $pdo = new PDO('sqlite:' . $path);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->exec("UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = NULL, inf_salary_max = NULL");
+    // id => [inf_salary_min, sal_min]. The employer of 1001, 1006 and 1007 has a figure on every posting.
+    $rows = [
+        1001 => [null, 5035.0],   // net 2.999: under 3.000
+        1006 => [null, 5036.0],   // net 3.000: from 3.000
+        1007 => [null, 6836.0],   // net 3.999
+        1002 => [null, 6837.0],   // net 4.000
+        1004 => [null, 8547.0],   // net 4.999
+        1005 => [null, 8548.0],   // net 5.000
+        1008 => [9000.0, 3000.0], // the stated figure wins: net 5.000+
+        2001 => [0.0, null],      // a zero is no figure
+        2002 => [null, 2500.0],   // net under 3.000
+        2003 => [null, 20000.0],  // net 5.000+
+        2004 => [null, 5035.99],  // a fraction under the threshold
+    ];
+    $up = $pdo->prepare("UPDATE job_postings SET inf_salary_min = ?, inf_salary_max = ?, sal_min = ?, sal_max = ? WHERE id = ?");
+    foreach ($rows as $id => [$inf, $sal]) $up->execute([$inf, $inf, $sal, $sal, $id]);
+    return [$path, $rows];
+}
+
+[$sal_path, $sal_rows] = salary_db();
+$sal_srv = start_fixture_server($sal_path);
+$sb = $sal_srv['base'];
+
+run_suite('each net bucket and "fara-estimare" select the postings whose displayed net is in the bucket', function () use ($sb, $sal_rows) {
+    $active = result_ids($sb, '');
+    // The bucket of each active posting from its displayed net figure, not from gross_for_net().
+    $want = ['net-sub-3000' => [], 'net-3000-4000' => [], 'net-4000-5000' => [], 'net-peste-5000' => [], 'fara-estimare' => []];
+    foreach ($active as $id) {
+        [$inf, $sal] = $sal_rows[$id] ?? [null, null];
+        $g = ($inf !== null) ? $inf : $sal;
+        if ($g === null || $g <= 0) { $want['fara-estimare'][] = $id; continue; }
+        $n = net_from_gross($g);
+        $k = $n < 3000 ? 'net-sub-3000' : ($n < 4000 ? 'net-3000-4000' : ($n < 5000 ? 'net-4000-5000' : 'net-peste-5000'));
+        $want[$k][] = $id;
+    }
+    assert_true(count($want['net-3000-4000']) > 0 && count($want['net-4000-5000']) > 0 && count($want['net-peste-5000']) > 0, 'the fixture fills every net bucket');
+    $total = 0;
+    foreach ($want as $key => $ids) {
+        assert_same($ids, result_ids($sb, 'salary_bucket=' . $key), "ids of $key");
+        $total += count($ids);
+    }
+    assert_same(count($active), $total, 'the five buckets add up to the active total');
+    // Literal edges: 5035 and 5035.99 are under 3.000 net, 5036 is in, 6836 / 6837 and 8547 / 8548 likewise.
+    assert_true(in_array(1001, $want['net-sub-3000'], true) && in_array(2004, $want['net-sub-3000'], true), '5.035 and 5.035,99 gross: under 3.000 net');
+    assert_true(in_array(1006, $want['net-3000-4000'], true) && in_array(1007, $want['net-3000-4000'], true), '5.036 and 6.836 gross: 3.000–4.000 net');
+    assert_true(in_array(1002, $want['net-4000-5000'], true) && in_array(1004, $want['net-4000-5000'], true), '6.837 and 8.547 gross: 4.000–5.000 net');
+    assert_true(in_array(1005, $want['net-peste-5000'], true) && in_array(1008, $want['net-peste-5000'], true), '8.548 gross and a stated figure: 5.000+ net');
+    assert_true(in_array(2001, $want['fara-estimare'], true), 'a zero figure has no estimate');
+});
+
+run_suite('the displayed net and the bucket agree row by row', function () use ($sb) {
+    $x = xpath_for(get_html($sb, '/?salary_bucket=net-3000-4000'));
+    $rows = $x->query('//li[@data-pref-id]//span[contains(@class,"pg-salary-value")]');
+    assert_true($rows->length >= 2, 'rows with a figure');
+    foreach ($rows as $r) {
+        assert_true(preg_match('/^≈ ([\d.]+)(?:–([\d.]+))? lei net$/u', trim($r->textContent), $m) === 1, 'a net figure: ' . trim($r->textContent));
+        $lo = (int)str_replace('.', '', $m[1]);
+        assert_true($lo >= 3000 && $lo < 4000, "the lower net figure $lo is in 3.000–4.000");
+    }
+});
+
+run_suite('the salary filter lists the five options with the counts of their links', function () use ($sb) {
+    $html = get_html($sb, '/posturi/');
+    $x = xpath_for($html);
+    $vals = [];
+    foreach ($x->query('//input[@name="salary_bucket"]') as $in) $vals[] = $in->getAttribute('value');
+    assert_same(['net-sub-3000', 'net-3000-4000', 'net-4000-5000', 'net-peste-5000', 'fara-estimare'], $vals, 'options in order; no old gross value');
+    foreach ($vals as $v) {
+        $in = $x->query('//input[@name="salary_bucket" and @value="' . $v . '"]')->item(0);
+        $label = trim(preg_replace('/\s+/', ' ', $in->parentNode->textContent));
+        assert_same(count(result_ids($sb, 'salary_bucket=' . $v)), paren_or_trailing($label), "count of $v");
+    }
+    assert_contains('Net lunar estimat, la gradația 0.', $html, 'help text');
+});
+
+/** The trailing number of "peste 5.000 lei net 4". */
+function paren_or_trailing(string $label): int {
+    return preg_match('/(\d[\d.]*)\s*$/u', $label, $m) ? (int)str_replace('.', '', $m[1]) : -1;
+}
+
+run_suite('the note above a salary-filtered list: text, count and link', function () use ($sb) {
+    $note = function (string $qs) use ($sb): array {
+        $x = xpath_for(get_html($sb, '/?' . $qs));
+        $n = $x->query('//*[@data-salary-note]');
+        if ($n->length === 0) return ['', null, null];
+        $c = $x->query('.//*[@data-salary-note-count]', $n->item(0))->item(0);
+        $l = $x->query('.//a[@data-salary-note-link]', $n->item(0))->item(0);
+        return [trim(preg_replace('/\s+/', ' ', $n->item(0)->textContent)), $c ? (int)$c->textContent : null, $l?->getAttribute('href')];
+    };
+    $first = 'Filtrul de salariu arată doar anunțurile cu salariu anunțat sau estimat.';
+    // A net bucket: N = the postings of the other filters with no figure; the link opens exactly those.
+    [$text, $n, $href] = $note('salary_bucket=net-peste-5000');
+    $none = count(result_ids($sb, 'salary_bucket=fara-estimare'));
+    assert_true($none > 0, 'the fixture has postings with no figure');
+    assert_same($none, $n, 'N = the postings with no estimate');
+    assert_contains("$first $none anunțuri care se potrivesc cu celelalte filtre nu au o estimare. Vezi-le", $text, 'net bucket: the note');
+    assert_same('?salary_bucket=fara-estimare', $href, 'the link: the same search with fara-estimare');
+    assert_same($n, list_count($sb, '/' . $href), 'the count of the link equals N');
+    // An old gross value gets the same note.
+    [$text, $n] = $note('salary_bucket=peste-7000');
+    assert_same($none, $n, 'old bucket: the same N');
+    assert_contains($first, $text, 'old bucket: the note');
+    // The other filters count in N: with an employer scope the count follows.
+    [, $n, $href] = $note('salary_bucket=net-sub-3000&employer=spitalul-clinic-judetean-cluj');
+    assert_same(null, $n, 'employer scope: its postings all have a figure, so N = 0 and no count is shown');
+    [$text, , $href] = $note('salary_bucket=net-sub-3000&employer=spitalul-clinic-judetean-cluj');
+    assert_same($first, $text, 'N = 0: the first sentence only');
+    assert_same(null, $href, 'N = 0: no link');
+    // The list with no estimate.
+    [$text, $n] = $note('salary_bucket=fara-estimare');
+    assert_same('Aceste anunțuri nu au un salariu anunțat și nu au putut fi estimate din grilă. De obicei titlul postului nu corespunde unei funcții din grila de salarizare.', $text, 'fara-estimare: its own note');
+    assert_same(null, $n, 'fara-estimare: no count, no link');
+    // No salary filter, no note; the fragment carries the note too.
+    assert_not_contains('data-salary-note', get_html($sb, '/posturi/'), 'no filter, no note');
+    $frag = (string)@file_get_contents($sb . '/?salary_bucket=net-peste-5000&_=1', false, stream_context_create(['http' => ['header' => "HX-Request: true\r\nHX-Target: results\r\n"]]));
+    assert_contains('data-salary-note', $frag, 'the HTMX fragment carries the note');
+    // The feeds carry no note.
+    assert_not_contains('Filtrul de salariu', (string)@file_get_contents($sb . '/feeduri/posturi.rss?salary_bucket=net-peste-5000'), 'not in the feeds');
+});
+
+run_suite('the detail page: net first with a gross line; with no figure one line and the reason', function () use ($sb, $sal_path) {
+    $pdo = new PDO('sqlite:' . $sal_path);
+    $with = 1006;
+    $pdo->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = ?")->execute([json_encode(
+        ['lei_min' => 5036, 'lei_max' => 6000, 'coef_min' => 1.2, 'coef_max' => 1.4, 'valoare_referinta' => 4000, 'gradatie' => 0,
+         'varianta' => 'x', 'disclaimer' => 'Estimare orientativă.']), $with]);
+    $none = (int)$pdo->query("SELECT id FROM job_postings WHERE id = 2001")->fetchColumn();
+    assert_true($none === 2001, 'a posting with no figure');
+    $h = get_html($sb, '/job/2001-x/');
+    assert_contains('data-no-salary', $h, 'no figure: the line is there');
+    assert_contains('Fără estimare de salariu. Titlul postului nu corespunde unei funcții din grila de salarizare.', preg_replace('/\s+/', ' ', $h), 'the reason');
+    assert_not_contains('fonduri europene sunt plătite', $h, 'no EU funding: no second sentence');
+    $pdo->exec("UPDATE job_postings SET funding_kind = 'pnrr' WHERE id = 2001");
+    assert_contains('Posturile pe proiecte cu fonduri europene sunt plătite de obicei în afara grilei.', preg_replace('/\s+/', ' ', get_html($sb, '/job/2001-x/')), 'PNRR funding: the second sentence');
+    $pdo->exec("UPDATE job_postings SET funding_kind = 'fonduri_europene' WHERE id = 2001");
+    assert_contains('în afara grilei', get_html($sb, '/job/2001-x/'), 'EU funding: the second sentence');
+    assert_true($with > 0, 'a posting with the estimate block');
+    $h = preg_replace('/\s+/', ' ', get_html($sb, '/job/' . $with . '-x/'));
+    assert_true(preg_match('/data-pay-net>\s*(≈ [\d.–]+ lei net)/u', $h, $m) === 1, 'the net range is the main figure');
+    assert_true(preg_match('/data-pay-gross>brut: ([\d.–]+) lei \/ lună, la gradația 0</u', $h, $m2) === 1, 'the gross range is one smaller line');
+    assert_not_contains('data-no-salary', $h, 'a figure: no "no estimate" line');
+});
+
+stop_fixture_server($sal_srv, $sal_path);
 
 stop_fixture_server($srv, $db_path);
 finish();

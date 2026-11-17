@@ -222,7 +222,7 @@
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
         // Estimated from the 2026 draft grid unless the posting states a salary.
         facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket ? [$sal_bucket] : [], false,
-                    'Salariul anunțat, altfel cel estimat din grila de salarizare propusă (brut lunar).');
+                    'Salariul anunțat, altfel cel estimat din grila de salarizare propusă. Net lunar estimat, la gradația 0.');
         facet_group('Nivel de studii',     $studies_options,    'studies_level', $studies_lvls, false,
                     'Nivelul cerut de anunț; nu stabilește dacă vă calificați.');
         facet_group('Domeniu de studii',   $isced_options,      'isced',      $isced_sel);

@@ -31,7 +31,7 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }) => { expect(errors.get(page), 'uncaught page errors').toEqual([]); });
 
 test('list icon buttons: small, inline after the title, 32px hit area, keyboard toggles announce', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const li = row(page, 1001);
   const save = li.locator('[data-pref="save"]');
   const hide = li.locator('[data-pref="hide"]');
@@ -109,7 +109,7 @@ async function expectView(page, mode) {
 const display = (page, sel) => page.locator(sel).first().evaluate((el) => getComputedStyle(el).display);
 
 test('view switch: lg+ only, three views persist across reload and an HTMX filter change', async ({ page, viewport }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('#sort')).toBeVisible();
   expect(await page.locator('#sort').evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('#results')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   expect(await page.locator('#urmareste').evaluate((el) => !!(document.querySelector('#results').compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
@@ -208,34 +208,8 @@ test('filter bar: search, view, status and sort share row 1; the filters follow 
   }
 });
 
-test('home shortcuts close the bar on a row of their own in the grid and table views, and go back in the list view', async ({ page, viewport }) => {
-  test.skip(!isDesktop(viewport), 'the bar is lg+ only');
-  await setLayout(page, 'compact');
-  await page.goto('/');
-  const sc = page.locator('#shortcuts');
-  expect(await sc.evaluate((el) => el.parentElement.classList.contains('pg-side'))).toBe(true);
-  expect(await sc.evaluate((el) => el === el.parentElement.lastElementChild), 'last in the bar').toBe(true);
-  const bar = await page.locator('.pg-side').boundingBox();
-  const own = await sc.boundingBox();
-  const sort = await page.locator('.pg-sort').boundingBox();
-  expect(own.y, 'a row below view and sort').toBeGreaterThanOrEqual(sort.y + sort.height);
-  expect(Math.abs(own.x - bar.x), 'starts at the bar\'s left edge').toBeLessThanOrEqual(1);
-  expect(Math.abs(own.width - bar.width), 'the whole bar width').toBeLessThanOrEqual(1);
-  for (const el of await sc.locator('a').all()) {
-    const bb = await el.boundingBox();
-    expect(bb.y + bb.height, 'chip inside the bar').toBeLessThanOrEqual(bar.y + bar.height + 1);
-  }
-  const res = await page.locator('#results').boundingBox();
-  expect(res.y).toBeGreaterThanOrEqual(bar.y + bar.height + 8);
-  await noOverflow(page, 'shortcuts in the bar');
-  await view(page, 'list').click();
-  expect(await sc.evaluate((el) => !!el.closest('.pg-main'))).toBe(true);
-  // In the list view the shortcuts precede the options row, as before.
-  expect(await sc.evaluate((el) => !!(el.compareDocumentPosition(document.querySelector('#result-options')) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
-});
-
 test('the total is said once, just before the results', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   // Text nodes a reader sees (the sr-only live region is for screen readers and says it once more on change).
   const seen = (re) => page.evaluate((src) => {
     const re = new RegExp(src);
@@ -255,7 +229,7 @@ test('the total is said once, just before the results', async ({ page }) => {
 
 test('list view: two columns beside the sidebar, the deadline beside the title on one line', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'two columns from about 1050px up');
-  await page.goto('/');
+  await page.goto('/posturi/');
   const cols = await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).gridTemplateColumns.split(' ').length);
   expect(cols).toBe(2);
   const ys = await page.locator('ul.pg-results > li.pg-row').evaluateAll((els) => els.slice(0, 2).map((e) => Math.round(e.getBoundingClientRect().y)));
@@ -273,7 +247,7 @@ test('list view: two columns beside the sidebar, the deadline beside the title o
 test('grid cards: columns, title, employer, pay beside the deadline with the labels on its line', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'the grid is lg+ only');
   await setLayout(page, 'compact');
-  await page.goto('/');
+  await page.goto('/posturi/');
   const li = row(page, 1001);
   const box = async (sel) => li.locator(sel).first().boundingBox();
   const [title, meta, pay, dl, badges] = [await box('.pg-title'), await box('.pg-meta'), await box('.pg-salary'), await box('.pg-deadline'), await box('.pg-badges')];
@@ -293,7 +267,7 @@ test('grid cards: columns, title, employer, pay beside the deadline with the lab
 test('table view: one line per posting, cells in their columns, pay labelled', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'the table is lg+ only');
   await setLayout(page, 'table');
-  await page.goto('/');
+  await page.goto('/posturi/');
   const head = await page.locator('.pg-thead span').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().x)));
   const li = row(page, 1001);
   const cells = {};
@@ -316,7 +290,7 @@ test('table view: one line per posting, cells in their columns, pay labelled', a
 test('pay is on every result view, labelled as an estimate', async ({ page, viewport }) => {
   for (const mode of isDesktop(viewport) ? ['list', 'compact', 'table'] : ['list']) {
     await page.addInitScript((m) => localStorage.setItem('posturi.layout', m), mode);
-    await page.goto('/');
+    await page.goto('/posturi/');
     const sal = row(page, 1001).locator('.pg-salary');
     await expect(sal, mode).toBeVisible();
     await expect(sal, mode).toContainText('4.100–5.200 lei');
@@ -327,7 +301,7 @@ test('pay is on every result view, labelled as an estimate', async ({ page, view
 test('bar facet panels: one open at a time, Escape and outside click close, list-mode state untouched', async ({ page, viewport }) => {
   test.skip(!isDesktop(viewport), 'compact view is lg+ only');
   await setLayout(page, 'compact');
-  await page.goto('/');
+  await page.goto('/posturi/');
   const groups = page.locator('#facet-list > .facet-group');
   const n = await groups.count();
   expect(n).toBeGreaterThan(2);
@@ -363,7 +337,8 @@ test('bar facet panels: one open at a time, Escape and outside click close, list
 
   await judet.locator('> summary').click();                        // click outside closes
   await expect(judet.locator('> .facet-body')).toBeVisible();
-  await page.locator('#results > div').first().click({ position: { x: 2, y: 2 } });
+  // Far from the open panel: without the shortcuts row (moved to the landing page), the results start closer to it.
+  await page.locator('#results > div').first().click({ position: { x: 700, y: 2 } });
   await expect(judet.locator('> .facet-body')).toBeHidden();
 
   // Keyboard: Enter on a focused summary opens, and the last pill's panel stays inside the viewport.
@@ -385,7 +360,7 @@ test('bar facet panels: one open at a time, Escape and outside click close, list
 test('a stored grid or table preference changes nothing below lg', async ({ page, viewport }) => {
   test.skip(isDesktop(viewport), 'mobile check');
   await setLayout(page, 'table');
-  await page.goto('/');
+  await page.goto('/posturi/');
   expect(await page.locator('ul.pg-results').evaluate((u) => getComputedStyle(u).display)).toBe('block');
   await expect(page.locator('#facet-panel')).not.toBeInViewport();       // still the off-canvas drawer
   await expect(page.locator('#filter-toggle')).toBeVisible();
@@ -401,7 +376,7 @@ test('a stored grid or table preference changes nothing below lg', async ({ page
 
 test('screenshots: list with icons and detail', async ({ page }) => {
   test.skip(!process.env.COMPACT_SHOTS, 'review screenshots only');
-  await page.goto('/');
+  await page.goto('/posturi/');
   await shot(page, 'list');
   await page.goto('/job/1001-asistent-medical-generalist/');
   await shot(page, 'detail');

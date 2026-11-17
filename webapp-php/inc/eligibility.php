@@ -13,7 +13,7 @@ declare(strict_types=1);
  * SAME role's entry only. Nothing is ever read from another role or from the posting-level
  * blocks of a decomposed posting.
  *
- * First-party include, like skins.php (lib/ holds only vendored libraries).
+ * First-party include (lib/ holds only vendored libraries).
  */
 
 /**

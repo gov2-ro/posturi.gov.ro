@@ -38,7 +38,7 @@ $fmt = static fn(?string $d): string => $d ? fmt_date($d) : '—';
 ?>
 <div class="mx-auto max-w-screen-md px-4 py-6 sm:px-6">
   <nav aria-label="Firimituri" class="mb-4 text-sm">
-    <a href="/" class="text-gov hover:underline">← Toate posturile active</a>
+    <a href="/posturi/" class="text-gov hover:underline">← Toate posturile active</a>
   </nav>
 
   <p class="mb-3 inline-block border border-alert-line bg-alert px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-alert-ink"><?= e($state) ?></p>
@@ -93,7 +93,7 @@ $fmt = static fn(?string $d): string => $d ? fmt_date($d) : '—';
     </ul>
     <?php else: ?>
       <p class="text-sm text-ink-muted">Nu am găsit acum posturi deschise pentru aceeași ocupație.
-        <a href="/" class="text-gov hover:underline">Vezi toate posturile active</a>.</p>
+        <a href="/posturi/" class="text-gov hover:underline">Vezi toate posturile active</a>.</p>
     <?php endif; ?>
   </section>
 </div>

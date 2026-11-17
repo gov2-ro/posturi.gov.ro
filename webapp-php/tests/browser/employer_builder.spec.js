@@ -374,7 +374,7 @@ test('the page states the scope and the PDF warning', async ({ page }) => {
 test('links to the builder: footer, /angajatori/', async ({ page }) => {
   await page.goto('/angajatori/');
   await expect(page.locator('main a[href="/pentru-angajatori/anunt/"], body > div a[href="/pentru-angajatori/anunt/"]').first()).toBeVisible();
-  await expect(page.locator('footer a[href="/pentru-angajatori/anunt/"]')).toHaveText('Asistent redactare anunțuri angajare');
+  await expect(page.locator('footer a[href="/pentru-angajatori/anunt/"]')).toHaveText('Pentru angajatori');
   await noOverflow(page, '/angajatori/');
   const res = await page.request.get('/pentru-angajatori/anunt');
   expect(res.status()).toBe(200);

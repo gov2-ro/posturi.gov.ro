@@ -43,9 +43,13 @@ test('profile → filtered list; kept in the browser; cleared on request', async
   expect(errors).toEqual([]);
 });
 
-test('the tool is linked from the nav (sm+) and from "Începe cu" (every width), and the nav still fits', async ({ page, viewport }) => {
+test('the tool is linked from the landing page and the footer, and the nav still fits', async ({ page }) => {
+  // 2026-11-16: no longer in the masthead (UX-05) and no longer in the list's "Începe cu" row.
   await page.goto('/');
-  if (viewport.width >= 640) await expect(page.locator('header a[href="/pot-aplica/"]')).toBeVisible();
-  await expect(page.locator('#shortcuts a[href="/pot-aplica/"]')).toBeVisible();
-  await noOverflow(page, 'nav with the tool link');
+  await expect(page.locator('main a[href="/pot-aplica/"]').first()).toBeVisible();
+  await expect(page.locator('footer a[href="/pot-aplica/"]')).toBeVisible();
+  await noOverflow(page, 'landing page with the tool link');
+  await page.goto('/posturi/');
+  await expect(page.locator('footer a[href="/pot-aplica/"]')).toBeVisible();
+  await noOverflow(page, 'list with the tool link in the footer');
 });

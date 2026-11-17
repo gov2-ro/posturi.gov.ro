@@ -1,6 +1,6 @@
 // UX-15 browser checks: saved searches in the browser (ADR 0001). Key rule against
-// tests/fixtures/search_keys.json, the list-page toggle and notice, the redirect
-// on return, the /salvate/ "Căutări salvate" section, the navbar count, and a corrupt store. Runs at 320, 375
+// tests/fixtures/search_keys.json, the list-page toggle, no redirect on bare /
+// (removed 2026-11-16, ADR 0004), the /salvate/ "Căutări salvate" section, the navbar count, and a corrupt store. Runs at 320, 375
 // and 1280 (playwright.config.js) against the fixture (tests/fixtures/build_db.php).
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
@@ -45,7 +45,7 @@ async function seedSearches(page, recs, defaultId = null) {
 }
 
 /**
- * The page as a whole overflows at 320 and 375 on the baseline (the footer skin
+ * The page as a whole overflows at 320 and 375 on the baseline (the old footer skin
  * select; saved.spec.js "widths" fails there already), so check that this
  * feature's own elements fit the viewport instead.
  */
@@ -67,7 +67,7 @@ function shot(page, name) {
 
 test('searchKey() matches the shared fixture', async ({ page }) => {
   const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'search_keys.json'), 'utf8'));
-  await page.goto('/');
+  await page.goto('/posturi/');
   const got = await page.evaluate((cases) => cases.map((c) => window.PosturiSearches.searchKey(c.input)), fixture.cases);
   fixture.cases.forEach((c, i) => expect(got[i], c.name).toBe(c.key));
 });
@@ -119,7 +119,7 @@ test('save two județe: pressed, kept on reload, follows HTMX filter changes', a
 });
 
 test('the toggle is hidden with no filters', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('#results')).toBeVisible();
   await expect(toggle(page)).toBeHidden();
   await page.goto('/?q=&status=active&page=1&sort=deadline');
@@ -176,74 +176,29 @@ test('navbar count is saved jobs + saved searches, across save, delete and tabs'
 
 test('navbar count: a corrupt searches store counts only the saved jobs, never NaN', async ({ page }) => {
   await seedRaw(page, '{"version":1,"searches":[');
-  await page.goto('/');
+  await page.goto('/posturi/');
   await page.locator('[data-pref="save"]').first().click();
   await expect(page.locator('[data-saved-count]')).toHaveText('(1)');
 });
 
-test('first visit to / in a session opens the default search; the second does not', async ({ page, context }) => {
-  await seedSearches(page, [
-    rec('q=vechi', { label: 'Veche', savedAt: '2026-09-01T10:00:00.000Z' }),
-    rec(TWO_KEY, { label: 'Cluj · Ilfov', sort: 'deadline', savedAt: '2026-10-01T10:00:00.000Z' }),
-  ]);
-  // A new page has the same localStorage and an empty sessionStorage: a fresh session.
-  const fresh = await context.newPage();
-  fresh.on('pageerror', (e) => pageErrors.get(page).push(e.message));
-  await fresh.goto('/');
-  await expect(fresh).toHaveURL(new RegExp('\\?' + TWO_KEY.replace(/[%[\]]/g, '\\$&') + '&sort=deadline$'));
-  const notice = fresh.locator('[data-search-notice]');
-  await expect(notice).toBeVisible();
-  await expect(notice).toContainText('Afișăm căutarea ta salvată «Cluj · Ilfov».');
-  await expect(notice.locator('a')).toHaveText('Vezi toate posturile');
-  await expect(fresh.locator('[data-active-chips] [data-search-toggle]')).toHaveAttribute('aria-pressed', 'true');
-  await shot(fresh, 'notice');
-  await fits(fresh, '[data-search-notice], [data-active-chips] [data-follow-group] *', 'notice and toggle');
-  // opened-at is recorded.
-  expect((await stored(fresh)).searches[TWO_KEY].openedAt).not.toBeNull();
-  expect((await stored(fresh)).searches['q=vechi'].openedAt).toBeNull();
-
-  // Same session, back to /: the home page stays.
-  await fresh.goto('/');
-  await expect(fresh).toHaveURL(/\/$/);
-  await expect(fresh.locator('[data-search-notice]')).toBeHidden();
-  await fresh.goto('/');
-  await expect(fresh).toHaveURL(/\/$/);
-
-  // The "Vezi toate posturile" link works the same way.
-  const again = await context.newPage();
-  again.on('pageerror', (e) => pageErrors.get(page).push(e.message));
-  await again.goto('/');
-  await expect(again.locator('[data-search-notice]')).toBeVisible();
-  await again.locator('[data-search-notice] a').click();
-  await expect(again).toHaveURL(/\/$/);
-
-  // Changing a filter removes the notice.
-  const third = await context.newPage();
-  third.on('pageerror', (e) => pageErrors.get(page).push(e.message));
-  await third.goto('/');
-  await expect(third.locator('[data-search-notice]')).toBeVisible();
-  await third.locator('input[name="q"]').first().fill('volum');
-  await expect(third).toHaveURL(/q=volum/);
-  await expect(third.locator('[data-search-notice]')).toBeHidden();
-  expect(await third.evaluate(() => sessionStorage.getItem('posturi.searchApplied'))).toBeNull();
-  await fresh.close(); await again.close(); await third.close();
-});
-
-test('a search saved later in the session does not move the reader', async ({ page }) => {
-  await page.goto('/');                       // no saved search yet; the session flag is set
-  await page.evaluate(() => window.PosturiSearches.save('q=nou', { label: 'Nou' }));
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/$/);
-});
-
-test('defaultId wins over the newest search', async ({ page, context }) => {
+// 2026-11-16 (ADR 0004): bare `/` is the landing page. The UX-15 redirect to the default
+// saved search is gone, and so is its notice. home.spec.js checks the landing page itself.
+test('a saved search never moves the reader off bare /: no redirect, no notice, no session flag', async ({ page, context }) => {
   await seedSearches(page, [
     rec('q=vechi', { savedAt: '2026-09-01T10:00:00.000Z' }),
     rec('q=nou', { savedAt: '2026-10-01T10:00:00.000Z' }),
   ], 'q=vechi');
   const fresh = await context.newPage();
+  fresh.on('pageerror', (e) => pageErrors.get(page).push(e.message));
   await fresh.goto('/');
-  await expect(fresh).toHaveURL(/\?q=vechi$/);
+  await expect(fresh).toHaveURL(/\/$/);
+  await expect(fresh.locator('h1')).toHaveText('Anunțuri de angajare din administrația publică');
+  expect(await fresh.evaluate(() => sessionStorage.getItem('posturi.searchRedirect'))).toBeNull();
+  expect(await fresh.evaluate(() => sessionStorage.getItem('posturi.searchApplied'))).toBeNull();
+  // A saved search still opens from its own link on the list page, with its toggle pressed.
+  await fresh.goto('/?q=vechi');
+  await expect(fresh.locator('[data-search-notice]')).toHaveCount(0);
+  await expect(fresh.locator('[data-active-chips] [data-search-toggle]')).toHaveAttribute('aria-pressed', 'true');
   await fresh.close();
 });
 
@@ -341,8 +296,8 @@ test('a corrupt store: no error, button hidden, value kept, saved jobs still wor
   await page.goto(TWO);
   await expect(page.locator('#results')).toBeVisible();
   await expect(toggle(page)).toBeHidden();
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/$/);
+  await page.goto('/posturi/');
+  await expect(page).toHaveURL(/\/posturi\/$/);
   expect(await storedRaw(page)).toBe(CORRUPT);
 
   // The tab says so, and writes nothing.
@@ -351,7 +306,7 @@ test('a corrupt store: no error, button hidden, value kept, saved jobs still wor
   expect(await storedRaw(page)).toBe(CORRUPT);
 
   // Saved jobs are a different store and keep working.
-  await page.goto('/');
+  await page.goto('/posturi/');
   const save = page.locator('[data-pref="save"]').first();
   await save.click();
   await expect(save).toHaveAttribute('aria-pressed', 'true');

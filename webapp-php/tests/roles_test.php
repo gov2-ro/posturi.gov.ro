@@ -379,7 +379,7 @@ run_suite('old export (no posting_roles): renders, and every requirement filter 
         WHERE r.eqf_level IS NOT j.v3_eqf_level OR r.exp_years IS NOT j.inf_experience_years OR r.skills IS NOT j.v3_skills')->fetchColumn(),
         'the view mirrors the posting columns');
 
-    foreach (['/', '/?' . Q_ALL, '/job/1009/', '/job/1011/', '/job/1008/', '/posturi.json', '/posturi.atom', '/statistici/'] as $path) {
+    foreach (['/', '/posturi/', '/?' . Q_ALL, '/job/1009/', '/job/1011/', '/job/1008/', '/posturi.json', '/posturi.atom', '/statistici/'] as $path) {
         $body = rget($ob, $path);
         assert_true($body !== '', "$path answers");
         assert_not_contains('Fatal error', $body, "$path body");

@@ -120,87 +120,10 @@ $postings = $stmt->fetchAll();
 timing_mark('main');
 // ---- Active filters ----
 $active_chips  = active_filter_chips();
-$is_unfiltered = $page === 1 && !$active_chips;
 
-// The "N anunțuri active · M angajatori" line above the shortcuts was dropped
-// 2026-10-16: the total is said once, by the count just above the results.
-
-// ---- Landing shortcuts ----
-//
-// The unfiltered page needs a way in that is not "type something". These are
-// entry points, not a filter UI: plain links, shown only when nothing is
-// selected, each landing on a filter the sidebar can then refine. Counts are
-// computed here rather than read off $..._options so capping and ordering in
-// the facet lists cannot quietly change what the landing offers.
-$shortcuts = [];
-$home_new = $home_soon = [];
-$home_new_day = '';
-if ($is_unfiltered) {
-    // 261016: the ways in are the jobs most on offer (the occupations with the
-    // most open postings) and a few cuts that need several filters' worth of
-    // knowledge to find — no experience, secondary studies, high pay, a civil
-    // service post. Each count is what the link will show: the same
-    // build_filters() predicate, under the default "Active" status.
-    $count_for = function (array $params): int {
-        $f = build_filters($params + ['status' => DEFAULT_STATUS]);
-        $w = $f['where'] ? 'WHERE ' . implode(' AND ', $f['where']) : '';
-        $st = db()->prepare("SELECT COUNT(*) FROM job_postings j $w");
-        $st->execute($f['binds']);
-        return (int)$st->fetchColumn();
-    };
-    $live = "application_status IN (" . OPEN_STATUS_SQL . ")";
-    foreach (db()->query(
-        "SELECT occ_canonical AS v, COUNT(*) AS c FROM job_postings
-         WHERE occ_canonical <> '' AND $live
-         GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 6") as $r) {
-        $shortcuts[] = ['href' => '/?occupation%5B%5D=' . rawurlencode($r['v']),
-                        'label' => $r['v'], 'count' => (int)$r['c']];
-    }
-    foreach ([
-        // 261016: "nu necesită calificare" is the COR group of unskilled work; a
-        // criminal-record certificate is asked of virtually every public post
-        // (HG 1336/2022, Codul administrativ), so "fără cazier" is not offered.
-        ['Fără experiență',     ['exp_level' => ['fara']]],
-        ['Fără calificare',     ['cor' => ['9']]],
-        ['Studii generale',     ['studies_level' => ['generala']]],
-        ['Studii medii',        ['studies_level' => ['liceala']]],
-        ['Normă parțială',      ['schedule' => ['norma_partiala']]],
-        ['Salariu peste 7.000', ['salary_bucket' => 'peste-7000']],
-        ['Funcție publică',     ['regime' => ['publica']]],
-        ['Fonduri europene',    ['funding' => ['fonduri_europene', 'pnrr']]],
-        ['Telemuncă',           ['remote' => '1']],
-    ] as [$label, $params]) {
-        $c = $count_for($params);
-        if ($c > 0) $shortcuts[] = ['href' => '/?' . http_build_query($params), 'label' => $label, 'count' => $c];
-    }
-
-    // D15: "Noi azi" and "Se închid curând" above the results, on the bare home
-    // page only (any parameter — a sort, a status — means a list is wanted). New = the latest
-    // publication day in the data (named "azi" when it is today), so the section
-    // is not empty every morning before the first run.
-    if (!$_GET) {
-        $home_new_day = (string)db()->query(
-            "SELECT MAX(substr(published_at, 1, 10)) FROM job_postings WHERE $live")->fetchColumn();
-        if ($home_new_day !== '') {
-            $st = db()->prepare("SELECT j.*, e.slug AS employer_slug_display FROM job_postings j
-                LEFT JOIN employers e ON e.id = j.employer_id
-                WHERE j.$live AND substr(j.published_at, 1, 10) = ?
-                ORDER BY j.published_at DESC, j.id DESC LIMIT 6");
-            $st->execute([$home_new_day]);
-            $home_new = $st->fetchAll();
-        }
-        $today = ro_today();
-        $in3 = (new DateTimeImmutable($today, new DateTimeZone('Europe/Bucharest')))->modify('+3 days')->format('Y-m-d');
-        $st = db()->prepare("SELECT j.*, e.slug AS employer_slug_display FROM job_postings j
-            LEFT JOIN employers e ON e.id = j.employer_id
-            WHERE j.application_status = 'confirmed_open' AND " . DEADLINE_COL . " >= ? AND " . DEADLINE_COL . " <= ?
-            ORDER BY " . DEADLINE_COL . " ASC, j.published_at DESC LIMIT 6");
-        $st->execute([$today, $in3]);
-        $home_soon = $st->fetchAll();
-    }
-}
-
-timing_mark('shortcuts');
+// 2026-11-16 (ADR 0004): the landing shortcuts and the lists "Noi azi" and
+// "Se închid în 3 zile" moved to the landing page (pages/home.php); `/` with
+// no parameter is that page, and the unfiltered list is `/posturi/`.
 // ---- Facet counts ----
 
 /**
@@ -648,7 +571,8 @@ if (!$is_htmx) {
     $page_title       = $q !== '' ? "Căutare: $q" : 'Posturi în sectorul public';
     $meta_description = 'Explorator independent pentru anunțurile de angajare din sectorul public românesc: '
                       . 'căutare full-text, filtre pe județ, domeniu, grad și termen limită.';
-    $canonical_path   = '/' . (($cq = http_build_query(clean_query($_GET))) ? '?' . $cq : '');
+    // Every filter permutation folds into the unfiltered list (the header drops the query string). Never `/`: that is the landing page.
+    $canonical_path   = '/posturi/';
     require __DIR__ . '/../inc/header.php';
 }
 
@@ -666,7 +590,8 @@ if (!$is_htmx): ?>
         hx-get="/"
         hx-target="#results"
         hx-push-url="true"
-        hx-trigger="change, input delay:400ms from:[name=q], submit"
+        hx-trigger="change delay:500ms, input delay:400ms from:[name=q], submit"
+        hx-sync="this:replace"
         hx-indicator="#results"
         onsubmit="return false;">
 
@@ -753,23 +678,8 @@ if (!$is_htmx): ?>
 
       </div><!-- /left column -->
 
-      <!-- RIGHT COLUMN — shortcuts, controls, results -->
+      <!-- RIGHT COLUMN — controls, results -->
       <div class="pg-main min-w-0 lg:flex-1">
-
-    <?php if ($shortcuts): ?>
-    <?php /* In the grid and table views the script moves this block into the filter
-       bar, where it is the bar's last row, on a line of its own. */ ?>
-    <div id="shortcuts" class="pg-shortcuts mb-4">
-      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 text-sm">
-        <span class="text-xs uppercase tracking-widest text-ink-muted">Începe cu</span>
-        <a href="/pot-aplica/" class="whitespace-nowrap font-medium text-gov hover:underline">Pot aplica? <span aria-hidden="true">→</span></a>
-        <?php foreach ($shortcuts as $sc): ?>
-        <a href="<?= e($sc['href']) ?>" class="whitespace-nowrap text-gov hover:underline"><?= e($sc['label']) ?>
-          <span class="font-mono text-xs text-ink-muted"><?= number_format($sc['count'], 0, ',', '.') ?></span></a>
-        <?php endforeach; ?>
-      </div>
-    </div>
-    <?php endif; ?>
 
     <!-- STATUS + view + sort. 261016: the status used to be a row of four buttons
          above the results; it is now a select beside the sort — the default
@@ -825,8 +735,6 @@ if (!$is_htmx): ?>
     </p>
     </div>
 
-        <?php /* UX-15: shown by static/searches.js when the site opened the reader's default saved search. Outside #results, so a swap does not rebuild it. */ ?>
-        <p data-search-notice hidden role="status" class="mb-3 border border-info-line bg-info px-3 py-2 text-sm leading-snug text-info-ink">Afișăm căutarea ta salvată «<span data-search-notice-label></span>». <a href="/" class="font-medium underline">Vezi toate posturile</a></p>
         <p id="results-status" role="status" aria-live="polite" aria-atomic="true" class="sr-only"><?= $total_count ?> <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?></p>
         <?php /* UX-15: browser-local saved search. Above #results (outside it), so HTMX does not rebuild it;
            static/searches.js shows it (JS and storage needed, and at least one filter) and syncFeedLinks() calls
@@ -1067,9 +975,9 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   var root = document.documentElement;
   var layoutSwitch = document.getElementById('layout-switch');
   var bar = document.querySelector('.pg-side');
-  // Blocks that join the filter bar in the bar views, in this order, and go back
+  // Blocks that join the filter bar in the bar views, and go back
   // to their place (a comment left there) in the list view.
-  var movers = ['result-options', 'shortcuts'].map(function (id) {
+  var movers = ['result-options'].map(function (id) {
     var el = document.getElementById(id);
     if (!el) return null;
     var slot = document.createComment(id);
@@ -1084,7 +992,7 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
   function topGroups() { return Array.prototype.slice.call(document.querySelectorAll('#facet-list > .facet-group')); }
   function topSummary(el) { return el.querySelector(':scope > summary'); }
 
-  /** View/sort and the shortcuts: end of the filter bar in the bar views, their own place otherwise. */
+  /** View/sort: end of the filter bar in the bar views, their own place otherwise. */
   function placeOptions() {
     if (!bar) return;
     var focused = document.activeElement;
@@ -1241,6 +1149,33 @@ if ($is_htmx && !isset($_GET['page'])) require __DIR__ . '/../partials/facets.ph
       keys[k] = (keys[k] === undefined ? true : keys[k]) && empty;
     });
     Object.keys(keys).forEach(function (k) { if (keys[k]) delete ev.detail.parameters[k]; });
+  });
+
+  // Several quick picks in one group (multi-select). `change` waits 500 ms after
+  // the last pick (hx-trigger) and a new request replaces one in flight
+  // (hx-sync). A response can still arrive after the reader changed a control
+  // and before the next request leaves: applying it would put back the old
+  // checkboxes (the facet list is swapped out of band) and push an old URL. So
+  // each edit of the form raises `formEdits`, each request remembers the value
+  // it left with, and a response whose value is no longer current is dropped
+  // whole (results, out-of-band parts and the pushed URL). The next request
+  // brings the current state.
+  var formEdits = 0;
+  var sentAt = new WeakMap();
+  if (form) {
+    ['change', 'input'].forEach(function (t) {
+      form.addEventListener(t, function () { formEdits++; });
+    });
+  }
+  document.body.addEventListener('htmx:beforeRequest', function (ev) {
+    if (form && ev.detail.elt === form) sentAt.set(ev.detail.xhr, formEdits);
+  });
+  document.body.addEventListener('htmx:beforeSwap', function (ev) {
+    var xhr = ev.detail.xhr;
+    if (form && ev.detail.requestConfig && ev.detail.requestConfig.elt === form
+        && sentAt.has(xhr) && sentAt.get(xhr) !== formEdits) {
+      ev.detail.shouldSwap = false;
+    }
   });
 
   document.body.addEventListener('htmx:beforeRequest', function () {

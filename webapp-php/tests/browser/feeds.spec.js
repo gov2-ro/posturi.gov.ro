@@ -202,7 +202,7 @@ test('"Urmărește" opens the dialog; layout holds at this width', async ({ page
 });
 
 test('landing: the block is in place and open; no group, no email form', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('#urmareste')).toBeVisible();
   await expect(page.locator('#urmareste-title')).toHaveText('Urmărește anunțurile noi');
   await expect(page.locator('[data-follow-email]')).toBeHidden();

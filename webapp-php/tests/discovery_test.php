@@ -110,7 +110,7 @@ run_suite('old filter URLs return the same postings as before the regroup', func
 });
 
 run_suite('every group is collapsed on a fresh load; Județ and Domeniu are the drawer defaults', function () use ($base) {
-    $home = get_html($base, '/');
+    $home = get_html($base, '/posturi/');
     assert_same([], open_facets($home), 'no disclosure is rendered open (desktop starts collapsed)');
     $defaults = [];
     foreach (xpath_for($home)->query('//details[contains(@class,"facet-group") and @data-default-open]') as $d) $defaults[] = $d->getAttribute('data-facet');
@@ -212,7 +212,7 @@ run_suite('selected values outside the options survive as pinned checkboxes', fu
 });
 
 run_suite('facet counts, chips and result IDs agree', function () use ($base) {
-    $home = get_html($base, '/');
+    $home = get_html($base, '/posturi/');
     foreach ([['studies_level[]', 'licenta', 'studies_level%5B%5D=licenta'], ['judet[]', 'cluj', 'judet%5B%5D=cluj'], ['skill[]', 'Excel', 'skill%5B%5D=Excel']] as [$n, $v, $qs]) {
         $x = xpath_for($home)->query('//input[@name="' . $n . '" and @value="' . $v . '"]/following-sibling::span[2]');
         $facet = (int)trim($x->item(0)?->textContent ?? '-1');
@@ -240,7 +240,7 @@ run_suite('UX-02: a county opens its localities, which filter and stay removable
 });
 
 run_suite('status labels, help copy and announcement counts', function () use ($base) {
-    $home = get_html($base, '/');
+    $home = get_html($base, '/posturi/');
     foreach (['Active', 'Termen în 7 zile', 'Înscrieri închise', 'Termen neprecizat'] as $l) assert_contains($l, $home, "status label $l");
     assert_not_contains('Expiră în 7 zile', $home, 'old 7-day label gone');
     $flat = preg_replace('/\s+/', ' ', strip_tags($home));
@@ -358,7 +358,7 @@ run_suite('employer scope and legacy params survive form serialisation and stay 
     assert_contains('Doar angajatorul', $html, 'scope chip group');
     assert_contains('Spitalul Clinic Județean Cluj', $html, 'scope chip names the employer');
     assert_contains('data-chip-param="employer"', $html, 'scope chip removable');
-    assert_not_contains('name="employer"', get_html($base, '/'), 'no scope input without scope');
+    assert_not_contains('name="employer"', get_html($base, '/posturi/'), 'no scope input without scope');
 });
 
 run_suite('feed links carry every active filter and never page/sort', function () use ($base) {
@@ -460,6 +460,18 @@ run_suite('pay meter: 1–5 against the median of open postings, said in words',
     assert_contains('data-level="5"', $top, 'the best-paid rows are in the top fifth');
     // Rows show the regime read off the text, not the source's categorie.
     assert_not_contains('Funcționari publici</span>', $html, 'no source categorie in the fact line');
+});
+
+run_suite('filter list order: Județ, Localitate, Domeniu profesional, then the rest; Specialitate medicală above Documente necesare', function () {
+    $src = (string)file_get_contents(__DIR__ . '/../partials/facets.php');
+    preg_match_all("/^\\s*facet_group\\('([^']+)'/m", $src, $m);
+    $labels = $m[1];
+    assert_same(['Județ', 'Localitate', 'Domeniu profesional', 'Instituție', 'Sector angajator', 'Nivel angajator', 'Grupă ocupațională', 'Ocupație'],
+        array_slice($labels, 0, 8), 'the first eight groups');
+    $i = array_search('Documente necesare', $labels, true);
+    assert_same('Specialitate medicală', $labels[$i - 1] ?? '', 'Specialitate medicală is directly above Documente necesare');
+    assert_same(1, count(array_keys($labels, 'Domeniu profesional', true)), 'Domeniu profesional appears once');
+    assert_same(1, count(array_keys($labels, 'Specialitate medicală', true)), 'Specialitate medicală appears once');
 });
 
 stop_fixture_server($srv, $db_path);

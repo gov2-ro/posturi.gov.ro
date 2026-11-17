@@ -737,6 +737,9 @@ function robots_disclaimer(string $url, string $class = ''): string {
          . '<a href="' . e($href) . '" target="_blank" rel="noopener" class="text-gov underline underline-offset-2 hover:no-underline">anunțul oficial</a>.</p>';
 }
 
+/** The version of the gov2 design system in static/gov2/ (ADR 0005). It is the cache key of the two DS links in inc/header.php. */
+const GOV2_DS_VERSION = '0.17.1';
+
 /** Feedback address shown in the [?!] panel; empty hides the e-mail link (D9). */
 const FEEDBACK_EMAIL = 'midas@gov2.ro';
 
@@ -2028,6 +2031,11 @@ function timing_mark(string $name): void {
 
 // ---- HTML helpers ----
 
+/** A decorative icon from the sprite in inc/header.php: `<svg><use>`, hidden from assistive technology. */
+function icon(string $id, string $class = ''): string {
+    return '<svg' . ($class !== '' ? ' class="' . e($class) . '"' : '') . ' aria-hidden="true" focusable="false"><use href="#' . e($id) . '"/></svg>';
+}
+
 function e(mixed $v): string {
     return htmlspecialchars((string)($v ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
@@ -2657,4 +2665,153 @@ function follow_group_html(string $extra_attrs): string {
         . $ico('i-feed') . $ico('i-mail') . $ico('i-calendar') . '</span>'
         . '<span class="sr-only"> (RSS, email, calendar)</span></button>'
         . '</div>';
+}
+
+// ---- Landing page (UX-05, ADR 0004) ----
+
+/** Romanian count of postings as "posturi": 0 posturi · 1 post · 2–19 posturi · 20+ de posturi. */
+function posturi_label(int $n): string {
+    if ($n === 1) return '1 post';
+    $mod = $n % 100;
+    $num = number_format($n, 0, ',', '.');
+    return ($n > 0 && ($mod === 0 || $mod >= 20)) ? $num . ' de posturi' : $num . ' posturi';
+}
+
+/** The sentence of the link "all postings" on the landing page, correct for each N. */
+function home_all_link_text(int $n): string {
+    if ($n === 0) return 'Vezi lista posturilor';
+    if ($n === 1) return 'Vezi singurul post activ';
+    $mod = $n % 100;
+    $num = number_format($n, 0, ',', '.');
+    return 'Vezi toate cele ' . $num . (($mod === 0 || $mod >= 20) ? ' de' : '') . ' posturi active';
+}
+
+/**
+ * How many postings the list shows for $params under the default status. Each
+ * count on the landing page is this number for the link beside it, so the
+ * count and the list cannot disagree (the same rule as `$count_for` in
+ * pages/list.php before the landing page moved out of it).
+ */
+function home_count_for(array $params): int {
+    $f = build_filters($params + ['status' => DEFAULT_STATUS]);
+    $w = $f['where'] ? 'WHERE ' . implode(' AND ', $f['where']) : '';
+    $st = db()->prepare("SELECT COUNT(*) FROM job_postings j $w");
+    $st->execute($f['binds']);
+    return (int)$st->fetchColumn();
+}
+
+/** The canonical list URL (ADR 0001) of $params. Bare `/` is the landing page, so an empty key is `/posturi/`. */
+function home_list_url(array $params): string {
+    $key = search_key($params);
+    return $key === '' ? '/posturi/' : '/?' . $key;
+}
+
+/** Sort key for Romanian names: a < ă < â < b … i < î … s < ș < t < ț < u. */
+function ro_sort_key(string $s): string {
+    static $order = null;
+    if ($order === null) $order = array_flip(mb_str_split(" -aăâbcdefghiîjklmnopqrsștțuvwxyz"));
+    $s = strtr(mb_strtolower($s, 'UTF-8'), ['ş' => 'ș', 'ţ' => 'ț']);
+    $out = '';
+    foreach (mb_str_split($s) as $ch) $out .= chr(48 + ($order[$ch] ?? 60));
+    return $out;
+}
+
+/** Counties by Romanian name: slug => name. */
+function judet_names_sorted(): array {
+    $names = judet_names();
+    uasort($names, fn($a, $b) => strcmp(ro_sort_key($a), ro_sort_key($b)));
+    return $names;
+}
+
+/**
+ * The county tile map: code => [slug, column, row] (9 columns, 7 rows), after
+ * the wireframe (docs/specs/2026-11-16-ui-overhaul/landing-wireframe.dc.html).
+ */
+const HOME_COUNTY_TILES = [
+    'SM' => ['satu-mare', 3, 1], 'MM' => ['maramures', 4, 1], 'SV' => ['suceava', 6, 1], 'BT' => ['botosani', 7, 1],
+    'BH' => ['bihor', 2, 2], 'SJ' => ['salaj', 3, 2], 'BN' => ['bistrita-nasaud', 4, 2], 'NT' => ['neamt', 6, 2], 'IS' => ['iasi', 7, 2],
+    'AR' => ['arad', 2, 3], 'CJ' => ['cluj', 3, 3], 'MS' => ['mures', 4, 3], 'HR' => ['harghita', 5, 3], 'BC' => ['bacau', 6, 3], 'VS' => ['vaslui', 7, 3],
+    'TM' => ['timis', 1, 4], 'HD' => ['hunedoara', 2, 4], 'AB' => ['alba', 3, 4], 'SB' => ['sibiu', 4, 4], 'BV' => ['brasov', 5, 4],
+    'CV' => ['covasna', 6, 4], 'VN' => ['vrancea', 7, 4], 'GL' => ['galati', 8, 4],
+    'CS' => ['caras-severin', 1, 5], 'GJ' => ['gorj', 2, 5], 'VL' => ['valcea', 3, 5], 'AG' => ['arges', 4, 5], 'DB' => ['dambovita', 5, 5],
+    'PH' => ['prahova', 6, 5], 'BZ' => ['buzau', 7, 5], 'BR' => ['braila', 8, 5], 'TL' => ['tulcea', 9, 5],
+    'MH' => ['mehedinti', 1, 6], 'DJ' => ['dolj', 2, 6], 'OT' => ['olt', 3, 6], 'TR' => ['teleorman', 4, 6], 'IF' => ['ilfov', 5, 6],
+    'B' => ['bucuresti', 6, 6], 'IL' => ['ialomita', 7, 6], 'CT' => ['constanta', 8, 6],
+    'GR' => ['giurgiu', 5, 7], 'CL' => ['calarasi', 7, 7],
+];
+
+/**
+ * Professional domains of the landing page, 
+ * Professional domains of the landing page. A domain is a combination of two filters that
+ * exist: `family[]` and, for the split of "tehnic", `cor[]` (a code prefix; a one-digit prefix
+ * is the first digit of `occ_group`). The count of each item is the count of its link
+ * (checked against home_count_for() in tests/home_test.php).
+ */
+const HOME_DOMAINS = [
+    ['key' => 'sanatate',     'label' => 'Sănătate',                         'icon' => 'i-sector-sanatate',          'family' => 'sănătate'],
+    ['key' => 'administratie','label' => 'Administrație',                    'icon' => 'i-domain-administratie',     'family' => 'administrație'],
+    ['key' => 'meseriasi',    'label' => 'Meseriași și muncitori calificați','icon' => 'i-domain-meseriasi',         'family' => 'tehnic', 'cor' => ['7']],
+    ['key' => 'paza',         'label' => 'Pază, îngrijire și servicii',      'icon' => 'i-domain-paza',              'family' => 'tehnic', 'cor' => ['5']],
+    ['key' => 'soferi',       'label' => 'Șoferi și operatori',              'icon' => 'i-domain-soferi',            'family' => 'tehnic', 'cor' => ['8']],
+    ['key' => 'ingineri',     'label' => 'Ingineri și tehnicieni',           'icon' => 'i-domain-ingineri',          'family' => 'tehnic', 'cor' => ['2', '3']],
+    ['key' => 'necalificati', 'label' => 'Muncitori necalificați',           'icon' => 'i-domain-necalificati',      'family' => 'tehnic', 'cor' => ['9']],
+    ['key' => 'social',       'label' => 'Social',                           'icon' => 'i-sector-asistenta_sociala', 'family' => 'social'],
+    ['key' => 'financiar',    'label' => 'Financiar',                        'icon' => 'i-domain-financiar',         'family' => 'financiar'],
+    ['key' => 'educatie',     'label' => 'Educație',                         'icon' => 'i-sector-educatie',          'family' => 'educație'],
+    ['key' => 'cultura',      'label' => 'Cultură',                          'icon' => 'i-sector-cultura',           'family' => 'cultură'],
+    ['key' => 'it',           'label' => 'IT',                               'icon' => 'i-domain-it',                'family' => 'IT'],
+    ['key' => 'juridic',      'label' => 'Juridic',                          'icon' => 'i-sector-justitie',          'family' => 'juridic'],
+    ['key' => 'ordine',       'label' => 'Ordine publică',                   'icon' => 'i-sector-ordine_publica',    'family' => 'ordine publică'],
+    ['key' => 'altele',       'label' => 'Altele',                           'icon' => 'i-sector-altele',            'family' => 'altele'],
+];
+
+/** Map step (0–3) of a county by its count of active postings: 0–19, 20–39, 40–79, 80+. */
+function home_map_step(int $n): int {
+    return $n >= 80 ? 3 : ($n >= 40 ? 2 : ($n >= 20 ? 1 : 0));
+}
+
+/** The Mondays of the last $weeks complete ISO weeks (this week is not complete), oldest first. */
+function home_week_starts(int $weeks = 12): array {
+    $tz = new DateTimeZone('Europe/Bucharest');
+    $this_monday = (new DateTimeImmutable(ro_today(), $tz))->modify('monday this week');
+    $out = [];
+    for ($i = $weeks; $i >= 1; $i--) $out[] = $this_monday->modify("-$i weeks")->format('Y-m-d');
+    return $out;
+}
+
+/**
+ * Postings published in each of the last 12 complete ISO weeks, oldest first:
+ * [['start' => 'Y-m-d', 'n' => int], …]. Source: `published_at` of
+ * job_postings and archived_postings, each posting counted once (an id in
+ * both tables counts for job_postings).
+ */
+function home_weekly_postings(int $weeks = 12): array {
+    $starts = home_week_starts($weeks);
+    $from = $starts[0];
+    $to = (new DateTimeImmutable(end($starts), new DateTimeZone('Europe/Bucharest')))->modify('+7 days')->format('Y-m-d');
+    $st = db()->prepare(
+        "SELECT d, COUNT(*) AS c FROM (
+            SELECT substr(published_at, 1, 10) AS d FROM job_postings
+            UNION ALL
+            SELECT substr(a.published_at, 1, 10) FROM archived_postings a
+            WHERE a.id NOT IN (SELECT id FROM job_postings)
+         ) WHERE d >= ? AND d < ? GROUP BY d");
+    $st->execute([$from, $to]);
+    $by_week = array_fill_keys($starts, 0);
+    foreach ($st->fetchAll() as $r) {
+        $ts = (new DateTimeImmutable((string)$r['d'], new DateTimeZone('Europe/Bucharest')))->modify('monday this week')->format('Y-m-d');
+        if (isset($by_week[$ts])) $by_week[$ts] += (int)$r['c'];
+    }
+    $out = [];
+    foreach ($by_week as $start => $n) $out[] = ['start' => $start, 'n' => $n];
+    return $out;
+}
+
+/** "24 aug" (and the year when it is not this year), for the ends of the chart. */
+function home_short_date(string $iso): string {
+    $months = ['ian', 'feb', 'mar', 'apr', 'mai', 'iun', 'iul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    $d = new DateTimeImmutable($iso, new DateTimeZone('Europe/Bucharest'));
+    $s = (int)$d->format('j') . ' ' . $months[(int)$d->format('n') - 1];
+    if ($d->format('Y') !== substr(ro_today(), 0, 4)) $s .= ' ' . $d->format('Y');
+    return $s;
 }

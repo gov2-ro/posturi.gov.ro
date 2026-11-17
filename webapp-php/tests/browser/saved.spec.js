@@ -55,7 +55,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test('save on the list survives reload; detail and /salvate/ agree; unsave in another tab updates this one', async ({ page, context }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('[data-saved-count]')).toHaveText('(0)');
   const save = saveBtn(page, 1001);
   await expect(save).toBeVisible();
@@ -106,9 +106,9 @@ test('save on the list survives reload; detail and /salvate/ agree; unsave in an
 });
 
 test('sequential edits from two tabs do not overwrite each other', async ({ page, context }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const other = await context.newPage();
-  await other.goto('/');
+  await other.goto('/posturi/');
   await saveBtn(page, 1001).click();
   // Write behind this tab's back (no storage event reaches the writing document),
   // then mutate: the mutation must start from what is stored now.
@@ -125,7 +125,7 @@ test('sequential edits from two tabs do not overwrite each other', async ({ page
 });
 
 test('hide, undo, show hidden, restore, and hiding a saved item keeps it saved', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const feedBefore = await page.locator('[data-feed="posturi.json"]').getAttribute('href');
   const countBefore = await page.locator('#results-status').textContent();
   const listCountBefore = await page.locator('#results .border-b').first().textContent();
@@ -173,12 +173,12 @@ test('hide, undo, show hidden, restore, and hiding a saved item keeps it saved',
 });
 
 test('an all-hidden page keeps pagination and does not claim the search has no results', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const ids = await page.locator('#results li[data-pref-id]').evaluateAll((els) => els.map((e) => Number(e.dataset.prefId)));
   expect(ids.length).toBe(25);
   const total = await page.locator('#results-status').textContent();
   await seed(page, ids.map((id, i) => rec(id, { hiddenAt: at(i) })));
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('#results li[data-pref-id]:visible')).toHaveCount(0);
   await expect(page.locator('[data-pref-banner-all]')).toContainText('Toate anunțurile de pe această pagină sunt ascunse');
   await expect(page.locator('[data-pref-banner-page]')).toContainText('25 de anunțuri ascunse pe această pagină');
@@ -200,7 +200,7 @@ test('an all-hidden page keeps pagination and does not claim the search has no r
 });
 
 test('HTMX pagination, back/forward and one listener per click', async ({ page, context }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   await saveBtn(page, 1001).click();
   await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'true');
   const next = () => page.locator('nav[aria-label="Paginare rezultate"] a[rel="next"]');
@@ -216,7 +216,7 @@ test('HTMX pagination, back/forward and one listener per click', async ({ page, 
 
   // Another tab changes page 1's state while this tab shows page 2; back must show it.
   const other = await context.newPage();
-  await other.goto('/');
+  await other.goto('/posturi/');
   await saveBtn(other, 1001).click();                    // unsave 1001
   await expect(saveBtn(other, 1001)).toHaveAttribute('aria-pressed', 'false');
   await page.goBack();
@@ -303,7 +303,7 @@ test('/salvate/: empty state, sorting, batches of 25, per-item actions, tabs', a
 
 test('clear saved / restore hidden need confirmation and touch only their own state', async ({ page }) => {
   await seed(page, [rec(2001, { savedAt: at(1) }), rec(2002, { savedAt: at(2), hiddenAt: at(3) }), rec(2003, { hiddenAt: at(4) })]);
-  await page.evaluate(() => { localStorage.setItem('pg.skin', 'govuk'); localStorage.setItem('posturi.facets', '{"open":["judet"]}'); });
+  await page.evaluate(() => { localStorage.setItem('pg.sentinel', 'x'); localStorage.setItem('posturi.facets', '{"open":["judet"]}'); });
   await page.goto('/salvate/');
   await expect(page.locator('[data-saved-list] li')).toHaveCount(2);
   const clear = page.locator('[data-clear="saved"]');
@@ -324,13 +324,13 @@ test('clear saved / restore hidden need confirmation and touch only their own st
   let recs = (await stored(page)).records;
   expect(Object.values(recs).filter((r) => r.savedAt).length).toBe(0);
   expect(Object.values(recs).filter((r) => r.hiddenAt).length).toBe(2);       // hidden untouched
-  expect(await page.evaluate(() => [localStorage.getItem('pg.skin'), localStorage.getItem('posturi.facets')])).toEqual(['govuk', '{"open":["judet"]}']);
+  expect(await page.evaluate(() => [localStorage.getItem('pg.sentinel'), localStorage.getItem('posturi.facets')])).toEqual(['x', '{"open":["judet"]}']);
 
   await page.locator('[data-clear="hidden"]').click();
   await expect(page.locator('[data-clear-confirm]')).toContainText('Restabilești toate cele 2 anunțuri ascunse');
   await page.locator('[data-clear-yes]').click();
   expect(await storedRaw(page)).toBe('{"version":1,"records":{}}');
-  expect(await page.evaluate(() => [localStorage.getItem('pg.skin'), localStorage.getItem('posturi.facets')])).toEqual(['govuk', '{"open":["judet"]}']);
+  expect(await page.evaluate(() => [localStorage.getItem('pg.sentinel'), localStorage.getItem('posturi.facets')])).toEqual(['x', '{"open":["judet"]}']);
 });
 
 test('500 distinct records: the limit never evicts a save and says what to do', async ({ page }) => {
@@ -338,7 +338,7 @@ test('500 distinct records: the limit never evicts a save and says what to do', 
   // Hidden records: the 500 cap counts every stored record, the 20 cap only those with a savedAt.
   for (let i = 0; i < 499; i++) recs.push(rec(5000 + i, { hiddenAt: at(i) }));
   await seed(page, recs);
-  await page.goto('/');
+  await page.goto('/posturi/');
   await saveBtn(page, 1001).click();                                        // 500th: allowed
   await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'true');
   expect(Object.keys((await stored(page)).records).length).toBe(500);
@@ -360,7 +360,7 @@ const twenty = (n) => Array.from({ length: n }, (_, i) => rec(5000 + i, { savedA
 
 test('the 21st save is refused with the notice, and nothing is evicted', async ({ page }) => {
   await seed(page, twenty(20));
-  await page.goto('/');
+  await page.goto('/posturi/');
   await saveBtn(page, 1001).click();
   await expect(page.locator('#pref-notice')).toBeVisible();
   await expect(page.locator('#pref-notice [data-notice-text]')).toHaveText(SAVE_LIMIT);
@@ -378,7 +378,7 @@ test('the 21st save is refused with the notice, and nothing is evicted', async (
 
 test('hide and note still work at 20 saved', async ({ page }) => {
   await seed(page, twenty(20));
-  await page.goto('/');
+  await page.goto('/posturi/');
   await hideBtn(page, 1001).click();
   await expect(row(page, 1001)).toBeHidden();
   const s = await stored(page);
@@ -395,7 +395,7 @@ test('a reader with 25 saved jobs keeps all 25, cannot save more, can unsave', a
   await expect(page.locator('[data-saved-count]')).toHaveText('(25)');
   expect(Object.keys((await stored(page)).records).length).toBe(25);
 
-  await page.goto('/');
+  await page.goto('/posturi/');
   await saveBtn(page, 1001).click();
   await expect(page.locator('#pref-notice [data-notice-text]')).toHaveText(SAVE_LIMIT);
   expect(Object.keys((await stored(page)).records).length).toBe(25);
@@ -405,7 +405,7 @@ test('a reader with 25 saved jobs keeps all 25, cannot save more, can unsave', a
   await expect(page.locator('[data-saved-list] > li')).toHaveCount(24);
   expect(Object.values((await stored(page)).records).filter((r) => r.savedAt).length).toBe(24);
   // Still above the cap: still refused.
-  await page.goto('/');
+  await page.goto('/posturi/');
   await saveBtn(page, 1001).click();
   await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'false');
 });
@@ -415,7 +415,7 @@ test.describe('storage failures', () => {
     await page.addInitScript(() => {
       Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('denied', 'SecurityError'); } });
     });
-    await page.goto('/');
+    await page.goto('/posturi/');
     await expect(saveBtn(page, 1001)).toBeVisible();
     await saveBtn(page, 1001).click();
     await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'true');
@@ -434,7 +434,7 @@ test.describe('storage failures', () => {
         return set.call(this, k, v);
       };
     });
-    await page.goto('/');
+    await page.goto('/posturi/');
     await saveBtn(page, 1001).click();
     await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'true');           // in-memory session
     await expect(page.locator('[data-pref-status]')).toContainText(SESSION_ONLY);
@@ -446,14 +446,14 @@ test.describe('storage failures', () => {
       const set = Storage.prototype.setItem;
       Storage.prototype.setItem = function (k, v) { if (k !== 'posturi.preferences.v1') return set.call(this, k, v); };
     });
-    await page.goto('/');
+    await page.goto('/posturi/');
     await saveBtn(page, 1001).click();
     await expect(page.locator('[data-pref-status]')).toContainText(SESSION_ONLY);
   });
 
   test('corrupt JSON: message, no overwrite, explicit confirmed reset', async ({ page }) => {
     await seed(page, [], '{not json');
-    await page.goto('/');
+    await page.goto('/posturi/');
     await expect(page.locator('[data-pref-status]')).toContainText('nu pot fi citite');
     await saveBtn(page, 1001).click();
     await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'true');           // session only
@@ -492,7 +492,7 @@ test.describe('storage failures', () => {
       'x': 42,
     } });
     await seed(page, [], raw);
-    await page.goto('/');
+    await page.goto('/posturi/');
     await expect(saveBtn(page, 1001)).toHaveAttribute('aria-pressed', 'true');
     await expect(saveBtn(page, 1002)).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('[data-saved-count]')).toHaveText('(1)');
@@ -583,7 +583,7 @@ test.describe('resolving today’s data', () => {
 });
 
 test('keyboard: buttons by Tab/Enter/Space, focus after hide, Escape, live announcements', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   await page.locator('li[data-pref-id="1001"] h2 a').focus();
   let found = false;
   for (let i = 0; i < 8 && !found; i++) {
@@ -625,7 +625,7 @@ test('widths: no horizontal overflow on list, saved, detail, employer; nav count
     await expect(page.locator('header nav a[href="/salvate/"]')).toBeVisible();
     await shot(page, testInfo, `layout-${name}`);
   }
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('[data-pref-banner-page]')).toContainText('1 anunț ascuns');
   await noOverflow(page, 'list with banner');
   await hideBtn(page, 1001).click();
@@ -638,7 +638,7 @@ test('widths: no horizontal overflow on list, saved, detail, employer; nav count
 test.describe('without JavaScript', () => {
   test.use({ javaScriptEnabled: false });
   test('normal links stay, controls are absent, and the page says why', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/posturi/');
     await expect(page.locator('li[data-pref-id="1001"] h2 a')).toBeVisible();
     await expect(page.locator('[data-pref="save"]').first()).toBeHidden();
     await expect(page.locator('main, body').first()).toBeVisible();

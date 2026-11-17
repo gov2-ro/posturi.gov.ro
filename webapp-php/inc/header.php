@@ -1,6 +1,4 @@
 <?php
-require_once __DIR__ . "/skins.php";
-
 // Set by the calling page: $page_title, and optionally $meta_description,
 // $canonical_path, $head_extra (raw markup, e.g. JSON-LD).
 $_title = isset($page_title) ? $page_title . ' — posturi.gov2.ro' : 'posturi.gov2.ro';
@@ -45,24 +43,20 @@ if (!isset($_build_stamp)) {
   <meta property="og:image" content="<?= e(site_origin()) ?>/static/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="posturi.gov2.ro — posturile din sectorul public, ușor de căutat și filtrat">
+  <meta property="og:image:alt" content="posturi.gov2.ro — anunțuri de angajare din administrația publică">
   <meta name="twitter:card" content="summary_large_image">
 
   <link rel="alternate" type="application/rss+xml" title="posturi.gov2.ro — RSS" href="/posturi.rss">
   <link rel="alternate" type="application/atom+xml" title="posturi.gov2.ro — Atom" href="/posturi.atom">
   <link rel="alternate" type="application/json" title="posturi.gov2.ro — JSON" href="/posturi.json">
 
-  <?php /* Preloads follow the default skin, which is what a first visit gets. A
-     returning visitor on hartie or govuk preloads a face it will not use — the
-     alternative is a cookie round-trip, which would break shared-host page
-     caching for the sake of ~45KB on one request.
-
-     Manrope is one variable face doing display, sans and mono in the posturi
-     skin, so this is a single preload where the parchment default needed two. */ ?>
-  <link rel="preload" href="/static/fonts/manrope-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <?php /* The gov2 design system (ADR 0005): the stylesheet and the font faces, from one
+     tag. The version in each URL changes when the copy in static/gov2/ changes, so the
+     one-year cache of .htaccess never serves an old file. app.css follows, so that its
+     layer order (reset, gov2, utilities, app) is the same as the DS one. */ ?>
+  <link rel="stylesheet" href="/static/gov2/gov2.css?v=<?= GOV2_DS_VERSION ?>">
+  <link rel="stylesheet" href="/static/gov2/fonts.css?v=<?= GOV2_DS_VERSION ?>">
   <link rel="stylesheet" href="/static/app.css?v=<?= @filemtime(__DIR__ . '/../static/app.css') ?: '1' ?>">
-  <?= pg_skin_links() ?>
-  <?= pg_skin_boot() ?>
   <?php /* Result view preference (list / compact = grid / table), applied before first
      paint (no flash). The list page's script owns the switch; the CSS only acts on the
      list at lg+. */ ?>
@@ -70,18 +64,10 @@ if (!isset($_build_stamp)) {
   <?php /* D10: welcome on a first visit or after 90 days away. Every page view
      records the visit; the close button only hides the box for this page. */ ?>
   <script>try{var k='posturi.lastVisit',n=Date.now(),v=+localStorage.getItem(k)||0;if(!v||n-v>7776e6)document.documentElement.dataset.welcome='1';localStorage.setItem(k,String(n))}catch(e){}</script>
-  <?php /* UX-15: on the first visit to `/` in a browser session, open the default
-     saved search (the one named by `defaultId`, else the newest). The flag is set
-     even when nothing is saved, so a search saved later in the session never moves
-     the reader off the page they are on. HTML is cached publicly, so the server
-     cannot do this. The page is hidden while the redirect runs, so `/` does not
-     flash. Store shape and rules: static/searches.js, ADR 0001. */ ?>
-  <script>try{if(location.pathname==='/'&&location.search===''&&!sessionStorage.getItem('posturi.searchRedirect')){sessionStorage.setItem('posturi.searchRedirect','1');var s=JSON.parse(localStorage.getItem('posturi.searches.v1')||'null');if(s&&s.version===1&&s.searches&&typeof s.searches==='object'){var ok=function(r,k){return r&&r.key===k&&r.qs===k&&/^[A-Za-z0-9_.~!'()*%=&-]+$/.test(k)&&/^(|deadline|employer|salary)$/.test(r.sort||'')&&typeof r.savedAt==='string'},d=null,i=s.defaultId;if(typeof i==='string'&&ok(s.searches[i],i))d=s.searches[i];else for(var k in s.searches)if(ok(s.searches[k],k)&&(!d||Date.parse(s.searches[k].savedAt)>Date.parse(d.savedAt)))d=s.searches[k];if(d){sessionStorage.setItem('posturi.searchApplied',d.key);document.documentElement.style.visibility='hidden';location.replace('/?'+d.qs+(d.sort?'&sort='+encodeURIComponent(d.sort):''))}}}}catch(e){}</script>
   <?php /* getCacheBusterParam gives every HTMX GET its own URL, so a cached
      results fragment can never be served as a page (index.php, BETA-CACHE). */ ?>
   <meta name="htmx-config" content='{"getCacheBusterParam":true}'>
   <script src="/static/htmx.min.js" defer></script>
-  <script src="/static/prefs.js?v=<?= @filemtime(__DIR__ . '/../static/prefs.js') ?: '1' ?>" defer></script>
   <?php /* UX-09: one shared script for browser-local save/hide, loaded once here
      rather than copied into the list and detail inline scripts. */ ?>
   <script src="/static/saved.js?v=<?= @filemtime(__DIR__ . '/../static/saved.js') ?: '1' ?>" defer></script>
@@ -102,11 +88,25 @@ if (!isset($_build_stamp)) {
   <symbol id="i-calendar-add" viewBox="0 0 24 24"><path d="M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5 M12 13v5 M9.5 15.5h5"/></symbol>
   <symbol id="i-mail" viewBox="0 0 24 24"><path d="M3 6h18v12H3z M3 7l9 6 9-6"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z M10 21h4"/></symbol>
+  <symbol id="i-sector-altele" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></symbol>
+  <symbol id="i-sector-asistenta_sociala" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"/><path d="M12 6l-3.293 3.293a1 1 0 0 0 0 1.414l.543 .543c.69 .69 1.81 .69 2.5 0l1 -1a3.182 3.182 0 0 1 4.5 0l2.25 2.25"/><path d="M12.5 15.5l2 2"/><path d="M15 13l2 2"/></symbol>
+  <symbol id="i-sector-cultura" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.192 9h6.616a2 2 0 0 1 1.992 2.183l-.567 6.182a4 4 0 0 1 -3.983 3.635h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183"/><path d="M15 13h.01"/><path d="M18 13h.01"/><path d="M15 16.5c1 .667 2 .667 3 0"/><path d="M8.632 15.982a4.037 4.037 0 0 1 -.382 .018h-1.5a4 4 0 0 1 -3.983 -3.635l-.567 -6.182a2 2 0 0 1 1.992 -2.183h6.616a2 2 0 0 1 2 2"/><path d="M6 8h.01"/><path d="M9 8h.01"/><path d="M6 12c.764 -.51 1.528 -.63 2.291 -.36"/></symbol>
+  <symbol id="i-sector-educatie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 9l-10 -4l-10 4l10 4l10 -4v6"/><path d="M6 10.6v5.4a6 3 0 0 0 12 0v-5.4"/></symbol>
+  <symbol id="i-sector-justitie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20l10 0"/><path d="M6 6l6 -1l6 1"/><path d="M12 3l0 17"/><path d="M9 12l-3 -6l-3 6a3 3 0 0 0 6 0"/><path d="M21 12l-3 -6l-3 6a3 3 0 0 0 6 0"/></symbol>
+  <symbol id="i-sector-ordine_publica" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/></symbol>
+  <symbol id="i-sector-sanatate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l18 0"/><path d="M5 21v-16a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v16"/><path d="M9 21v-4a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v4"/><path d="M10 9l4 0"/><path d="M12 7l0 4"/></symbol>
+  <symbol id="i-domain-administratie" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2h-2"/><path d="M9 5a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2"/><path d="M9 12h6"/><path d="M9 16h6"/></symbol>
+  <symbol id="i-domain-meseriasi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h4l13 -13a1.5 1.5 0 0 0 -4 -4l-13 13v4"/><path d="M14.5 5.5l4 4"/><path d="M12 8l-5 -5l-4 4l5 5"/><path d="M7 8l-1.5 1.5"/><path d="M16 12l5 5l-4 4l-5 -5"/><path d="M16 17l-1.5 1.5"/></symbol>
+  <symbol id="i-domain-paza" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21v-2a4 4 0 0 1 4 -4h2"/><path d="M22 16c0 4 -2.5 6 -3.5 6s-3.5 -2 -3.5 -6c1 0 2.5 -.5 3.5 -1.5c1 1 2.5 1.5 3.5 1.5"/><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/></symbol>
+  <symbol id="i-domain-soferi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M12 14l0 7"/><path d="M10 12l-6.75 -2"/><path d="M14 12l6.75 -2"/></symbol>
+  <symbol id="i-domain-ingineri" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4l-14 14l-4 -4l14 -14"/><path d="M16 7l-1.5 -1.5"/><path d="M13 10l-1.5 -1.5"/><path d="M10 13l-1.5 -1.5"/><path d="M7 16l-1.5 -1.5"/></symbol>
+  <symbol id="i-domain-necalificati" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 4l3 3"/><path d="M18.5 5.5l-8 8"/><path d="M8.276 11.284l4.44 4.44a.968 .968 0 0 1 0 1.369l-2.704 2.704a4.108 4.108 0 0 1 -5.809 -5.81l2.704 -2.703a.968 .968 0 0 1 1.37 0l-.001 0"/></symbol>
+  <symbol id="i-domain-financiar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0"/><path d="M14.8 9a2 2 0 0 0 -1.8 -1h-2a2 2 0 1 0 0 4h2a2 2 0 1 1 0 4h-2a2 2 0 0 1 -1.8 -1"/><path d="M12 7v10"/></symbol>
+  <symbol id="i-domain-it" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l-4 4l4 4"/><path d="M17 8l4 4l-4 4"/><path d="M14 4l-4 16"/></symbol>
+  <symbol id="i-chart-bar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -6"/><path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -10"/><path d="M9 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -14"/><path d="M4 20h14"/></symbol>
 </defs></svg>
 
-<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gov focus:px-4 focus:py-2 focus:text-on-gov">
-  Sari la conținut
-</a>
+<a class="g2-skip-link" href="#main">Sari la conținut</a>
 
 <?php /* One row: brand + version, the database stamp, nav (BETA-CHROME, D9).
    ────────────────────────────────────────────────────────────────────────────
@@ -115,37 +115,35 @@ if (!isset($_build_stamp)) {
    claim moved to where it matters — the start and end of every posting
    (robots_disclaimer()), the first-visit welcome below, the footer and /despre/
    — and feedback to the [?!] button in the footer. Below sm the stamp and the
-   version's commit drop out; the footer still carries the stamp. */ ?>
+   version's commit drop out; the footer still carries the stamp.
+   ADR 0005: the DS header (.g2-header, .g2-wordmark, .g2-nav). The row wraps at
+   320 px, with no menu button. */ ?>
 <?php $_stamp = build_stamp_relative(); $_code = code_version(); ?>
-<header class="bg-gov-bar text-on-bar border-b border-gov-bar">
-  <div class="w-full px-3 sm:px-6 flex items-center gap-2 sm:gap-4 h-14">
-    <a href="/" class="flex shrink-0 items-baseline gap-2 py-2 group">
-      <span class="font-display italic text-base sm:text-lg md:text-xl font-semibold text-on-bar leading-none tracking-tight">
-        posturi<span class="text-on-bar-accent">.</span>gov<span class="text-on-bar-accent">2</span><span class="text-on-bar-accent">.</span>ro
-      </span>
-      <span class="text-[11px] text-on-bar-muted font-mono leading-none"<?= $_code !== '' ? ' title="Versiunea codului: ' . e($_code) . '"' : '' ?>>beta<?php if ($_code !== ''): ?><span class="hidden sm:inline"> · <?= e($_code) ?></span><?php endif; ?></span>
-    </a>
+<header class="g2-header">
+  <span class="g2-ro-corner" aria-hidden="true"></span>
+  <div class="g2-header-in g2-container">
+    <a href="/" class="g2-wordmark min-h-[44px]"><span>posturi<em>.gov2.ro</em></span></a>
+    <span class="font-mono text-[11px] leading-none text-on-bar-muted"<?= $_code !== '' ? ' title="Versiunea codului: ' . e($_code) . '"' : '' ?>>beta<?php if ($_code !== ''): ?><span class="hidden sm:inline"> · <?= e($_code) ?></span><?php endif; ?></span>
 
     <?php /* Below sm there is no room beside the nav; the footer and /despre/ carry the stamp there. */ ?>
-    <p class="min-w-0 flex-1 truncate text-center text-xs leading-none text-on-bar-muted">
+    <p class="hidden min-w-0 flex-1 truncate text-center text-xs leading-none sm:block">
       <?php if ($_stamp): ?>
-      <a href="/despre/#versiunea-datelor" class="hover:text-on-bar"<?= $_build_tooltip ? ' title="' . e($_build_tooltip) . '"' : '' ?>>
-        <span class="hidden sm:inline">Bază generată: <time datetime="<?= e($_stamp['iso']) ?>"><?= e($_stamp['long']) ?></time></span>
+      <a href="/despre/#versiunea-datelor" class="g2-link-inverse inline-block py-4"<?= $_build_tooltip ? ' title="' . e($_build_tooltip) . '"' : '' ?>>
+        Bază generată: <time datetime="<?= e($_stamp['iso']) ?>"><?= e($_stamp['long']) ?></time>
       </a>
       <?php endif; ?>
     </p>
 
-    <?php /* Statistici and Angajatori moved to /despre/ — they are things you
-       read once, not places you navigate between, and the masthead is worth
-       more as one unambiguous way back to the listing. */ ?>
-    <nav aria-label="Navigare principală" class="shrink-0 flex items-center gap-3 sm:gap-4 text-sm text-on-bar-muted">
-      <?php /* UX-09: the count is the browser-local number of saved items; it
-         stays hidden until saved.js has read the state. */ ?>
-      <?php /* 261016: the "Pot aplica?" tool. No room below sm; the landing's
-         "Începe cu" row links it there. */ ?>
-      <a href="/pot-aplica/" class="hidden py-2 hover:text-on-bar transition-colors sm:inline">Pot aplica?</a>
-      <a href="/salvate/" class="py-2 hover:text-on-bar transition-colors">Salvate<span data-saved-count hidden class="ml-1 font-mono text-xs"></span></a>
-      <a href="/despre/" class="py-2 hover:text-on-bar transition-colors">Despre</a>
+    <?php /* 2026-11-16 (UX-05): five links, all visible at each width; the row wraps
+       at 320 px. "Pot aplica?" and Angajatori moved to the landing page and the
+       footer. The saved count is the browser-local number of saved items (UX-09);
+       it stays hidden until saved.js has read the state. */ ?>
+    <nav aria-label="Navigare principală" class="g2-nav ml-auto">
+      <a href="/posturi/">Posturi</a>
+      <a href="/salvate/">Salvate<span data-saved-count hidden class="ml-1 font-mono text-xs"></span></a>
+      <a href="/alerte/">Alerte</a>
+      <a href="/statistici/">Statistici</a>
+      <a href="/despre/">Despre</a>
     </nav>
   </div>
 </header>
@@ -174,4 +172,4 @@ if (!isset($_build_stamp)) {
   <p class="border-b border-line bg-sunken px-4 py-2 text-center text-xs text-ink-muted">Salvarea și ascunderea anunțurilor se păstrează în browser și necesită JavaScript. Legăturile către anunțuri funcționează normal.</p>
 </noscript>
 
-<main id="main" class="flex-1">
+<main id="main" tabindex="-1" class="flex-1">

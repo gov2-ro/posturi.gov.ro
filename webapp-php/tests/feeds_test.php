@@ -641,8 +641,8 @@ run_suite('subscription block: one block, labels, limits, no page/sort, no local
     // Copy buttons are script-only; links work without them.
     foreach ($x->query('//button[@data-copy]') as $b) assert_true($b->hasAttribute('hidden'), 'copy buttons ship hidden');
     assert_same(0, $x->query('//a[@href="#urmareste-linkuri"]')->length, 'no second link to the block in the export line');
-    // Home page, no filters: plain links.
-    [, $home] = fetch($base, '/');
+    // List page, no filters (/posturi/): plain links.
+    [, $home] = fetch($base, '/posturi/');
     assert_contains('data-feed="posturi.rss" href="/posturi.rss"', $home, 'unfiltered RSS link');
     assert_contains('rel="alternate" type="application/rss+xml"', $home, 'RSS autodiscovery');
     // Employer page.

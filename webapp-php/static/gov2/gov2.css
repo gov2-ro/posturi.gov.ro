@@ -1,0 +1,484 @@
+/* gov2 — stilul comun pentru proiectele gov2.ro · v0.17.1 · 27.10.2026
+
+   Shared stylesheet for gov2.ro projects.
+   Inspired by igov.ro's GOV.UK-derived theme (brand.css, 2026-10): Inter + Fragment Mono,
+   black header with a brand band, square corners, underlined links, yellow focus,
+   green primary button, six-tone status palette. Optional Romanian tricolour band.
+
+   Repo: https://github.com/gov2-ro/gov2ro-design-system
+   Activation: load this file. It applies the site defaults and publishes the tokens on :root.
+   Layers: reset, gov2, utilities, app (public order). Inside gov2: tokens, base, components, states.
+   A layer that an earlier stylesheet created keeps its position: declare the order first (see the migration document).
+   Colours are RGB channels (--g2-color-*). Opt-in classes are prefixed .g2-.
+   Colour scheme: light by default. <html data-g2-scheme="dark"> or "auto" (follows prefers-color-scheme) opts in to the dark values (COMPONENTS.md).
+   Fonts: this file makes no font request. --g2-font-sans and --g2-font-mono name Inter and Fragment Mono, with system fallbacks.
+   Standard installation also copies fonts.css and fonts/, which supply the two families as local files (fonts/README.md).
+   Migration from 0.6.0: docs/migration-from-0.6.0.md.
+*/
+@layer reset, gov2, utilities, app;
+@layer gov2.tokens, gov2.base, gov2.components, gov2.states;
+
+/* ---- Tokens: published on :root ---- */
+@layer gov2.tokens {
+:root {
+  color-scheme: light; /* the active scheme; the dark blocks below set dark */
+
+  /* Surfaces */
+  --g2-color-page:                     255 255 255; /* #ffffff */
+  --g2-color-surface:                  255 255 255; /* #ffffff */
+  --g2-color-surface-sunken:           243 242 241; /* #f3f2f1  panels, footer, toolbars, notice bar, tags */
+  --g2-color-line:                     177 180 182; /* #b1b4b6  rules, card borders */
+  --g2-color-control-border:           11 12 12; /* #0b0c0c  form controls */
+  --g2-color-control-bg:               255 255 255; /* #ffffff  background of .g2-input, also while focused */
+
+  /* Text */
+  --g2-color-text:                     11 12 12; /* #0b0c0c  19:1 on white */
+  --g2-color-text-muted:               80 90 95; /* #505a5f  7:1 on white */
+  --g2-color-text-faint:               111 119 123; /* #6f777b  4.57:1 on white; not for text on the sunken surface */
+
+  /* Links and selection */
+  --g2-color-link:                     29 79 191; /* #1d4fbf  links */
+  --g2-color-link-visited:             76 44 146; /* #4c2c92 */
+  --g2-color-selected-bg:              210 226 241; /* #d2e2f1  selected rows */
+  --g2-color-on-link:                  255 255 255; /* #ffffff  text on a link-colour fill */
+
+  /* Brand and header */
+  --g2-color-brand:                    11 61 145; /* #0b3d91  header band, footer rule, tile rules */
+  --g2-color-header-bg:                11 12 12; /* #0b0c0c  header and other dark surfaces */
+  --g2-color-on-header:                255 255 255; /* #ffffff */
+  --g2-color-on-header-muted:          204 204 204; /* #cccccc */
+  --g2-color-header-accent:            140 198 255; /* #8cc6ff  current nav item */
+
+  /* Actions: buttons and errors */
+  --g2-color-action:                   0 112 60; /* #00703c  primary button */
+  --g2-color-action-hover:             0 90 48; /* #005a30 */
+  --g2-color-action-shadow:            0 45 24; /* #002d18 */
+  --g2-color-action-secondary-shadow:  146 145 145; /* #929191 */
+  --g2-color-action-secondary-hover:   219 218 217; /* #dbdad9  hover background of the secondary button */
+  --g2-color-danger-solid:             212 53 28; /* #d4351c  errors, destructive button */
+  --g2-color-danger-shadow:            85 21 11; /* #55150b */
+  --g2-color-on-solid:                 255 255 255; /* #ffffff  text on a saturated fill: action and danger buttons, notice title band */
+
+  /* Focus: keyboard focus only */
+  --g2-color-focus:                    255 221 0; /* #ffdd00 */
+  --g2-color-on-focus:                 11 12 12; /* #0b0c0c */
+
+  /* Status tones: bg / line / ink. Markup: data-tone with the same names as the tokens. */
+  --g2-color-neutral-bg:               229 230 231; /* #e5e6e7 */
+  --g2-color-neutral-line:             80 90 95; /* #505a5f */
+  --g2-color-neutral-ink:              56 63 67; /* #383f43 */
+  --g2-color-info-bg:                  210 226 241; /* #d2e2f1 */
+  --g2-color-info-line:                29 112 184; /* #1d70b8 */
+  --g2-color-info-ink:                 12 45 74; /* #0c2d4a */
+  --g2-color-progress-bg:              219 213 233; /* #dbd5e9 */
+  --g2-color-progress-line:            76 44 146; /* #4c2c92 */
+  --g2-color-progress-ink:             61 35 117; /* #3d2375 */
+  --g2-color-warning-bg:               255 247 191; /* #fff7bf */
+  --g2-color-warning-line:             181 136 0; /* #b58800 */
+  --g2-color-warning-ink:              89 77 0; /* #594d00 */
+  --g2-color-success-bg:               204 226 216; /* #cce2d8 */
+  --g2-color-success-line:             0 112 60; /* #00703c */
+  --g2-color-success-ink:              0 90 48; /* #005a30 */
+  --g2-color-danger-bg:                244 205 198; /* #f4cdc6 */
+  --g2-color-danger-line:              212 53 28; /* #d4351c */
+  --g2-color-danger-ink:               42 11 6; /* #2a0b06 */
+  --g2-color-success-solid:            0 112 60; /* #00703c */
+
+  /* Highlight: the background of a matched word in <mark>. Not the focus yellow: yellow means keyboard focus. */
+  --g2-color-highlight-bg:             255 247 191; /* #fff7bf */
+
+  /* Tricolour (decorative only: never text, except .g2-ro-sweep (ADR 0010)) */
+  --g2-color-ro-blue:                  0 43 127; /* #002b7f */
+  --g2-color-ro-yellow:                252 209 22; /* #fcd116 */
+  --g2-color-ro-red:                   206 17 38; /* #ce1126 */
+  --g2-color-ro-blue-ring:             58 90 160; /* #3a5aa0  ring of the blue dot in .g2-ro-dots, for the dark header */
+
+  /* Chart ramp: blue series, greys for the rest, the dark colour marks the selection */
+  --g2-color-chart-1:                  29 112 184; /* #1d70b8 */
+  --g2-color-chart-2:                  11 61 145; /* #0b3d91 */
+  --g2-color-chart-3:                  80 90 95; /* #505a5f */
+  --g2-color-chart-4:                  177 180 182; /* #b1b4b6 */
+  --g2-color-chart-selected:           11 12 12; /* #0b0c0c */
+
+  /* Type */
+  --g2-font-sans:                      "Inter", -apple-system, "Segoe UI", Arial, sans-serif;
+  --g2-font-mono:                      "Fragment Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Type scale: starting treatments, in rem so that they follow the reader's text size (px at a 16px root) */
+  --g2-font-size-heading-page:         2rem; /* 32px  page title */
+  --g2-font-size-heading-section:      1.5rem; /* 24px  section title */
+  --g2-font-size-heading-item:         1.1875rem; /* 19px  item title and its link */
+  --g2-font-size-body:                 1.0625rem; /* 17px  body text, buttons and fields */
+  --g2-font-size-meta:                 .9375rem; /* 15px  metadata, navigation and chips */
+  --g2-font-size-label:                .875rem; /* 14px  short labels, field labels and tags */
+  --g2-line-height-heading:            1.25; /* headings: stay within 1.2 to 1.3 */
+  --g2-line-height-body:               1.55; /* running text */
+
+  /* Spacing: a compact scale in rem (px at a 16px root) */
+  --g2-space-1:                        .25rem; /* 4px  label to hint to field */
+  --g2-space-2:                        .5rem; /* 8px  between items in a row */
+  --g2-space-3:                        .75rem; /* 12px  inline padding of a navigation link */
+  --g2-space-4:                        1rem; /* 16px  between related blocks */
+  --g2-space-5:                        1.5rem; /* 24px  between groups, header columns */
+  --g2-space-6:                        2rem; /* 32px  between page sections */
+  --g2-space-7:                        3rem; /* 48px  above and below the page content */
+
+  /* Metrics: square, flat */
+  --g2-radius:                         0;
+  --g2-border-width-control:           2px;
+  --g2-container-max:                  80rem; /* 1280px  maximum width of .g2-container, padding included */
+  --g2-gutter:                         clamp(1rem, 3vw, 2rem); /* inline padding of .g2-container */
+}
+
+/* Dark scheme: opt-in, with one attribute on the root element. No attribute, or "light", keeps the values above.
+   The same values are written twice, because CSS cannot share a rule between a media query and a plain selector. A test compares them.
+   Tokens that keep their light value are not listed: the header group, focus, the tricolour and its ring. */
+:root[data-g2-scheme=dark] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --g2-color-page:                     11 12 12; /* #0b0c0c  near-black page; the header colour, so the brand band separates them */
+  --g2-color-surface:                  22 25 26; /* #16191a  raised surface: card, notice body */
+  --g2-color-surface-sunken:           32 36 38; /* #202426  panels, footer, toolbars, notice bar, chips, disabled field */
+  --g2-color-line:                     65 72 75; /* #41484b  rules, card borders */
+  --g2-color-control-border:           243 242 241; /* #f3f2f1  form controls */
+  --g2-color-control-bg:               11 12 12; /* #0b0c0c  field background */
+
+  /* Text */
+  --g2-color-text:                     243 242 241; /* #f3f2f1 */
+  --g2-color-text-muted:               177 180 182; /* #b1b4b6 */
+  --g2-color-text-faint:               142 151 155; /* #8e979b */
+
+  /* Links and selection */
+  --g2-color-link:                     134 185 255; /* #86b9ff */
+  --g2-color-link-visited:             169 138 240; /* #a98af0 */
+  --g2-color-selected-bg:              23 49 79; /* #17314f  selected rows */
+  --g2-color-on-link:                  11 12 12; /* #0b0c0c  text on a link-colour fill */
+
+  /* Brand */
+  --g2-color-brand:                    47 107 209; /* #2f6bd1  header band, footer rule, tile rules */
+
+  /* Actions: saturated fills carry dark text (on-solid) */
+  --g2-color-action:                   47 165 100; /* #2fa564 */
+  --g2-color-action-hover:             76 195 130; /* #4cc382  lighter on hover; dark text gains contrast */
+  --g2-color-action-shadow:            20 92 54; /* #145c36 */
+  --g2-color-action-secondary-shadow:  94 102 106; /* #5e666a */
+  --g2-color-action-secondary-hover:   48 54 58; /* #30363a */
+  --g2-color-danger-solid:             240 106 91; /* #f06a5b  errors, destructive button */
+  --g2-color-danger-shadow:            138 42 31; /* #8a2a1f */
+  --g2-color-on-solid:                 11 12 12; /* #0b0c0c  dark text on a saturated fill */
+
+  /* Status tones: bg / line / ink */
+  --g2-color-neutral-bg:               43 48 51; /* #2b3033 */
+  --g2-color-neutral-line:             141 151 156; /* #8d979c */
+  --g2-color-neutral-ink:              228 231 233; /* #e4e7e9 */
+  --g2-color-info-bg:                  21 48 76; /* #15304c */
+  --g2-color-info-line:                90 164 234; /* #5aa4ea */
+  --g2-color-info-ink:                 208 229 251; /* #d0e5fb */
+  --g2-color-progress-bg:              42 33 80; /* #2a2150 */
+  --g2-color-progress-line:            166 142 233; /* #a68ee9 */
+  --g2-color-progress-ink:             229 221 251; /* #e5ddfb */
+  --g2-color-warning-bg:               58 49 0; /* #3a3100 */
+  --g2-color-warning-line:             217 164 26; /* #d9a41a */
+  --g2-color-warning-ink:              255 233 140; /* #ffe98c */
+  --g2-color-success-bg:               15 58 37; /* #0f3a25 */
+  --g2-color-success-line:             47 165 100; /* #2fa564 */
+  --g2-color-success-ink:              200 237 216; /* #c8edd8 */
+  --g2-color-danger-bg:                74 27 21; /* #4a1b15 */
+  --g2-color-danger-line:              240 106 91; /* #f06a5b */
+  --g2-color-danger-ink:               255 217 211; /* #ffd9d3 */
+  --g2-color-success-solid:            47 165 100; /* #2fa564 */
+
+  /* Highlight: the background of a matched word in <mark> */
+  --g2-color-highlight-bg:             92 77 0; /* #5c4d00  7.46:1 with the dark text colour */
+
+  /* Chart ramp: the same order of emphasis as the light scheme */
+  --g2-color-chart-1:                  79 148 216; /* #4f94d8 */
+  --g2-color-chart-2:                  156 195 246; /* #9cc3f6 */
+  --g2-color-chart-3:                  151 161 166; /* #97a1a6 */
+  --g2-color-chart-4:                  65 72 75; /* #41484b */
+  --g2-color-chart-selected:           243 242 241; /* #f3f2f1 */
+}
+@media (prefers-color-scheme: dark) {
+:root[data-g2-scheme=auto] {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --g2-color-page:                     11 12 12; /* #0b0c0c  near-black page; the header colour, so the brand band separates them */
+  --g2-color-surface:                  22 25 26; /* #16191a  raised surface: card, notice body */
+  --g2-color-surface-sunken:           32 36 38; /* #202426  panels, footer, toolbars, notice bar, chips, disabled field */
+  --g2-color-line:                     65 72 75; /* #41484b  rules, card borders */
+  --g2-color-control-border:           243 242 241; /* #f3f2f1  form controls */
+  --g2-color-control-bg:               11 12 12; /* #0b0c0c  field background */
+
+  /* Text */
+  --g2-color-text:                     243 242 241; /* #f3f2f1 */
+  --g2-color-text-muted:               177 180 182; /* #b1b4b6 */
+  --g2-color-text-faint:               142 151 155; /* #8e979b */
+
+  /* Links and selection */
+  --g2-color-link:                     134 185 255; /* #86b9ff */
+  --g2-color-link-visited:             169 138 240; /* #a98af0 */
+  --g2-color-selected-bg:              23 49 79; /* #17314f  selected rows */
+  --g2-color-on-link:                  11 12 12; /* #0b0c0c  text on a link-colour fill */
+
+  /* Brand */
+  --g2-color-brand:                    47 107 209; /* #2f6bd1  header band, footer rule, tile rules */
+
+  /* Actions: saturated fills carry dark text (on-solid) */
+  --g2-color-action:                   47 165 100; /* #2fa564 */
+  --g2-color-action-hover:             76 195 130; /* #4cc382  lighter on hover; dark text gains contrast */
+  --g2-color-action-shadow:            20 92 54; /* #145c36 */
+  --g2-color-action-secondary-shadow:  94 102 106; /* #5e666a */
+  --g2-color-action-secondary-hover:   48 54 58; /* #30363a */
+  --g2-color-danger-solid:             240 106 91; /* #f06a5b  errors, destructive button */
+  --g2-color-danger-shadow:            138 42 31; /* #8a2a1f */
+  --g2-color-on-solid:                 11 12 12; /* #0b0c0c  dark text on a saturated fill */
+
+  /* Status tones: bg / line / ink */
+  --g2-color-neutral-bg:               43 48 51; /* #2b3033 */
+  --g2-color-neutral-line:             141 151 156; /* #8d979c */
+  --g2-color-neutral-ink:              228 231 233; /* #e4e7e9 */
+  --g2-color-info-bg:                  21 48 76; /* #15304c */
+  --g2-color-info-line:                90 164 234; /* #5aa4ea */
+  --g2-color-info-ink:                 208 229 251; /* #d0e5fb */
+  --g2-color-progress-bg:              42 33 80; /* #2a2150 */
+  --g2-color-progress-line:            166 142 233; /* #a68ee9 */
+  --g2-color-progress-ink:             229 221 251; /* #e5ddfb */
+  --g2-color-warning-bg:               58 49 0; /* #3a3100 */
+  --g2-color-warning-line:             217 164 26; /* #d9a41a */
+  --g2-color-warning-ink:              255 233 140; /* #ffe98c */
+  --g2-color-success-bg:               15 58 37; /* #0f3a25 */
+  --g2-color-success-line:             47 165 100; /* #2fa564 */
+  --g2-color-success-ink:              200 237 216; /* #c8edd8 */
+  --g2-color-danger-bg:                74 27 21; /* #4a1b15 */
+  --g2-color-danger-line:              240 106 91; /* #f06a5b */
+  --g2-color-danger-ink:               255 217 211; /* #ffd9d3 */
+  --g2-color-success-solid:            47 165 100; /* #2fa564 */
+
+  /* Highlight: the background of a matched word in <mark> */
+  --g2-color-highlight-bg:             92 77 0; /* #5c4d00  7.46:1 with the dark text colour */
+
+  /* Chart ramp: the same order of emphasis as the light scheme */
+  --g2-color-chart-1:                  79 148 216; /* #4f94d8 */
+  --g2-color-chart-2:                  156 195 246; /* #9cc3f6 */
+  --g2-color-chart-3:                  151 161 166; /* #97a1a6 */
+  --g2-color-chart-4:                  65 72 75; /* #41484b */
+  --g2-color-chart-selected:           243 242 241; /* #f3f2f1 */
+}
+}
+}
+
+/* ---- Base: whole-site defaults ----
+   A rule in a later layer wins over these, whatever its specificity.
+   Unlayered rules outrank every layer, gov2 states included. */
+@layer gov2.base {
+body{margin:0;background:rgb(var(--g2-color-page));color:rgb(var(--g2-color-text));font:var(--g2-font-size-body)/var(--g2-line-height-body) var(--g2-font-sans);-webkit-font-smoothing:antialiased}
+a{color:rgb(var(--g2-color-link));text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+a:where(:visited){color:rgb(var(--g2-color-link-visited))}
+a:where(:hover){text-decoration-thickness:3px}
+/* Highlight for a matched word. The text keeps the text colour; the background is not the focus yellow. */
+mark{background:rgb(var(--g2-color-highlight-bg));color:rgb(var(--g2-color-text))}
+@media(forced-colors:active){mark{background:Mark;color:MarkText}}
+/* Important declarations invert the layer order: this rule wins over project rules in later layers. */
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+}
+
+/* ---- Components: opt-in .g2- classes, with their hover treatment ----
+   Focus, selection, disabled and error treatments are in the states layer, which follows this one. */
+@layer gov2.components {
+/* ---- Component sizing: independent of the host reset ---- */
+:where(.g2-btn,.g2-chip,.g2-input){box-sizing:border-box}
+
+/* ---- Page container: full width up to --g2-container-max, with a gutter that fits a 320px viewport ---- */
+.g2-container{box-sizing:border-box;width:100%;max-width:var(--g2-container-max);margin-inline:auto;padding-inline:var(--g2-gutter)}
+
+/* ---- Type roles: size, weight and line height only (headings also break a word that is wider than the line).
+   The heading level (h1 to h6) and the margins stay with the page. ---- */
+.g2-heading-page{font-size:var(--g2-font-size-heading-page);font-weight:700;line-height:var(--g2-line-height-heading);overflow-wrap:break-word}
+.g2-heading-section{font-size:var(--g2-font-size-heading-section);font-weight:700;line-height:var(--g2-line-height-heading);overflow-wrap:break-word}
+.g2-heading-item{font-size:var(--g2-font-size-heading-item);font-weight:700;line-height:var(--g2-line-height-heading);overflow-wrap:break-word}
+.g2-text-meta{font-size:var(--g2-font-size-meta);color:rgb(var(--g2-color-text-muted))}
+
+/* ---- Links: defaults for common roles (GUIDELINES.md) ----
+   Plain <a> = in-text link (base layer). Visited and hover use :where() to keep one specificity. */
+.g2-link-title{color:rgb(var(--g2-color-link));font-weight:700;font-size:var(--g2-font-size-heading-item);line-height:1.3;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+.g2-link-title:where(:visited){color:rgb(var(--g2-color-link-visited))}
+.g2-link-quiet{color:rgb(var(--g2-color-text));text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+.g2-link-inverse{color:rgb(var(--g2-color-on-header));text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:.15em}
+.g2-link-title:where(:hover),.g2-link-quiet:where(:hover),.g2-link-inverse:where(:hover){text-decoration-thickness:3px}
+/* Chip: a shortcut or filter link. The selected chip (aria-current or aria-pressed="true") is in the states layer. */
+.g2-chip{display:inline-flex;align-items:baseline;gap:6px;min-height:36px;padding:6px 10px;border:var(--g2-border-width-control) solid transparent;border-radius:var(--g2-radius);background:rgb(var(--g2-color-surface-sunken));color:rgb(var(--g2-color-text));font:500 var(--g2-font-size-meta)/1.3 var(--g2-font-sans);text-decoration:none}
+.g2-chip:where(:hover){background:rgb(var(--g2-color-neutral-bg))}
+.g2-chip-count{font:var(--g2-font-size-label)/1.3 var(--g2-font-mono);color:rgb(var(--g2-color-text-muted))}
+
+/* ---- Header, band, footer ---- */
+.g2-header{background:rgb(var(--g2-color-header-bg));color:rgb(var(--g2-color-on-header));border-bottom:8px solid rgb(var(--g2-color-brand))}
+/* Header content: wraps at narrow widths, with no script and no menu button. Put it in .g2-container for the side gutters. */
+.g2-header-in{box-sizing:border-box;min-height:52px;display:flex;flex-wrap:wrap;align-items:center;gap:var(--g2-space-2) var(--g2-space-5);padding-block:var(--g2-space-1)}
+/* Tricolour variant: the stripe sits above everything (notice bar included); the header drops its blue band. */
+.g2-ro-bar{height:6px;background:linear-gradient(90deg,rgb(var(--g2-color-ro-blue)) 33.33%,rgb(var(--g2-color-ro-yellow)) 33.33% 66.66%,rgb(var(--g2-color-ro-red)) 66.66%)}
+.g2-header.g2-tricolor{border-bottom:0}
+/* Smaller marks; the header keeps its blue band. Decorative: add aria-hidden="true".
+   Default for gov2 projects: .g2-ro-corner. */
+.g2-header{position:relative}
+.g2-ro-corner{position:absolute;top:0;right:24px;width:54px;height:6px;background:linear-gradient(90deg,rgb(var(--g2-color-ro-blue)) 33.33%,rgb(var(--g2-color-ro-yellow)) 33.33% 66.66%,rgb(var(--g2-color-ro-red)) 66.66%)}
+.g2-ro-dots{display:inline-flex;gap:4px;margin-left:2px}
+.g2-ro-dots::before,.g2-ro-dots::after,.g2-ro-dots>i{content:"";display:block;width:7px;height:7px;border-radius:50%}
+.g2-ro-dots::before{background:rgb(var(--g2-color-ro-blue));box-shadow:0 0 0 1px rgb(var(--g2-color-ro-blue-ring))}
+.g2-ro-dots>i{background:rgb(var(--g2-color-ro-yellow))}
+.g2-ro-dots::after{background:rgb(var(--g2-color-ro-red))}
+/* Notice bar: above the header, dismissible (store the choice, e.g. localStorage). */
+.g2-notice-bar{display:flex;align-items:center;gap:10px;padding:6px 8px 6px 24px;background:rgb(var(--g2-color-surface-sunken));border-bottom:1px solid rgb(var(--g2-color-line));font-size:var(--g2-font-size-meta)}
+.g2-notice-bar[hidden]{display:none}
+.g2-notice-bar>p{flex:1;min-width:0;margin:0}
+.g2-notice-bar>button{flex:none;width:44px;height:36px;border:0;background:transparent;color:rgb(var(--g2-color-text));font-size:22px;cursor:pointer}
+.g2-wordmark{display:inline-flex;align-items:center;gap:10px;color:rgb(var(--g2-color-on-header));font-size:19px;font-weight:700;letter-spacing:-.03em;text-decoration:none}
+.g2-wordmark em{font-style:normal;font-weight:500;color:rgb(var(--g2-color-on-header-muted))}
+.g2-logo{display:block;height:28px;width:auto}
+/* ---- Title sweep: a tricolour band crosses a site title (ADR 0010) ----
+   The only tricolour text, with two deliberate WCAG deviations: 2.2.2 (the loop has no pause control; the reduced-motion preference is the only stop)
+   and 1.4.3 (a glyph under the band can fall below 4.5:1). A project that must meet WCAG AA does not use it.
+   Put it on one inline element that holds only the title, inside .g2-wordmark or a heading of .g2-header. Use it once per page.
+   The civtech sweep (ADR 0010 amendment): a soft, wide, tilted band in a continuous 7s loop, with no rest. The first and last frames show the colour of the host.
+   The text is plain without background-clip:text, under the reduced-motion preference, in forced colours and in print. The focus rule is in the states layer. */
+@supports((-webkit-background-clip:text) or (background-clip:text)){
+@media(prefers-reduced-motion:no-preference){
+.g2-ro-sweep{background:linear-gradient(100deg,currentColor 0 34%,rgb(var(--g2-color-ro-blue)) 42%,rgb(var(--g2-color-ro-yellow)) 50%,rgb(var(--g2-color-ro-red)) 58%,currentColor 66% 100%) 100% 0/300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:g2-ro-sweep 7s linear infinite}
+}
+}
+@keyframes g2-ro-sweep{from{background-position:100% 0}to{background-position:0 0}}
+@media(forced-colors:active),print{.g2-ro-sweep{background:none;-webkit-text-fill-color:currentColor;animation:none}}
+.g2-nav{display:flex;flex-wrap:wrap;column-gap:var(--g2-space-1)}
+.g2-nav a{box-sizing:border-box;display:inline-flex;align-items:center;min-height:44px;padding:var(--g2-space-2) var(--g2-space-3);color:rgb(var(--g2-color-on-header));text-decoration:none;font-weight:600;font-size:var(--g2-font-size-meta)}
+.g2-nav a:hover{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:6px}
+.g2-nav a[aria-current=page]{box-shadow:inset 0 -4px rgb(var(--g2-color-header-accent))}
+/* Forced colours remove box-shadow: mark the current page with a system colour instead. */
+@media(forced-colors:active){.g2-nav a[aria-current=page]{background:Highlight;color:HighlightText}}
+.g2-footer{background:rgb(var(--g2-color-surface-sunken));color:rgb(var(--g2-color-text));border-top:10px solid rgb(var(--g2-color-brand))}
+.g2-footer a{color:rgb(var(--g2-color-text))}
+/* Footer content: groups wrap at narrow widths. Put it in .g2-container for the side gutters. */
+.g2-footer-in{display:flex;flex-wrap:wrap;gap:var(--g2-space-4) var(--g2-space-6);padding-block:var(--g2-space-5)}
+.g2-footer-in>*{margin:0;min-width:0}
+
+/* Short tricolour dash for section titles */
+.g2-dash{display:block;width:48px;height:4px;background:linear-gradient(90deg,rgb(var(--g2-color-ro-blue)) 33.33%,rgb(var(--g2-color-ro-yellow)) 33.33% 66.66%,rgb(var(--g2-color-ro-red)) 66.66%)}
+.g2-dash.g2-red{background:rgb(var(--g2-color-ro-red))}
+
+/* ---- Buttons ---- */
+.g2-btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:8px 16px;border:var(--g2-border-width-control) solid transparent;border-radius:var(--g2-radius);background:rgb(var(--g2-color-action));color:rgb(var(--g2-color-on-solid));font:600 var(--g2-font-size-body)/1.2 var(--g2-font-sans);box-shadow:0 2px rgb(var(--g2-color-action-shadow));cursor:pointer;text-decoration:none}
+.g2-btn:hover{background:rgb(var(--g2-color-action-hover))}
+.g2-btn.g2-secondary{background:rgb(var(--g2-color-surface-sunken));color:rgb(var(--g2-color-text));box-shadow:0 2px rgb(var(--g2-color-action-secondary-shadow))}
+.g2-btn.g2-secondary:where(:hover){background:rgb(var(--g2-color-action-secondary-hover))}
+.g2-btn.g2-danger{background:rgb(var(--g2-color-danger-solid));box-shadow:0 2px rgb(var(--g2-color-danger-shadow))}
+
+/* ---- Tags: square, the text names the state ---- */
+.g2-tag{display:inline-block;padding:2px 8px;border-radius:var(--g2-radius);font:600 var(--g2-font-size-label)/1.35 var(--g2-font-sans);background:rgb(var(--g2-color-neutral-bg));color:rgb(var(--g2-color-neutral-ink))}
+.g2-tag[data-tone=info]{background:rgb(var(--g2-color-info-bg));color:rgb(var(--g2-color-info-ink))}
+.g2-tag[data-tone=progress]{background:rgb(var(--g2-color-progress-bg));color:rgb(var(--g2-color-progress-ink))}
+.g2-tag[data-tone=warning]{background:rgb(var(--g2-color-warning-bg));color:rgb(var(--g2-color-warning-ink))}
+.g2-tag[data-tone=success]{background:rgb(var(--g2-color-success-bg));color:rgb(var(--g2-color-success-ink))}
+.g2-tag[data-tone=danger]{background:rgb(var(--g2-color-danger-bg));color:rgb(var(--g2-color-danger-ink))}
+
+/* ---- Fields ---- */
+.g2-input{min-height:40px;padding:5px 8px;border:var(--g2-border-width-control) solid rgb(var(--g2-color-control-border));border-radius:var(--g2-radius);font:var(--g2-font-size-body) var(--g2-font-sans);background:rgb(var(--g2-color-control-bg));color:rgb(var(--g2-color-text))}
+/* Select: .g2-input on a native <select>. A drop-down (no multiple, size absent or 1) drops the native look, leaves room for the arrow and clips a long option with an ellipsis. multiple and size>1 keep the native list. */
+select.g2-input:not([multiple],[size]:not([size="1"])){appearance:none;max-width:100%;padding-right:2.5rem;text-overflow:ellipsis}
+select.g2-input:is([multiple],[size]:not([size="1"])){max-width:100%}
+/* Forced colours remove gradient backgrounds, so the CSS arrow would vanish: give the native arrow back, in system colours. */
+@media(forced-colors:active){select.g2-input:not([multiple],[size]:not([size="1"])){appearance:auto}}
+/* Field: label, hint, error message and input stacked. The form sets the space between fields.
+   The 12rem scroll margin keeps the label, hint and error in view when a recovery link (href="#id") jumps to the input. */
+.g2-field{display:grid;gap:var(--g2-space-1);justify-items:start;min-width:0;overflow-wrap:anywhere}
+.g2-field>*{margin:0;min-width:0}
+.g2-field>.g2-input{width:100%;scroll-margin-block-start:12rem}
+.g2-label{display:block;font-size:var(--g2-font-size-label);font-weight:600}
+.g2-hint{color:rgb(var(--g2-color-text-muted));font-size:var(--g2-font-size-meta)}
+.g2-field-error{padding-left:15px;border-left:5px solid rgb(var(--g2-color-danger-solid))}
+.g2-error-msg{color:rgb(var(--g2-color-danger-solid));font-weight:700}
+
+/* ---- Panels ---- */
+.g2-inset{padding:12px 16px;border-left:5px solid rgb(var(--g2-color-line))}
+.g2-notice{border:5px solid rgb(var(--g2-color-info-line));border-radius:var(--g2-radius);background:rgb(var(--g2-color-info-line))}
+.g2-notice>*:first-child{margin:0;padding:2px 15px 7px;color:rgb(var(--g2-color-on-solid));font-weight:700}
+.g2-notice>*:last-child{margin:0;padding:12px 15px 14px;background:rgb(var(--g2-color-surface))}
+.g2-tile{padding:20px;border:1px solid rgb(var(--g2-color-line));border-top:5px solid rgb(var(--g2-color-brand));border-radius:var(--g2-radius)}
+/* ---- Skip link: the first focusable element of the page. Invisible until it has focus, then it shows the standard focus treatment (states layer).
+   The target (main) needs an id and tabindex="-1", so that activating the link moves focus to it. ---- */
+.g2-skip-link{position:absolute;z-index:10;inset-block-start:var(--g2-space-2);inset-inline-start:var(--g2-space-2);box-sizing:border-box;max-width:calc(100% - 2 * var(--g2-space-2));padding:var(--g2-space-3) var(--g2-space-4);background:rgb(var(--g2-color-page));color:rgb(var(--g2-color-text));font-weight:600}
+.g2-skip-link:not(:focus){width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* ---- Breadcrumbs: <nav> with an <ol>. The separator is generated content with an empty text alternative, so that a screen reader does not announce it.
+   The current item is not a link; a long current item wraps. ---- */
+.g2-breadcrumbs ol{display:flex;flex-wrap:wrap;align-items:center;margin:0;padding:0;list-style:none;font-size:var(--g2-font-size-meta);color:rgb(var(--g2-color-text-muted))}
+.g2-breadcrumbs li{min-width:0;overflow-wrap:anywhere}
+.g2-breadcrumbs li+li::before{content:"/";content:"/" / "";margin-inline:var(--g2-space-2);color:rgb(var(--g2-color-text-faint))}
+.g2-breadcrumbs a{display:inline-block;padding-block:var(--g2-space-2)}
+.g2-breadcrumbs [aria-current=page]{color:rgb(var(--g2-color-text));font-weight:600}
+
+/* ---- Pagination: <nav> with a position line and links. The links are plain links with a 44px target, not buttons.
+   Leave out an absent previous or next link. The current numbered link is in the states layer. ---- */
+.g2-pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--g2-space-2) var(--g2-space-5);padding-block:var(--g2-space-2);border-top:2px solid rgb(var(--g2-color-text))}
+.g2-pagination p{margin:0}
+.g2-pagination ul{display:flex;flex-wrap:wrap;gap:var(--g2-space-1) var(--g2-space-2);margin:0;padding:0;list-style:none}
+.g2-pagination a{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding-inline:var(--g2-space-3);border:var(--g2-border-width-control) solid transparent}
+
+/* ---- Data table: give it a <caption> or an accessible name, and scope on every header cell.
+   .g2-table-wrap scrolls a wide table inside the page; as a scrollable region it needs tabindex="0", role="region" and an accessible name.
+   .g2-table-stacked shows one row as a block below 45em; add explicit table roles to its elements (COMPONENTS.md). ---- */
+.g2-table-wrap{max-width:100%;overflow-x:auto}
+.g2-table{width:100%;border-collapse:collapse}
+.g2-table caption{padding-block-end:var(--g2-space-2);text-align:left;font-weight:700}
+.g2-table :where(th,td){padding:var(--g2-space-2) var(--g2-space-3);border-bottom:1px solid rgb(var(--g2-color-line));text-align:left;vertical-align:top}
+.g2-table thead th{background:rgb(var(--g2-color-surface-sunken));font-size:var(--g2-font-size-label);font-weight:600}
+.g2-table tbody th{font-weight:600}
+.g2-table .g2-cell-num{text-align:right;font-variant-numeric:tabular-nums}
+@media(max-width:45em){
+.g2-table-stacked,.g2-table-stacked :where(caption,thead,tbody,tfoot,tr,th,td){display:block}
+.g2-table-stacked thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.g2-table-stacked tr{padding-block:var(--g2-space-2);border-bottom:1px solid rgb(var(--g2-color-line))}
+.g2-table-stacked :where(th,td){padding:var(--g2-space-1) var(--g2-space-3);border-bottom:0}
+.g2-table-stacked td[data-label]::before{content:attr(data-label);display:block;font-size:var(--g2-font-size-label);font-weight:600;color:rgb(var(--g2-color-text-muted))}
+.g2-table-stacked .g2-cell-num{text-align:left}
+}
+
+/* ---- Summary list: <dl> with one <div> for each row. A row stacks when the list is narrower than about 27rem; a long value wraps. ---- */
+.g2-summary-list{margin:0}
+.g2-summary-list>div{display:flex;flex-wrap:wrap;gap:var(--g2-space-1) var(--g2-space-4);padding-block:var(--g2-space-2)}
+.g2-summary-list>div+div{border-top:1px solid rgb(var(--g2-color-line))}
+.g2-summary-list dt{flex:0 0 min(100%,14rem);min-width:0;font-size:var(--g2-font-size-label);font-weight:600;color:rgb(var(--g2-color-text-muted))}
+.g2-summary-list dd{flex:1 1 12rem;min-width:0;margin:0;overflow-wrap:anywhere}
+.g2-mono{font-family:var(--g2-font-mono);font-variant-numeric:tabular-nums}
+}
+
+/* ---- States: they win over the component defaults above ----
+   Selection, disabled and error set properties that the focus rules do not set. The specific focus rules follow the general one.
+   Hover is not here: it stays with each component default, so a variant default can still outrank it. */
+@layer gov2.states {
+.g2-chip:where([aria-current]:not([aria-current=false],[aria-current=""]),[aria-pressed=true]){border-color:rgb(var(--g2-color-text))}
+.g2-btn:disabled{opacity:.5;cursor:not-allowed}
+.g2-input:disabled{background:rgb(var(--g2-color-surface-sunken));border-color:rgb(var(--g2-color-text-muted));color:rgb(var(--g2-color-text-muted));cursor:not-allowed}
+.g2-field-error .g2-input{border-color:rgb(var(--g2-color-danger-solid))}
+/* Select arrow: two gradient halves of a triangle in the text colour (muted when disabled). Forced colours drop gradients; the components layer gives the native arrow back there. Their selectors outrank the focus rules, which reset the background shorthand. */
+select.g2-input:not([multiple],[size]:not([size="1"])){background-image:linear-gradient(45deg,transparent 50%,rgb(var(--g2-color-text)) 50%),linear-gradient(135deg,rgb(var(--g2-color-text)) 50%,transparent 50%);background-position:right calc(1rem + .45em) center,right 1rem center;background-size:.45em .45em;background-repeat:no-repeat}
+select.g2-input:disabled{opacity:1}
+select.g2-input:disabled:not([multiple],[size]:not([size="1"])){background-image:linear-gradient(45deg,transparent 50%,rgb(var(--g2-color-text-muted)) 50%),linear-gradient(135deg,rgb(var(--g2-color-text-muted)) 50%,transparent 50%)}
+/* Forced colours give every chip the same border: show the selected chip with the system selection colours. */
+@media(forced-colors:active){.g2-chip:where([aria-current]:not([aria-current=false],[aria-current=""]),[aria-pressed=true]){background:Highlight;color:HighlightText}
+.g2-chip:where([aria-current]:not([aria-current=false],[aria-current=""]),[aria-pressed=true]) .g2-chip-count{color:HighlightText}}
+:focus-visible{outline:3px solid transparent;background:rgb(var(--g2-color-focus));color:rgb(var(--g2-color-on-focus));box-shadow:0 -2px rgb(var(--g2-color-focus)),0 4px rgb(var(--g2-color-on-focus));text-decoration:none}
+:is(input,textarea,select):focus-visible{background:rgb(var(--g2-color-control-bg));color:rgb(var(--g2-color-text));outline:3px solid rgb(var(--g2-color-focus));outline-offset:0;box-shadow:inset 0 0 0 2px rgb(var(--g2-color-text))}
+.g2-btn:focus-visible{background:rgb(var(--g2-color-focus));color:rgb(var(--g2-color-on-focus));box-shadow:0 2px rgb(var(--g2-color-text))}
+.g2-wordmark:focus-visible em{color:inherit}
+/* A container that receives focus from a skip link or from a script (tabindex="-1") gets no focus fill: it is not a control.
+   A control, a link and a widget role with tabindex="-1" (roving focus) keep the standard treatment. */
+[tabindex="-1"]:not(a[href],button,input,select,textarea,summary,[contenteditable],[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[role=treeitem],[role=gridcell],[role=checkbox],[role=radio],[role=switch]):focus-visible{background:none;color:inherit;box-shadow:none;outline:none}
+/* The scrollable region of a wide table: a yellow outline and an inner ink ring, as on a field, so that the cells keep their own backgrounds. */
+.g2-table-wrap:focus-visible{background:none;color:inherit;outline:3px solid rgb(var(--g2-color-focus));outline-offset:0;box-shadow:inset 0 0 0 2px rgb(var(--g2-color-text))}
+/* The current numbered page: a border and bold text. Forced colours give every link the same border: use the system selection colours. */
+.g2-pagination a:where([aria-current]:not([aria-current=false],[aria-current=""])){border-color:rgb(var(--g2-color-text));font-weight:700}
+@media(forced-colors:active){.g2-pagination a:where([aria-current]:not([aria-current=false],[aria-current=""])){background:Highlight;color:HighlightText}}
+/* Title sweep: a focused host link shows the focus colours with plain text, so that no glyph stays transparent. */
+:focus-visible .g2-ro-sweep{background:none}
+:focus-visible .g2-ro-sweep,.g2-ro-sweep:focus-visible{-webkit-text-fill-color:currentColor}
+}

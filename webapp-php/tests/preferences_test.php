@@ -168,7 +168,7 @@ run_suite('lookup: bodies over 16 KiB are 413', function () use ($base) {
 });
 
 run_suite('markup: identity attributes and real buttons on list, employer and detail', function () use ($base) {
-    $list = http($base, '/')[2];
+    $list = http($base, '/posturi/')[2];
     $x = xpath_for($list);
     $row = $x->query('//li[@data-posting][@data-pref-id="1001"]');
     assert_same(1, $row->length, 'list row 1001 carries identity');

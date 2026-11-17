@@ -82,7 +82,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('fresh load: desktop starts with every group collapsed, the drawer with Județ and Grupă ocupațională open; no overflow', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   expect(await openKeys(page)).toEqual(isNarrow(page) ? ['cor', 'judet'] : []);
   // Server-rendered open state is not a reader preference: nothing is stored.
   await page.waitForTimeout(100);
@@ -99,7 +99,7 @@ test('fresh load: desktop starts with every group collapsed, the drawer with Jud
 });
 
 test('status is a select beside the sort; its help and the 7-day note follow the choice', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const help = page.locator('#status-help');
   const sel = page.locator('select#status');
   await expect(sel).toBeVisible();

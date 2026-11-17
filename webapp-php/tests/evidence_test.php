@@ -347,7 +347,7 @@ run_suite('old export (no requirement_evidence): an empty temp view stands in an
         'the view has the table\'s columns');
     assert_same([], load_requirement_evidence($pdo, 1009), 'the loader returns nothing');
 
-    foreach (['/job/1009/', '/job/1013/', '/job/1008/', '/job/1001/', '/', '/posturi.json'] as $path) {
+    foreach (['/job/1009/', '/job/1013/', '/job/1008/', '/job/1001/', '/', '/posturi/', '/posturi.json'] as $path) {
         $html = ev_get($ob, $path);
         assert_true($html !== '', "$path answers");
         assert_not_contains('Fatal error', $html, $path);

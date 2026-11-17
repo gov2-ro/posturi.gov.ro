@@ -27,11 +27,12 @@ echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
 $last_update = db()->query("SELECT MAX(last_seen_at) FROM job_postings")->fetchColumn() ?: null;
 
 sm_url($origin . '/',            $last_update, 'daily',   '1.0');
+sm_url($origin . '/posturi/',    $last_update, 'daily',   '0.9');
 sm_url($origin . '/angajatori/', $last_update, 'weekly',  '0.6');
 sm_url($origin . '/statistici/', $last_update, 'weekly',  '0.5');
 sm_url($origin . '/despre/',     null,         'monthly', '0.3');
 
-$budget = SITEMAP_MAX_URLS - 4;
+$budget = SITEMAP_MAX_URLS - 5;
 
 // Job pages — freshest first, so a truncated sitemap keeps the useful half.
 $rows = db()->query(

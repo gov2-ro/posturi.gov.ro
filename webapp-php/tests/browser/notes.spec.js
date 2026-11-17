@@ -25,7 +25,7 @@ test.afterEach(async ({ page }) => {
 });
 
 test('a note from the list: editor, save, shown under the row, counted as saved', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const btn = noteBtn(page, 1001);
   await expect(btn).toBeVisible();
   await expect(btn).toHaveAttribute('aria-expanded', 'false');
@@ -86,7 +86,7 @@ test('Escape closes without saving; Ctrl+Enter saves; an emptied note is removed
 });
 
 test('/salvate/: noted postings listed with saved ones, edit in place, CSV export', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   // One bookmarked, one noted only.
   await row(page, 1006).locator('[data-pref="save"]').click();
   await noteBtn(page, 1001).click();
@@ -127,7 +127,7 @@ test('/salvate/: noted postings listed with saved ones, edit in place, CSV expor
 test('table view: the note and its editor span the row', async ({ page, viewport }) => {
   test.skip(viewport.width < 1024, 'the table is lg+ only');
   await page.addInitScript(() => localStorage.setItem('posturi.layout', 'table'));
-  await page.goto('/');
+  await page.goto('/posturi/');
   await noteBtn(page, 1001).click();
   const ed = row(page, 1001).locator('[data-note-editor]');
   const [eb, rb] = [await ed.boundingBox(), await row(page, 1001).boundingBox()];

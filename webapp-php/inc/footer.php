@@ -1,27 +1,44 @@
 </main>
 
-<footer class="border-t border-line mt-12 py-6 text-center text-xs text-ink-muted font-mono space-y-1">
-  <p>
-    Acesta <b>nu este un proiect oficial</b> al Guvernului României. Versiune beta.
-    <?php if (!empty($_build_stamp)): ?>
-    &ensp;&middot;&ensp; Bază de date generată
-    <time datetime="<?= e($_build_stamp_iso ?? '') ?>"<?= !empty($_build_tooltip) ? ' title="' . e($_build_tooltip) . '" class="cursor-help"' : '' ?>><?= $_build_stamp ?></time>
-    <?php if ($_source_label): ?>
-    &ensp;&middot;&ensp; <?= e($_source_label) ?>
-    <?php endif; ?>
-    <?php endif; ?>
-    &ensp;&middot;&ensp; sursă: <a href="https://posturi.gov.ro" rel="noopener" class="text-gov hover:underline">posturi.gov.ro</a>
-    &ensp;&middot;&ensp;
-    <a href="https://github.com/gov2-ro/posturi.gov.ro" class="text-gov underline hover:no-underline" target="_blank" rel="noopener">cod sursă</a> ·
-    <a href="/despre/" class="text-gov underline hover:no-underline">despre și metodologie</a> ·
-    <a href="/despre/#confidentialitate" class="text-gov underline hover:no-underline">confidențialitate</a> ·
-    <a href="/alerte/" class="text-gov underline hover:no-underline">alerte pe email</a> ·
-    <a href="/pentru-angajatori/anunt/" class="text-gov underline hover:no-underline">Asistent redactare anunțuri angajare</a>
-  </p>
-  <p class="flex items-center justify-center gap-2 pt-1">
-    <label for="skin-picker" class="text-ink-faint">Stil vizual</label>
-    <?= pg_skin_select() ?>
-  </p>
+<?php /* 2026-11-16 (UX-05): three groups of links, then the disclaimer. ADR 0005: the DS footer. */
+$_footer_groups = [
+    'Posturi' => [
+        ['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'],
+        ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'],
+    ],
+    'Urmărește' => [
+        ['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'],
+        ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/'],
+    ],
+    'Proiect' => [
+        ['Despre și metodologie', '/despre/'], ['Confidențialitate', '/despre/#confidentialitate'],
+        ['Cod sursă', 'https://github.com/gov2-ro/posturi.gov.ro'], ['Pentru angajatori', '/pentru-angajatori/anunt/'],
+    ],
+]; ?>
+<footer class="g2-footer mt-12">
+  <div class="g2-footer-in g2-container">
+    <?php foreach ($_footer_groups as $_fg_title => $_fg_links): ?>
+    <div>
+      <h2 class="g2-label mb-1"><?= e($_fg_title) ?></h2>
+      <ul>
+        <?php foreach ($_fg_links as [$_fl_label, $_fl_href]): $_ext = str_starts_with($_fl_href, 'https://'); ?>
+        <li><a href="<?= e($_fl_href) ?>"<?= $_ext ? ' target="_blank" rel="noopener"' : '' ?> class="inline-flex min-h-[44px] items-center text-sm"><?= e($_fl_label) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+    </div>
+    <?php endforeach; ?>
+    <p class="g2-text-meta basis-full">
+      Acesta <b>nu este un proiect oficial</b> al Guvernului României. Versiune beta.
+      <?php if (!empty($_build_stamp)): ?>
+      &ensp;&middot;&ensp; Bază de date generată
+      <time datetime="<?= e($_build_stamp_iso ?? '') ?>"<?= !empty($_build_tooltip) ? ' title="' . e($_build_tooltip) . '" class="cursor-help"' : '' ?>><?= $_build_stamp ?></time>
+      <?php if ($_source_label): ?>
+      &ensp;&middot;&ensp; <?= e($_source_label) ?>
+      <?php endif; ?>
+      <?php endif; ?>
+      &ensp;&middot;&ensp; sursă: <a href="https://posturi.gov.ro" rel="noopener" class="inline-flex min-h-[44px] items-center">posturi.gov.ro</a>
+    </p>
+  </div>
 </footer>
 
 <?php /* D9: the [?!] button replaces "Acceptăm sugestii" in the masthead. A native

@@ -94,7 +94,7 @@ require __DIR__ . '/../inc/header.php';
     </div>
   </form>
 
-  <noscript><p class="mt-6 text-sm text-ink-muted">Instrumentul are nevoie de JavaScript. Aceleași filtre sunt în <a href="/" class="text-gov underline">lista principală</a>: Nivel de studii, Experiență minimă, Județ, Documente necesare („fără”).</p></noscript>
+  <noscript><p class="mt-6 text-sm text-ink-muted">Instrumentul are nevoie de JavaScript. Aceleași filtre sunt în <a href="/posturi/" class="text-gov underline">lista principală</a>: Nivel de studii, Experiență minimă, Județ, Documente necesare („fără”).</p></noscript>
 </div>
 
 <script>
@@ -152,7 +152,7 @@ require __DIR__ . '/../inc/header.php';
       if (!(p.langs || []).length) q.append('lang_not[]', 'straina');
     }
     var s = q.toString();
-    return '/' + (s ? '?' + s : '');
+    return s ? '/?' + s : '/posturi/';
   }
 
   fill(read());

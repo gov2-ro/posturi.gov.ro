@@ -1,15 +1,20 @@
-<!-- Source of webapp-php/static/og-image.png (UX-04, D13): screenshot this page at 1200x630, e.g. with Playwright. Not deployed (assets/). -->
+<!-- Source of webapp-php/static/og-image.png (UX-04, D13): screenshot this page at 1200x630, e.g. with Playwright. Not deployed (assets/). The look is the gov2 DS: header band, brand bar, Inter. -->
 <!doctype html><html><head><meta charset="utf-8"><style>
-@font-face{font-family:M;font-weight:400 800;src:url('../static/fonts/manrope-normal-latin-ext.woff2') format('woff2')}
+@import url('../static/gov2/fonts.css');
+:root{--ink:11 12 12;--bg:255 255 255;--brand:11 61 145;--muted:80 90 95}
 html,body{margin:0;width:1200px;height:630px}
-body{background:#0f2742;color:#fff;font-family:M,sans-serif;display:flex;flex-direction:column;justify-content:space-between;padding:72px 80px;box-sizing:border-box;border-bottom:12px solid #d4af6a}
-.brand{font-size:76px;font-weight:800;letter-spacing:-1px}
-.brand i{font-style:normal;color:#d4af6a}
-.beta{font-size:28px;color:#dbe3ec;font-weight:500;margin-left:14px;vertical-align:middle}
-h1{font-size:52px;line-height:1.15;font-weight:700;margin:0;max-width:960px}
-p{font-size:30px;color:#dbe3ec;margin:0;line-height:1.35}
+body{background:rgb(var(--bg));color:rgb(var(--ink));font-family:Inter,sans-serif;display:flex;flex-direction:column;box-sizing:border-box}
+.bar{background:rgb(var(--ink));color:#fff;height:132px;display:flex;align-items:center;padding:0 80px;border-bottom:16px solid rgb(var(--brand));font-size:60px;font-weight:700;letter-spacing:-.03em}
+.bar em{font-style:normal;font-weight:500;color:#c9ced1}
+.bar small{font-size:26px;font-weight:500;color:#c9ced1;margin-left:20px;letter-spacing:0}
+.main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:36px;padding:0 80px}
+h1{font-size:76px;line-height:1.08;font-weight:800;letter-spacing:-.02em;margin:0;max-width:1000px}
+p{font-size:32px;line-height:1.35;color:rgb(var(--muted));margin:0}
+p b{color:rgb(var(--ink))}
 </style></head><body>
-<div><span class="brand">posturi<i>.</i>gov<i>2</i><i>.</i>ro</span><span class="beta">beta</span></div>
-<h1>Toate posturile din sectorul public, ușor de căutat și filtrat</h1>
-<p>Anunțuri preluate de pe posturi.gov.ro, restructurate automat · explorator independent, neoficial</p>
+<div class="bar"><span>posturi<em>.gov2.ro</em></span><small>beta</small></div>
+<div class="main">
+<h1>Anunțuri de angajare din administrația publică</h1>
+<p>Proiect independent. <b>Nu este un site oficial</b> al Guvernului României.</p>
+</div>
 </body></html>

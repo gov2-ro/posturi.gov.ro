@@ -31,7 +31,7 @@ if (!$p) {
     echo '<div class="mx-auto max-w-screen-md px-4 py-16 text-center">'
        . '<h1 class="mb-3 font-display text-2xl font-semibold text-ink">Anunțul nu mai este în baza noastră</h1>'
        . '<p class="text-sm text-ink-muted">Păstrăm anunțurile expirate sau anulate 90 de zile; acesta este mai vechi sau nu a existat.</p>'
-       . '<a href="/" class="mt-4 inline-block text-gov hover:underline">← Toate posturile active</a></div>';
+       . '<a href="/posturi/" class="mt-4 inline-block text-gov hover:underline">← Toate posturile active</a></div>';
     require __DIR__ . '/../inc/footer.php';
     exit;
 }
@@ -76,13 +76,14 @@ $est  = $dl['source'] === 'expirare';
 // Return to the filtered list the reader came from, when there is one.
 // `javascript:history.back()` broke for anyone arriving from a feed, a shared
 // link or a search result.
-$back_url   = '/';
+$back_url   = '/posturi/';
 $back_label = 'Toate posturile';
 if ($ref = ($_SERVER['HTTP_REFERER'] ?? '')) {
     $rp = parse_url($ref);
-    if (($rp['host'] ?? '') === ($_SERVER['HTTP_HOST'] ?? '') && ($rp['path'] ?? '/') === '/') {
-        $back_url   = '/' . (isset($rp['query']) ? '?' . $rp['query'] : '');
-        $back_label = isset($rp['query']) ? 'Înapoi la căutare' : 'Toate posturile';
+    // A bare `/` is the landing page (ADR 0004), not a list: only `/?…` is a search to return to.
+    if (($rp['host'] ?? '') === ($_SERVER['HTTP_HOST'] ?? '') && ($rp['path'] ?? '/') === '/' && isset($rp['query'])) {
+        $back_url   = '/?' . $rp['query'];
+        $back_label = 'Înapoi la căutare';
     }
 }
 

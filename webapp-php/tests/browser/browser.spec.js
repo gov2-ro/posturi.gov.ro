@@ -7,7 +7,7 @@ const ROW_1001 = 'a[href="/job/1001-asistent-medical-generalist/"]';
 
 // ---- Every width: no horizontal overflow ----
 test('no horizontal overflow', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const overflow = await page.evaluate(
     () => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth
   );
@@ -31,13 +31,13 @@ test('freshness stamps separate build from source check', async ({ page }) => {
   // The old combined claim is gone.
   await expect(page.locator('body')).not.toContainText('Date actualizate la');
   // Footer says the same thing as the page.
-  await page.goto('/');
+  await page.goto('/posturi/');
   await expect(page.locator('footer')).toContainText('Bază de date generată');
 });
 
 // ---- Every width: countdown and printed date agree on the result row ----
 test('result row shows one deadline', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/posturi/');
   const row = page.locator('ul.pg-results > li', { has: page.locator(ROW_1001) });
   await expect(row).toContainText('13 zile');
   // The row also carries the published-date <time>; this is the deadline one.
@@ -75,7 +75,7 @@ test.describe('mobile drawer', () => {
   test.skip(({ viewport }) => viewport.width >= 1024, 'drawer is mobile-only');
 
   test('filter via drawer updates results and URL; Escape restores focus', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/posturi/');
 
     const toggle = page.locator('#filter-toggle');
     await toggle.click();

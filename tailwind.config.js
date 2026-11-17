@@ -1,19 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 
 /*
- * Every colour here resolves to a CSS custom property rather than a literal, so
- * the palette is swappable at runtime by re-declaring variables — that is what
- * makes skins possible (webapp-php/static/skins/, see inc/skins.php). The
- * defaults live in one `:root` block in assets/app.css; a skin overrides the
- * same names under `[data-skin="<id>"]`.
+ * Every colour here resolves to a CSS custom property rather than a literal. The
+ * role tokens (`--c-*`, `--font-*`, `--radius*`) are aliases of the gov2 design
+ * system tokens (`--g2-*`): the `:root` block in assets/app.css sets each one
+ * (ADR 0005). To change a colour, change the alias, never a template.
  *
- * Variables hold space-separated RGB channels ("245 240 232", not "#F5F0E8")
+ * Variables hold space-separated RGB channels ("29 79 191", not "#1D4FBF")
  * because that is the only form Tailwind's `<alpha-value>` placeholder can
  * compose with — it is what keeps `bg-surface/70` and `border-note/60` working.
+ * The DS colour tokens are RGB channels too, so an alias keeps the form.
  *
- * Naming rule: tokens name a ROLE, never a colour or a texture. `bg-page`
- * survives being re-skinned; `bg-parchment` (what this used to be) becomes a
- * lie the moment a skin is anything but beige.
+ * Naming rule: tokens name a ROLE, never a colour or a texture. `bg-page` says
+ * what the colour is for; `bg-parchment` (an old name) says what it looked like.
  */
 const c = (v) => `rgb(var(--c-${v}) / <alpha-value>)`;
 
@@ -30,8 +29,7 @@ module.exports = {
       DEFAULT: "var(--radius)",
       md: "var(--radius-md)",
       lg: "var(--radius-lg)",
-      // Pills and progress-bar caps. A token rather than 9999px so a square
-      // skin (govuk) can flatten its tags without also squaring nothing else.
+      // Pills and progress-bar caps. The DS is square, so this is `--g2-radius` (0) too.
       full: "var(--radius-pill)",
     },
     extend: {
@@ -45,16 +43,10 @@ module.exports = {
         // Text, most to least prominent.
         ink: { DEFAULT: c("ink"), muted: c("ink-muted"), faint: c("ink-faint") },
 
-        // Brand, in two parts. `gov` is the action colour — links, buttons,
-        // badges — paired with `on-gov` for text drawn on a gov fill. `gov-bar`
-        // is the masthead fill, paired with the `on-bar` ramp.
-        //
-        // These were one token until both skins turned out to need a masthead
-        // that is not their link colour (GOV.UK: black bar, blue links;
-        // posturi.gov.ro: navy bar, lighter blue links) and had to override
-        // `header` by hand to get it. Splitting them means no skin hardcodes the
-        // header, and it makes the on-fill contrast pairs checkable — see
-        // assets/check-skins.php.
+        // Brand, in two parts. `gov` is the link colour — links, badges, the
+        // selected state — paired with `on-gov` for text drawn on a gov fill.
+        // `gov-bar` is the masthead fill, paired with the `on-bar` ramp. The DS
+        // has the same split (`--g2-color-link`, `--g2-color-header-bg`).
         gov: { DEFAULT: c("gov"), light: c("gov-light"), bar: c("gov-bar") },
         "on-gov": c("on-gov"),
         "on-bar": {
@@ -63,6 +55,9 @@ module.exports = {
           accent: c("on-bar-accent"),
         },
         focus: c("focus"),
+
+        // The first series of the chart (`--g2-color-chart-1`).
+        chart: c("chart-1"),
 
         // Semantic families. DEFAULT is the fill, so the common case reads
         // `bg-note`; `border-note-line` and `text-note-ink` are the other two.

@@ -303,7 +303,7 @@ run_suite('shim works on a read-only file', function () use ($legacy) {
     chmod($legacy, 0644);
 });
 
-$paths = ['/', '/?status=closed', '/?status=unknown', '/?status=soon', '/?q=medic',
+$paths = ['/', '/posturi/', '/?status=closed', '/?status=unknown', '/?status=soon', '/?q=medic',
           '/?funding=fonduri_europene', '/?funding=buget_local', '/?sector=sanatate',
           '/?occupation=Referent', '/?duration=determinata', '/?schedule=norma_intreaga',
           '/?has_salary=1', '/?shift=1',

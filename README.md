@@ -629,52 +629,40 @@ npm run css          # webapp-php/assets/app.css -> webapp-php/static/app.css (m
 npm run css:watch    # while editing templates
 ```
 
-Fonts (`static/fonts/*.woff2`) and htmx (`static/htmx.min.js`) are self-hosted; nothing
+Fonts (`static/gov2/fonts/*.woff2`) and htmx (`static/htmx.min.js`) are self-hosted; nothing
 is fetched from a CDN at runtime.
 
-### Skins
+### Design system
 
-The whole palette is one `:root` block of CSS custom properties in
-`webapp-php/assets/app.css`. Tailwind's theme resolves every colour, radius and font
-utility to one of those variables, so re-declaring them under `[data-skin="<id>"]`
-restyles the entire site without touching a single utility class. That is all a skin is.
+The app has one look: the gov2 design system (DS), version `v0.17.1`. ADR 0005 records the
+rules. The skins are removed.
 
-Three ship today, chosen with the picker in the footer (stored in `localStorage`, applied
-before first paint so there is no flash):
+- The DS copy is in `webapp-php/static/gov2/` (`gov2.css`, `fonts.css`, `fonts/`). Nobody
+  edits it. `inc/header.php` links `gov2.css` and `fonts.css` on each page, with the version
+  in the URL.
+- `assets/app.css` aliases the role tokens to DS tokens (`--c-ink: var(--g2-color-text)`).
+  Templates use the role tokens and the semantic families (`info`, `neutral`, `ok`, `note`,
+  `alert`). A template has no raw palette class and no hex.
+- The project CSS is in the DS cascade layers (`reset, gov2, utilities, app`). The Tailwind
+  reset is in `reset`. The project components and the Tailwind utilities are in `app`.
+  No project rule is outside a layer.
+- Use a `.g2-` component when one fits. The chrome and the landing page use them. A part that
+  the DS does not have stays local, with a DS proposal when another project can use it.
+- The page stays light. The app does not set `data-g2-scheme`.
 
-| id        | what it is                                                              |
-| --------- | ----------------------------------------------------------------------- |
-| `hartie`  | the built-in default — parchment, Fraunces, DM Sans. No file; it *is* `:root`. |
-| `govuk`   | GOV.UK Design System — white, square, Arial, yellow focus, black masthead. |
-| `posturi` | the official posturi.gov.ro — navy + gold, Manrope, rounded, lifted cards. |
-
-**Adding one:** copy `webapp-php/static/skins/_template.css` to `<name>.css` and it
-appears in the picker on the next request — no registry, no build step. The id is the
-filename; `inc/skins.php` discovers it and reads the display name from the `@skin` comment.
-Files starting with `_` are skipped.
-
-Two rules the template explains at length:
-
-1. **Scope every rule** under `[data-skin="<id>"]`. All skin files load on every page, so
-   an unscoped rule leaks into the others. `@font-face` is the exception — it declares a
-   family rather than applying one, and is how a skin ships its own typeface.
-2. **Colours are space-separated RGB channels** (`245 240 232`), not hex. That is the only
-   form Tailwind's alpha modifiers compose with; a hex value silently breaks every
-   `bg-surface/70` on the page.
-
-Skins live in `static/` rather than `assets/` because they need no build — Tailwind would
-strip them, since nothing in the PHP references their selectors — and because `deploy-php.sh`
-excludes `assets/`.
-
-Validate before committing:
+**Update the DS:**
 
 ```bash
-php webapp-php/assets/check-skins.php
+DS=~/devbox/gov2/gov2ro-design-system
+git -C "$DS" fetch --tags
+rm -r webapp-php/static/gov2
+mkdir -p webapp-php/static/gov2
+git -C "$DS" archive vX.Y.Z gov2.css fonts.css fonts | tar -x -C webapp-php/static/gov2
 ```
 
-It reads the token contract out of `app.css` and flags the four failures that are silent in
-a browser: an unscoped rule, a token name that does not exist, a colour written as hex, and
-any text/background pair under WCAG AA.
+Then change the version in the two `<link>` URLs of `inc/header.php`, read `CHANGELOG.md` of
+the DS back to the old version (look for **Breaking**), run `npm run css`, and run the
+tests. `tests/ds_test.php` checks that the copy is byte-identical to the tag.
 
 ### Previewing another export
 
@@ -700,7 +688,7 @@ the `.htaccess` deny rules. Apache never loads it.
 
 | Path | Purpose |
 |------|---------|
-| `index.php` | Front controller — routes `/`, `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/robots.txt`, `/sitemap.xml` |
+| `index.php` | Front controller — routes `/` (the landing page; with any parameter, the list), `/posturi/` (the unfiltered list; `/posturi/?…` is a 301 to `/?…`; ADR 0004), `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/robots.txt`, `/sitemap.xml` |
 | `db.php` | PDO singleton for `posturi.sqlite` |
 | `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |
@@ -708,7 +696,7 @@ the `.htaccess` deny rules. Apache never loads it.
 | `partials/` | Result list and facet sidebar (both HTMX out-of-band swappable) |
 | `inc/` | Header/footer HTML, `<head>` metadata (canonical, OpenGraph, JSON-LD hook) |
 | `assets/` | Tailwind source — **not deployed** |
-| `static/` | Compiled `app.css`, self-hosted fonts, htmx |
+| `static/` | Compiled `app.css`, the DS copy (`gov2/`), htmx |
 | `router.php` | Dev-server router — **not deployed** |
 | `.htaccess` | URL rewriting, asset caching, blocks direct access to `*.sqlite*` |
 

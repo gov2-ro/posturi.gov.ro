@@ -81,11 +81,13 @@ if ($query_error !== null) {
         // never be able to depend on.
         echo '<!doctype html><html lang="ro"><head><meta charset="utf-8">'
             . '<meta name="viewport" content="width=device-width, initial-scale=1">'
-            . '<title>Cerere invalidă — posturi.gov2.ro</title></head>'
-            . '<body style="font-family:system-ui,sans-serif;margin:2rem;color:#1e293b">'
-            . '<h1 style="font-size:1.25rem">Cerere invalidă</h1>'
+            . '<title>Cerere invalidă — posturi.gov2.ro</title>'
+            . '<link rel="stylesheet" href="/static/gov2/gov2.css?v=' . GOV2_DS_VERSION . '">'
+            . '<link rel="stylesheet" href="/static/gov2/fonts.css?v=' . GOV2_DS_VERSION . '">'
+            . '</head><body><main class="g2-container" style="padding-block:var(--g2-space-6)">'
+            . '<h1 class="g2-heading-section">Cerere invalidă</h1>'
             . '<p>' . e($query_error) . '.</p>'
-            . '<p><a href="/" style="color:#1d4ed8">← Înapoi acasă</a></p>'
+            . '<p><a href="/">← Înapoi acasă</a></p></main>'
             . '</body></html>';
     }
     exit;
@@ -147,8 +149,55 @@ if ($uri === '/versiuni.json') { require __DIR__ . '/feeds/versiuni.json.php'; e
 if ($uri === '/robots.txt') { require __DIR__ . '/pages/robots.php';  exit; }
 if ($uri === '/sitemap.xml') { require __DIR__ . '/pages/sitemap.php'; exit; }
 
+// ADR 0004: `/` is the landing page; the list is `/?…` and, unfiltered, `/posturi/`.
+// "Empty" means a parameter whose every value is blank (a form that was sent
+// with nothing typed). A blank value never selects anything — `judet[]=` would
+// match no posting — so a request that carries one goes to the same address
+// without it, or to /posturi/ when nothing else is left.
+$is_root = ($uri === '/' || $uri === '');
+if ($is_root && !$hx_fragment && $_GET && in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)) {
+    $has_blank = false;
+    $non_blank = [];
+    foreach ($_GET as $k => $v) {
+        if (is_array($v)) {
+            $vals = array_values(array_filter($v, fn($x) => trim((string)$x) !== ''));
+            if (count($vals) !== count($v) || !$vals) $has_blank = true;
+            if ($vals) $non_blank[$k] = $vals;
+        } elseif (trim((string)$v) === '') {
+            $has_blank = true;
+        } else {
+            $non_blank[$k] = $v;
+        }
+    }
+    if ($has_blank) {
+        http_response_code(301);
+        $parts = [];
+        foreach ($non_blank as $k => $v) {
+            foreach ((array)$v as $one) $parts[] = rawurlencode((string)$k) . (is_array($v) ? '%5B%5D=' : '=') . rawurlencode((string)$one);
+        }
+        header('Location: ' . ($parts ? '/?' . implode('&', $parts) : '/posturi/'));
+        exit;
+    }
+}
+
 // Route pages
-if ($uri === '/' || $uri === '') {
+if ($is_root && !$hx_fragment && !$_GET) {
+    require __DIR__ . '/pages/home.php';
+} elseif ($is_root) {
+    // An HTMX fragment that no filter, sort, status or page narrows is the
+    // unfiltered list: the address bar shows /posturi/, not a bare `/`.
+    if ($hx_fragment && search_key($_GET) === ''
+        && !array_intersect_key(clean_query($_GET), ['sort' => 1, 'status' => 1, 'page' => 1])) {
+        header('HX-Push-Url: /posturi/');
+    }
+    require __DIR__ . '/pages/list.php';
+} elseif ($uri === '/posturi') {
+    if ($_GET) {
+        // Each filtered list has one URL: /?… (the query string is kept as sent).
+        http_response_code(301);
+        header('Location: /?' . ($_SERVER['QUERY_STRING'] ?? ''));
+        exit;
+    }
     require __DIR__ . '/pages/list.php';
 } elseif (preg_match('#^/job/(\d+)(?:-[^/]*)?/?$#', $uri, $m)) {
     // `/job/1234/` and `/job/1234-anything/` both resolve; detail.php redirects

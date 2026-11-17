@@ -31,7 +31,7 @@ require __DIR__ . '/../inc/header.php';
   </nav>
 
   <noscript>
-    <p class="mt-6 text-sm text-ink-muted">Lista este păstrată în browserul tău și poate fi citită doar cu JavaScript activat. Anunțurile rămân accesibile din <a href="/" class="text-gov underline">lista principală</a>.</p>
+    <p class="mt-6 text-sm text-ink-muted">Lista este păstrată în browserul tău și poate fi citită doar cu JavaScript activat. Anunțurile rămân accesibile din <a href="/posturi/" class="text-gov underline">lista principală</a>.</p>
   </noscript>
 
   <?php /* UX-15: the „Căutări salvate” section. static/searches.js fills it from `posturi.searches.v1`. */ ?>
@@ -40,7 +40,7 @@ require __DIR__ . '/../inc/header.php';
     <p data-searches-status role="status" aria-live="polite" class="min-h-4 text-xs text-ink-muted"></p>
     <div data-searches-empty hidden class="mt-2 py-4">
       <p class="text-sm text-ink-muted" data-searches-empty-text></p>
-      <a href="/" class="mt-3 inline-block text-sm text-gov hover:underline">Caută anunțuri</a>
+      <a href="/posturi/" class="mt-3 inline-block text-sm text-gov hover:underline">Caută anunțuri</a>
     </div>
     <ul data-searches-list class="divide-y divide-line"></ul>
   </section>
@@ -49,7 +49,7 @@ require __DIR__ . '/../inc/header.php';
 
   <div data-saved-empty hidden class="mt-8 py-8 text-center">
     <p class="text-sm text-ink-muted" data-empty-text></p>
-    <a href="/" class="mt-3 inline-block text-sm text-gov hover:underline">Caută anunțuri</a>
+    <a href="/posturi/" class="mt-3 inline-block text-sm text-gov hover:underline">Caută anunțuri</a>
   </div>
 
   <ul data-saved-list class="mt-2 divide-y divide-line"></ul>

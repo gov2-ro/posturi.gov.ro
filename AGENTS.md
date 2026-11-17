@@ -26,7 +26,7 @@ See README.md for project overview, pipeline, commands, and data structure.
 
 **Județe are normalised at import** — the source badge is `"Timiş"` (pre-redesign) or `"TIMIŞOARA, Timiș"` (post-redesign). `webapp/apps/jobs/judete.py` is the only place that interprets it: `normalize_judet()` returns `(county, locality)` against the canonical 42 counties. Never write a raw badge value into `Judet.name` — that is what produced 261 rows and broke the județ facet. Unmatched values land in `JobPosting.judet_raw` and are reported by `judet_sanity_warnings()` on every import; fix by adding to `judete.ALIASES`. See README § Județe.
 
-**The PHP webapp's palette is tokens, not literals** — every colour, radius and font in `tailwind.config.js` resolves to a CSS custom property; the defaults are one `:root` block in `webapp-php/assets/app.css`. Never add a raw Tailwind palette class (`bg-amber-50`, `text-slate-700`) or a hex literal to a template — use the role tokens (`page`, `sunken`, `surface`, `line`, `ink`, `gov`, `gov-bar`) and the five semantic families (`info`, `neutral`, `ok`, `note`, `alert`), each a `bg-x` / `border-x-line` / `text-x-ink` triple. A skin is a file in `webapp-php/static/skins/` that re-declares those variables under `[data-skin="<id>"]`; run `php webapp-php/assets/check-skins.php` after touching one. See README § Skins.
+**The PHP webapp's palette is tokens, not literals** — every colour, radius and font in `tailwind.config.js` resolves to a CSS custom property; the `:root` block in `webapp-php/assets/app.css` sets each one to a gov2 DS token (`--g2-*`). Never add a raw Tailwind palette class (`bg-amber-50`, `text-slate-700`) or a hex literal to a template — use the role tokens (`page`, `sunken`, `surface`, `line`, `ink`, `gov`, `gov-bar`) and the five semantic families (`info`, `neutral`, `ok`, `note`, `alert`), each a `bg-x` / `border-x-line` / `text-x-ink` triple. The app has one look, the gov2 DS; the skins are removed (ADR 0005). See README § Design system.
 
 **Rate limiting** — `random.uniform(0.5, 1.1)` sleep between pages, built into all fetch scripts.
 
@@ -37,15 +37,16 @@ See README.md for project overview, pipeline, commands, and data structure.
 
 ## Design system (gov2 DS)
 
-This project uses the gov2 design system (DS), version 0.4.0.
+This project uses the gov2 design system (DS), version 0.17.1.
 DS repo: gov2-ro/gov2ro-design-system (local copy: ~/devbox/gov2/gov2ro-design-system).
 
 - Read `COMPONENTS.md` in the DS before you build UI. Use a DS component when one fits.
-- Do not edit the copy of the DS in this project: `webapp-php/static/skins/gov2.css`.
-- To update the DS, copy `gov2.css` from a DS tag. Then set the version above.
+- Do not edit the copy of the DS in this project: `webapp-php/static/gov2/` (`gov2.css`, `fonts.css`, `fonts/`).
+- To update the DS, copy `gov2.css`, `fonts.css` and `fonts/` from one DS tag, with the `git archive` command of the DS README. Then set the version above and `GOV2_DS_VERSION` in `webapp-php/helpers.php`.
 - Before you update, read `CHANGELOG.md` in the DS back to the version above. The DS is 0.x, so a minor version can break. Look for **Breaking**.
 - Put the project styles in `webapp-php/assets/app.css` and the Tailwind role tokens (see the palette rule above). Use the DS tokens. Do not change how a `.g2-` class looks.
-- After you update the copy, run `php webapp-php/assets/check-skins.php`. On 2026-10-26 it reports 69 problems for `gov2.css`: 23 DS tokens that the skin contract does not know, and 46 `.g2-` rules outside `[data-skin]`. The DS backlog tracks these problems. Do not fix them in the copy.
+- After you update the copy, run `php webapp-php/tests/ds_test.php` and the Playwright spec `ds.spec.js`. The first compares the copy with the tag, byte for byte.
+- Put each project rule in a cascade layer (`reset` or `app`). A rule outside a layer wins over every DS rule (ADR 0005).
 - When the project needs a component, a variant or a token that other projects can use, open an issue in the DS:
   `gh issue create -R gov2-ro/gov2ro-design-system --label ds-proposal --title "[proposal] …" --body-file <file>`.
   Use the sections of `.github/ISSUE_TEMPLATE/ds-proposal.md`.

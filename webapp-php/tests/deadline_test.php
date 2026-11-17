@@ -92,7 +92,7 @@ run_suite('rendered: countdown and printed date agree everywhere', function () {
         return (string)@file_get_contents($base . $path);
     };
 
-    $list = $get('/');
+    $list = $get('/posturi/');
     assert_not_contains('Fatal error', $list, 'list renders');
 
     // Extract one result row by its canonical job URL — title needles can also

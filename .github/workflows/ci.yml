@@ -145,6 +145,14 @@ jobs:
         working-directory: webapp-php
         run: php tests/alerts_test.php
 
+      - name: Landing page, /posturi/ and the route rule (UX-05, ADR 0004)
+        working-directory: webapp-php
+        run: php tests/home_test.php
+
+      - name: One look, the gov2 DS; no skins (ADR 0005)
+        working-directory: webapp-php
+        run: php tests/ds_test.php
+
   browser-tests:
     # Playwright against the fixture-served app at 320/375/1280, including the
     # no-execution proof for sanitized Markdown.

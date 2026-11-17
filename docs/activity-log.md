@@ -2,6 +2,120 @@
 
 ## 2026
 
+### 2026-11-17 — Professional domains, filter order, multi-select fix (not deployed)
+
+Brief: `docs/briefs/2026-11-17-domains-filters-multiselect.md` (with follow-ups 1 and 2).
+
+**Done**
+- Baseline before any change (tree with the icon work): the full Playwright run had 592 passed, 50 skipped, 0 failed.
+- Landing page: the sector grid is now 15 professional domains (`HOME_DOMAINS` in `helpers.php`): a `family[]` value, and for the four-way split of "tehnic" a `cor[]` prefix. Each item has an icon (32 px), a larger name (`text-lg`), and its count in brackets outside the link. A county on the map or in the select changes the counts and the links (`home.js` builds `family[]` and `cor[]`). 8 new Tabler 3.52.0 icons (`clipboard-text`, `tools`, `user-shield`, `steering-wheel`, `ruler-2`, `shovel`, `coin`, `code`) plus `chart-bar`; 7 sector symbols are reused; 7 sector symbols that nothing used are out of the sprite (the source files stay in `assets/icons/tabler/`).
+- Measured on the 17 Oct export (1,197 active): Sănătate 375, Administrație 206, Meseriași 102, Pază 75, Șoferi 63, Ingineri 58, Muncitori necalificați 43, Social 65, Financiar 55, Educație 45, Cultură 14, IT 9, Juridic 8, Ordine publică 8, Altele 66. Each equals `home_count_for()` of its link. "Tehnic" is 346; the items cover 341; 5 postings are in no item.
+- "După angajator": a row of text links (sector, count above 0, no icons) in the starting points.
+- Filter list order: Județ, Localitate, Domeniu profesional, Instituție, Sector angajator, Nivel angajator, Grupă ocupațională, Ocupație, ...; Specialitate medicală is above Documente necesare.
+- Multi-select: `hx-trigger="change delay:500ms"`, `hx-sync="this:replace"`, and a stale-response guard in `list.php`: each edit of the form raises a counter, each request keeps the counter value it left with, and `htmx:beforeSwap` sets `shouldSwap = false` for a response whose value is old (results, out-of-band facet list and pushed URL all stay as they are). Controls stay enabled; the existing `#results` indicator shows.
+- Follow-up 1: the example count and the domain count are joined to the last word by a no-break space (the title is inline text, no flex row); "Statistici →" with a chart icon ends the figures row; the first option of both county selects has no count; the starting-point groups are inline text (a wrapped line starts at the left edge, line height 28 px). Measured on the groups: the smallest link fragment is 26 px high, the gap between two lines of targets is 2 px, and the gap between targets on a line is at least 43 px. Follow-up 2: "După domeniu" link to `#domenii` (the target has `tabindex="-1"`, `scroll-mt-4`); the h1 spans both hero columns and is 34 px at 1280 (one line).
+- New backlog items: UX-05-DOMAIN (derive the domain from COR in the pipeline) and UX-18 (Hungarian landing page).
+
+**Hard**
+- I started the baseline run, then edited `list.php` and `facets.php` while it ran. That polluted the run. I stopped it, put both files back to the baseline state, and ran it again.
+- The multi-select test passes only with all three parts. Without the 500 ms wait, three picks send three requests. Without the guard, a pick made while a request is in flight is lost when its response arrives before the next request leaves. Without `hx-sync`, the old request still completes (the guard hides this in the UI, so a test counts completed requests).
+- `home.js` writes the count text again on load, so a test with script cannot see the no-break space of the server markup. A PHP check covers it.
+- Tailwind builds only the classes that exist in the sources. A mutation test that adds a new class needs `npm run css` first, or it passes for the wrong reason.
+
+**Decided**
+- Domain items are inline text with padding on the link (no `inline-flex` or `inline-block`), so the count wraps with the last word. Cost: the item cannot be one flex row with a fixed link size.
+- The grid has one column at 1280 (22 rem minimum): the longest name needs one line. Cost: a tall list beside the map.
+- Stale guard by counter, not by comparing the form data: a counter is cheap and an edit that changes nothing only costs one more request.
+
+### 2026-11-17 — Sector icons, landing copy and layout (not deployed)
+
+Brief: `docs/briefs/2026-11-17-sector-icons.md` (with follow-up 1 and its addition). ADR 0006.
+
+**Done**
+- Sector icons: the 14 Tabler 3.52.0 SVG files and the MIT `LICENSE` are in `webapp-php/assets/icons/tabler/` (`mediu.svg` is `trees`, taken unmodified from the 3.52.0 tarball; `leaf` looked like the `agricultura` wheat ear). The sprite in `inc/header.php` has 14 symbols `i-sector-<key>` (+5,570 bytes on each page; the invisible `stroke="none"` bounding path of each file is not copied). `icon()` in `helpers.php` writes `<svg aria-hidden="true" focusable="false"><use>`.
+- Follow-up 1: new h1 and title "Anunțuri de angajare din administrația publică"; no lead paragraph, no update date in the hero; "Toate anunțurile (N)"; the last line of the hero with a link and bold text. Example searches: hidden heading, count in brackets after the title. Sectors are one-line items (28 px icon, link, count in brackets outside the link), not `.g2-tile`. Start groups are one wrapping line with a bold label; "După județ" is removed. Both county selects show "Name (N)" from the counts of the map (`data-name` holds the plain name for the live text). Logo has no gap. `og-image.html` and `og-image.png` are new (gov2 DS look, Playwright screenshot at 1200 x 630). The `og:image:alt` text follows the new headline.
+- Tests: `home_test.php` and `home.spec.js` follow the new markup; new checks for the icons, the counts outside the links, the option counts, no "După județ".
+
+**Hard**
+- The fixture has all sector postings in one county, so a script that never rewrote the sector count still passed. The new browser test poisons each count with "(999)" first.
+- A box-less item needs its own 44 px link target: the link is `inline-flex min-h-[44px]`.
+- When a title wraps, the count in brackets drops to its own line (a link that must be 44 px high is `inline-block`).
+
+**Decided**
+- Icon size 28 px (the brief allows 24 to 32). Cost of 32: the line and the icon look heavy beside 16 px text.
+- Icon outside the link: it is decoration, so the link text stays the only name.
+
+### 2026-11-17 — One look: the gov2 DS v0.17.1; skins removed; landing tweaks (not deployed)
+
+Brief: `docs/briefs/2026-11-17-ds-alignment.md`. Decision: ADR 0005.
+
+**Done**
+- Landing page: the figures panel has no border; the heading is "Exemple de căutare"; the example cards have no box (title link, `.g2-tag` tags, count); the "Sau începe de aici" items are a text link plus a count outside the link (not underlined, 44 px target); the sector tiles are `.g2-tile`. The chrome and the landing page use `.g2-skip-link`, `.g2-header`, `.g2-wordmark`, `.g2-nav`, `.g2-footer`, `.g2-container`, `.g2-heading-*`, `.g2-text-meta`, `.g2-btn`, `.g2-input`, `.g2-tile`, `.g2-tag`.
+- DS `v0.17.1` installed in `webapp-php/static/gov2/` with the `git archive` command of the DS README. Each page links `gov2.css` and `fonts.css` with `?v=` from `GOV2_DS_VERSION` (`helpers.php`). The 400 page, which was standalone with inline hex, links them too.
+- Removed: `static/skins/`, `inc/skins.php`, `assets/check-skins.php`, `static/prefs.js`, the picker, the skin boot script, the font preload, `assets/fonts.css`, `static/fonts/` (12 files: Fraunces, DM Sans, DM Mono, Manrope). `assets/og-image.html` now uses the DS Inter. `ci.yml` and `deploy-php.sh` had no skin step; `ci.yml` has a new `ds_test.php` step.
+- Tokens: the `:root` block of `assets/app.css` aliases each role token to a DS token. `.pg-tile`, `.pg-chip`, `.pg-chip-count` and the old focus and picker rules are gone.
+- Layers: `@layer reset { @tailwind base; }` and `@layer app { @tailwind components; @tailwind utilities; @tailwind variants; }`, then native `@layer app` blocks. No rule is outside a layer.
+- Focus: one rule block in `app` (after the utilities) gives the DS focus treatment again.
+- Docs: README § Design system; backlog UX-06 closed, UX-06A/B/C opened.
+
+**Hard**
+- Tailwind 3 appended the variant utilities (`hover:`, `lg:`, `placeholder:`) after the layers, outside any layer. They would have beaten every DS rule. The fix is `@tailwind variants;` inside `@layer app`. `ds_test.php` checks that no top-level rule is outside a layer.
+- A utility on a focusable element (`bg-gov`, `hover:bg-sunken`, `focus:outline-none`) removes the DS focus treatment. The focus rule uses a doubled `:focus-visible` to beat `hover:` utilities, and `background-color` for fields, so that the select arrow stays.
+- A first focus test failed on the view switch: a `transition-colors` utility. The test waits 300 ms.
+- Inter has no italic file. The headings had `italic` for Fraunces. `.font-display.italic` is upright now.
+- `ink-faint` on the sunken surface (4.08:1) was used only in the dl of `about.php` (12 uses, measured with a script over 13 pages). Now `ink-muted`.
+
+**Decided**
+- Layer method: Tailwind directives inside native layers, utilities in `app` and not in `utilities`. Cost of the alternative (a build step that splits the output): a second tool, and no gain.
+- Header and footer use `.g2-container`; the other pages keep their own width, so above 1280 px they are wider than the header (UX-06B).
+- Notifications block: a local block on the sunken surface with three `.g2-tile`. No `.g2-inset` or `.g2-notice` fits a block with a heading and three tiles.
+- `.g2-ro-corner` is in the header (DS default mark).
+
+**Measured**
+- Baseline before the change: 17 PHP suites pass, lint clean, Playwright 520 passed, 50 skipped, 0 failed.
+- County map text contrast, one DS look (steps 0–19, 20–39, 40–79, 80+): 16.23, 11.93, 7.36, 7.18. The lowest is 7.18.
+- After: 18 PHP suites pass (new `ds_test.php`, 146 assertions; `home_test.php` 558), Playwright with new `ds.spec.js` (87 tests across 3 widths).
+
+### 2026-11-16 — Landing page, /posturi/, navigation and footer (not deployed)
+
+Brief: `docs/briefs/2026-11-16-landing-page.md`. Route rule: ADR 0004.
+
+**Done**
+- Routes (`index.php`): bare `/` renders `pages/home.php`. `/?…` and each HTMX fragment render the list. `/posturi/` renders the unfiltered list. `/posturi/?…` is a 301 to `/?…` with the query string as sent. A fragment with no filter, sort, status or page sends `HX-Push-Url: /posturi/`; the vendored htmx 2.0.4 honours it (checked in the browser by `home.spec.js`). `/posturi/` is in the sitemap.
+- `pages/home.php` (new): hero with search and county select; three figures; a weekly chart; six ready-made searches; domain tiles with a county tile map; four rows of starting-point chips; "Noi azi" and "Se închid în 3 zile" (moved from the list page, rules unchanged); notifications; tools. `static/home.js` (new) runs the hero form and the county select and map. `static/flags/hu.svg` (new).
+- List page: the shortcuts row, `$home_new`, `$home_soon` and their markup are gone. "Șterge tot", "Șterge toate filtrele", "✕ Șterge filtrele", the "all postings" links of the archive, saved, detail and eligibility pages, and the detail "back" default now point to `/posturi/`. The list canonical is `/posturi/` for every filter permutation (the header drops the query string, so `/` would have folded the lists into the landing page).
+- Masthead: five links (Posturi, Salvate, Alerte, Statistici, Despre), all visible, each 44 px high, wrapping at 320 px. Footer: three groups of links, the disclaimer, the skin picker.
+- UX-15 redirect removed: the `header.php` script, the notice (`[data-search-notice]`) and `syncNotice()`, `APPLIED`, `sessionGet()` and `sessionDel()` of `searches.js`. Kept: `defaultId` and `defaultSearch()` (the Salvate page reads them), `markOpened()`.
+- CSS: `.pg-tile`, `.pg-chip`, `.pg-chip-count`, `.pg-map`, `.pg-map-cell`, `.pg-map-swatch`. No token, no skin file and no `.g2-` class changed. `check-skins.php`: 69 problems, as before.
+- Tests: new `tests/home_test.php` (540 assertions) and `tests/browser/home.spec.js` (12 tests × 3 widths); `ci.yml` runs the new suite. Old suites and specs that opened `/` for the list now open `/posturi/`. The spec that tested the shortcuts row of the bar view is removed (the row no longer exists). The three redirect tests of `searches.spec.js` became one test: no redirect, no notice, no session flag.
+
+**Hard**
+- The wireframe has no rule for a blank form. Without script, `?q=&judet[]=` would reach the list as `judet[]=''`, and `build_filters()` turns that into `IN ('')`: zero results. Fix in `index.php`: a request to `/` whose parameters have blank values is a 301 to the same address without them, or to `/posturi/` when nothing is left. `/?status=active` is not blank and stays a list (ADR 0004).
+- The count of "noi în 7 zile" cannot use a list filter (`published` is one day). It links to `/posturi/`. The count is the active postings published in the 7 calendar days up to today, today included.
+- The third figure of the first draft counted all rows of the file (630); this one counts active postings only, so the figure and the list agree.
+
+**Decided**
+- The `level` value of "Funcții de conducere" is the string the source sends (`Funcții de conducere`, as the facet "Funcție" lists it), not the legacy `conducere`. The fixture rows use `executie`/`conducere`; the card shows only when the live value exists. Cost of the alternative (`conducere`): a card with 0 results on the real export.
+- The map fill is `gov` at 0.12, 0.30, 0.55 and 1.0, over `surface`. The text is `ink` on steps 0–2 and `on-gov` on step 3. Measured contrast (WCAG ratio, `home.spec.js` in the browser, same numbers as an independent script):
+
+  | Skin | 0–19 | 20–39 | 40–79 | 80+ |
+  |---|---|---|---|---|
+  | hartie | 14.14 | 9.93 | 5.58 | 11.27 |
+  | posturi | 11.99 | 8.64 | 5.11 | 8.86 |
+  | govuk | 16.64 | 12.81 | 8.57 | 5.17 |
+  | gov2 | 16.23 | 11.93 | 7.36 | 7.18 |
+
+  The lowest ratio is 5.11 (posturi, 40–79). No opacity needed to change.
+- Counts: `postings_label()` says "anunțuri", so the landing page has `posturi_label()` (0 posturi · 1 post · 2–19 posturi · 20+ de posturi) and `home_all_link_text()` for the sentence of the link. `posturi_label(0)` is "0 posturi", not "0 de posturi".
+- The county map shows all 42 counties, including those with 0 postings (a hole in the map would be worse than a pale cell). Tiles, chips and cards with 0 are hidden. The figures are not tiles and always show.
+- Chart: the last 12 complete ISO weeks (the current week is left out); postings from `job_postings` plus the `archived_postings` rows whose id is not in `job_postings`. On the dev export (2026-10-17) the two tables share 0 ids; the rule stays, because the next export may differ. Hidden below 4 weeks with data.
+- Map cells are 44 px high below 480 px and 40 px square above. At 320 px a cell is about 30 px wide (WCAG 2.5.8 needs 24 px). Cost of 44 px wide: 9 columns do not fit at 320 px.
+
+**Measured** (dev export `data/_dev/posturi-new.sqlite`, 2026-10-17, 1,197 active postings)
+- `Server-Timing` total of `/`, median of 5 requests: 41.1 ms with the real clock (the chart is hidden: the data is a month old), 32.4 ms with `POSTURI_TODAY=2026-10-17` (chart drawn). Limit in the brief: 100 ms.
+- The sector tiles and the (county, sector) sums agree with README §2.2 of the UI overhaul spec (Sănătate 441, Administrație locală 253, Educație 170, …); all postings have a county, so the county sums equal the tile counts. All 42 slugs of `HOME_COUNTY_TILES` exist in `judete`.
+- Baseline before the change: 16 PHP suites pass; Playwright 488 passed, 52 skipped, 0 failed (6.0 min).
+
 ### 2026-11-16 — Normalised title casing; calendar named from the filters
 
 **Done**

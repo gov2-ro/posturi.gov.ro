@@ -37,7 +37,7 @@ test('the name, the links and the percent', async ({ page }) => {
     await page.goto(url);
     await expect(page.locator('a[href="/pentru-angajatori/anunt/"]', { hasText: 'Asistent redactare anunțuri angajare' }).first()).toBeVisible();
   }
-  await expect(page.locator('footer a[href="/pentru-angajatori/anunt/"]')).toHaveText('Asistent redactare anunțuri angajare');
+  await expect(page.locator('footer a[href="/pentru-angajatori/anunt/"]')).toHaveText('Pentru angajatori');
   expect(errors).toEqual([]);
 });
 

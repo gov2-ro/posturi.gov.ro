@@ -11,8 +11,8 @@
  * This store is separate from saved.js (`posturi.preferences.v1`). A fault here
  * must not touch saved jobs, so the two share no state and no code.
  *
- * The same file draws three things: the "Salvează căutarea" toggle and the
- * notice on the list page, and the "Căutări salvate" section on /salvate/.
+ * The same file draws two things: the "Salvează căutarea" toggle on the list
+ * page, and the "Căutări salvate" section on /salvate/.
  * Each write fires `posturi:searches-changed` on document; saved.js listens, to
  * keep the navbar count (saved jobs + saved searches) right.
  */
@@ -23,7 +23,6 @@
   var VERSION = 1;
   var LIMIT = 4;
   var SORTS = ['', 'deadline', 'employer', 'salary'];
-  var APPLIED = 'posturi.searchApplied';
   var LABEL_MAX = 80;       // default label, cut from the chips
   var LABEL_STORE_MAX = 200;
   var LIMIT_TEXT = 'Ai atins limita de ' + LIMIT + ' căutări salvate. Șterge una din Salvate, apoi încearcă din nou.';
@@ -231,10 +230,7 @@
     return '/?' + rec.qs + (rec.sort ? '&sort=' + enc(rec.sort) : '');
   }
 
-  function sessionGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } }
-  function sessionDel(k) { try { window.sessionStorage.removeItem(k); } catch (e) { /* ignore */ } }
-
-  // ---- list page: toggle and notice -------------------------------------------
+  // ---- list page: toggle -------------------------------------------
   /** The label from the active-filter chips; the zero-result relaxation chips sit outside this container. */
   function defaultLabel() {
     var box = qs('[data-active-chips]');
@@ -250,8 +246,6 @@
     var s = new URLSearchParams(window.location.search).get('sort') || '';
     return SORTS.indexOf(s) === -1 ? '' : s;
   }
-
-  var noticeShownFor = null;
 
   function syncList() {
     var bar = qs('[data-search-bar]');
@@ -269,23 +263,6 @@
       btn.setAttribute('aria-pressed', saved ? 'true' : 'false');
       qs('[data-search-toggle-label]', btn).textContent = saved ? 'Căutare salvată' : 'Salvează căutarea';
     });
-    syncNotice(st, key);
-  }
-
-  function syncNotice(st, key) {
-    var box = qs('[data-search-notice]');
-    if (!box) return;
-    var applied = sessionGet(APPLIED);
-    var rec = st.status === 'ok' && key ? st.recs[key] : null;
-    if (applied && applied === key && rec) {
-      qs('[data-search-notice-label]', box).textContent = rec.label;
-      box.hidden = false;
-      if (noticeShownFor !== key) { noticeShownFor = key; API.markOpened(key); }
-      return;
-    }
-    box.hidden = true;
-    noticeShownFor = null;
-    if (applied) sessionDel(APPLIED);          // the reader moved to other filters
   }
 
   function say(text) {

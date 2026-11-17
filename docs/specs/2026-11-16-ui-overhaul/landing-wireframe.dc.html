@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>Pagina de start posturi.gov2.ro</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#1d4f91}a:hover{color:#12335f}
+</style>
+</helmet>
+<div style="font-family: Inter, system-ui, sans-serif; color: #1c1c1c; background: #ffffff; font-size: 16px; line-height: 1.45">
+
+<header style="background: #222222; color: #ffffff">
+<div style="max-width: 1120px; margin: 0 auto; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px">
+<a href="#" style="color: #ffffff; font-weight: 700; font-size: 18px; text-decoration: none; min-height: 44px; display: flex; align-items: center">posturi.gov2.ro <span style="font-weight: 400; font-size: 12px; color: #d0d0d0; margin-left: 8px">beta</span></a>
+<nav aria-label="Navigare principală" style="display: flex; flex-wrap: wrap; gap: 4px 20px">
+<a href="#" style="color: #ffffff; min-height: 44px; display: flex; align-items: center">Posturi</a>
+<a href="#" style="color: #ffffff; min-height: 44px; display: flex; align-items: center">Salvate</a>
+<a href="#" style="color: #ffffff; min-height: 44px; display: flex; align-items: center">Alerte</a>
+<a href="#" style="color: #ffffff; min-height: 44px; display: flex; align-items: center">Statistici</a>
+<a href="#" style="color: #ffffff; min-height: 44px; display: flex; align-items: center">Despre</a>
+</nav>
+</div>
+</header>
+
+<main style="max-width: 1120px; margin: 0 auto; padding: 0 16px 56px; display: flex; flex-direction: column; gap: 48px">
+
+<section aria-labelledby="h-hero" style="padding-top: 40px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-size: 12px; color: #555555; letter-spacing: 0.04em">1 · HERO + CIFRE</p>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px 40px">
+
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<h1 id="h-hero" style="margin: 0; font-size: 36px; line-height: 1.15; font-weight: 700; max-width: 640px">Posturile din sectorul public, mai ușor de găsit</h1>
+<p style="margin: 0; font-size: 18px; max-width: 620px">Adunăm zilnic anunțurile de pe posturi.gov.ro. Le poți filtra după domeniu, județ, studii și salariu.</p>
+<form style="display: flex; flex-wrap: wrap; gap: 8px">
+<label for="q" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Caută un post</label>
+<input id="q" type="search" placeholder="Caută: asistent medical, consilier, șofer…" style="flex: 1 1 220px; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 0 14px; font: inherit; border: 2px solid #1c1c1c; border-radius: 0">
+<label for="q-judet" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Județ</label>
+<select id="q-judet" style="flex: 0 1 180px; min-width: 0; min-height: 48px; box-sizing: border-box; padding: 0 10px; font: inherit; border: 2px solid #1c1c1c; border-radius: 0; background: #ffffff; color: #1c1c1c">
+<option value="">Toate județele</option>
+<sc-for list="{{counties}}" as="o" hint-placeholder-count="6">
+<option value="{{o.code}}">{{o.name}}</option>
+</sc-for>
+</select>
+<button type="submit" style="min-height: 48px; padding: 0 24px; font: inherit; font-weight: 600; background: #1c1c1c; color: #ffffff; border: 0; border-radius: 0">Caută</button>
+</form>
+<p style="margin: 0"><a href="#" style="font-weight: 600">Vezi toate cele 1.197 de posturi active</a></p>
+<p style="margin: 0; font-size: 14px; color: #555555">Date actualizate: [azi, ora ultimei rulări]. Proiect independent. Nu este un site oficial al Guvernului României.</p>
+</div>
+
+<div style="flex: 1 1 360px; min-width: 0; box-sizing: border-box; padding: 20px; border: 1px solid #8a8a8a; display: flex; flex-direction: column; gap: 20px">
+<h2 style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Cifre</h2>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{stats}}" as="st" hint-placeholder-count="3">
+<a href="#" style="display: flex; flex-direction: column; gap: 2px; color: #1c1c1c; text-decoration: none">
+<span style="font-size: 30px; font-weight: 700; line-height: 1.1">{{st.n}}</span>
+<span style="font-size: 14px; color: #555555">{{st.label}}</span>
+</a>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding-top: 16px; border-top: 1px solid #c8c8c8">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px">
+<span style="font-size: 14px; font-weight: 600">{{spark.caption}}</span>
+<div role="group" aria-label="Interval" style="display: flex; border: 1px solid #1c1c1c">
+<sc-for list="{{ranges}}" as="r" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{r.pressed}}" onClick="{{r.pick}}" style="min-height: 36px; min-width: 64px; padding: 0 12px; font: inherit; font-size: 14px; border: 0; border-radius: 0; background: {{r.bg}}; color: {{r.fg}}">{{r.label}}</button>
+</sc-for>
+</div>
+</div>
+<svg role="img" aria-label="{{spark.aria}}" viewBox="0 0 320 64" preserveAspectRatio="none" style="width: 100%; height: 64px; display: block; overflow: visible">
+<path d="{{spark.area}}" fill="#e3ecf6" stroke="none"></path>
+<polyline points="{{spark.points}}" fill="none" stroke="#1d4f91" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"></polyline>
+</svg>
+<div style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: #555555">
+<span>{{spark.from}}</span>
+<span>min {{spark.min}} · max {{spark.max}} · ultima {{spark.last}}</span>
+<span>{{spark.to}}</span>
+</div>
+<p style="margin: 0; font-size: 12px; color: #555555">[date ilustrative]</p>
+</div>
+<p style="margin: 0; font-size: 15px"><a href="#">Mai multe statistici</a></p>
+</div>
+
+</div>
+</section>
+
+<section aria-labelledby="h-combo" style="display: flex; flex-direction: column; gap: 16px">
+<p style="margin: 0; font-size: 12px; color: #555555; letter-spacing: 0.04em">2 · CĂUTĂRI COMBINATE</p>
+<h2 id="h-combo" style="margin: 0; font-size: 24px; font-weight: 700">Căutări gata făcute</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px">
+<sc-for list="{{combos}}" as="c" hint-placeholder-count="6">
+<a href="{{c.href}}" lang="{{c.lang}}" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #8a8a8a; color: #1c1c1c; text-decoration: none">
+<span style="display: flex; align-items: flex-start; gap: 10px">
+<sc-if value="{{c.flag}}" hint-placeholder-val="{{false}}">
+<svg role="img" aria-label="Steagul Ungariei" width="30" height="20" viewBox="0 0 3 2" style="flex: none; margin-top: 3px; outline: 1px solid #c8c8c8"><rect width="3" height="0.667" y="0" fill="#CD2A3E"></rect><rect width="3" height="0.667" y="0.667" fill="#FFFFFF"></rect><rect width="3" height="0.667" y="1.333" fill="#436F4D"></rect></svg>
+</sc-if>
+<span style="font-weight: 600; font-size: 17px; color: #1d4f91">{{c.title}}</span>
+</span>
+<span style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{c.tags}}" as="t" hint-placeholder-count="2">
+<span lang="ro" style="font-size: 13px; padding: 2px 8px; background: #f2f2f2; border: 1px solid #c8c8c8">{{t}}</span>
+</sc-for>
+</span>
+<span lang="ro" style="font-size: 14px; color: #555555">{{c.n}}</span>
+</a>
+</sc-for>
+</div>
+</section>
+
+<section aria-labelledby="h-dom" style="display: flex; flex-direction: column; gap: 16px">
+<h2 id="h-dom" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Posturi pe domenii și județe</h2>
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px 40px">
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+<label for="dom-judet" style="font-weight: 600">Județ</label>
+<select id="dom-judet" value="{{county}}" onChange="{{onCounty}}" style="min-width: 220px; min-height: 44px; box-sizing: border-box; padding: 0 10px; font: inherit; border: 1px solid #1c1c1c; border-radius: 0; background: #ffffff; color: #1c1c1c">
+<option value="">Toate județele</option>
+<sc-for list="{{counties}}" as="o" hint-placeholder-count="6">
+<option value="{{o.code}}">{{o.name}}</option>
+</sc-for>
+</select>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px">
+<sc-for list="{{sectors}}" as="s" hint-placeholder-count="13">
+<a href="#" style="display: flex; flex-direction: column; gap: 10px; padding: 16px; min-height: 96px; box-sizing: border-box; background: #f2f2f2; border: 1px solid #c8c8c8; color: #1c1c1c; text-decoration: none">
+<sc-if value="{{showIcons}}" hint-placeholder-val="{{true}}">
+<span aria-hidden="true" style="width: 32px; height: 32px; box-sizing: border-box; border: 2px dashed #8a8a8a; display: block"></span>
+</sc-if>
+<span style="font-weight: 600">{{s.label}}</span>
+<span style="font-size: 14px; color: #555555">{{s.n}}</span>
+</a>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: 1 1 348px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<span style="font-size: 14px; font-weight: 600">Posturi active pe județe</span>
+<div role="group" aria-label="Alege județul pe hartă" style="display: grid; grid-template-columns: repeat(9, 36px); grid-auto-rows: 36px; gap: 3px">
+<sc-for list="{{tiles}}" as="t" hint-placeholder-count="42">
+<button type="button" aria-label="{{t.aria}}" aria-pressed="{{t.pressed}}" title="{{t.aria}}" onClick="{{t.pick}}" style="grid-column: {{t.col}}; grid-row: {{t.row}}; background: {{t.fill}}; color: {{t.fg}}; outline: {{t.ring}}; outline-offset: 1px; position: relative; z-index: {{t.z}}; border: 0; border-radius: 0; padding: 0; font: inherit; font-size: 11px; font-weight: 600">{{t.code}}</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: 13px; color: #555555">
+<sc-for list="{{legend}}" as="lg" hint-placeholder-count="4">
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 14px; height: 14px; background: {{lg.fill}}; outline: 1px solid #c8c8c8; display: block"></span>{{lg.label}}</span>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 12px; color: #555555">[ilustrativ, în afară de B, CJ, VL, TM, CT, PH]</p>
+</div>
+
+</div>
+</section>
+
+<section aria-labelledby="h-start" style="display: flex; flex-direction: column; gap: 20px">
+<p style="margin: 0; font-size: 12px; color: #555555; letter-spacing: 0.04em">3 · ALTE PUNCTE DE PORNIRE</p>
+<h2 id="h-start" style="margin: 0; font-size: 24px; font-weight: 700">Sau începe de aici</h2>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 16px; font-weight: 600">{{g.title}}</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{g.items}}" as="c" hint-placeholder-count="6">
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; box-sizing: border-box; padding: 0 14px; border: 1px solid #8a8a8a; color: #1c1c1c; text-decoration: none">{{c.label}} <span style="font-size: 14px; color: #555555">{{c.n}}</span></a>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</section>
+
+<section aria-labelledby="h-now" style="display: flex; flex-direction: column; gap: 16px">
+<p style="margin: 0; font-size: 12px; color: #555555; letter-spacing: 0.04em">4 · NOI ȘI URGENTE (EXISTĂ AZI PE PAGINA DE LISTĂ)</p>
+<h2 id="h-now" style="margin: 0; font-size: 24px; font-weight: 700">Noi și pe terminate</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<sc-for list="{{lists}}" as="l" hint-placeholder-count="2">
+<div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">{{l.title}}</h3>
+<sc-for list="{{l.rows}}" as="r" hint-placeholder-count="3">
+<a href="#" style="display: flex; flex-direction: column; gap: 2px; padding: 12px 0; border-top: 1px solid #c8c8c8; color: #1c1c1c; text-decoration: none">
+<span style="font-weight: 600; color: #1d4f91">[Titlu post]</span>
+<span style="font-size: 14px; color: #555555">[Angajator] · [Localitate, județ] · {{r.meta}}</span>
+</a>
+</sc-for>
+<p style="margin: 0; padding-top: 4px"><a href="#">{{l.more}}</a></p>
+</div>
+</sc-for>
+</div>
+</section>
+
+<section aria-labelledby="h-follow" style="display: flex; flex-direction: column; gap: 16px; padding: 24px; background: #f2f2f2; border: 1px solid #c8c8c8">
+<p style="margin: 0; font-size: 12px; color: #555555; letter-spacing: 0.04em">5 · NOTIFICĂRI</p>
+<h2 id="h-follow" style="margin: 0; font-size: 24px; font-weight: 700">Abonează-te la notificări</h2>
+<p style="margin: 0; max-width: 680px">Alerte pe email și RSS pentru orice combinație de filtre / căutări.</p>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #ffffff; border: 1px solid #c8c8c8">
+<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1c1c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14"></rect><path d="M3 7l9 6 9-6"></path></svg>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Email</h3>
+<p style="margin: 0; font-size: 15px">Un rezumat la 3 zile cu posturile noi din căutarea ta.</p>
+<a href="#" style="font-size: 15px">Cum funcționează alertele</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #ffffff; border: 1px solid #c8c8c8">
+<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1c1c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Calendar</h3>
+<p style="margin: 0; font-size: 15px">Termenele de depunere și probele de concurs, în Google Calendar, Apple sau Outlook.</p>
+<a href="#" style="font-size: 15px">Calendarul tuturor posturilor</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 16px; background: #ffffff; border: 1px solid #c8c8c8">
+<svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1c1c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1.5"></circle></svg>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">RSS</h3>
+<p style="margin: 0; font-size: 15px">Un flux pentru cititorul tău de știri, pentru orice căutare.</p>
+<a href="#" style="font-size: 15px">Fluxul tuturor posturilor</a>
+</div>
+</div>
+<p style="margin: 0; font-size: 15px">Poți și să salvezi posturi și căutări în browser. Le găsești la <a href="#">Salvate</a>.</p>
+</section>
+
+<section aria-labelledby="h-tools" style="display: flex; flex-direction: column; gap: 16px">
+<p style="margin: 0; font-size: 12px; color: #555555; letter-spacing: 0.04em">6 · INSTRUMENTE</p>
+<h2 id="h-tools" style="margin: 0; font-size: 24px; font-weight: 700">Instrumente</h2>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px">
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #8a8a8a; color: #1c1c1c; text-decoration: none">
+<span style="font-weight: 600; color: #1d4f91">Pot aplica?</span>
+<span style="font-size: 15px">Verifică dacă îndeplinești condițiile unui post.</span>
+</a>
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 16px; border: 1px solid #8a8a8a; color: #1c1c1c; text-decoration: none">
+<span style="font-weight: 600; color: #1d4f91">Pentru angajatori</span>
+<span style="font-size: 15px">Asistent pentru redactarea unui anunț de angajare.</span>
+</a>
+</div>
+</section>
+
+</main>
+
+<footer style="border-top: 1px solid #c8c8c8; background: #f2f2f2">
+<div style="max-width: 1120px; margin: 0 auto; padding: 32px 16px; display: flex; flex-direction: column; gap: 24px">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px">
+<sc-for list="{{footer}}" as="f" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0 0 4px; font-size: 14px; font-weight: 700">{{f.title}}</h2>
+<sc-for list="{{f.links}}" as="k" hint-placeholder-count="4">
+<a href="#" style="font-size: 15px; min-height: 32px; display: flex; align-items: center">{{k}}</a>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 14px; color: #555555">Acesta nu este un proiect oficial al Guvernului României. Versiune beta. Sursa datelor: posturi.gov.ro.</p>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<label for="skin" style="font-size: 14px">Stil vizual</label>
+<select id="skin" style="min-height: 44px; font: inherit; font-size: 14px; padding: 0 8px; border: 1px solid #8a8a8a; border-radius: 0; background: #ffffff"><option>posturi.gov.ro</option><option>hârtie</option><option>govuk</option><option>gov2</option></select>
+</div>
+</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"showIcons":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":3000}}'>
+class Component extends DCLogic {
+renderVals() {
+var self = this;
+var st = this.state || {};
+var chip = function (label, n) { return { label: label, n: n }; };
+var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); };
+
+// Counties: code, name, tile column, tile row, active jobs (B, CJ, VL, TM, CT, PH real; others illustrative)
+var C = [
+['SM','Satu Mare',3,1,14],['MM','Maramureș',4,1,18],['SV','Suceava',6,1,25],['BT','Botoșani',7,1,12],
+['BH','Bihor',2,2,30],['SJ','Sălaj',3,2,8],['BN','Bistrița-Năsăud',4,2,12],['NT','Neamț',6,2,15],['IS','Iași',7,2,40],
+['AR','Arad',2,3,20],['CJ','Cluj',3,3,62],['MS','Mureș',4,3,28],['HR','Harghita',5,3,14],['BC','Bacău',6,3,24],['VS','Vaslui',7,3,12],
+['TM','Timiș',1,4,48],['HD','Hunedoara',2,4,22],['AB','Alba',3,4,15],['SB','Sibiu',4,4,26],['BV','Brașov',5,4,38],['CV','Covasna',6,4,9],['VN','Vrancea',7,4,11],['GL','Galați',8,4,22],
+['CS','Caraș-Severin',1,5,13],['GJ','Gorj',2,5,11],['VL','Vâlcea',3,5,49],['AG','Argeș',4,5,25],['DB','Dâmbovița',5,5,14],['PH','Prahova',6,5,47],['BZ','Buzău',7,5,13],['BR','Brăila',8,5,10],['TL','Tulcea',9,5,8],
+['MH','Mehedinți',1,6,10],['DJ','Dolj',2,6,30],['OT','Olt',3,6,10],['TR','Teleorman',4,6,7],['IF','Ilfov',5,6,18],['B','București',6,6,184],['IL','Ialomița',7,6,9],['CT','Constanța',8,6,48],
+['GR','Giurgiu',5,7,6],['CL','Călărași',7,7,7]
+];
+var steps = [
+{ max: 19, fill: '#e3ecf6', fg: '#1c1c1c', label: '0–19' },
+{ max: 39, fill: '#b4cbe6', fg: '#1c1c1c', label: '20–39' },
+{ max: 79, fill: '#6f98cc', fg: '#1c1c1c', label: '40–79' },
+{ max: Infinity, fill: '#1d4f91', fg: '#ffffff', label: '80+' }
+];
+var stepFor = function (v) { for (var i = 0; i < steps.length; i++) { if (v <= steps[i].max) return steps[i]; } return steps[3]; };
+var county = st.county || '';
+var tiles = C.map(function (c) {
+var s = stepFor(c[4]); var on = c[0] === county;
+return { code: c[0], col: c[2], row: c[3], fill: s.fill, fg: s.fg,
+aria: c[1] + ': ' + c[4] + (c[4] >= 20 ? ' de posturi' : ' posturi'),
+pressed: on ? 'true' : 'false', ring: on ? '3px solid #1c1c1c' : 'none', z: on ? 1 : 0,
+pick: function () { self.setState({ county: on ? '' : c[0] }); } };
+});
+var counties = C.slice().sort(function (a, b) { return a[1].localeCompare(b[1], 'ro'); }).map(function (c) { return { code: c[0], name: c[1] }; });
+
+// Sparkline (illustrative series)
+var weekly = [540, 610, 580, 655, 620, 700, 640, 590, 680, 720, 660, 610, 630];
+var monthly = [2150, 2480, 2610, 2700, 2560, 2490, 2380, 1980, 2620, 2750, 2690, 2240, 2400, 2550, 2720, 2810, 2640, 2520, 2410, 2050, 2700, 2860, 2780, 2300, 2450, 2600, 2790, 2880, 2700, 2590, 2470, 2120, 2760, 2910, 2840, 2600];
+var range = st.range || '3l';
+var data = range === '3l' ? weekly : monthly;
+var max = Math.max.apply(null, data), min = Math.min.apply(null, data);
+var W = 320, H = 64, P = 4;
+var xy = data.map(function (v, i) { return (i / (data.length - 1) * W).toFixed(1) + ',' + (P + (1 - (v - min) / (max - min)) * (H - 2 * P)).toFixed(1); });
+var spark = {
+caption: range === '3l' ? 'Posturi publicate pe săptămână' : 'Posturi publicate pe lună',
+points: xy.join(' '),
+area: 'M0,' + H + ' L' + xy.join(' L') + ' L' + W + ',' + H + ' Z',
+from: range === '3l' ? 'aug. 2026' : 'dec. 2023',
+to: range === '3l' ? 'nov. 2026' : 'nov. 2026',
+min: fmt(min), max: fmt(max), last: fmt(data[data.length - 1]),
+aria: (range === '3l' ? 'Posturi publicate pe săptămână, ultimele 3 luni' : 'Posturi publicate pe lună, ultimii 3 ani') + ': între ' + fmt(min) + ' și ' + fmt(max)
+};
+var ranges = [{ id: '3l', label: '3 luni' }, { id: '3a', label: '3 ani' }].map(function (r) {
+var on = r.id === range;
+return { label: r.label, pressed: on ? 'true' : 'false', bg: on ? '#1c1c1c' : '#ffffff', fg: on ? '#ffffff' : '#1c1c1c',
+pick: function () { self.setState({ range: r.id }); } };
+});
+
+return {
+showIcons: this.props.showIcons ?? true,
+county: county,
+onCounty: function (e) { self.setState({ county: e.target.value }); },
+counties: counties,
+tiles: tiles,
+legend: steps,
+spark: spark,
+ranges: ranges,
+stats: [
+{ n: '1.197', label: 'posturi active' },
+{ n: '733', label: 'angajatori' },
+{ n: '630', label: 'noi în 7 zile' }
+],
+combos: [
+{ title: 'Salarii peste 7.000 lei, în afara sectorului medical', tags: ['peste 7.000 lei', 'fără Sănătate și asistență socială'], n: '[N] posturi', lang: 'ro', flag: false,
+href: '?salary_bucket=peste-7000&isced_not%5B%5D=09_sanatate_asistenta_sociala' },
+{ title: '5.000–7.000 lei, normă parțială, pe proiecte PNRR sau europene', tags: ['5.000–7.000 lei', 'normă parțială', 'PNRR', 'fonduri europene'], n: '[N] posturi', lang: 'ro', flag: false,
+href: '?salary_bucket=5000-7000&schedule%5B%5D=norma_partiala&funding%5B%5D=pnrr&funding%5B%5D=fonduri_europene' },
+{ title: 'Magyar nyelvtudást igénylő állások', tags: ['necesită limba maghiară'], n: '[N] posturi', lang: 'hu', flag: true, href: '#' },
+{ title: 'Primul job: fără experiență cerută', tags: ['fără experiență'], n: '89 de posturi', lang: 'ro', flag: false, href: '#' },
+{ title: 'Funcții de conducere', tags: ['conducere'], n: '81 de posturi', lang: 'ro', flag: false, href: '#' },
+{ title: 'Proiecte cu fonduri europene, pe perioadă determinată', tags: ['fonduri europene', 'perioadă determinată'], n: '[N] posturi', lang: 'ro', flag: false, href: '#' }
+],
+sectors: [
+chip('Sănătate', '441 de posturi'), chip('Administrație locală', '253 de posturi'), chip('Educație', '170 de posturi'),
+chip('Mediu', '70 de posturi'), chip('Asistență socială', '64 de posturi'), chip('Cultură', '51 de posturi'),
+chip('Apărare', '40 de posturi'), chip('Cercetare', '37 de posturi'), chip('Administrație centrală', '19 posturi'),
+chip('Justiție', '4 posturi'), chip('Agricultură', '4 posturi'), chip('Transport', '3 posturi'), chip('Altele', '6 posturi')
+],
+groups: [
+{ title: 'După studii', items: [chip('Generale', '186'), chip('Profesionale', '44'), chip('Liceale', '270'), chip('Postliceale', '146'), chip('Licență', '483'), chip('Master', '13'), chip('Doctorat', '7')] },
+{ title: 'După ocupație', items: [chip('Îngrijitor', '84'), chip('Medic specialist', '76'), chip('Asistent medical generalist', '66'), chip('Asistent medical', '54'), chip('Muncitor calificat', '49'), chip('Infirmier', '40'), chip('Șofer', '38')] },
+{ title: 'După județ', items: [chip('București', '184'), chip('Cluj', '62'), chip('Vâlcea', '49'), chip('Timiș', '48'), chip('Constanța', '48'), chip('Prahova', '47'), chip('Toate județele', '42')] },
+{ title: 'Alte filtre', items: [chip('Fără experiență', '89'), chip('Salariu peste 7.000 lei', '228'), chip('Funcții de conducere', '81'), chip('Perioadă determinată', '190'), chip('Normă parțială', '126'), chip('Fonduri europene', '104')] }
+],
+lists: [
+{ title: 'Noi azi', more: 'Toate posturile noi', rows: [{ meta: 'publicat azi' }, { meta: 'publicat azi' }, { meta: 'publicat azi' }] },
+{ title: 'Se închid în 3 zile', more: 'Toate cele 195 care se închid în 3 zile', rows: [{ meta: 'termen: [dată]' }, { meta: 'termen: [dată]' }, { meta: 'termen: [dată]' }] }
+],
+footer: [
+{ title: 'Posturi', links: ['Toate posturile', 'Angajatori', 'Statistici', 'Pot aplica?'] },
+{ title: 'Urmărește', links: ['Alerte pe email', 'Flux RSS', 'Calendar', 'Salvate'] },
+{ title: 'Proiect', links: ['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'] }
+]
+};
+}
+}
+</script>
+</body>
+</html>

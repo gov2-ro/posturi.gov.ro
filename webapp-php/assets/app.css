@@ -3,90 +3,95 @@
  * webapp-php/static/app.css is committed so the shared host needs no
  * toolchain.
  *
- * ── Tokens and skins ────────────────────────────────────────────────────────
- * The `:root` block below is the whole palette. Tailwind's theme resolves every
- * colour, radius and font to one of these variables (see tailwind.config.js), so
- * re-declaring them under `[data-skin="x"]` restyles the entire site without
- * touching a utility class. That is all a skin is — see static/skins/_template.css.
+ * ── Design system and layers (ADR 0005) ─────────────────────────────────────
+ * The app has one look: the gov2 design system (DS), linked on each page from
+ * static/gov2/ (inc/header.php). The DS declares the cascade layers
+ * `reset, gov2, utilities, app`; this file declares the same order first, so
+ * that it holds whichever stylesheet loads first.
  *
- * `:root` doubles as the built-in "hartie" skin: it is what you get with no skin
- * file layered on top, so keep it a complete, self-sufficient palette.
+ *   reset  The Tailwind reset (preflight). It loses to the DS base styles.
+ *   app    The project components and the Tailwind utilities, then the plain
+ *          project rules below. No rule of this file is outside a layer.
  *
- * Colours are space-separated RGB channels so Tailwind's alpha modifiers
- * (`bg-surface/70`) compose with them. Non-colour tokens are ordinary values.
+ * Method: Tailwind's own directives sit inside native layers
+ * (`@layer reset { @tailwind base; }`). Tailwind 3 reads the names `base`,
+ * `components` and `utilities` of its `@layer` directive, and `utilities` is
+ * also a DS layer. So the Tailwind utilities go in `app`, with the project
+ * components; the project's `@layer components { … }` blocks are Tailwind's
+ * (they come out before the utilities), and the blocks that must come after the
+ * utilities are native `@layer app { … }`.
+ *
+ * ── Tokens ──────────────────────────────────────────────────────────────────
+ * The `:root` block is the role palette. Each role token is an alias of a DS
+ * token. Tailwind's theme resolves every colour, radius and font to a role
+ * token (see tailwind.config.js). Colours are space-separated RGB channels, as
+ * the DS tokens are, so Tailwind's alpha modifiers (`bg-surface/70`) compose.
  */
-@import "./fonts.css";
+@layer reset, gov2, utilities, app;
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@layer reset { @tailwind base; }
+@layer app {
+  @tailwind components;
+  @tailwind utilities;
+  @tailwind variants;
+}
 
-@layer base {
+@layer app {
   :root {
     /* Surfaces, back to front. */
-    --c-page:        245 240 232;
-    --c-sunken:      237 231 217;
-    --c-surface:     255 255 255;
-    --c-line:        214 207 196;   /* hairline dividers — decorative        */
-    --c-line-strong: 143 135 125;   /* form controls — needs 3:1 (WCAG 1.4.11) */
+    --c-page:        var(--g2-color-page);
+    --c-sunken:      var(--g2-color-surface-sunken);
+    --c-surface:     var(--g2-color-surface);
+    --c-line:        var(--g2-color-line);              /* hairline dividers        */
+    --c-line-strong: var(--g2-color-control-border);    /* form controls            */
 
-    /* Text, most to least prominent. The muted/faint pair is darker than it
-       looks like it should be: the original #78716C / #A8A29E measured 4.23
-       and 2.22 on this page colour, both under AA. */
-    --c-ink:       28 25 23;
-    --c-ink-muted: 98 92 86;
-    --c-ink-faint: 111 105 99;
+    /* Text, most to least prominent. `faint` has 4.57:1 on the page and 4.08:1 on
+       `sunken`: use `ink-muted` on a sunken ground. */
+    --c-ink:       var(--g2-color-text);
+    --c-ink-muted: var(--g2-color-text-muted);
+    --c-ink-faint: var(--g2-color-text-faint);
 
-    /* Brand, in two parts. `gov` is the action colour — links, buttons, badges —
-       with `on-gov` for text drawn on a gov fill. `gov-bar` is the masthead,
-       with its own `on-bar` ramp, because a skin generally wants a masthead that
-       is not its link colour. */
-    --c-gov:       27 58 107;
-    --c-gov-light: 238 242 255;
-    --c-on-gov:    255 255 255;
+    /* Brand, in two parts. `gov` is the link colour — links, badges, the selected
+       state — with `on-gov` for text drawn on a gov fill. `gov-light` is the
+       selected-row fill. `gov-bar` is the masthead, with its own `on-bar` ramp. */
+    --c-gov:       var(--g2-color-link);
+    --c-gov-light: var(--g2-color-selected-bg);
+    --c-on-gov:    var(--g2-color-on-link);
 
-    --c-gov-bar:       27 58 107;
-    --c-on-bar:        255 255 255;
-    --c-on-bar-muted:  191 219 254;   /* header nav, "actualizat" stamp */
-    --c-on-bar-accent: 147 197 253;   /* the dots in posturi.gov2.ro    */
+    --c-gov-bar:       var(--g2-color-header-bg);
+    --c-on-bar:        var(--g2-color-on-header);
+    --c-on-bar-muted:  var(--g2-color-on-header-muted);
+    --c-on-bar-accent: var(--g2-color-header-accent);
 
-    --c-focus: 27 58 107;
+    --c-focus: var(--g2-color-focus);
 
-    /* Semantic families: fill / border / label. */
-    --c-info-bg:    239 246 255; --c-info-line:    191 219 254; --c-info-ink:    30 64 175;
-    --c-neutral-bg: 241 245 249; --c-neutral-line: 226 232 240; --c-neutral-ink:  51 65 85;
-    --c-ok-bg:      236 253 245; --c-ok-line:      167 243 208; --c-ok-ink:       6 95 70;
-    --c-ok-solid:    22 163  74;
-    --c-note-bg:    255 251 235; --c-note-line:    253 230 138; --c-note-ink:   120  53  15;
-    --c-alert-bg:   254 242 242; --c-alert-line:   254 202 202; --c-alert-ink:  153  27  27;
+    /* Semantic families: fill / border / label. `note` is the DS `warning`, `ok`
+       is `success`, `alert` is `danger`. */
+    --c-info-bg:    var(--g2-color-info-bg);    --c-info-line:    var(--g2-color-info-line);    --c-info-ink:    var(--g2-color-info-ink);
+    --c-neutral-bg: var(--g2-color-neutral-bg); --c-neutral-line: var(--g2-color-neutral-line); --c-neutral-ink: var(--g2-color-neutral-ink);
+    --c-ok-bg:      var(--g2-color-success-bg); --c-ok-line:      var(--g2-color-success-line); --c-ok-ink:      var(--g2-color-success-ink);
+    --c-ok-solid:   var(--g2-color-success-solid);
+    --c-note-bg:    var(--g2-color-warning-bg); --c-note-line:    var(--g2-color-warning-line); --c-note-ink:    var(--g2-color-warning-ink);
+    --c-alert-bg:   var(--g2-color-danger-bg);  --c-alert-line:   var(--g2-color-danger-line);  --c-alert-ink:   var(--g2-color-danger-ink);
 
-    /* Type. A skin may only name fonts the page already loads or system fonts;
-       to bring its own it declares an @font-face in its own file. */
-    --font-display: Fraunces, Georgia, serif;
-    --font-sans:    "DM Sans", system-ui, -apple-system, sans-serif;
-    --font-mono:    "DM Mono", ui-monospace, SFMono-Regular, monospace;
+    /* The first series of a chart. */
+    --c-chart-1: var(--g2-color-chart-1);
 
-    /* Metrics. --radius-pill is what makes chips round; a square skin sets it
-       to 0 and flattens every tag in one declaration. */
-    --radius:      0.25rem;
-    --radius-md:   0.375rem;
-    --radius-lg:   0.5rem;
-    --radius-pill: 9999px;
+    /* Type. The DS has one sans family; `display` is the same family. */
+    --font-display: var(--g2-font-sans);
+    --font-sans:    var(--g2-font-sans);
+    --font-mono:    var(--g2-font-mono);
+
+    /* Metrics. The DS is square: every radius is `--g2-radius`. */
+    --radius:      var(--g2-radius);
+    --radius-md:   var(--g2-radius);
+    --radius-lg:   var(--g2-radius);
+    --radius-pill: var(--g2-radius);
   }
 
   /* UX-09: the hidden attribute must win over utility display classes
      (inline-flex buttons toggled by saved.js). */
   [hidden] { display: none !important; }
-
-  body {
-    background-color: rgb(var(--c-page));
-    color: rgb(var(--c-ink));
-  }
-
-  :where(a, button, summary, select, input):focus-visible {
-    outline: 2px solid rgb(var(--c-focus));
-    outline-offset: 3px;
-  }
 
   /* Facet disclosures: no native triangle, caret flips when open. */
   summary { list-style: none; cursor: pointer; }
@@ -100,12 +105,35 @@
   ::-webkit-scrollbar-track { background: rgb(var(--c-sunken)); }
   ::-webkit-scrollbar-thumb { background: rgb(var(--c-line-strong)); border-radius: var(--radius); }
 
+  /* The old display face was a real italic. Inter has no italic file, and the
+     browser would slant it. The headings keep the upright face. */
+  .font-display.italic { font-style: normal; }
+
+  /* Keyboard focus. The DS gives every focusable element a yellow fill with ink
+     text and a bar (gov2.states). A utility in this layer that sets a background,
+     a colour, an outline or a shadow (`bg-gov`, `hover:bg-sunken`,
+     `focus:outline-none`, `focus-visible:ring-2`) would remove that, so the rule
+     is written again here, after the utilities, from the DS tokens. The doubled
+     `:focus-visible` raises the specificity above a `hover:` utility. A field keeps
+     its own background image (the select arrow), so it sets `background-color`. */
+  :is(a, button, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible:focus-visible {
+    outline: 3px solid transparent;
+    background: rgb(var(--g2-color-focus));
+    color: rgb(var(--g2-color-on-focus));
+    box-shadow: 0 -2px rgb(var(--g2-color-focus)), 0 4px rgb(var(--g2-color-on-focus));
+    text-decoration: none;
+  }
+  .g2-btn:focus-visible:focus-visible { box-shadow: 0 2px rgb(var(--g2-color-text)); }
+  :is(input, textarea, select):focus-visible:focus-visible {
+    background-color: rgb(var(--g2-color-control-bg));
+    color: rgb(var(--g2-color-text));
+    outline: 3px solid rgb(var(--g2-color-focus));
+    outline-offset: 0;
+    box-shadow: inset 0 0 0 2px rgb(var(--g2-color-text));
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
-      animation-duration: 0.01ms !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
+    *, *::before, *::after { scroll-behavior: auto !important; }
   }
 }
 
@@ -123,7 +151,7 @@
   .pref-group { @apply ml-1 whitespace-nowrap align-middle text-sm font-normal not-italic; }
   .pref-btn {
     @apply -my-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded align-middle text-ink-muted
-           transition-colors hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus;
+           transition-colors hover:text-gov;
   }
   .pref-ico { @apply h-5 w-5 fill-none stroke-current; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .pref-btn[aria-pressed="true"] .pref-ico { @apply fill-current; }
@@ -141,7 +169,7 @@
   .follow-group[hidden] { display: none; }
   .follow-btn {
     @apply inline-flex items-center gap-1.5 whitespace-nowrap px-3 text-sm text-ink transition-colors
-           hover:bg-sunken hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus;
+           hover:bg-sunken hover:text-gov;
   }
   .follow-btn + .follow-btn { @apply border-l border-line-strong; }
   .follow-btn-primary { @apply border-gov bg-gov text-on-gov hover:bg-gov hover:text-on-gov hover:underline; }
@@ -210,7 +238,6 @@
     color: rgb(var(--c-ink-muted) / 0.7); border: 1px solid transparent;
   }
   .facet-not:hover { color: rgb(var(--c-alert-ink)); border-color: rgb(var(--c-alert-line)); }
-  .facet-not:focus-within { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
   .facet-not:has(input:checked) { color: rgb(var(--c-alert-ink)); background: rgb(var(--c-alert-bg)); border-color: rgb(var(--c-alert-line)); font-weight: 600; }
   .facet-not:has(input:disabled) { visibility: hidden; }
   /* Status and sort share a line on phones (each takes half). */
@@ -235,7 +262,6 @@
     border-radius: var(--radius-sm, 0.25rem); color: rgb(var(--c-ink-muted)); font-size: 0.75rem;
   }
   .facet-twisty:hover { color: rgb(var(--c-gov)); }
-  .facet-twisty:focus-visible { outline: 2px solid rgb(var(--c-focus)); outline-offset: 1px; }
   .facet-twisty span { transition: transform 0.15s; }
   .facet-twisty[aria-expanded="true"] span { transform: rotate(90deg); }
   .facet-children { padding-left: 0.75rem; }
@@ -244,24 +270,6 @@
   .facet-row-not .facet-check + span { text-decoration: line-through; color: rgb(var(--c-alert-ink)); }
   @media (hover: hover) {
     .facet-row:not(:hover) .facet-not:not(:focus-within):not(:has(input:checked)) { opacity: 0; }
-  }
-
-  /* The skin picker in the footer. Styled here rather than in each skin so a
-     skin that forgets it still gets a usable control. */
-  .skin-select {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: rgb(var(--c-ink-muted));
-    background: rgb(var(--c-surface));
-    border: 1px solid rgb(var(--c-line));
-    border-radius: var(--radius);
-    padding: 0.15rem 0.4rem;
-    cursor: pointer;
-    max-width: 100%;
-  }
-  .skin-select:focus-visible {
-    outline: 2px solid rgb(var(--c-focus));
-    outline-offset: 1px;
   }
 
   /* Rendered posting body (Markdown → HTML) */
@@ -303,6 +311,7 @@
   .prose-body th { background: rgb(var(--c-sunken)); font-weight: 600; }
 }
 
+@layer app {
 /* ── Grid and table views (lg and up) ─────────────────────────────────────────
  * One switch (#layout-switch, state in localStorage `posturi.layout`, applied to
  * <html data-layout> before paint) has three views. `list` (no attribute) keeps
@@ -314,7 +323,7 @@
  * grid shows cards and the table one line per posting under column heads.
  * It is only a stylesheet over the same server markup, so filters, HTMX swaps,
  * OOB facet updates, feeds and history are unaffected, and without JavaScript
- * the attribute is never set. Unlayered on purpose: these rules have to outrank
+ * the attribute is never set. In the `app` layer, after the utilities: these rules have to outrank
  * the lg: utilities on the same elements. Colours and radii are tokens only.
  */
 .pg-thead { display: none; }
@@ -389,11 +398,9 @@
   }
 
   /* View switch and sort, moved here by the script, follow the last filter on
-     the same line, no gap. The home page's "Începe cu" shortcuts, moved here
-     too, close the bar on a row of their own. */
+     the same line, no gap. */
   html[data-layout] .pg-side > #result-options { margin: 0; flex-wrap: nowrap; }
   html[data-layout] .pg-side > #result-options > * { height: var(--pg-bar-h); }
-  html[data-layout] .pg-side > .pg-shortcuts { flex-basis: 100%; margin: 0.25rem 0 0; padding: 0; border: 0; }
 
   /* 261116: two rows. Row 1: the boxed controls (search, view, status, sort).
      Row 2: the facet dropdowns, shorter and with no row gap. The ::before is a
@@ -404,7 +411,6 @@
   html[data-layout] .pg-side::before { content: ""; order: 1; flex-basis: 100%; height: 0.375rem; }
   html[data-layout] #facet-panel > *,
   html[data-layout] #facet-list > * { order: 2; }
-  html[data-layout] .pg-side > .pg-shortcuts { order: 3; }
   html[data-layout] #facet-list > .facet-group > summary,
   html[data-layout] #facet-list > .pg-clear { height: 1.875rem; }
 
@@ -493,6 +499,7 @@
   html[data-layout="table"] .pg-sep,
   html[data-layout="table"] .pg-meta > [aria-hidden="true"] { display: none; }
 }
+}
 
 /* BETA-CHROME (D9–D10): the welcome box, the posting disclaimer and the [?!]
    feedback button. The welcome is in every (cached) page and shown only when the
@@ -521,12 +528,52 @@
   .note-view { @apply relative z-[1] mt-1.5 whitespace-pre-line border-l-2 border-gov pl-2 text-xs leading-snug text-ink; }
   .note-editor { @apply relative z-[1] mt-2 border border-line-strong bg-surface p-2; }
   .note-label { @apply mb-1 block text-xs text-ink-muted; }
-  .note-input { @apply block w-full rounded border border-line-strong bg-surface p-2 text-sm text-ink focus:border-gov focus:outline-none focus:ring-1 focus:ring-focus; }
+  .note-input { @apply block w-full rounded border border-line-strong bg-surface p-2 text-sm text-ink focus:border-gov; }
   .note-actions { @apply mt-2 flex flex-wrap gap-2; }
-  .note-btn { @apply min-h-[2.25rem] border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted hover:border-gov hover:text-gov focus:outline-none focus-visible:ring-2 focus-visible:ring-focus; }
+  .note-btn { @apply min-h-[2.25rem] border border-line bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted hover:border-gov hover:text-gov; }
   .note-btn-primary { @apply border-gov bg-gov text-on-gov hover:text-on-gov; }
 }
-@media (min-width: 1024px) {
-  html[data-layout="table"] .pg-row > .note-view,
-  html[data-layout="table"] .pg-row > .note-editor { grid-column: 1 / -1; }
+@layer app {
+  @media (min-width: 1024px) {
+    html[data-layout="table"] .pg-row > .note-view,
+    html[data-layout="table"] .pg-row > .note-editor { grid-column: 1 / -1; }
+  }
+}
+
+/* 2026-11-16 (UX-05, brief 2026-11-16-landing-page): the landing page's local
+   components. The tiles, the buttons and the fields are DS components
+   (.g2-tile, .g2-btn, .g2-input); the county map has none. */
+@layer components {
+  /* The county tile map: 9 columns by 7 rows. Local; the DS has no such
+     component. A cell shows the step of its count by the opacity of `gov`, over
+     `surface` so that the contrast does not depend on the page colour. Steps:
+     0 = 0–19, 1 = 20–39, 2 = 40–79, 3 = 80+. Text is `ink` on steps 0–2 and
+     `on-gov` on step 3. A selected cell has a ring (outline) and a heavier
+     border, so the selection does not rest on colour alone. */
+  .pg-map {
+    @apply grid gap-[3px];
+    grid-template-columns: repeat(9, minmax(0, 2.5rem));
+    grid-auto-rows: 2.75rem;
+  }
+  @media (min-width: 480px) { .pg-map { grid-auto-rows: 2.5rem; } }
+  .pg-map-cell {
+    @apply relative m-0 min-w-0 rounded border border-line p-0 text-[11px] font-semibold leading-none text-ink;
+    background-color: rgb(var(--c-surface));
+  }
+  .pg-map-cell[data-step="0"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.12), rgb(var(--c-gov) / 0.12)); }
+  .pg-map-cell[data-step="1"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.30), rgb(var(--c-gov) / 0.30)); }
+  .pg-map-cell[data-step="2"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.55), rgb(var(--c-gov) / 0.55)); }
+  .pg-map-cell[data-step="3"] { @apply text-on-gov; background-image: linear-gradient(rgb(var(--c-gov)), rgb(var(--c-gov))); }
+  .pg-map-cell:hover { @apply border-ink; }
+  .pg-map-cell[aria-pressed="true"] {
+    @apply z-[1] border-2 border-ink;
+    outline: 2px solid rgb(var(--c-ink));
+    outline-offset: 1px;
+  }
+  /* Legend swatches use the same steps. */
+  .pg-map-swatch { @apply block h-3.5 w-3.5 rounded border border-line; background-color: rgb(var(--c-surface)); }
+  .pg-map-swatch[data-step="0"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.12), rgb(var(--c-gov) / 0.12)); }
+  .pg-map-swatch[data-step="1"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.30), rgb(var(--c-gov) / 0.30)); }
+  .pg-map-swatch[data-step="2"] { background-image: linear-gradient(rgb(var(--c-gov) / 0.55), rgb(var(--c-gov) / 0.55)); }
+  .pg-map-swatch[data-step="3"] { background-image: linear-gradient(rgb(var(--c-gov)), rgb(var(--c-gov))); }
 }

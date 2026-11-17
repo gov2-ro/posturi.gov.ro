@@ -105,7 +105,7 @@ run_suite('valid and legacy query shapes keep working', function () use ($base) 
 });
 
 run_suite('all public routes answer', function () use ($base) {
-    foreach (['/', '/angajatori', '/angajatori/', '/angajator/spitalul-clinic-judetean-cluj/', '/statistici', '/despre', '/robots.txt', '/sitemap.xml'] as $path) {
+    foreach (['/', '/posturi/', '/angajatori', '/angajatori/', '/angajator/spitalul-clinic-judetean-cluj/', '/statistici', '/despre', '/robots.txt', '/sitemap.xml'] as $path) {
         [$status, $body] = fetch_page($base, $path);
         assert_same(200, $status, "$path — 200");
         assert_not_contains('Fatal error', $body, "$path — no fatal");
@@ -189,7 +189,7 @@ run_suite('feeds parse as their formats and respect filters', function () use ($
 
 run_suite('filtering, facet parity, chips, pagination, sort', function () use ($base) {
     // Facet parity: the Cluj checkbox count equals the filtered result count.
-    [, $home] = fetch_page($base, '/');
+    [, $home] = fetch_page($base, '/posturi/');
     preg_match('#name="judet\[\]" value="cluj"[^>]*>.*?<span[^>]*>(\d+)</span>#s', $home, $m);
     assert_true(isset($m[1]), 'cluj facet checkbox present');
     $facet_count = (int)$m[1];
@@ -240,7 +240,7 @@ run_suite('filtering, facet parity, chips, pagination, sort', function () use ($
     assert_not_contains('href="/job/1001-asistent-medical-generalist/"', $unknown, 'unknown hides dated rows');
     // The default active view excludes the closed row and includes the
     // unknown-deadline one, with its explicit "Termen neprecizat" display.
-    [, $home] = fetch_page($base, '/');
+    [, $home] = fetch_page($base, '/posturi/');
     assert_not_contains('href="/job/1003-inspector-grad-ii/"', $home, 'default view excludes closed');
     assert_contains('href="/job/1005-muncitor-necalificat/"', $home, 'default view keeps unknown-deadline rows');
 
@@ -262,7 +262,7 @@ run_suite('filtering, facet parity, chips, pagination, sort', function () use ($
 
 run_suite('BETA-CACHE: what the edge and the browser may keep', function () use ($base) {
     $cacheable = 'public, max-age=300, s-maxage=3600';
-    foreach (['/', '/?judet%5B%5D=cluj', '/?judet%5B%5D=cluj&org.htmx.cache-buster=results',
+    foreach (['/', '/posturi/', '/?judet%5B%5D=cluj', '/?judet%5B%5D=cluj&org.htmx.cache-buster=results',
               '/despre/', '/angajatori/', '/posturi.json'] as $path) {
         [$status, , $h] = fetch_page($base, $path);
         assert_same(200, $status, "$path answers 200");

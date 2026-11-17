@@ -143,43 +143,43 @@ require __DIR__ . '/../inc/header.php';
 <?php if ($_bm && $_bt): ?>
     <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs font-mono
                bg-sunken border border-line rounded p-4 my-4">
-      <dt class="text-ink-faint">Bază generată</dt>
-      <dd class="text-ink"><?= e($_bt) ?> <span class="text-ink-faint">(ora României)</span></dd>
+      <dt class="text-ink-muted">Bază generată</dt>
+      <dd class="text-ink"><?= e($_bt) ?> <span class="text-ink-muted">(ora României)</span></dd>
 
-      <dt class="text-ink-faint">Sursă verificată</dt>
+      <dt class="text-ink-muted">Sursă verificată</dt>
       <dd class="text-ink">
         <?php if (!empty($_bm['detail_fetched_at_max'])): ?>
           <?= fmt_date($_bm['detail_fetched_at_max']) ?>
-          <span class="text-ink-faint">— data la care pagina anunțului a fost citită cu succes, direct de la sursă</span>
+          <span class="text-ink-muted">— data la care pagina anunțului a fost citită cu succes, direct de la sursă</span>
         <?php else: ?>
           <span class="text-note-ink">neverificată</span>
-          <span class="text-ink-faint">— acest export nu conține încă observații de sursă (metadatele au apărut pe 04.10.2026)</span>
+          <span class="text-ink-muted">— acest export nu conține încă observații de sursă (metadatele au apărut pe 04.10.2026)</span>
         <?php endif; ?>
       </dd>
 
-      <dt class="text-ink-faint">Anunțuri active</dt>
+      <dt class="text-ink-muted">Anunțuri active</dt>
       <dd class="text-ink"><?= number_format((int) $_bm['job_postings'], 0, ',', '.') ?></dd>
 
-      <dt class="text-ink-faint">Angajatori</dt>
+      <dt class="text-ink-muted">Angajatori</dt>
       <dd class="text-ink"><?= number_format((int) $_bm['employers'], 0, ',', '.') ?></dd>
 
-      <dt class="text-ink-faint">Evenimente de concurs</dt>
+      <dt class="text-ink-muted">Evenimente de concurs</dt>
       <dd class="text-ink"><?= number_format((int) $_bm['calendar_events'], 0, ',', '.') ?></dd>
 
 <?php if (!empty($_bm['git_sha'])): ?>
-      <dt class="text-ink-faint">Versiune date</dt>
+      <dt class="text-ink-muted">Versiune date</dt>
       <dd>
         <a href="https://github.com/gov2-ro/posturi.gov.ro/commit/<?= e($_bm['git_sha']) ?>"
            class="text-gov hover:underline" target="_blank" rel="noopener"><?= e($_bm['git_sha']) ?></a>
-        <span class="text-ink-faint">— commit-ul care a construit baza de date</span>
+        <span class="text-ink-muted">— commit-ul care a construit baza de date</span>
       </dd>
 <?php endif; ?>
 <?php if (code_version() !== ''): ?>
-      <dt class="text-ink-faint">Versiune cod</dt>
+      <dt class="text-ink-muted">Versiune cod</dt>
       <dd>
         <a href="https://github.com/gov2-ro/posturi.gov.ro/commit/<?= e(code_version()) ?>"
            class="text-gov hover:underline" target="_blank" rel="noopener"><?= e(code_version()) ?></a>
-        <span class="text-ink-faint">— commit-ul care a construit site-ul servit acum</span>
+        <span class="text-ink-muted">— commit-ul care a construit site-ul servit acum</span>
       </dd>
 <?php endif; ?>
     </dl>

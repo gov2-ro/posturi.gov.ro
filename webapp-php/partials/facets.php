@@ -209,6 +209,7 @@
         // runs, then the long tail — skills and documents last, they are mostly fluff.
         facet_group('Județ',               $judet_options,      'judet',      $judet_slugs, true);
         facet_group('Localitate',          $loc_options,        'loc',        $loc_sel);
+        facet_group('Domeniu profesional', $family_options,     'family',     $families,    false, $auto_help);
         facet_group('Instituție',          $inst_options,       'inst',       $inst_sel, false,
                     'Tipul instituției, după numele angajatorului.');
         facet_group('Sector angajator',    $sector_options,     'sector',     $sector_sel);
@@ -219,9 +220,6 @@
         facet_group('Grupă ocupațională',  $cor_options,        'cor',        $cor_sel,     true,
                     'După Clasificarea Ocupațiilor din România (COR), dedusă din titlul postului. ▸ deschide subgrupele.');
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
-        facet_group('Specialitate medicală', $medspec_options,  'medspec',    $medspec_sel, false,
-                    'Specialitatea numită în titlul anunțului.');
-        facet_group('Domeniu profesional', $family_options,     'family',     $families,    false, $auto_help);
         // Estimated from the 2026 draft grid unless the posting states a salary.
         facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket ? [$sal_bucket] : [], false,
                     'Salariul anunțat, altfel cel estimat din grila de salarizare propusă (brut lunar).');
@@ -265,6 +263,8 @@
         facet_group('Domeniu de activitate', $domain_options,   'domain',     $domain_sel);
         facet_group('Limbi străine',       $lang_options,       'lang',       $lang_sel);
         facet_group('Competențe',          $skill_options,      'skill',      $skill_sel);
+        facet_group('Specialitate medicală', $medspec_options,  'medspec',    $medspec_sel, false,
+                    'Specialitatea numită în titlul anunțului.');
         facet_group('Documente necesare',  $cred_options,       'credential', $cred_sel);
         $dates_on = $exp_after !== '' || $exp_before !== '';
         ?>
@@ -290,6 +290,6 @@
         </details>
 
         <?php if ($active_chips): ?>
-          <a href="/" class="pg-clear mt-2 block py-1 text-center text-xs text-gov hover:underline">✕ Șterge filtrele</a>
+          <a href="/posturi/" class="pg-clear mt-2 block py-1 text-center text-xs text-gov hover:underline">✕ Șterge filtrele</a>
         <?php endif; ?>
 </div>

@@ -77,7 +77,6 @@ test('the county selection updates the counts and the links', async ({ page }) =
   await pick('cluj').click();
   await expect(live).toHaveText('Cluj: 2 posturi active');
   await expect(pick('cluj')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-county-all]')).not.toBeChecked();
   for (const id of ids) {
     const n = (d.items[id].counties || {}).cluj || 0;
     if (n === 0) await expect(tile(page, id), `${id} hidden in cluj`).toBeHidden();
@@ -100,7 +99,7 @@ test('the county selection updates the counts and the links', async ({ page }) =
   await expect(tile(page, 'medspec:Radiologie')).toBeHidden();
   // A second click on the same cell clears it: the totals and the first links are back.
   await page.locator('button[data-county="bacau"]').click();
-  await expect(page.locator('[data-county-all]')).toBeChecked();
+  await expect(page.locator('#home-judet')).toHaveValue('');
   await expect(live).toHaveText('Toate județele: 6 posturi active');
   for (const id of ids) {
     await expect(tile(page, id)).toBeVisible();
@@ -204,25 +203,16 @@ test('the first screen has two columns from lg: the map is in it at 1280 px, and
   await noOverflow(page, 'first screen');
 });
 
-test('the checkbox "Arată toate județele": checked with no county; a county unchecks it; checking it clears the county everywhere', async ({ page }) => {
+test('no checkbox "Arată toate județele"; the first option of the select clears the county everywhere', async ({ page }) => {
   await page.goto('/sanatate/');
   const d = await data(page);
-  const box = page.getByRole('checkbox', { name: 'Arată toate județele' });
-  await expect(box).toBeVisible();
-  await expect(box).toBeChecked();
-  expect((await box.boundingBox()).height).toBeGreaterThanOrEqual(20);
-  expect((await page.locator('label:has([data-county-all])').boundingBox()).height).toBeGreaterThanOrEqual(44);
-  // With no county, a click leaves it checked.
-  await box.click();
-  await expect(box).toBeChecked();
-  // The map unchecks it; a check clears the map, the select, the title, the links and the chart.
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  // The map sets the county; the first option of the select clears the map, the title, the links and the chart.
   const chartPts = await page.locator('[data-chart-line]').getAttribute('points');
   await page.locator('button[data-county="cluj"]').click();
-  await expect(box).not.toBeChecked();
   expect(paren(await tile(page, 'medspec:Cardiologie').locator('[data-tile-count]').textContent())).toBe(2);
   expect(await page.locator('[data-chart-line]').getAttribute('points')).not.toBe(chartPts);
-  await box.check();
-  await expect(box).toBeChecked();
+  await page.locator('#home-judet').selectOption('');
   await expect(page.locator('button[data-county][aria-pressed="true"]')).toHaveCount(0);
   await expect(page.locator('#home-judet')).toHaveValue('');
   await expect(page.locator('h1#h-theme')).toHaveText('Posturi în sănătate (6)');
@@ -230,11 +220,6 @@ test('the checkbox "Arată toate județele": checked with no county; a county un
   expect(await page.locator('[data-chart-line]').getAttribute('points')).toBe(chartPts);
   expect(paren(await tile(page, 'medspec:Cardiologie').locator('[data-tile-count]').textContent())).toBe(3);
   await expect(tile(page, 'all').locator('a')).toHaveAttribute('href', itemHref(d.items.all));
-  // The select unchecks it too, and its first option checks it.
-  await page.locator('#home-judet').selectOption('ilfov');
-  await expect(box).not.toBeChecked();
-  await page.locator('#home-judet').selectOption('');
-  await expect(box).toBeChecked();
   // The label above the map is not visible, and the map has a name.
   const lab = await page.locator('#map-label').boundingBox();
   expect(lab.width * lab.height, 'the label is not visible').toBeLessThanOrEqual(4);
@@ -465,7 +450,7 @@ test('the five buttons stay; a button with a zero series for the county is hidde
     if (zero(slug, i)) await expect(btn.nth(i + 1)).toBeHidden(); else await expect(btn.nth(i + 1)).toBeVisible();
   }
   await expect(btn).toHaveCount(d.series.length + 1);   // the buttons are the same for every county
-  await page.locator('[data-county-all]').check();
+  await page.locator('#home-judet').selectOption('');
   await expect(btn.nth(hide + 1)).toBeVisible();
 });
 
@@ -504,10 +489,9 @@ test('the options of Specialitate and Ocupație do not change with the county', 
 
 test.describe('the page without script shows the whole country', () => {
   test.use({ javaScriptEnabled: false });
-  test('the title count and the chart are national; the checkbox is hidden', async ({ page }) => {
+  test('the title count and the chart are national', async ({ page }) => {
     await page.goto('/sanatate/');
     await expect(page.locator('h1#h-theme')).toHaveText('Posturi în sănătate (6)');
-    await expect(page.locator('[data-county-all]')).toBeHidden();
     await expect(page.locator('[data-chart-stats]')).toHaveText('min 0 · max 2 · ultima 0');
   });
 });
@@ -531,7 +515,7 @@ test('the title shows the selected county: "Posturi în sănătate → Suceava";
   expect(await page.title(), 'the <title> is the same').toBe(title);
   await page.locator('#home-judet').selectOption('ilfov');
   await expect(h1).toHaveText('Posturi în sănătate → județul Ilfov (2)');
-  await page.locator('[data-county-all]').check();
+  await page.locator('#home-judet').selectOption('');
   await expect(h1).toHaveText('Posturi în sănătate (6)');
   await expect(h1.locator('[aria-hidden="true"]').filter({ hasText: '→' })).toHaveCount(0);
 });

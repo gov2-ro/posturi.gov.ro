@@ -13,8 +13,8 @@
  *     block #home-data: items[id] = {params: {field: [values]}, counties: {slug: n}}
  *     (active postings, the same predicate as the list). An item with no count element
  *     only gets the county in its link. Without script the items show the totals.
- *     A themed page has the select of its search form: the map and that select are one control. The checkbox
- *     [data-county-all] ("Arată toate județele") is checked when no county is selected and clears the county when it is checked;
+ *     A themed page has the select of its search form: the map and that select are one control. Its first
+ *     option ("Toate județele") or a second click on the selected cell clears the county;
  *     the <h1> gets " → county" ([data-county-title]) and the count of that county ([data-title-count]). Each selection
  *     sends the event `posturi:county` ({slug}) to static/theme-panel.js, which filters the chart.
  *
@@ -79,7 +79,6 @@
   var cells = qsa('[data-county]');
   var tiles = qsa('[data-home-tile]');
   var live = qs('[data-home-live]');
-  var allBox = qs('[data-county-all]');            // the checkbox "Arată toate județele" under the map of a themed page
   var title = qs('[data-county-title]');           // inside the <h1> of a themed page
   var titleCount = qs('[data-title-count]');       // the count of active postings after the title
   var current = select ? select.value : '';
@@ -101,7 +100,6 @@
   function apply(slug, announce) {
     current = slug;
     if (select) select.value = slug;
-    if (allBox) allBox.checked = !slug;
     if (titleCount) {
       var all = (data.items || {}).all || {};
       titleCount.textContent = '\u00a0(' + numLabel(slug ? ((all.counties || {})[slug] || 0) : data.total) + ')';
@@ -153,10 +151,6 @@
       var slug = c.dataset.county;
       apply(current === slug ? '' : slug, true);
     });
-  });
-  // The checkbox is checked when no county is selected. Checking it clears the county; a click while none is selected leaves it checked.
-  if (allBox) allBox.addEventListener('change', function () {
-    if (allBox.checked) apply('', true); else allBox.checked = !current;
   });
   if (select) select.addEventListener('change', function () { apply(select.value, true); });
 

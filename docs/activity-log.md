@@ -41,6 +41,9 @@ Assumed
 - Tests: `feeds_test.php` 3,386 assertions (new suite: the three formats, stated with and without an estimate).
 - Backlog: DATA-SALARY-GROSS-NET now says the goal: both figures everywhere, net first, from a recorded basis (gross or net).
 
+**Follow-up 4 (same day, owner request)**
+- `/sanatate/`: the checkbox "Arată toate județele" under the map is removed (markup, its code in `static/home.js`, its tests). The first option of the select ("Toate județele") or a second click on the selected cell clears the county. Tests: `theme_test.php` 546 assertions; `theme.spec.js` and `home.spec.js` 153 passed.
+
 ### 2026-11-17 — Footer link rows, GitHub mark, /llms.txt (not deployed)
 
 Brief: `docs/briefs/2026-11-17-footer-llms-txt.md`.

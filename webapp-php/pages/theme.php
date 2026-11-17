@@ -145,10 +145,6 @@ $heading = 'g2-heading-section';
       <div class="flex min-w-0 flex-col gap-3">
         <?php $cm_counts = $county_total; $cm_label_hidden = true;
               require __DIR__ . '/../partials/county_map.php'; ?>
-        <?php /* One native checkbox (the DS has none yet; a DS proposal is pending): checked = no county; checking it clears the county. */ ?>
-        <div data-home-js hidden>
-          <label class="inline-flex min-h-[44px] items-center gap-2 text-base"><input type="checkbox" data-county-all checked class="h-5 w-5 accent-gov">Arată toate județele</label>
-        </div>
         <?php require __DIR__ . '/../partials/home_data.php'; ?>
       </div>
       <?php endif; ?>

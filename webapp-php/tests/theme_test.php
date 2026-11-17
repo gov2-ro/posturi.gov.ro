@@ -213,12 +213,9 @@ run_suite('the search form, the county select and the county JSON', function () 
     assert_not_contains('data-county-hint', $h, 'no hint element');
     assert_same(1, $x->query('//h1/span/span[@data-county-title]')->length, 'the title has the place for the county (the script fills it)');
     assert_same(0, $x->query('//*[@data-county-clear or @data-county-picked or @data-county-name]')->length, 'no button "Toate județele" and no county name before it');
-    $cb = $x->query('//input[@type="checkbox"][@data-county-all]');
-    assert_same(1, $cb->length, 'one checkbox under the map');
-    assert_true($cb->item(0)->hasAttribute('checked'), 'it ships checked (no county selected)');
-    assert_same('Arată toate județele', trim($cb->item(0)->parentNode->textContent), 'its label');
-    assert_same(1, $x->query('//input[@data-county-all]/ancestor::div[@data-home-js and @hidden]')->length, 'it ships hidden, the script shows it');
-    assert_true(strpos($h, 'data-county-all') > strrpos(substr($h, 0, (int)strpos($h, 'data-county-all')), 'data-county="'), 'it is under the map');
+    // No checkbox "Arată toate județele" (owner request 2026-11-17): the select and the map clear the county.
+    assert_same(0, $x->query('//input[@type="checkbox"]')->length, 'no checkbox under the map');
+    assert_not_contains('Arată toate județele', $h, 'no checkbox label');
     // The label above the map is not visible, and the map has an accessible name.
     $lab = $x->query('//span[@id="map-label"]');
     assert_same('Posturi active pe județe', trim($lab->item(0)->textContent), 'the label stays for assistive technology');
@@ -241,7 +238,7 @@ run_suite('the search form, the county select and the county JSON', function () 
         }
     }
     assert_not_contains('</script><', substr($m[1], 0, 10), 'JSON is escaped for a script block');
-    assert_same(2, $x->query('//*[@data-home-js]')->length, 'the map and its line ship hidden');
+    assert_same(1, $x->query('//*[@data-home-js]')->length, 'the map ships hidden (no line under it)');
     foreach ($x->query('//*[@data-home-js]') as $el) assert_true($el->hasAttribute('hidden'), 'hidden without script');
     assert_same(42, $x->query('//button[@data-county]')->length, '42 county cells');
 });

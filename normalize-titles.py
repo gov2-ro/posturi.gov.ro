@@ -330,13 +330,54 @@ UPSERT = """
 """
 
 
-def write_occupation(conn, group, mapping: OccupationMapping, cor, provider, model, grid_version):
+def posting_counts_by_label(conn) -> dict[str, int]:
+    """`{canonical: postings}` over the whole dictionary (a label with no posting counts 0)."""
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT o.canonical, COUNT(p.id) FROM jobs_occupation o
+              LEFT JOIN jobs_jobposting p ON p.occupation_id = o.id
+             WHERE COALESCE(o.canonical, '') <> '' GROUP BY o.canonical""")
+        return {label: n for label, n in cur.fetchall()}
+
+
+def merge_spellings(conn, dry_run: bool) -> tuple[int, int]:
+    """One label for the spellings of one occupation ("Îngrijitor copii" / "Îngrijitor de copii").
+
+    No LLM. The most frequent spelling wins (`ocupatii.spelling_winners()`). Labels
+    that differ by a word stay apart. Only `canonical` changes: the COR code, the
+    grid selector and the study level of each row stay.
+    Returns `(labels changed, postings changed)`.
+    """
+    counts = posting_counts_by_label(conn)
+    winners = ocupatii.spelling_winners(counts)
+    changes = {label: winners[k] for label in counts
+               if (k := ocupatii.spelling_key(label)) and winners[k] != label}
+    for label, winner in sorted(changes.items(), key=lambda kv: -counts[kv[0]]):
+        print(f"  {label} ({counts[label]}) -> {winner} ({counts[winner]})")
+    if changes and not dry_run:
+        with conn.cursor() as cur:
+            cur.executemany("UPDATE jobs_occupation SET canonical = %s, updated_at = NOW() WHERE canonical = %s",
+                            [(winner, label) for label, winner in changes.items()])
+        conn.commit()
+    postings = sum(counts[label] for label in changes)
+    print(f"{len(changes)} labels {'would be ' if dry_run else ''}merged into another spelling, {postings} postings")
+    return len(changes), postings
+
+
+def write_occupation(conn, group, mapping: OccupationMapping, cor, provider, model, grid_version,
+                     winners: dict[str, str] | None = None):
     entry = cor.by_code.get(mapping.cor_code or "")
     selector = mapping.grid_selector.model_dump() if mapping.grid_selector else {}
+    canonical = mapping.occupation_canonical or ocupatii.canonical_label(group["parsed"].base)
+    # The model often answers "Muncitor calificat" for "Muncitor calificat
+    # electrician". The trade is in the title: keep it (UX-05-DOMAIN brief 2).
+    canonical = ocupatii.trade_label(group["parsed"].base, canonical) or canonical
+    # A new row takes the spelling the dictionary already uses (merge_spellings()).
+    canonical = (winners or {}).get(ocupatii.spelling_key(canonical), canonical)
     with conn.cursor() as cur:
         cur.execute(UPSERT, (
             group["title_norm"], group["sample"][:300],
-            (mapping.occupation_canonical or ocupatii.canonical_label(group["parsed"].base))[:300],
+            canonical[:300],
             mapping.cor_code or "", (entry.denumire if entry else "")[:300],
             mapping.isco_group or "", json.dumps(selector, ensure_ascii=False),
             mapping.study_level or "", mapping.match_confidence,
@@ -363,6 +404,30 @@ def link_postings(conn) -> int:
     return len(pairs)
 
 
+def relabel_trades(conn, dry_run: bool) -> int:
+    """Give a generic canonical ("Muncitor calificat") the trade its title names.
+
+    No LLM: `ocupatii.trade_label()` checks the title against the COR names. Only
+    `canonical` changes; the COR code, the grid selector and the grade stay.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id, title_sample, canonical FROM jobs_occupation")
+        todo = []
+        for r in cur:
+            label = ocupatii.trade_label(ocupatii.parse_title(r["title_sample"]).base, r["canonical"])
+            if label and label != r["canonical"]:
+                todo.append((label[:300], r["id"], r["canonical"], r["title_sample"]))
+    for label, _id, old, sample in todo:
+        print(f"  {sample[:56]:58s} {old} -> {label}")
+    if not dry_run:
+        with conn.cursor() as cur:
+            cur.executemany("UPDATE jobs_occupation SET canonical = %s, updated_at = NOW() WHERE id = %s",
+                            [(label, _id) for label, _id, _o, _s in todo])
+        conn.commit()
+    print(f"{len(todo)} occupations {'would be ' if dry_run else ''}relabelled")
+    return len(todo)
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -378,6 +443,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="print what would be sent and written; call no provider, write nothing")
     ap.add_argument("--link-only", action="store_true",
                     help="skip the LLM; just re-point postings at existing occupation rows")
+    ap.add_argument("--relabel-trades", action="store_true",
+                    help="skip the LLM; give a generic canonical the trade its title names (honours --dry-run)")
+    ap.add_argument("--merge-spellings", action="store_true",
+                    help="skip the LLM; one label for the spellings of one occupation (honours --dry-run)")
     ap.add_argument("--run-log", default=str(ROOT / "data" / "pipeline-runs.jsonl"), metavar="PATH",
                     help="Append this step's LLM usage (kind llm-usage) to the pipeline run log.")
     ap.add_argument("--no-run-log", action="store_true",
@@ -401,6 +470,14 @@ def main() -> int:
     with psycopg.connect(DATABASE_URL) as conn:
         if args.link_only:
             print(f"linked {link_postings(conn)} postings to occupations")
+            return 0
+
+        if args.relabel_trades or args.merge_spellings:
+            # Trades first: the spellings are counted on the final labels.
+            if args.relabel_trades:
+                relabel_trades(conn, args.dry_run)
+            if args.merge_spellings:
+                merge_spellings(conn, args.dry_run)
             return 0
 
         groups = load_titles(conn, args.slug)
@@ -438,6 +515,7 @@ def main() -> int:
             print(f"\n(dry run — {len(groups)} titles, no provider called, nothing written)")
             return 0
 
+        winners = ocupatii.spelling_winners(posting_counts_by_label(conn))
         generate = make_generator(provider, model, system_prompt)
         ledger = llm_ledger.make_ledger(
             "occupations", provider, model, PROMPT_KEY,
@@ -470,7 +548,7 @@ def main() -> int:
                 stats["failed"] += 1
                 print(f"  ✗ {group['sample'][:44]:46s} {type(exc).__name__}: {str(exc)[:110]}")
                 continue
-            write_occupation(conn, group, mapping, cor, provider, model, args.grid_version)
+            write_occupation(conn, group, mapping, cor, provider, model, args.grid_version, winners)
             cost += runner.compute_cost(provider, model, in_tok, out_tok, cached)
             stats[mapping.match_confidence] += 1
             stats["ok"] += 1

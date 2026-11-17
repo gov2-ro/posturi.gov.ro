@@ -116,6 +116,66 @@ def _canon_grade(kind: str, rank: str, suffix: str | None) -> str:
     return token if token in GRADE_TOKENS else ""
 
 
+#: Heads that name a class of worker, not a trade. The trade is in the tail.
+GENERIC_HEADS = ("muncitor calificat", "muncitor", "inginer", "tehnician")
+#: Tokens that may follow a generic head without being a trade: grade, study level.
+_HEAD_EXTRA = {"i", "ii", "iii", "iv", "v", "m", "s", "ia", "pl", "gradul", "treapta",
+               "profesionala", "categoria", "gr", "tr"}
+_TRADE_PREFIX = re.compile(
+    r"^(cu\s+atribu[țt]ii\s+(unice\s+)?(de|in|în)\s+|cu\s+calificare\s+|cu\s+autoriza[țt]ie\s+de\s+|"
+    r"în\s+meseria\s+de\s+|specialitatea\s+)", re.I)
+
+
+def _generic_head(text: str) -> str:
+    """The generic head of "Muncitor calificat IV" or "Inginer gradul I", or ""."""
+    toks = norm(text).split()
+    for head in GENERIC_HEADS:
+        h = head.split()
+        if toks[:len(h)] == h and all(t in _HEAD_EXTRA for t in toks[len(h):]):
+            return head
+    return ""
+
+
+def _is_generic_head(text: str) -> bool:
+    return bool(_generic_head(text))
+
+
+def trade_in(tail: str, head: str = "") -> str:
+    """The first trade named in `tail`, spelled as COR spells it, or "".
+
+    The tail counts as a trade when its words start the name of a COR
+    occupation (`Cor.candidates()`): "fochist", "electrician auto", "lăcătuș".
+    A department never matches: no COR name starts with "serviciul". "fochist, muncitor calificat intretinere" gives
+    "Fochist": the first post. For "inginer" and "tehnician", COR writes the head
+    into the name ("inginer construcții civile"): pass `head` and the head is
+    matched but not returned.
+
+    >>> trade_in("electrician"), trade_in("Serviciul Buget"), trade_in("intretinere")
+    ('electrician', '', '')
+    """
+    tail = _TRADE_PREFIX.sub("", (tail or "").strip())
+    if not tail:
+        return ""
+    cor = load_cor()
+    first = re.split(r"\s*[,;/]\s*|\s+(?:și|si|ȘI|SI|Și)\s+", tail)[0]
+    for piece in (tail, first):
+        piece = re.sub(r"\s*\(.*$", "", piece).strip(" .-–—")
+        words = norm(piece).split()
+        if not words or "necalificat" in words or _is_generic_head(piece):
+            continue
+        skip = len(head.split()) if head and not head.startswith("muncitor") else 0
+        full = (head.split() if skip else []) + words
+        for _, e in cor.candidates(" ".join(full), k=10):
+            name = e.denumire_normalizata.split()
+            if name[:len(full)] == full:
+                spelled = e.denumire.split()
+                # COR spells it with diacritics; keep that when the words align.
+                if len(spelled) == len(name):
+                    return " ".join(spelled[skip:len(full)]).strip(" ,;")
+                return piece
+    return ""
+
+
 def parse_title(raw: str) -> ParsedTitle:
     """Split a posting title into occupation + grade + study hint.
 
@@ -130,9 +190,16 @@ def parse_title(raw: str) -> ParsedTitle:
     # but just as often the grade ("Asistent medical comunitar – debutant").
     # Keep the tail when it is a grade; the grade is half of the grid key.
     parts = re.split(r"\s+[-–—]\s+|\s*,\s*(?=Serviciul|Compartimentul|Direc[țt]ia|Biroul)", text)
+    trade = ""
     if len(parts) > 1:
         tail = parts[-1].strip()
         keep_tail = bool(_BARE_GRADE.search(tail) or _RANKED_GRADE.search(tail))
+        # A generic head ("Muncitor calificat – electrician") hides the trade in
+        # the tail. The first tail is the trade; the grade logic below still
+        # reads the head, so the grade and the grid row do not change.
+        head = _generic_head(parts[0])
+        if head:
+            trade = trade_in(parts[1], head)
         text = f"{parts[0]} {tail}" if keep_tail else parts[0]
     text = _TITLE_NOISE.sub(" ", text)
 
@@ -173,8 +240,45 @@ def parse_title(raw: str) -> ParsedTitle:
 
     text = _GRADE_LEFTOVER.sub(" ", text)
     base = re.sub(r"\s+", " ", re.sub(r"[(),;:]+", " ", text)).strip(" .,-–—")
+    if trade and norm(trade) not in norm(base):
+        base = f"{base} {trade}"
     return ParsedTitle(raw=raw, base=base, base_norm=norm(base),
                        grade_token=grade_token, study_hint=study_hint)
+
+
+#: Words that change the spelling of a label, not its meaning ("Îngrijitor de copii").
+_SPELLING_STOP = {"de", "la", "in", "din", "pentru", "a", "al", "cu"}
+
+
+def spelling_key(label: str) -> str:
+    """Join key for the spellings of one occupation label.
+
+    Case, diacritics, hyphens, punctuation and the words `de la în din pentru a al
+    cu` do not count. The feminine "-iera" is "-ier". A word that is in one
+    label and not in the other does count: the two are two occupations.
+
+    >>> spelling_key("Îngrijitor de copii") == spelling_key("Îngrijitor copii")
+    True
+    >>> spelling_key("Infirmieră") == spelling_key("Infirmier")
+    True
+    >>> spelling_key("Asistent medical") == spelling_key("Asistent medical generalist")
+    False
+    """
+    words = [w for w in norm(label).split() if w not in _SPELLING_STOP]
+    return " ".join(re.sub(r"iera$", "ier", w) for w in words)
+
+
+def spelling_winners(counts: dict[str, int]) -> dict[str, str]:
+    """`{label: postings}` to `{key: label}`: the most frequent spelling of each key.
+
+    A tie goes to the longer label, then to the first in alphabetical order.
+    """
+    best: dict[str, str] = {}
+    for label in sorted(counts, key=lambda x: (-counts[x], -len(x), x)):
+        key = spelling_key(label)
+        if key:
+            best.setdefault(key, label)
+    return best
 
 
 def canonical_label(base: str) -> str:
@@ -183,6 +287,35 @@ def canonical_label(base: str) -> str:
     if not base:
         return ""
     return base[0].upper() + base[1:].lower() if base.isupper() else base[0].upper() + base[1:]
+
+
+def trade_label(base: str, canonical: str) -> str:
+    """The label that keeps the trade, or "" when `canonical` is not generic.
+
+    `base` is `parse_title().base`. For "Muncitor calificat electrician" with the
+    generic canonical "Muncitor calificat" the label is "Electrician". For an
+    engineer or a technician the head stays: "Inginer construcții".
+
+    >>> trade_label("Muncitor calificat electrician", "Muncitor calificat")
+    'Electrician'
+    >>> trade_label("Inginer constructii", "Inginer")
+    'Inginer construcții'
+    >>> trade_label("Muncitor calificat electrician", "Electrician")
+    ''
+    """
+    if norm(canonical) not in GENERIC_HEADS:
+        return ""
+    words = (base or "").split()
+    head = next((h for h in GENERIC_HEADS if [norm(w) for w in words[:len(h.split())]] == h.split()), "")
+    if not head:
+        return ""
+    rest = words[len(head.split()):]
+    while rest and norm(rest[0]) and set(norm(rest[0]).split()) <= _HEAD_EXTRA:
+        rest = rest[1:]
+    trade = trade_in(" ".join(rest), head)
+    if not trade:
+        return ""
+    return canonical_label(trade if head.startswith("muncitor") else f"{words[0]} {trade}")
 
 
 # --- COR ---------------------------------------------------------------------

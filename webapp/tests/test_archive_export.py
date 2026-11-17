@@ -15,7 +15,7 @@ import pytest
 from django.db import connection
 from psycopg.rows import dict_row
 
-from apps.jobs.models import Employer, JobPosting, Judet
+from apps.jobs.models import Employer, JobPosting, Judet, Occupation
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -94,3 +94,36 @@ def test_live_slice_keeps_a_recently_listed_posting_without_an_expiry(exp):
     assert listed.id in live
     assert gone.id not in live, "no longer listed: not shown as open"
     assert cancelled.id not in live
+
+
+@pytest.mark.django_db
+def test_the_archive_carries_the_cor_group_and_the_specialty(exp):
+    """Brief 2 (A3): `occ_group` and `med_specialty` use the live derivation, so the
+    weekly chart of a themed page can filter the archive like the live list."""
+    employer = Employer.objects.create(name="Group Employer", slug="group-employer")
+    judet = Judet.objects.create(name="Iasi GR", slug="iasi-gr")
+    when = date.today() - timedelta(days=5)
+    coded = post(employer, judet, expires=when)
+    fallback = post(employer, judet, expires=when)
+    doctor = post(employer, judet, expires=when)
+    Occupation.objects.create(title_norm="gr-coded", canonical="Electrician", isco_group="7411")
+    Occupation.objects.create(title_norm="gr-fallback", canonical="Electrician")
+    Occupation.objects.create(title_norm="gr-doctor", canonical="Medic specialist")
+    JobPosting.objects.filter(pk=coded.pk).update(
+        occupation=Occupation.objects.get(title_norm="gr-coded"))
+    JobPosting.objects.filter(pk=fallback.pk).update(
+        occupation=Occupation.objects.get(title_norm="gr-fallback"))
+    JobPosting.objects.filter(pk=doctor.pk).update(
+        occupation=Occupation.objects.get(title_norm="gr-doctor"),
+        title="Medic specialist medicină de familie")
+
+    con = sqlite3.connect(":memory:")
+    exp.create_schema(con)
+    with connection.connection.cursor(row_factory=dict_row) as cur:
+        exp.export_archive(cur, con)
+    rows = {r[0]: r[1:] for r in con.execute(
+        "SELECT id, occ_group, med_specialty FROM archived_postings")}
+
+    assert rows[coded.id] == ("7411", "[]"), "the dictionary's ISCO code wins"
+    assert rows[fallback.id][0] == "741", "no code: the title fallback, as in job_postings"
+    assert rows[doctor.id][1] == '["Medicină de familie"]'

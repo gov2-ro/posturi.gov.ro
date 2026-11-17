@@ -471,6 +471,10 @@ CREATE TABLE archived_postings (
     nr_posturi            INTEGER,
     occ_canonical         TEXT NOT NULL DEFAULT '',
     inf_profession_family TEXT NOT NULL DEFAULT '',
+    -- Same values, same derivation as job_postings.occ_group / med_specialty:
+    -- the weekly chart of a themed page filters the archive by them.
+    occ_group             TEXT NOT NULL DEFAULT '',
+    med_specialty         TEXT NOT NULL DEFAULT '[]',
     sal_min               REAL,
     sal_max               REAL,
     summary               TEXT NOT NULL DEFAULT ''
@@ -863,6 +867,7 @@ def export_archive(cur, con: sqlite3.Connection) -> None:
     that (a cancelled posting has no cancellation date of its own).
     """
     print("Exporting archived_postings...", end=" ", flush=True)
+    occ_majority = _occupation_majority(cur)
     cur.execute(f"""
         SELECT jp.id, jp.url, jp.title, jp.employer_id, e.name AS employer_name,
                COALESCE(j.name, '') AS judet_name, COALESCE(j.slug, '') AS judet_slug,
@@ -870,7 +875,8 @@ def export_archive(cur, con: sqlite3.Connection) -> None:
                jp.cancelled, jp.nr_posturi, jp.body_markdown,
                jp.schema_json::text AS schema_json, jp.inferred::text AS inferred,
                jp.salary_estimate::text AS salary_estimate,
-               COALESCE(o.canonical, '') AS occ_canonical
+               COALESCE(o.canonical, '') AS occ_canonical,
+               COALESCE(o.isco_group, '') AS occ_isco_group
         FROM jobs_jobposting jp
         JOIN jobs_employer e ON e.id = jp.employer_id
         LEFT JOIN jobs_judet j ON j.id = jp.judet_id
@@ -893,14 +899,17 @@ def export_archive(cur, con: sqlite3.Connection) -> None:
             r["judet_name"], r["judet_slug"], r["locality"] or "",
             fmt_date(r["published_at"]), fmt_date(r["expires_at"]), deadline["date"],
             1 if r["cancelled"] else 0, r["nr_posturi"], r["occ_canonical"],
-            inferred.get("profession_family") or "", est["min"], est["max"],
-            _summary(r["body_markdown"]),
+            inferred.get("profession_family") or "",
+            r["occ_isco_group"] or occ_majority.get(r["occ_canonical"])
+                or classify.occupation_fallback(r["occ_canonical"], r["title"]),
+            json.dumps(classify.medical_specialties(r["title"]), ensure_ascii=False),
+            est["min"], est["max"], _summary(r["body_markdown"]),
         ))
     con.executemany(
         "INSERT INTO archived_postings(id, url, title, employer_id, employer_name, judet_name, "
         "judet_slug, locality, published_at, expires_at, apply_deadline, cancelled, nr_posturi, "
-        "occ_canonical, inf_profession_family, sal_min, sal_max, summary) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+        "occ_canonical, inf_profession_family, occ_group, med_specialty, sal_min, sal_max, summary) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
     print(f"{len(rows)} rows")
 
 

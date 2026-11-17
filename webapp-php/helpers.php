@@ -2972,7 +2972,17 @@ function home_week_starts(int $weeks = 12): array {
 }
 
 /**
- * Postings published in each of the last 12 complete ISO weeks, oldest first:
+ * The posts of an announcement, as one SQL expression (the weekly chart counts posts, not announcements): `nr_posturi` when it
+ * is from 1 to 30, else 1 (missing, below 1 or above 30: the source holds wrong values, such as a year). Use it in a SELECT of
+ * job_postings or archived_postings with no table alias, or with the alias `a` in the archive (`posts_sql('a.nr_posturi')`).
+ * An estimate: DATA-NR-POSTURI in docs/backlog.md replaces the rule with a validated count.
+ */
+function posts_sql(string $col = 'nr_posturi'): string {
+    return "CASE WHEN $col BETWEEN 1 AND 30 THEN $col ELSE 1 END";
+}
+
+/**
+ * Posts (see posts_sql()) published in each of the last 12 complete ISO weeks, oldest first:
  * [['start' => 'Y-m-d', 'n' => int], …]. Source: `published_at` of
  * job_postings and archived_postings, each posting counted once (an id in
  * both tables counts for job_postings). With $family, only the postings of
@@ -2984,11 +2994,12 @@ function home_weekly_postings(int $weeks = 12, ?string $family = null): array {
     $to = (new DateTimeImmutable(end($starts), new DateTimeZone('Europe/Bucharest')))->modify('+7 days')->format('Y-m-d');
     $fj = $family === null ? '' : ' WHERE inf_profession_family = ?';
     $fa = $family === null ? '' : ' AND a.inf_profession_family = ?';
+    $pj = posts_sql(); $pa = posts_sql('a.nr_posturi');
     $st = db()->prepare(
-        "SELECT d, COUNT(*) AS c FROM (
-            SELECT substr(published_at, 1, 10) AS d FROM job_postings$fj
+        "SELECT d, SUM(p) AS c FROM (
+            SELECT substr(published_at, 1, 10) AS d, $pj AS p FROM job_postings$fj
             UNION ALL
-            SELECT substr(a.published_at, 1, 10) FROM archived_postings a
+            SELECT substr(a.published_at, 1, 10), $pa FROM archived_postings a
             WHERE a.id NOT IN (SELECT id FROM job_postings)$fa
          ) WHERE d >= ? AND d < ? GROUP BY d");
     $st->execute($family === null ? [$from, $to] : [$family, $family, $from, $to]);
@@ -3018,7 +3029,7 @@ function theme_group_of(array $groups, string $occupation): ?int {
 
 /**
  * The weekly series of the chart of a themed page, for the whole country and for each county: the postings of the profession
- * family in the last $weeks complete weeks (same weeks, same source and same once-only rule as home_weekly_postings(): job_postings
+ * family in the last $weeks complete weeks, as posts (posts_sql()) (same weeks, same source and same once-only rule as home_weekly_postings(): job_postings
  * and archived_postings, an id in both tables counts for job_postings), split into the occupation groups of the theme. A posting
  * is in one group at most (theme_group_of()), so no series is above the total.
  *
@@ -3032,11 +3043,12 @@ function theme_group_series(string $family, array $groups, int $weeks = 12): arr
     $idx = array_flip($starts);
     $from = $starts[0];
     $to = (new DateTimeImmutable(end($starts), new DateTimeZone('Europe/Bucharest')))->modify('+7 days')->format('Y-m-d');
+    $pj = posts_sql(); $pa = posts_sql('a.nr_posturi');
     $st = db()->prepare(
-        "SELECT j, occ, d, COUNT(*) AS c FROM (
-            SELECT judet_slug AS j, occ_canonical AS occ, substr(published_at, 1, 10) AS d FROM job_postings WHERE inf_profession_family = ?
+        "SELECT j, occ, d, SUM(p) AS c FROM (
+            SELECT judet_slug AS j, occ_canonical AS occ, substr(published_at, 1, 10) AS d, $pj AS p FROM job_postings WHERE inf_profession_family = ?
             UNION ALL
-            SELECT a.judet_slug, a.occ_canonical, substr(a.published_at, 1, 10) FROM archived_postings a
+            SELECT a.judet_slug, a.occ_canonical, substr(a.published_at, 1, 10), $pa FROM archived_postings a
             WHERE a.id NOT IN (SELECT id FROM job_postings) AND a.inf_profession_family = ?
          ) WHERE d >= ? AND d < ? GROUP BY j, occ, d");
     $st->execute([$family, $family, $from, $to]);

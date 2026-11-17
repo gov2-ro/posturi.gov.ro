@@ -12,7 +12,7 @@ declare(strict_types=1);
 <div data-theme-stats class="flex min-w-0 flex-col gap-5">
   <h2 class="sr-only">Statistici</h2>
   <?php if ($ts['weekly'] !== null): ?>
-  <?php $wc = ['weekly' => $ts['weekly'], 'caption' => 'Anunțuri noi pe săptămână', 'caption_hidden' => true, 'series' => $ts['series']];
+  <?php $wc = ['weekly' => $ts['weekly'], 'caption' => 'Posturi publicate pe săptămână', 'caption_hidden' => true, 'series' => $ts['series']];
         require __DIR__ . '/weekly_chart.php'; ?>
   <?php endif; ?>
   <?php /* The data of the county selection (static/theme-panel.js): the same panel for every reader; the page shows the whole country. */ ?>

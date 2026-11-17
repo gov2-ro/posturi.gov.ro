@@ -23,7 +23,7 @@ The weekly chart of the landing page and of each themed page counts **posts** (*
   - thin bars, with space between them;
   - no grid and no axis labels other than the two dates;
   - the colour of the line for a single series;
-  - a thin gap of the page colour between two segments.
+  - no border and no gap on the segments: adjacent segments touch (owner, 2026-11-18).
 - The axis stays shared: from 0 to the largest week of any button (Opus, 2026-11-17). A stacked bar of "Toate" is as tall as the total.
 
 ## Measured (17 Oct export; `job_postings` plus the rows of `archived_postings` that are not in `job_postings`)
@@ -66,7 +66,7 @@ Report:
 ### 2. Captions and texts
 
 - Both charts have the caption "Posturi publicate pe săptămână".
-- Below the chart, one muted sentence: "Estimare: un anunț fără număr de posturi contează ca un post."
+- No sentence about the estimate under the chart (owner, 2026-11-18). A code comment explains the rule.
 - The line "min · max · ultima", the `aria-label` of the chart and the live region speak of posts:
   - Write "Medic: 25 de posturi în ultimele 12 săptămâni", not "anunțuri".
   - Use the rule of `posturi_label()` (helpers.php). Its JavaScript twin replaces `ads()` in `theme-panel.js`.
@@ -85,7 +85,7 @@ Report:
 ### 4. Stacked bar under "Toate" (themed page)
 
 - Segments, from the bottom up: the groups of the theme in configuration order, then "Alte ocupații". "Alte ocupații" is the total minus the sum of the groups of that week and county. Check that it is never below 0, and report it if it is.
-- Colours, in group order: `chart-2`, `chart-1`, `chart-3`, `chart-4`. "Alte ocupații" has no fill and a 1 px border in the colour `line`. Separate two segments with a 1 px gap of the page colour. A theme with more than 4 groups: stop and ask. Today no theme has more than 4.
+- Colours, in group order: `chart-2`, `chart-1`, `chart-3`, `chart-4`. "Alte ocupații" has the fill `chart-1` at 30 % opacity: not white, and different from each group colour (owner, 2026-11-18). No segment has a border, and two segments have no gap between them. A theme with more than 4 groups: stop and ask. Today no theme has more than 4.
 - Each group button shows a square of its colour before the text. The button "Toate" has no square. The buttons are the legend. Add a text item "Alte ocupații" with its square after the buttons, as a legend entry and not as a button.
 - A group button shows the bars of that group only, in the colour of its segment, on the same axis.
 - The colour is not the only cue: each segment has its `<title>` (group, week, value).
@@ -103,7 +103,7 @@ The DS has 4 chart colours: two blues and two greys. Use them as written above. 
   - The landing chart sums posts. Mutation: `COUNT(*)`.
   - A themed chart: for each week, the sum of the segments equals the total. Mutation: drop "Alte ocupații".
   - No polyline, and no `POSTURI_CHART_BARS`, in the source.
-  - The caption and the estimate sentence are present.
+  - The caption is present.
 - **Playwright (`theme.spec.js`, `home.spec.js`), at 375 and 1280 px:**
   - "Toate" shows 12 stacks. The segment heights of a week add up to the height of the total bar.
   - A group button shows one series in its colour. Its tallest bar is at the expected fraction of the axis: update the existing check, Medic at half the axis on the fixture.

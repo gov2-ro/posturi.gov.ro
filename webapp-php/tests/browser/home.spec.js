@@ -698,3 +698,27 @@ test('a domain item with a themed page links to it; with a county the link has t
   await expect(page).toHaveURL(new RegExp(slug + '#' + county + '$'));
   await expect(page.locator('#home-judet')).toHaveValue(county);
 });
+
+// The shared fixture has fewer than 4 weeks with postings, so the chart is hidden there; the theme fixture (health postings in 10 weeks) shows it.
+test.describe('the landing chart', () => {
+test.use({ baseURL: 'http://127.0.0.1:8824' });
+test('the weekly chart: 12 thin bars of one colour, posts, a title on each, a baseline and no grid; the estimate is said; no overflow', async ({ page }) => {
+  await page.goto('/');
+  const fig = page.locator('figure:has(svg[role="img"] g[data-bar])');
+  await expect(fig.locator('figcaption')).toHaveText('Posturi publicate pe săptămână');
+  await expect(fig.getByText('Estimare: un anunț')).toHaveCount(0);
+  await expect(fig.locator('svg[role="img"] g[data-bar]'), 'twelve weeks').toHaveCount(12);
+  // The landing chart has no groups: one bar for each week with posts, all of the colour of the first series. Mutation: a line (polyline) or a grid.
+  const bars = await fig.locator('svg rect').evaluateAll((rs) => rs.map((r) => ({ c: r.getAttribute('class'), h: parseFloat(r.getAttribute('height')), t: r.querySelector('title').textContent, w: r.getBoundingClientRect().width })));
+  expect(bars.length, 'at least 4 weeks with posts').toBeGreaterThanOrEqual(4);
+  bars.forEach((b) => { expect(b.c).toBe('pg-seg'); expect(b.t).toMatch(/^săpt\. \d+ [a-z]{3}: \d+ (de )?post(uri)?$/); });
+  expect(Math.max(...bars.map((b) => b.h)), 'the tallest bar reaches the top of the axis (0 to the largest week)').toBe(60);
+  const slot = (await fig.locator('svg[role="img"]').boundingBox()).width / 12;
+  bars.forEach((b) => expect(b.w / slot, 'a bar is half of its slot: thin, with space between').toBeCloseTo(0.5, 1));
+  await expect(fig.locator('svg line'), 'one baseline, no grid').toHaveCount(1);
+  await expect(fig.locator('svg polyline, svg path')).toHaveCount(0);
+  await expect(fig.locator('svg[role="img"]')).toHaveAttribute('aria-label', /^Posturi publicate pe săptămână, ultimele 12 săptămâni complete: între \d+ și [\d.]+ (de )?post(uri)?$/);
+  const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
+  expect(o, 'no horizontal overflow').toBeLessThanOrEqual(1);
+});
+});

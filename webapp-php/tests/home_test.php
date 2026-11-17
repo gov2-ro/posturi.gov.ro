@@ -589,7 +589,10 @@ run_suite('the weekly chart: shown from 4 weeks with data, counted once, 12 comp
                 VALUES (2001, 'https://x/2001', 'dup', 1, 'e', 'Cluj', 'cluj', '', '2026-07-15', NULL, NULL, 0, NULL, '', '', NULL, NULL, '')");
     // A distinct archived posting in the oldest week counts once.
     $pdo->exec("INSERT INTO archived_postings (id, url, title, employer_id, employer_name, judet_name, judet_slug, locality, published_at, expires_at, apply_deadline, cancelled, nr_posturi, occ_canonical, inf_profession_family, sal_min, sal_max, summary)
-                VALUES (990001, 'https://x/990001', 'old', 1, 'e', 'Cluj', 'cluj', '', '2026-07-07', NULL, NULL, 0, NULL, '', '', NULL, NULL, '')");
+                VALUES (990001, 'https://x/990001', 'old', 1, 'e', 'Cluj', 'cluj', '', '2026-07-07', NULL, NULL, 0, 12, '', '', NULL, NULL, '')");
+    // Post counts: the archived row has 12 posts; one live posting has 4, and one has 339395 (wrong: counts as 1).
+    $pdo->exec("UPDATE job_postings SET nr_posturi = 4 WHERE id = (SELECT MIN(id) FROM job_postings WHERE published_at >= '2026-08-01' AND published_at < '2026-09-28')");
+    $pdo->exec("UPDATE job_postings SET nr_posturi = 339395 WHERE id = (SELECT MAX(id) FROM job_postings WHERE published_at >= '2026-08-01' AND published_at < '2026-09-28')");
     $shared = (int)$pdo->query('SELECT COUNT(*) FROM job_postings j JOIN archived_postings a ON a.id = j.id')->fetchColumn();
     assert_same(1, $shared, 'the test database has one id in both tables');
     $per_week = [];
@@ -597,7 +600,9 @@ run_suite('the weekly chart: shown from 4 weeks with data, counted once, 12 comp
     for ($w = 12; $w >= 1; $w--) {
         $from = $monday->modify("-$w weeks")->format('Y-m-d');
         $to = $monday->modify('-' . ($w - 1) . ' weeks')->format('Y-m-d');
-        $n = (int)$pdo->query("SELECT COUNT(*) FROM (SELECT substr(published_at,1,10) d FROM job_postings UNION ALL SELECT substr(published_at,1,10) FROM archived_postings WHERE id NOT IN (SELECT id FROM job_postings)) WHERE d >= '$from' AND d < '$to'")->fetchColumn();
+        // Posts, with the rule written on the side: nr_posturi from 1 to 30, else 1.
+        $p = 'CASE WHEN nr_posturi >= 1 AND nr_posturi <= 30 THEN nr_posturi ELSE 1 END';
+        $n = (int)$pdo->query("SELECT SUM(p) FROM (SELECT substr(published_at,1,10) d, $p p FROM job_postings UNION ALL SELECT substr(published_at,1,10), $p FROM archived_postings WHERE id NOT IN (SELECT id FROM job_postings)) WHERE d >= '$from' AND d < '$to'")->fetchColumn();
         $per_week[] = $n;
     }
     $pdo = null;
@@ -605,11 +610,22 @@ run_suite('the weekly chart: shown from 4 weeks with data, counted once, 12 comp
     $html = home_html($db);
     assert_contains('min ' . min($per_week) . ' · max ' . max($per_week) . ' · ultima ' . end($per_week), $html, 'min, max and last');
     assert_contains('între ' . min($per_week) . ' și ' . max($per_week), $html, 'the svg label');
-    // The polyline, drawn on the side from the counts: the shared partial (partials/weekly_chart.php) draws the landing chart as before.
-    [$lo, $hi] = [min($per_week), max($per_week)];
-    $pts = [];
-    foreach ($per_week as $i => $v) $pts[] = round($i / 11 * 320, 1) . ',' . round($hi === $lo ? 32 : 4 + (1 - ($v - $lo) / ($hi - $lo)) * 56, 1);
-    assert_contains('points="' . implode(' ', $pts) . '"', $html, 'the polyline of the landing chart');
+    // The bars, drawn on the side from the counts: 12 slots of 26.67, a bar is half a slot, the axis is from 0 to the largest week (60 high).
+    $hi = max($per_week);
+    $x = xp($html);
+    $bars = $x->query('//svg[@role="img"]//g[@data-bar]');
+    assert_same(12, $bars->length, 'twelve bars');
+    foreach ($per_week as $i => $v) {
+        $r = $x->query('.//rect', $bars->item($i));
+        assert_same(1, $r->length, "week $i: one bar");
+        assert_same(round(60 * $v / $hi, 2), round((float)$r->item(0)->getAttribute('height'), 2), "week $i: the height of the bar, from 0 to the largest week");
+        assert_same(round($i * 320 / 12 + 320 / 12 / 4, 2), round((float)$r->item(0)->getAttribute('x'), 2), "week $i: the place of the bar");
+        assert_same(round(320 / 12 / 2, 2), round((float)$r->item(0)->getAttribute('width'), 2), "week $i: the width of the bar is half of its slot");
+        assert_same('pg-seg', $r->item(0)->getAttribute('class'), "week $i: a single series, the colour of the line");
+        assert_same(true, (bool)preg_match('/^săpt\. \d+ [a-z]{3}: ' . preg_quote(number_format($v, 0, ',', '.'), '/') . ' (de )?post(uri)?$/u', $x->query('./title', $r->item(0))->item(0)->textContent), "week $i: the title of the bar");
+    }
+    assert_not_contains('<polyline', $html, 'no line');
+    assert_not_contains('Estimare: un anunț', $html, 'no sentence about the estimate (owner, 2026-11-18)');
     assert_contains('<figcaption class="g2-label">Posturi publicate pe săptămână</figcaption>', $html, 'the caption of the landing chart');
     assert_contains('aria-label="Posturi publicate pe săptămână, ultimele 12 săptămâni complete: între ', $html, 'the label of the landing chart');
     assert_same(home_weekly_postings_on($db), home_weekly_postings_on($db, true), 'a null family is the landing result');

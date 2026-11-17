@@ -25,6 +25,8 @@ require_once __DIR__ . '/fixtures/page_helpers.php';
 require_once __DIR__ . '/../assets/icons/healthicons/build-sprite.php';
 
 putenv('POSTURI_TODAY=2026-10-03');
+/** The rule of posts, written on the side (not posts_sql()): 1 to 30 as it is, else 1. */
+const POSTS_SIDE = 'CASE WHEN nr_posturi >= 1 AND nr_posturi <= 30 THEN nr_posturi ELSE 1 END';
 const HEALTH = 'family%5B%5D=s%C4%83n%C4%83tate';
 // The county map is in the first screen (section h-theme), so the "counties" section has no section of its own.
 const SECTION_IDS = ['h-theme', 'h-specialitati', 'h-ocupatii', 'h-studii', 'h-noi', 'h-notificari'];
@@ -352,17 +354,17 @@ run_suite('the title has the count of the theme; the link to all follows the lin
 run_suite('the weekly chart of the theme counts only the theme, each posting once', function () use ($base, $db) {
     $weekly = json_decode(php_on($db, 'echo json_encode(home_weekly_postings(12, "sănătate"));'), true);
     assert_same(['2026-07-06', '2026-09-21'], [$weekly[0]['start'], end($weekly)['start']], 'twelve complete weeks');
-    // 9101 (Jul 8), 9107 + 9108 (Jul 14, 15), 9001 (Aug 1) and 9109 (Aug 3), 1003 + 9102 (Aug 10 and 12), 9110 (Aug 19), 9106 (Sep 2), 2001 + 2002 (Sep 15);
+    // 9101 (Jul 8), 9107 + 9108 (Jul 14, 15), 9001 (Aug 1, two posts) and 9109 (Aug 3), 1003 + 9102 (Aug 10 and 12), 9110 (Aug 19), 9106 (Sep 2), 2001 + 2002 (Sep 15);
     // out: 9103 (another family), 9104 (the id of 2001: once), 9105 (before Jul 6), the postings of the current week.
-    assert_same([1, 2, 0, 1, 1, 2, 1, 0, 1, 0, 2, 0], array_column($weekly, 'n'), 'weeks of the theme');
+    assert_same([1, 2, 0, 2, 1, 2, 1, 0, 1, 0, 2, 0], array_column($weekly, 'n'), 'weeks of the theme, in posts: 9001 has nr_posturi 2');
     $all = json_decode(php_on($db, 'echo json_encode(home_weekly_postings(12));'), true);
     assert_true(array_sum(array_column($all, 'n')) > array_sum(array_column($weekly, 'n')), 'without the family the chart counts more (the other families)');
     [, $h] = http_page($base, '/sanatate/');
-    assert_contains('Anunțuri noi pe săptămână', $h, 'the caption of the chart');
+    assert_contains('Posturi publicate pe săptămână', $h, 'the caption of the chart');
     assert_contains('min 0 · max 2 · ultima 0', $h, 'min, max, last');
     assert_not_contains('Toată țara', $h, 'no caption below the chart');
     $cap = xp($h)->query('//figure[@data-chart]/figcaption');
-    assert_same('Anunțuri noi pe săptămână', trim($cap->item(0)->textContent), 'the heading of the chart stays for assistive technology');
+    assert_same('Posturi publicate pe săptămână', trim($cap->item(0)->textContent), 'the heading of the chart stays for assistive technology');
     assert_same('sr-only', trim($cap->item(0)->getAttribute('class')), '… and is visually hidden');
     assert_not_contains('Arhiva începe', $h, 'no note about the archive');
     assert_not_contains('Ocupații, pe luni', $h, 'no month table');
@@ -397,9 +399,9 @@ run_suite('the buttons of the chart: "Toate" and the four occupation groups, in 
         'Asistent' => "occ_canonical LIKE 'Asistent medical%'",
         'Îngrijitor' => "occ_canonical IN ('Îngrijitor', 'Infirmier', 'Infirmieră', 'Brancardier')",
     ];
-    $sql = fn(string $c, string $w0) => (int)$pdo->query("SELECT COUNT(*) FROM (
-        SELECT substr(published_at,1,10) d FROM job_postings WHERE inf_profession_family='sănătate' AND ($c)
-        UNION ALL SELECT substr(published_at,1,10) FROM archived_postings WHERE inf_profession_family='sănătate' AND ($c) AND id NOT IN (SELECT id FROM job_postings))
+    $sql = fn(string $c, string $w0) => (int)$pdo->query("SELECT SUM(p) FROM (
+        SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE inf_profession_family='sănătate' AND ($c)
+        UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE inf_profession_family='sănătate' AND ($c) AND id NOT IN (SELECT id FROM job_postings))
         WHERE d >= '$w0' AND d < date('$w0', '+7 days')")->fetchColumn();
     $starts = [];
     for ($i = 0, $t = new DateTimeImmutable('2026-07-06'); $i < 12; $i++) $starts[] = $t->modify("+$i weeks")->format('Y-m-d');
@@ -411,7 +413,7 @@ run_suite('the buttons of the chart: "Toate" and the four occupation groups, in 
     $by = array_column($d['series'], 'values', 'name');
     assert_same([0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0], $by['Medic'], 'Medic: Medic specialist on 12 Aug and 2 Sep, and not the resident');
     assert_same([0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], $by['Rezident'], 'Rezident: "Medic rezident" on 19 Aug, in this group and not in Medic');
-    assert_same([1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0], $by['Asistent'], 'Asistent: Asistent medical on 8 Jul, 1 Aug, 10 Aug (closed), 15 Sep');
+    assert_same([1, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1, 0], $by['Asistent'], 'Asistent: Asistent medical on 8 Jul, 1 Aug (two posts), 10 Aug (closed), 15 Sep');
     assert_same([0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], $by['Îngrijitor'], 'Îngrijitor: "Infirmier" on 3 Aug');
     // A posting is in one group at most; the rest (Farmacist, Kinetoterapeut, Psiholog) is in no group.
     $grouped = array_map(fn($i) => array_sum(array_column(array_column($d['series'], 'values'), $i)), range(0, 11));
@@ -489,9 +491,9 @@ run_suite('the county data of the panel: the weekly values of each county equal 
     ];
     $weekly = function (string $county, string $group = '') use ($pdo, $health, $starts, $cond) {
         $o = $group === '' ? '' : ' AND (' . $cond[$group] . ')';
-        return array_map(fn($w) => (int)$pdo->query("SELECT COUNT(*) FROM (
-            SELECT substr(published_at,1,10) d FROM job_postings WHERE $health AND judet_slug=" . $pdo->quote($county) . "$o
-            UNION ALL SELECT substr(published_at,1,10) FROM archived_postings WHERE $health AND judet_slug=" . $pdo->quote($county) . "$o AND id NOT IN (SELECT id FROM job_postings))
+        return array_map(fn($w) => (int)$pdo->query("SELECT SUM(p) FROM (
+            SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE $health AND judet_slug=" . $pdo->quote($county) . "$o
+            UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE $health AND judet_slug=" . $pdo->quote($county) . "$o AND id NOT IN (SELECT id FROM job_postings))
             WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
     };
     $names = array_column($d['series'], 'name');
@@ -507,9 +509,9 @@ run_suite('the county data of the panel: the weekly values of each county equal 
     }
     // The sum rule: each week and each series, the sum over the counties is the national value of the postings that have a county;
     // the figures "active" and "7 days" too (the fixture has no posting with no county). Not for the employers.
-    $national = fn(string $group = '') => array_map(fn($w) => (int)$pdo->query("SELECT COUNT(*) FROM (
-            SELECT substr(published_at,1,10) d FROM job_postings WHERE $health AND judet_slug<>''" . ($group === '' ? '' : ' AND (' . $cond[$group] . ')') . "
-            UNION ALL SELECT substr(published_at,1,10) FROM archived_postings WHERE $health AND judet_slug<>''" . ($group === '' ? '' : ' AND (' . $cond[$group] . ')') . " AND id NOT IN (SELECT id FROM job_postings))
+    $national = fn(string $group = '') => array_map(fn($w) => (int)$pdo->query("SELECT SUM(p) FROM (
+            SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE $health AND judet_slug<>''" . ($group === '' ? '' : ' AND (' . $cond[$group] . ')') . "
+            UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE $health AND judet_slug<>''" . ($group === '' ? '' : ' AND (' . $cond[$group] . ')') . " AND id NOT IN (SELECT id FROM job_postings))
             WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
     assert_same($national(), $sum['t'], 'the weekly total: the counties add up to the national value');
     assert_same($d['total'], $sum['t'], 'and to the total that the server draws (every posting has a county on the fixture)');
@@ -1019,6 +1021,109 @@ run_suite('a second theme from the configuration: the same template, no change',
 
 stop_fixture_server($srv2, $db2);
 @unlink($extra);
+
+// ---- the weekly chart counts posts, and draws bars (brief 5) ----
+
+run_suite('posts_sql(): 1 to 30 as it is; a missing value, 0, 31 and 339395 count as 1', function () {
+    $out = php_on(theme_db('postsrule'), '$p = new PDO("sqlite::memory:"); $p->exec("CREATE TABLE t (nr_posturi INTEGER)");
+        foreach ([2, null, 0, 31, 339395, 1, 30] as $v) $p->prepare("INSERT INTO t VALUES (?)")->execute([$v]);
+        echo json_encode(array_map("intval", $p->query("SELECT " . posts_sql() . " FROM t")->fetchAll(PDO::FETCH_COLUMN)));');
+    assert_same([2, 1, 1, 1, 1, 1, 30], json_decode($out, true), 'one case for each branch: 2, missing, 0, 31, 339395, and the edges 1 and 30');
+    assert_same('CASE WHEN a.n BETWEEN 1 AND 30 THEN a.n ELSE 1 END', posts_sql('a.n'), 'the column can be qualified (the archive alias)');
+});
+
+/** A theme fixture where some announcements of the health family have a post count (see the rule of posts). */
+function posts_db(): string {
+    // 9102 Medic, 12 Aug (week 5): 7 posts. 9107 Kinetoterapeut and 9108 Psiholog, 14 and 15 Jul (week 1): 339395 and 0, so 1 each.
+    // 9110 Medic rezident, 19 Aug (week 6): 31, so 1. 2002 Asistent, 15 Sep (week 10): 2. 9001 (week 3) has 2 in the fixture.
+    $sql = '';
+    foreach ([9102 => 7, 9107 => 339395, 9108 => 0, 9110 => 31, 2002 => 2] as $id => $n)
+        $sql .= "UPDATE job_postings SET nr_posturi = $n WHERE id = $id; UPDATE archived_postings SET nr_posturi = $n WHERE id = $id; ";
+    return theme_db('posts', $sql);
+}
+
+run_suite('the chart sums posts: the landing total, a theme total and each group', function () {
+    $db = posts_db();
+    $health = json_decode(php_on($db, 'echo json_encode(array_column(home_weekly_postings(12, "sănătate"), "n"));'), true);
+    assert_same([1, 2, 0, 2, 1, 8, 1, 0, 1, 0, 3, 0], $health, 'the weeks of the theme in posts (COUNT(*) gives [1, 2, 0, 1, 1, 2, 1, 0, 1, 0, 2, 0])');
+    $pdo = new PDO('sqlite:' . $db);
+    $starts = [];
+    for ($i = 0, $t = new DateTimeImmutable('2026-07-06'); $i < 12; $i++) $starts[] = $t->modify("+$i weeks")->format('Y-m-d');
+    $side = fn(string $w) => (int)$pdo->query("SELECT SUM(p) FROM (
+        SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings
+        UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE id NOT IN (SELECT id FROM job_postings))
+        WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn();
+    $landing = json_decode(php_on($db, 'echo json_encode(array_column(home_weekly_postings(12), "n"));'), true);
+    assert_same(array_map($side, $starts), $landing, 'the landing total equals the posts of the SQL on the side');
+    $pdo->exec("UPDATE job_postings SET nr_posturi = NULL, published_at = '2026-07-13' WHERE id = 1003");
+    $groups = json_decode(php_on($db, 'echo json_encode(theme_group_series("sănătate", [["label" => "Medic", "prefixes" => ["Medic"], "except" => ["Medic rezident"]]], 12));'), true);
+    assert_same([0, 0, 0, 0, 0, 7, 0, 0, 1, 0, 0, 0], $groups['groups'][0], 'the group Medic in posts: 7 on 12 Aug (9102), 1 on 2 Sep');
+    assert_same($groups['total'], json_decode(php_on($db, 'echo json_encode(array_column(home_weekly_postings(12, "sănătate"), "n"));'), true), 'the group function and the total function agree');
+});
+
+/** Per week: the posts that the titles of the segments give, and the heights; from the SVG of a chart page. */
+function chart_bars(string $html): array {
+    $x = xp($html);
+    $out = [];
+    foreach ($x->query('//figure[@data-chart or not(@data-chart)]//svg[@role="img"]//g[@data-bar]') as $g) {
+        $segs = [];
+        foreach ($x->query('.//rect', $g) as $r) {
+            preg_match('/: ([\d.]+) (?:de )?post(?:uri)?$/u', $x->query('./title', $r)->item(0)->textContent, $m);
+            $segs[] = ['posts' => (int)str_replace('.', '', $m[1]), 'h' => (float)$r->getAttribute('height'), 'class' => $r->getAttribute('class'),
+                       'title' => $x->query('./title', $r)->item(0)->textContent];
+        }
+        $out[] = $segs;
+    }
+    return $out;
+}
+
+run_suite('the chart of a theme: 12 stacks; the segments of each week add up to the total; the colours, the legend, the texts', function () {
+    $db = posts_db();
+    $srv = start_fixture_server($db);
+    [, $h] = http_page($srv['base'], '/sanatate/');
+    stop_fixture_server($srv, $db);
+    $weeks = chart_bars($h);
+    assert_same(12, count($weeks), 'twelve stacks');
+    assert_same(0, preg_match('/<polyline|<path/', substr($h, strpos($h, '<figure'), strpos($h, '</figure>') - strpos($h, '<figure'))), 'no line and no area in the chart');
+    preg_match('#<script type="application/json" id="theme-panel-data">(.*?)</script>#s', $h, $m);
+    $d = json_decode($m[1], true);
+    $hi = max($d['total']);
+    foreach ($weeks as $i => $segs) {
+        assert_same($d['total'][$i], array_sum(array_column($segs, 'posts')), "week $i: the segments add up to the total");
+        assert_true(abs(array_sum(array_column($segs, 'h')) - $d['total'][$i] / $hi * 60) < 0.05, "week $i: the heights add up (segments touch) to the height of the total");
+        foreach ($segs as $sg) assert_true($sg['posts'] > 0, "week $i: no empty segment");
+    }
+    // Week 1: Kinetoterapeut and Psiholog are in no group: one segment, "Alte ocupații", 2 posts (the class).
+    assert_same(1, count($weeks[1]), 'week 1: one segment');
+    assert_contains('pg-c-other', $weeks[1][0]['class'], 'week 1: "Alte ocupații"');
+    assert_contains('Alte ocupații', $weeks[1][0]['title'], 'its title names it');
+    assert_contains('săpt. 13 iul', $weeks[1][0]['title'], 'and the week');
+    // Week 5: Medic 7 (class pg-c-1, chart-2: the first group), Asistent 1 (the third group, pg-c-2). Bottom up: the groups in order.
+    assert_same(['pg-seg pg-c-1', 'pg-seg pg-c-2'], array_column($weeks[5], 'class'), 'week 5: the colours of the groups, in order');
+    assert_same([7, 1], array_column($weeks[5], 'posts'), 'week 5: Medic 7, Asistent 1');
+    assert_contains('săpt. 10 aug, Medic: 7 posturi', $weeks[5][0]['title'], 'the title: week, group and posts');
+    // The Alte ocupații segment is never below 0: the total minus the groups.
+    foreach (array_keys($d['total']) as $i) assert_true($d['total'][$i] - array_sum(array_column(array_column($d['series'], 'values'), $i)) >= 0, "week $i: Alte ocupații is not below 0");
+    // The texts: the caption, the estimate, and the posts in the label.
+    assert_not_contains('Estimare: un anunț', $h, 'no sentence about the estimate (owner, 2026-11-18)');
+    assert_contains('aria-label="Posturi publicate pe săptămână, ultimele 12 săptămâni complete: între 0 și 8 posturi"', $h, 'the label speaks of posts');
+    assert_same('Posturi publicate pe săptămână', $d['caption'], 'the caption of the JSON');
+    assert_same(12, count($d['weeks']), 'the JSON has the 12 week labels');
+    // The buttons: a square of the colour of the group before the text; "Toate" has none; the legend entry is not a button.
+    $x = xp($h);
+    foreach ($x->query('//button[@data-chart-series]') as $b) {
+        $sq = $x->query('./span[contains(@class,"pg-chart-sq")]', $b)->length;
+        assert_same($b->getAttribute('data-chart-series') === '-1' ? 0 : 1, $sq, 'the button ' . trim($b->textContent) . ': a square only on a group');
+    }
+    assert_same(['pg-c-1', 'pg-c-0', 'pg-c-2', 'pg-c-3'], array_map(fn($n) => preg_replace('/^.*(pg-c-\d).*$/', '$1', $n->getAttribute('class')), iterator_to_array($x->query('//button[@data-chart-series!="-1"]/span'))), 'the squares: chart-2, chart-1, chart-3, chart-4');
+    assert_same(1, $x->query('//span[@data-chart-other][contains(., "Alte ocupații")][not(self::button)]')->length, 'the legend entry "Alte ocupații", not a button');
+    assert_not_contains('POSTURI_CHART_BARS', file_get_contents(__DIR__ . '/../partials/weekly_chart.php') . file_get_contents(__DIR__ . '/../static/theme-panel.js') . file_get_contents(__DIR__ . '/../helpers.php'), 'no switch of the prototype');
+    assert_not_contains('polyline', file_get_contents(__DIR__ . '/../partials/weekly_chart.php') . file_get_contents(__DIR__ . '/../static/theme-panel.js'), 'no polyline in the sources');
+    // No theme has more than 4 groups (the colours are 4); a fifth group needs a decision.
+    require_once __DIR__ . '/../inc/themes.php';
+    foreach (themes() as $slug => $t) assert_true(count($t['history']['groups'] ?? []) <= 4, "theme $slug: at most 4 chart groups");
+});
+
 
 run_suite('server log: no warnings, notices or fatals', function () use ($srv) {
     $log = (string)@file_get_contents($srv['log']);

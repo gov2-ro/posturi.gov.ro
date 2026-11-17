@@ -99,7 +99,7 @@ foreach ($theme['sections'] as $sec) if ($sec['type'] === 'stats' && is_string($
     foreach ($groups as $i => $g) $series[] = ['name' => $g['label'], 'values' => $gs['groups'][$i]];
     $ts = ['weekly' => $weekly, 'series' => $series];
     // For each county the weekly total and the weekly series of each group (the same sources as the chart); the page is the whole country.
-    $ts['data'] = ['caption' => 'Anunțuri noi pe săptămână', 'total' => $gs['total'], 'series' => $series, 'counties' => $gs['counties']];
+    $ts['data'] = ['caption' => 'Posturi publicate pe săptămână', 'weeks' => array_map(fn($w) => home_short_date($w['start']), $weekly), 'total' => $gs['total'], 'series' => $series, 'counties' => $gs['counties']];
 }
 
 $ns = ['base' => $base] + home_new_soon($base, $today);

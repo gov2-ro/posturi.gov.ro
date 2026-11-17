@@ -2,6 +2,37 @@
 
 ## 2026
 
+### 2026-11-18 — Weekly chart: posts, bars, a stacked bar under "Toate" (brief 5; not deployed)
+
+**Opus review (2026-11-18): accepted.** Opus took new screenshots on the 17 Oct export (`/sanatate/` "Toate" and "Asistent", `/administratie/`, the landing page; 1280 and 375 px) and checked the three owner changes: no estimate sentence, a light-blue "Alte ocupații", touching segments. No horizontal scroll. All 20 PHP suites pass. Noted, not changed: `tailwind.config.js` does not scan `static/*.js`, so a class that only the script writes is purged. The colour classes are listed in the PHP colour map for this reason. A fifth chart group falls back to the fourth colour; the DS proposal for a categorical palette is not opened yet (owner decision pending).
+
+Brief `docs/briefs/2026-11-18-weekly-chart-posts-bars.md`. Sonnet built it; Opus review is open. The bar prototype and `POSTURI_CHART_BARS` were already removed (Opus, before the commit of brief 1). The bars are built from the line chart.
+
+**Done**
+- Rule of posts: `posts_sql()` in `helpers.php`. Posts = `nr_posturi` from 1 to 30, else 1. `home_weekly_postings()` and `theme_group_series()` sum it in place of `COUNT(*)`: total, groups and counties; an id in both tables still counts once, for `job_postings`. The landing figures and the list counts still count announcements.
+- Texts: caption "Posturi publicate pe săptămână" on both charts (hidden on a themed page, as before). The `aria-label` says "între 0 și 8 posturi"; the live region says "Medic: 2 posturi în ultimele 12 săptămâni" (JS `posts()`, the twin of `posturi_label()`). The JSON block of the panel has the new key `weeks` (the 12 short dates for the titles).
+- Bars: 12 `<rect>`, a bar is 50 % of its slot, one baseline, no grid, no line, no area. The axis is from 0 to the largest week (landing), or to the largest week of any button in the selected county (themed page). The tallest bar is 60 of 64 units high. Colours are classes in `assets/app.css` (`.pg-seg`, `.pg-c-0` to `.pg-c-3`, `.pg-c-other`, `.pg-chart-sq`, `.pg-chart-legend`, layer `components`), from `--c-chart-1` to `-4`. Each segment has a `<title>` ("săpt. 10 aug, Medic: 7 posturi"). The server draws the same bars as the script.
+- Stack under "Toate": groups in configuration order (chart-2, chart-1, chart-3, chart-4), then "Alte ocupații" (total minus the groups; chart-1 at 30 % fill, see Decided). Segments touch: no gap, no border. A group button shows a square of its colour; "Toate" has none; "Alte ocupații" is a legend entry (`data-chart-other`), shown with "Toate" and hidden when a group is pressed. A group button shows that group alone, in its colour, on the same axis. A county selection redraws all of it.
+- Tests: `theme_test.php` 988 assertions (from 911), `home_test.php` 895; Playwright `theme.spec.js` (stack, group, county, live region) and `home.spec.js` (landing chart, on the theme fixture port 8824).
+
+**Measured** (dev database `data/_dev/posturi-new.sqlite`, 6,865 announcements: `job_postings` plus the archive rows that are not in it)
+- The rule changes the value of: missing 2,777 (counted as 1, so the count does not move), below 1: 2, above 30: 23 (largest 349,085).
+- The 12 chart weeks (27 Jul to 18 Oct, clock 2026-10-19): 6,303 announcements, 8,450 posts. In those weeks: 2,527 missing, 2 below 1, 21 above 30. `/sanatate/` over the same weeks: 2,718 posts.
+- `Server-Timing` total, median of 5, ms (clock of the machine): `/` 41.4 before, 39.7, 39.3, 39.4 after; `/sanatate/` 34.3 before, 33.7, 33.2, 34.0 after. No growth.
+- "Alte ocupații" is never below 0: it is the total minus the groups, and a posting is in one group at most (test in `theme_test.php`).
+
+**Hard**
+- Tailwind reads the `.php` files and `static/saved.js`, not `theme-panel.js`. A class that only the script writes (`pg-c-0` to `pg-c-3`) was purged from `static/app.css`. The classes are now written out in `weekly_chart.php` (the colour map of the groups). `tailwind.config.js` is outside the brief.
+- The shared Playwright fixture has fewer than 4 weeks with postings, so its landing chart is hidden. The landing chart test uses the theme fixture (port 8824).
+- The existing test "the buttons are text only" took the first `main p` as normal text; the new muted sentence is now first. The test skips `.g2-text-meta`.
+- The post counts of the theme fixture are all empty except 9001 (2): the PHP tests set more values in a copy (`posts_db()`).
+
+**Decided**
+- Owner changes of 2026-11-18, after the first build (they replace the brief): (1) no sentence "Estimare: un anunț fără număr de posturi contează ca un post." under the chart; the rule stays, with its comment in `posts_sql()`, and DATA-NR-POSTURI stays open. (2) "Alte ocupații" has a fill: `--c-chart-1` at 30 % (light blue), the same in its legend square; not white, not an outline. (3) No border and no gap on any segment; adjacent segments touch. Checks: the fill of "Alte ocupații" is not transparent and differs from each group colour; no segment has a stroke; segments touch; the sentence is absent. Fails against: fill none, a stroke on the segment, the fill of chart-2, an empty legend square, a 1 px gap in the script and in the partial, the sentence back.
+- "Alte ocupații" in the legend hides when a group is pressed, because it is not in the chart then.
+- Mutations that the new checks fail against: `COUNT(*)` in `home_weekly_postings()` (`home_test.php`), `COUNT(*)` in `theme_group_series()`, `BETWEEN 1 AND 31`, `ELSE 0` (`theme_test.php`), drop "Alte ocupații" in PHP and in the script, a scale for each series, bars the full width of the slot, a polyline back in the SVG, no gap between segments, "anunțuri" in the live region (Playwright).
+- DS: the 4 chart colours are two blues and two greys. A DS proposal for a categorical palette is for Opus to open (text in the report of this brief).
+
 ### 2026-11-17 — Pipeline: trade in the occupation, COR group in the archive, domain spike (not deployed)
 
 Brief 2 of 4 (`docs/briefs/2026-11-17-pipeline-domain-trade.md`). Report: `docs/audits/2026-11-17-pipeline-domain-trade.md`. Sonnet built it against the local PostgreSQL (`posturi_dev`, September snapshot, 9,756 postings). No production access.

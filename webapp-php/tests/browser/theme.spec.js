@@ -31,6 +31,10 @@ const itemHref = (item, county) => {
   p.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : 1));
   return '/?' + p.map(([k, v]) => `${encodeURIComponent(k)}%5B%5D=${encodeURIComponent(v)}`).join('&');
 };
+/** The bars of the chart: for each week, its segments {h, c, t} (height, class, title). */
+const bars = (page) => page.evaluate(() => [...document.querySelectorAll('[data-chart-bars] [data-bar]')].map((g) => [...g.querySelectorAll('rect')].map((r) => ({ h: parseFloat(r.getAttribute('height')), c: r.getAttribute('class'), t: r.querySelector('title').textContent }))));
+const sig = async (page) => JSON.stringify(await bars(page));
+const sum = (v) => v.reduce((a, b) => a + b, 0);
 async function noOverflow(page, what) {
   const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
   expect(o, `horizontal overflow: ${what}`).toBeLessThanOrEqual(1);
@@ -208,16 +212,16 @@ test('no checkbox "Arată toate județele"; the first option of the select clear
   const d = await data(page);
   await expect(page.getByRole('checkbox')).toHaveCount(0);
   // The map sets the county; the first option of the select clears the map, the title, the links and the chart.
-  const chartPts = await page.locator('[data-chart-line]').getAttribute('points');
+  const chartPts = await sig(page);
   await page.locator('button[data-county="cluj"]').click();
   expect(paren(await tile(page, 'medspec:Cardiologie').locator('[data-tile-count]').textContent())).toBe(2);
-  expect(await page.locator('[data-chart-line]').getAttribute('points')).not.toBe(chartPts);
+  expect(await sig(page)).not.toBe(chartPts);
   await page.locator('#home-judet').selectOption('');
   await expect(page.locator('button[data-county][aria-pressed="true"]')).toHaveCount(0);
   await expect(page.locator('#home-judet')).toHaveValue('');
   await expect(page.locator('h1#h-theme')).toHaveText('Posturi în sănătate (6)');
   await expect(page.locator('[data-home-live]')).toHaveText('Toate județele: 6 posturi active');
-  expect(await page.locator('[data-chart-line]').getAttribute('points')).toBe(chartPts);
+  expect(await sig(page)).toBe(chartPts);
   expect(paren(await tile(page, 'medspec:Cardiologie').locator('[data-tile-count]').textContent())).toBe(3);
   await expect(tile(page, 'all').locator('a')).toHaveAttribute('href', itemHref(d.items.all));
   // The label above the map is not visible, and the map has a name.
@@ -304,7 +308,7 @@ test('a specialty icon renders at 40 px and has drawn content (a broken referenc
   expect(empty).toBe(0);
 });
 
-test('the chart: "Toate" and the four groups; a click draws the series, the line of text and the live region', async ({ page }) => {
+test('the chart: "Toate" is a stacked bar; a group shows its bars in its colour; the text and the live region say posts', async ({ page }) => {
   await page.goto('/sanatate/');
   const fig = page.locator('[data-chart]');
   const btns = fig.locator('button[data-chart-series]');
@@ -312,28 +316,67 @@ test('the chart: "Toate" and the four groups; a click draws the series, the line
   await expect(btns.first()).toBeVisible();
   for (const b of await btns.all()) { const r = await b.boundingBox(); expect(r.height, 'a target of at least 24 px').toBeGreaterThanOrEqual(24); }
   await expect(btns.first()).toHaveAttribute('aria-pressed', 'true');
-  const line = fig.locator('[data-chart-line]'), stats = fig.locator('[data-chart-stats]'), live = fig.locator('[data-chart-live]');
-  const total = await line.getAttribute('points');
+  const stats = fig.locator('[data-chart-stats]'), live = fig.locator('[data-chart-live]'), other = fig.locator('[data-chart-other]');
+  const total = await bars(page);
+  const totalSig = await sig(page);
   const totalStats = await stats.textContent();
   expect(totalStats).toBe('min 0 · max 2 · ultima 0');
-  await btns.nth(1).click();   // Medic: Medic specialist on 12 Aug and 2 Sep (fixture)
+  // "Toate": 12 stacks. The posts of the fixture week by week (axis 0 to 2, so 30 high for a post): the segments of a week, with the
+  // no gaps, add up to the height of the total bar. Mutation: drop "Alte ocupații" (week 1 has no bar and the sums fail).
+  await expect(fig.locator('[data-chart-bars] [data-bar]')).toHaveCount(12);
+  const posts = [1, 2, 0, 2, 1, 2, 1, 0, 1, 0, 2, 0];
+  total.forEach((segs, i) => {
+    expect(sum(segs.map((s) => s.h)), `week ${i}: the segments add up to the total bar`).toBeCloseTo(posts[i] * 30, 1);
+    segs.forEach((s) => expect(s.t, 'each segment has a title: week, group, posts').toMatch(/^săpt\. \d+ [a-z]{3}, [^:]+: \d+ (de )?post(uri)?$/));
+  });
+  expect(total[5].map((s) => s.c), 'week 5: Medic (chart-2) under Asistent (chart-3)').toEqual(['pg-seg pg-c-1', 'pg-seg pg-c-2']);
+  expect(total[1].map((s) => s.c), 'week 1: the postings of no group, "Alte ocupații"').toEqual(['pg-seg pg-c-other']);
+  await expect(other).toBeVisible();
+  await expect(other).toHaveText('Alte ocupații');
+  expect(await other.evaluate((n) => n.tagName), 'the legend entry is not a button').not.toBe('BUTTON');
+  // The squares: one for each group, none for "Toate"; the colour of the square is the colour of the bars of its group.
+  await expect(btns.first().locator('.pg-chart-sq')).toHaveCount(0);
+  await expect(fig.locator('button .pg-chart-sq')).toHaveCount(4);
+  // Fills: "Alte ocupații" has its own fill (chart-1 at 30 %: not transparent, not white) that differs from each group colour; no segment has a
+  // stroke, and segments touch (no gap). Mutations: fill none; the fill of chart-1; a stroke on .pg-seg; a 1 px gap in the script or the partial.
+  const look = await fig.locator('[data-chart-bars] rect').evaluateAll((rs) => rs.map((r) => { const c = getComputedStyle(r); return { c: r.getAttribute('class'), fill: c.fill, stroke: c.stroke, sw: c.strokeWidth, y: parseFloat(r.getAttribute('y')), h: parseFloat(r.getAttribute('height')) }; }));
+  look.forEach((r) => { expect(r.stroke, 'no border on a segment').toBe('none'); });
+  const fills = Object.fromEntries(look.map((r) => [r.c.split(' ')[1], r.fill]));
+  expect(fills['pg-c-other'], 'a fill, not transparent').toMatch(/^(rgba\(.*, 0\.3\)|color\(srgb .* \/ 0\.3\))$/);
+  ['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'].forEach((k) => { if (fills[k]) expect(fills['pg-c-other'], `differs from ${k}`).not.toBe(fills[k]); });
+  const sqOther = await other.locator('.pg-chart-sq').evaluate((n) => getComputedStyle(n).backgroundColor);
+  expect(sqOther.replace(/[^\d.,]/g, ''), 'the legend square has the same fill').toBe(fills['pg-c-other'].replace(/[^\d.,]/g, ''));
+  for (let w = 0; w < 12; w++) {
+    const rects = await page.locator('[data-chart-bars] [data-bar]').nth(w).locator('rect').evaluateAll((rs) => rs.map((r) => [parseFloat(r.getAttribute('y')), parseFloat(r.getAttribute('height'))]));
+    for (let k = 1; k < rects.length; k++) expect(rects[k][0] + rects[k][1], `week ${w}: segments touch`).toBeCloseTo(rects[k - 1][0], 1);
+  }
+  // Plain: one baseline, no grid, no line chart; a bar is half of its slot wide.
+  await expect(fig.locator('svg line')).toHaveCount(1);
+  await expect(fig.locator('svg polyline, svg path')).toHaveCount(0);
+  const geo = await fig.locator('svg[role="img"]').evaluate((svg) => { const w = svg.getBoundingClientRect().width, r = svg.querySelector('rect').getBoundingClientRect().width; return r / (w / 12); });
+  expect(geo, 'a bar is 50 % of its slot').toBeCloseTo(0.5, 1);
+  await btns.nth(1).click();   // Medic: Medic specialist on 12 Aug and 2 Sep (fixture), 1 post each
   await expect(btns.nth(1)).toHaveAttribute('aria-pressed', 'true');
   await expect(btns.first()).toHaveAttribute('aria-pressed', 'false');
   expect(await fig.locator('button[aria-pressed="true"]').count(), 'one button is pressed').toBe(1);
-  expect(await line.getAttribute('points'), 'the line is the series').not.toBe(total);
+  await expect(other, 'the legend entry belongs to "Toate"').toBeHidden();
   await expect(stats).toHaveText('min 0 · max 1 · ultima 0');
-  await expect(live).toHaveText('Medic: 2 anunțuri în ultimele 12 săptămâni');
-  // One axis for every button, from 0 to the largest week of any button (the total: 2). Medic's highest week (1) is half way up
-  // (y = 4 + 0.5 × 56 = 32), not at the top (y = 4); a week of 0 is at the bottom (y = 60). Mutation: a scale for each series → 4.
-  const ys = (await line.getAttribute('points')).split(' ').map((p) => parseFloat(p.split(',')[1]));
-  expect(Math.min(...ys)).toBe(32); expect(Math.max(...ys)).toBe(60);
-  const totalYs = total.split(' ').map((p) => parseFloat(p.split(',')[1]));
-  expect(Math.min(...totalYs), 'the total reaches the top of the axis').toBe(4);
-  await expect(fig.locator('svg[role="img"]')).toHaveAttribute('aria-label', /Medic.*între 0 și 1/);
+  await expect(live).toHaveText('Medic: 2 posturi în ultimele 12 săptămâni');
+  // One series, in its colour. One axis for every button, from 0 to the largest week of any button (the total: 2): Medic's highest week
+  // (1 post) is half of the axis (30 of 60), not the whole. Mutation: a scale for each series → 60.
+  const medic = (await bars(page)).flat();
+  expect(medic.length, 'two bars').toBe(2);
+  medic.forEach((s) => { expect(s.c).toBe('pg-seg pg-c-1'); expect(s.h, 'half of the axis').toBe(30); expect(s.t).toMatch(/^săpt\. \d+ [a-z]{3}, Medic: 1 post$/); });
+  const tallest = Math.max(...total.map((segs) => sum(segs.map((s) => s.h))));
+  expect(tallest, 'the total reaches the top of the axis').toBe(60);
+  const colours = await page.evaluate(() => ({ sq: getComputedStyle(document.querySelectorAll('[data-chart] button .pg-chart-sq')[0]).backgroundColor, bar: getComputedStyle(document.querySelector('[data-chart-bars] rect')).fill }));
+  expect(colours.bar, 'the square has the colour of the bars').toBe(colours.sq);
+  await expect(fig.locator('svg[role="img"]')).toHaveAttribute('aria-label', /Medic.*între 0 și 1 post/);
   await btns.first().click();
-  expect(await line.getAttribute('points'), 'back to the total').toBe(total);
+  expect(await sig(page), 'back to the stack').toBe(totalSig);
   await expect(stats).toHaveText(totalStats);
-  await expect(live).toHaveText('Toate ocupațiile: 11 anunțuri în ultimele 12 săptămâni');
+  await expect(live).toHaveText('Toate ocupațiile: 12 posturi în ultimele 12 săptămâni');
+  await expect(other).toBeVisible();
   await noOverflow(page, 'the chart buttons');
 });
 
@@ -380,11 +423,11 @@ test('the heading of the chart is hidden but in the accessibility tree; the butt
   const cap = page.locator('[data-chart] figcaption');
   const box = await cap.boundingBox();
   expect(box.width * box.height, 'not visible').toBeLessThanOrEqual(4);
-  await expect(page.getByRole('figure', { name: 'Anunțuri noi pe săptămână' })).toHaveCount(1);
+  await expect(page.getByRole('figure', { name: 'Posturi publicate pe săptămână' })).toHaveCount(1);
   await expect(page.getByText('Toată țara. Anunțuri publicate', { exact: false })).toHaveCount(0);
   const b = page.locator('.pg-chart-btn').nth(1);
   const look = () => b.evaluate((e) => { const c = getComputedStyle(e); return { bg: c.backgroundColor, bw: [c.borderTopWidth, c.borderRightWidth, c.borderBottomWidth, c.borderLeftWidth].join(' '), shadow: c.boxShadow, color: c.color }; });
-  const body = await page.locator('main p').first().evaluate((e) => getComputedStyle(e).color);
+  const body = await page.locator('main p:not(.g2-text-meta)').first().evaluate((e) => getComputedStyle(e).color);
   expect(await look(), 'default').toMatchObject({ bg: 'rgba(0, 0, 0, 0)', bw: '0px 0px 0px 0px', shadow: 'none' });
   await b.hover();
   expect(await look(), 'hover').toMatchObject({ bg: 'rgba(0, 0, 0, 0)', bw: '0px 0px 0px 0px', shadow: 'none' });
@@ -411,14 +454,16 @@ test('a click on the map sets the select, the title and the chart; a change of t
   const d = await panelData(page);
   const h = await data(page);
   const h1 = page.locator('h1#h-theme');
-  const national = { stats: await page.locator('[data-chart-stats]').textContent(), pts: await page.locator('[data-chart-line]').getAttribute('points') };
+  const national = { stats: await page.locator('[data-chart-stats]').textContent(), pts: await sig(page) };
   const sel = page.locator('#home-judet');
   await page.locator('button[data-county="bacau"]').click();
   await expect(sel).toHaveValue('bacau');                         // the map sets the select
   await expect(h1).toHaveText(`Posturi în sănătate → județul Bacău (${h.items.all.counties.bacau})`);
   const c = d.counties.bacau;
   await expect(page.locator('[data-chart-stats]')).toHaveText(stat(c.t));
-  expect(await page.locator('[data-chart-line]').getAttribute('points')).not.toBe(national.pts);
+  expect(await sig(page)).not.toBe(national.pts);
+  // The stack of the county: the segments of each week add up to the county total, on the axis of the county (0 to its largest week).
+  (await bars(page)).forEach((segs, w) => expect(sum(segs.map((x) => x.h)), `bacau, week ${w}`).toBeCloseTo(c.t[w] * 60 / Math.max(...c.t), 1));
   // A series of the county: its line of text is the series of the JSON.
   const withData = d.series.findIndex((s, i) => (c.s[i] || []).some((v) => v > 0));
   await page.locator('[data-chart-series]').nth(withData + 1).click();
@@ -433,7 +478,7 @@ test('a click on the map sets the select, the title and the chart; a change of t
   await expect(page.locator('button[data-county][aria-pressed="true"]')).toHaveCount(0);
   await page.locator('[data-chart-series="-1"]').click();
   await expect(page.locator('[data-chart-stats]')).toHaveText(national.stats);
-  expect(await page.locator('[data-chart-line]').getAttribute('points')).toBe(national.pts);
+  expect(await sig(page)).toBe(national.pts);
 });
 
 test('the five buttons stay; a button with a zero series for the county is hidden, and "Toate" is pressed when it was the active one', async ({ page }) => {

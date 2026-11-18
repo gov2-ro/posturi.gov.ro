@@ -187,3 +187,27 @@ class TestEmployerCounty:
     ])
     def test_county_named_in_the_employer_string(self, employer, expected):
         assert uat.employer_county(employer) == expected
+
+
+class TestUnitsFor:
+    """`units_for()` feeds the local pay cap (GRID153-CAP): type and population of the unit."""
+
+    def test_a_commune_keeps_its_population(self):
+        assert uat.units_for("Primăria Comunei Ciugud", "Alba") == [{"tip": "comuna", "populatie": 3285}]
+
+    def test_a_county_seat_is_marked(self):
+        assert uat.units_for("Primăria Municipiului Cluj-Napoca", "Cluj")[0]["tip"] == "resedinta"
+
+    def test_a_town_that_is_not_a_seat(self):
+        assert uat.units_for("Primăria Orașului Abrud", "Alba") == [{"tip": "oras", "populatie": 4360}]
+
+    def test_capital_sector_and_county_council(self):
+        assert uat.units_for("Primăria Municipiului București")[0]["tip"] == "capitala"
+        assert uat.units_for("Primăria Sectorului 3")[0]["tip"] == "sector"
+        assert uat.units_for("Consiliul Județean Alba")[0]["tip"] == "judet"
+
+    def test_a_commune_missing_from_the_table_has_no_population(self):
+        assert uat.units_for("Primăria Comunei Zzzzz", "Alba") == [{"tip": "comuna", "populatie": None}]
+
+    def test_an_unknown_employer_has_no_unit(self):
+        assert uat.units_for("Serviciul public X") == []

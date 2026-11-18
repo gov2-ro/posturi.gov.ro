@@ -2,6 +2,104 @@
 
 ## 2026
 
+### 2026-11-18 — Salary grid follow-up: local cap by population, review of 552 rows, „Salarii” on /despre/ (brief 2026-11-18-salary-grid-153-followup; Sonnet; not deployed)
+
+**Done.**
+- Part A. `data/uat-populatie.csv` is now a copy of `core-assets/data/geo/uat-populatie.csv` (core-assets commit 961c4ff; 3,181 rows; more columns; 12 old values corrected). `uat.units_for()` returns the type (`capitala`, `sector`, `judet`, `resedinta`, `oras`, `comuna`) and the population of the employer. `plafon-local.csv` has 14 rows: Anexa IX lit. C poz. 2, 4 and 17-28, each with its population limits, coefficient, cap and source row. `Grid.local_cap()` picks the row of the type and population; with no unit it takes the widest cap without the Capital's. Positions 23-28 use cap × 1.10 (OUG 53/2024 art. II, in `sursa`). A unit with no population takes the widest row of its type. Ambiguous names take the widest of their units.
+- Part B. All 552 `needs_review` rows checked against the HTML tables. Result in `tmp/261118/grid153/review.csv` (not in git): 516 ok, 30 fixed, 6 reject. `needs_review` is 0 for every row now.
+- Part C. Section „Salarii” of `webapp-php/pages/about.php` rewritten (the section and its TOC entry existed with one paragraph).
+
+**Measured** (database `posturi_dev`, snapshot 2026-09-09; export `tmp/261118/grid153/posturi-after2.sqlite`).
+- Median `lei_max` of the 1,195 postings with a local range, before → after: all 10,868 → 10,626; comune (737) 10,868 → 9,299; towns that are not county seats (194) 13,283 → 13,283; county seats (37), sectors (7), county councils (60) 19,320 → 19,320; unit not known (160) 19,320 → 19,320. Before, a unit was also "?" for 233 postings: `units_for()` now names the unit for 73 of them.
+- Five comune (population, cap before → after): Leleşe 339, 10,868 → 7,970; Călărași 1,883, 10,868 → 7,970; Buteni 3,262, 10,868 → 9,299; Gârcina 4,889, 10,868 → 9,299; Chiajna 43,588, 13,283 → 12,075.
+- Bucket counts of the 1,822 active postings (net-sub-3000 / 3000-4000 / 4000-5000 / 5000-7000 / peste-7000 / fara-estimare): before the grid 616 / 617 / 114 / 57 / 119 / 299; first grid run 941 / 423 / 30 / 109 / 20 / 299; this run 941 / 423 / 30 / 109 / 20 / 299. No posting changes bucket against the first run: the bucket reads `sal_min`, and no `sal_min` changed (0 of 9,756). `sal_max` changed for 883 postings.
+- Review checks (each row, by script, against the table row in the HTML): lei value in the row; lei value against coefficient × 2,500 (within 0.6%); study level; vechime; function text; grade; factor of the chapter; every table row with a lei value is in the grid (29 tables).
+
+**Hard.**
+- Parser fixes: (1) a row "- gradul II" gave the name "-" (6 rows, table 75): it now inherits the head row. (2) "gradul I (10 ani vechime)" stayed in the name (20 rows, table 91): the grade now goes to `grad_treapta`. (3) "curier diplomatic I, referent cabinet" and "Secretar I, consul" had no grade (4 rows, tables 81, 82): one alternative that ends in a numeral gives the grade (not in management tables). A first version of (3) also changed 2 rows of table 150 (a function that ends in "I"): I limited it to non-management tables.
+- Table 45 (Anexa II pct. 3.3, care staff of social assistance units) is removed. OUG 19/2024 Anexa 2 lists the same functions at higher June 2024 values (Infirmieră 4,260; the law table × 1.05 gives 3,728). No `sal_min` changed, because other rows give the same minimum.
+- Factor of Anexele III, IV, V: OUG 53/2024 art. I alin. (1) names Anexele III, IV, VII, VIII, Cap. II of Anexa I and Cap. VI of Anexa V. So 1.15 for III, IV and Anexa V Cap. VI (ONRC, tables 92-93); 1.05 for Anexa V Cap. II-V and VII (tables 88-91, 94). No note of these annexes changes the factor. OUG 53/2024 art. III alin. (3) stops OUG 115/2023 art. I for the environment agencies only. OUG 36/2025 changes sporuri of Anexele III, IV, V, not the base. The factor is not checked against a pay list: none covers these annexes.
+- The draft figure is in the data (`proiect`), but no PHP page shows it. The brief said "the site also shows the figure"; the text of the section says the site does not show it.
+- `ops/build-uat-population.py` still writes `data/uat-populatie.csv` from the old sources. Do not run it: it replaces the core-assets copy.
+
+**Decided.**
+- Cap of an unknown unit: the widest cap without the Capital's (19,320). Alternative: include the Capital (21,735). Cost: 12% more on the upper end of 160 postings that are not Bucharest.
+- A municipiu that is not a county seat with 20,000 people or fewer uses the "oraș" rows (the law has no row for it). Assumption.
+- A population of exactly 100,000 uses the row "50,001–100,000"; the law says "peste 100.001".
+- Links: only Legea 153/2017 and OUG 19/2024 have a legislatie.just.ro id. The other four acts are plain text on the page. Cost: the reader cannot click.
+- No PHP test of the page: there is no test of `/despre/` beyond the HTTP 200 in `theme_test.php`. Rendered by hand and the PHP tests `ds`, `theme`, `home`, `discovery`, `feeds`, `v5`, `stats` pass.
+
+### 2026-11-18 — Salary grid of the law in force (brief SALARY-GRID-153; Sonnet; not deployed)
+
+**Done.** Each posting now gets its estimate from Legea 153/2017 as it applies in 2026. The draft estimate stays under `proiect`. Run Python with `.venv/bin/python` (there is no `python` on the PATH).
+- Step 0 (factor). Re-ran the S1 gap logic with the factors 1.05 / 1.10 / 1.15 on the 56 rows. Not local (11 rows): median gap −2.0 / −2.0 / **−0.3%**; within ±10%: 9 / 9 / 9. Local (45 rows): median **−21.0 / −17.4 / −13.7%**; within ±10%: 11 / 13 / **18**. Decision: 1.15 for all Anexa VIII rows and for the lower end of the local range. ONRC and the research institute now fit exactly (0%). The hospital workers (−15 to −21%) stay a known gap. The grid reproduces the factor-1.15 model row by row (`tmp/261118/grid153/gap_grid-out.txt`).
+- Parameters: variant `lege153-2026`; minimum wage 4,050 (2025-01-01) and 4,325 (2026-07-01, HG 146/2026, M.Of. 13 March 2026; source is press, the Monitorul Oficial text is not read); correct article numbers (CFP Art. 15, ceiling Art. 25 alin. (1) at 30%, projects Art. 16, night Art. 20, disability Art. 22); factors of 2022→2026; known gaps.
+- Grid: `build-salary-grid.py --source lege-153` parses 110 tables of the consolidated HTML (saved in `docs/salarii/lege-153/`, with SHA-256 in the file notes below) into `grila-lege153-2026.csv`: 1,919 rows (I 472, II 333, III 262, IV 69, V 215, VIII 568). Each row has its table and row (`sheet`, `source_row`, `act_sursa`). `plafon-local.csv`: 5 rows (4 bands and one for county seats, sectors and county councils).
+- Calculator: `Grid.estimate()` for the law grid: `ceil(lei × regula × gradation)`, management rows without gradation, floor at the minimum wage of the date, local range (lower end = territorial table, upper end = cap). `selector_for_law()` maps the draft selectors to the law rows (no LLM). `tip_unitate` narrows health rows.
+- Estimator: both baselines, JSON per ADR 0008. `hospital_type()` classifies by name. Council employers only (primării, county councils, local public services) get the range; local schools and hospitals get the annex value.
+- Texts: three PHP strings now name Legea 153/2017. `list_salary()` shows a range well (`≈ 3.328–6.358 lei net` for 5,641–10,868).
+- Tests: `test_salary_grid.py` 36 → 89 tests, all pass. PHP `discovery`, `feeds`, `home`, `v5`, `theme` pass.
+
+**Measured** (database `posturi_dev`, snapshot 2026-09-09; export to `tmp/261118/grid153/posturi-{before,after}.sqlite`; the `salary` and `export-sqlite` steps of `pipeline.py` cannot take an output path, so I ran `estimate-salaries.py --clear` and `export-to-sqlite.py --out` directly):
+- Coverage of the draft estimates by the law grid (posting count, draft → law): I 957 → 955; II 2,291 → 2,242; III 29 → 29; IV 19 → 18; V 38 → 38; VII 2 → 0; VIII 5,032 → 4,974. Total 8,368 with a figure (the draft had 8,367 before the grid). 8,256 postings carry `lege_in_vigoare` (3,348 exact, 4,908 interval); 1,494 carry `proiect` (112 with a draft figure, 1,382 with none).
+- Hospital split (2,242 postings of Anexa II): a.1 496, a.4 1,746. Employer names: a.1 226, a.4 1,191.
+- `salary_bucket` before → after, active postings (1,822; deadline ≥ 2026-09-09): net-sub-3000 616 → 941; 3000–4000 617 → 423; 4000–5000 114 → 30; 5000–7000 57 → 109; peste-7000 119 → 20; fara-estimare 299 → 299. 528 postings change bucket. All 9,756: 3,316 → 5,056; 3,351 → 2,297; 596 → 228; 462 → 637; 650 → 158; 1,381 → 1,380; 2,847 change.
+- Median change of `sal_min` (after vs before): Anexa I −12.1%; II −17.7%; III −22.7%; IV −25.4%; V −45.3%; VIII −7.2% (VIII with a local range −8.2%, VIII without −7.2%).
+
+**Hard.**
+- `needs_review`: 552 rows (III 262, IV 69, V 215, II pct. 3.3 6) because the rule of OUG 53/2024 is assumed for annexes outside the S1 check. Anexa VIII and I have none.
+- Left out on purpose: Anexa VII (tables 103–106, no function column; 2 postings), clerical staff (table 23), aviation (163–167), and the local nomenclatures that have only names (116/117/146–149). 58 postings of local functions (salvamont, SVSU, conducător autospecială, agent agricol) and 49 of Anexa II (for example "Director medical", from the table of percentages) get the draft figure.
+- `docs/salarii/` is in `.gitignore`, so the two saved HTML files are not tracked (backlog GRID153-SOURCE-TRACK).
+- `test_salary_facet_sql.py::test_every_salary_comparison_casts_its_bind[pages/list.php]` fails on a clean checkout. Not caused by this work.
+
+**Decided.**
+- Factor 1.15 (measured, step 0), not 1.05. Cost of 1.05: Anexa VIII 13% too low; local lower end 21% too low.
+- The cap per band is the highest vice-mayor coefficient of the band (4.5 under 10,000; 5.5; 6.5; 8.0 for county seats, sectors and county councils). Alternative: one cap per unit type and population. Cost: a small comună shows up to 4.5 where its real cap is 3.0–4.0. Recorded as GRID153-CAP.
+- Known gaps, not fixed: OUG 53/2024 art. II (up to 10% over the cap), OUG 128/2023 art. III (+8%/+12%), a hospital that pays workers 14–28% above, new hires (OUG 115/2023 art. I alin. (5)).
+- File SHA-256: `legea-153-2017-id298840-2026-11-18.html` 8fae6cd7aa21…2270; `oug-19-2024-id279777-2026-11-18.html` b90160d6cd32…1d. The consolidated page does not say which version it shows (assumed: the latest).
+
+**Review (Opus).**
+- Re-ran the tests: `test_salary_grid.py` and `test_salary_facet_sql.py` give 96 passed and 1 failed. The failure is the old TEST-SALARY-FACET-SQL; I removed the duplicate GRID153-FACET-TEST. PHP `discovery`, `home`, `theme` and `stats` pass.
+- Checked the stored JSON: the law in force is at the top level with `baza`, and the draft is under `proiect` (brief, rule 5).
+- Checked the largest drop, Anexa II (−17.7%). It is correct: a principal nurse gets 5,460 lei at gradation 0 and 6,816 at gradation 5. Four hospital lists show 6,816–6,817 at gradation 5. The draft gives about 6,740 already at gradation 0, so the draft is a raise of about 20%. **S2's "+2.8% over the draft" compared a mixed-gradation staff (mostly senior) with the draft at gradation 0.** Do not use that number as evidence that the draft matches today's pay.
+- Example of a local range: 4,543–10,868 lei gross (the cap for the band under 10,000 is 4.5 × 2,415). The range is wide on purpose (ADR 0008, rule 3). GRID153-CAP can narrow it.
+- Accepted the rule of the builder: only primării, county councils and local public services get the range. Local schools and hospitals get the annex value.
+- Not deployed. The owner must confirm ADR 0008 rule 7: on the 9 Sep snapshot, 528 of 1,822 active postings change their salary bucket.
+
+### 2026-11-18 — Salary spikes S1 and S2: the law in force, transparency lists (Sonnet; reviewed by Opus)
+
+**Done.** Two spikes from the plan of SALARY-R2, run in parallel. Reports: `docs/audits/2026-11-18-salary-s1-current-law.md` and `docs/audits/2026-11-18-salary-s2-transparency-lists.md`. Downloads, scripts and parsed rows: `tmp/261118/s1/`, `tmp/261118/s2/` (not in git). Data: `data/_dev/dev.sqlite`. Its newest `last_seen_at` is 2026-09-09, so "active" = `coalesce(apply_deadline, expires_at) >= '2026-09-09'` → **1,822 postings, 1,078 employers**. With 2026-10-18 only 26 postings are active.
+- S1 built the chain of acts from the 2022 annex value to the pay of 2026: OUG 168/2022, OUG 45/2023, OUG 115/2023 (+5%), OUG 128/2023 (education), OUG 19/2024 (health), OUG 156/2024 (freeze 2025), Legea 141/2025 art. XVI (freeze 2026). It compared 14 functions in 56 rows from 12 lists.
+- Method (b) (2022 annex value, +5% for Anexa VIII, the June 2024 tables for health and education, gradation, minimum-wage floor) against the lists: **median −2%, 8 of 11 rows within ±10%** outside local administration; **median −21%, 11 of 45 within ±10%** in local administration (per list from 0% to −45%). The annex value alone: −23% and −28%.
+- Local pay is 25–93% of the Art. 11(4) cap (Anexa IX lit. C × 2,415), median 50%. No row reaches 95%; only management posts come near.
+- S2: of the top 30 employers (15.1% of postings, almost all hospitals), 16 have a list (9.2% of postings), 7 parse (4.8%), 39 postings match a row (2.1%). List pay vs the draft estimate: median +2.8% (n = 36, quartiles −7% / +13%). 80% of postings needs 714 employers.
+- Review (Opus): re-ran `tmp/261118/s1/gap.py` (same numbers) and the active count of S2 (1,822).
+
+**Hard.**
+- Annex VIII has no lei values for local posts; the council sets the pay. So local administration cannot have one exact figure from the law.
+- The 2022 health and education tables are obsolete. The figures come from OUG 19/2024 and OUG 128/2023.
+- Two gaps have no legal basis that we found: ONRC and a research institute pay exactly 1.15 × the annex value, and one hospital pays workers 14–28% above (b).
+- 14 lists, 14 layouts; 4 of 16 found lists are scans; the file URL changes each period.
+- `parametri.json` cites old article numbers (CFP is Art. 15; the sporuri ceiling is Art. 25(1), 30%).
+
+**Decided.**
+- Opus: drop a generic transparency-list pipeline (backlog SALARY-TRANSPARENTA, `[-]`). Cost of the alternative: about 130–200 h of parsers plus rework twice a year, for a ceiling of 35–50% of postings.
+- Opus: method (b) is the candidate for SALARY-GRID-153. Its brief waits for the owner's answers in S1-Q.
+- Assumed, not measured: the S2 ceiling and cost come from hospitals; town halls and schools were not sampled. S1 assumes that a new hire gets the rule of OUG 115/2023 art. I alin. (5).
+- Note: for hospitals, both the draft estimate (+2.8% under the lists) and method (b) (−2%) are close to the pay in the lists. The two baselines differ most in local administration.
+
+### 2026-11-18 — Salary estimator, round 2: plan, ADR 0008, two spike briefs (Opus)
+
+**Done.** The owner asked if we can reverse-engineer salariile.ro/compara, and shared a Google AI answer about it. I read their `/compara` and `/metodologie` pages. They have no model: each occupation shows one documented reference value (eJobs *Ghidul Salarial 2026*, a voluntary survey; INS FOM106G and FOM121A as context; the ranges of steps from the 153/2017 grids). They use no county or seniority multipliers. The Google AI answer says the opposite, and it is wrong. Wrote ADR 0008 (proposed), the briefs for spikes S1 and S2, and the backlog item SALARY-R2.
+
+**Hard.** Pay under Legea 153/2017 is not one number. The annexes give the 2022 target values, ordinances froze the pay in force, and councils set local pay up to a maximum. So spike S1 measures the annex value and the frozen value against real transparency lists before we build a grid.
+
+**Decided.**
+- The owner (2026-11-18): the draft is not adopted. Show both baselines, the law in force first, and the draft second as „după noua lege (proiect)”. Cost of the alternative (the draft as the main figure): the main figure, the sort order and the filter stay wrong for every reader until 2027.
+- The owner: scope = INS context, transparency lists, the `/salarii/` hub with „A vs B”, gradation and sporuri. A few eJobs figures may be cited by hand, with attribution.
+- Opus: INS data is already in `../tempo-ins-dump` (FOM106E by county × CAEN to 2024; FOM106G/FOM107G monthly to May 2026; FOM121A public ownership × ISCO major group). We derive one small table and copy nothing (ADR 0008, rule 8, for the owner to confirm).
+- Opus: the `salary_bucket` keys stay; their meaning follows the main figure (ADR 0008, rule 7, for the owner to confirm).
+
 ### 2026-11-18 — Salary filter as a multi-select (brief BUG-SALARY-MULTI; Sonnet; not deployed)
 
 Brief `docs/briefs/2026-11-18-salary-multi-select.md`. **Opus review (2026-11-18): accepted.** Checked the OR clause in `build_filters()`, `al_migrate_salary_keys()` (anchored regex; a `q` value that contains the text is left alone) and `rekey()`. Accepted the edits outside the brief: `browser/salary.spec.js` (the salary fixture lives there) and one line of `home_test.php`. Opus added the log line of the migration count in `al_schema()` (the brief's deploy note asked for a count that nothing logged), and a test of the salary range above the list in `discovery_test.php`.

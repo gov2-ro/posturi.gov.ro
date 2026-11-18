@@ -49,7 +49,7 @@ $_sr_fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
       <span class="font-mono font-medium text-ink"><?= $total_count ?></span>
       <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?>
       <?php if ($_sr): ?>
-      <span data-salary-range title="Salariul anunțat sau, pentru cele mai multe posturi, cel estimat din grila de salarizare propusă (gradația 0)."> · salariu net ≈ <span class="text-ink"><?= $_sr['min'] === $_sr['max'] ? e($_sr_fmt($_sr['min'])) : e($_sr_fmt($_sr['min'])) . '–' . e($_sr_fmt($_sr['max'])) ?> lei</span><?php if ($_sr['k'] >= 5): ?>, mediana <span class="text-ink"><?= e($_sr_fmt($_sr['median'])) ?> lei</span><?php endif; ?><?php if ($_sr['k'] < $total_count): ?> <span class="text-ink-faint">(<?= e($_sr_fmt($_sr['k'])) ?> din <?= e($_sr_fmt($total_count)) ?>)</span><?php endif; ?></span>
+      <span data-salary-range title="Salariul anunțat sau, pentru cele mai multe posturi, cel estimat după legea în vigoare (Legea 153/2017), la gradația 0."> · salariu net ≈ <span class="text-ink"><?= $_sr['min'] === $_sr['max'] ? e($_sr_fmt($_sr['min'])) : e($_sr_fmt($_sr['min'])) . '–' . e($_sr_fmt($_sr['max'])) ?> lei</span><?php if ($_sr['k'] >= 5): ?>, mediana <span class="text-ink"><?= e($_sr_fmt($_sr['median'])) ?> lei</span><?php endif; ?><?php if ($_sr['k'] < $total_count): ?> <span class="text-ink-faint">(<?= e($_sr_fmt($_sr['k'])) ?> din <?= e($_sr_fmt($total_count)) ?>)</span><?php endif; ?></span>
       <?php endif; ?>
     <?php else: ?>
       Niciun rezultat

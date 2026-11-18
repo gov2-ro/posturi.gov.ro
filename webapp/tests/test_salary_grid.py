@@ -5,6 +5,7 @@ state a salary in the text — so the arithmetic and the row selection have to b
 reproducible from `(selector, variant)` alone.
 """
 
+import csv
 import json
 import math
 import sys
@@ -236,3 +237,259 @@ class TestRetrieval:
 
     def test_gibberish_retrieves_nothing(self, grid):
         assert grid.candidates("qwertyuiop asdfghjkl") == []
+
+
+# ---------------------------------------------------------------------------
+# The grid of the law in force (Legea 153/2017, ADR 0008)
+# ---------------------------------------------------------------------------
+import importlib.util  # noqa: E402
+from datetime import date  # noqa: E402
+
+LAW_CSV = sg.DATA_DIR / f"grila-{sg.LAW_VERSION}.csv"
+law_only = pytest.mark.skipif(
+    not LAW_CSV.exists(),
+    reason="run `python build-salary-grid.py --source lege-153` to build the law grid",
+)
+
+#: The 14 functions of S1 section 4.2: (selector, 2022 annex value or the later table
+#: value, factor, which end of the range the S1 value is). The factor is 1.15 for Anexa VIII
+#: (OUG 115/2023 + OUG 53/2024), 1 for the OUG 19/2024 and OUG 128/2023 tables.
+S1_FUNCTIONS = {
+    "F1": (dict(functie="Consilier", anexa="VIII", regim="funcționar public",
+                nivel_administrativ="teritorial", grad_treapta="superior", studii="licenta"), 4905, 1.15, "min"),
+    "F2": (dict(functie="Consilier", anexa="VIII", regim="funcționar public",
+                nivel_administrativ="teritorial", grad_treapta="principal", studii="licenta"), 4561, 1.15, "min"),
+    "F3": (dict(functie="Referent", anexa="VIII", regim="funcționar public",
+                nivel_administrativ="teritorial", grad_treapta="superior", studii="liceala"), 4087, 1.15, "min"),
+    "F4": (dict(functie="Consilier", anexa="VIII", regim="personal contractual",
+                nivel_administrativ="teritorial", grad_treapta="gradul I A", studii="licenta"), 4733, 1.15, "min"),
+    "F5": (dict(functie="Muncitor calificat", anexa="VIII", regim="personal contractual",
+                grad_treapta="treapta I"), 3850, 1.15, "max"),
+    "F6": (dict(functie="Muncitor necalificat", anexa="VIII", regim="personal contractual",
+                grad_treapta="treapta I"), 2535, 1.15, "min"),
+    "F7": (dict(functie="Îngrijitor", anexa="VIII", regim="personal contractual"), 2950, 1.15, "min"),
+    "F8": (dict(functie="Șofer", anexa="VIII", regim="personal contractual",
+                grad_treapta="treapta I"), 3850, 1.15, "min"),
+    "F9": (dict(functie="Asistent medical", anexa="II", tip_unitate="a.4",
+                grad_treapta="principal", studii="PL"), 5460, 1.0, "min"),
+    "F10": (dict(functie="Medic specialist", anexa="II", tip_unitate="a.4"), 10963, 1.0, "min"),
+    "F11": (dict(functie="Infirmieră", anexa="II", tip_unitate="a.4", studii="generala"), 4615, 1.0, "max"),
+    "F12": (dict(functie="Asistent social principal", anexa="II", studii="licenta"), 5473, 1.0, "min"),
+    "F13": (dict(functie="Administrator financiar", anexa="I", grad_treapta="gradul I"), 6530, 1.0, "max"),
+    "F14": (dict(functie="Mediator școlar", anexa="I", grad_treapta="treapta I"), 5083, 1.0, "min"),
+}
+#: A date after 1 July 2026: the floor is 4,325 lei.
+AFTER_JULY = date(2026, 9, 30)
+
+
+@pytest.fixture(scope="module")
+def law():
+    return sg.load_grid(sg.LAW_VERSION)
+
+
+@pytest.fixture(scope="module")
+def est():
+    """`estimate-salaries.py` has a hyphen in its name; import it by path."""
+    spec = importlib.util.spec_from_file_location(
+        "estimate_salaries_under_test", REPO_ROOT / "estimate-salaries.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["estimate_salaries_under_test"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@law_only
+class TestLawGolden:
+    """The 14 functions of S1 section 4.2, at gradation 0 and 5, with the factor of the brief."""
+
+    @pytest.mark.parametrize("gradation", [0, 5])
+    @pytest.mark.parametrize("fn", sorted(S1_FUNCTIONS, key=lambda k: int(k[1:])))
+    def test_value_is_annex_x_factor_x_gradation_never_below_the_minimum_wage(self, law, fn, gradation):
+        selector, base, factor, end = S1_FUNCTIONS[fn]
+        result = law.estimate(selector, gradation=gradation, as_of=AFTER_JULY)
+        expected = max(math.ceil(round(base * factor * law.multiplier(gradation), 6)), 4325)
+        got = result.lei_max if end == "max" else result.lei_min
+        assert got == expected, f"{fn}: {result.motiv} {result.randuri}"
+
+    def test_the_law_baseline_is_in_force_and_names_itself(self, law):
+        result = law.estimate(S1_FUNCTIONS["F10"][0], as_of=AFTER_JULY)
+        assert law.variant.status_juridic == "în vigoare"
+        assert result.varianta == sg.LAW_VERSION
+        assert result.disclaimer == sg.DISCLAIMER_LAW
+        assert result.coef_min is None
+
+    def test_every_row_records_its_source_table_and_row(self, law):
+        assert len(law.rows) > 1500
+        for row in law.rows:
+            assert row.lei_min is not None and row.lei_max >= row.lei_min > 1000
+            assert row.act_sursa and row.sheet.startswith(("L153-t", "OUG19-t")) and row.source_row > 0
+
+    def test_no_row_is_flagged_after_the_review(self, law):
+        """The 552 rows of Anexele III, IV, V were reviewed on 2026-11-18 (tmp/261118/grid153/review.csv)."""
+        assert not [r.ref for r in law.rows if r.needs_review]
+
+    def test_the_rows_of_the_review_fixes(self, law):
+        rows = {r.ref: r for r in law.rows}
+        # "- gradul II" under a head row keeps the name of the head row (was "-").
+        assert rows["L153-t75!13"].functie.startswith("Muzeograf") and rows["L153-t75!13"].grad_treapta == "gradul II"
+        # "gradul I (10 ani vechime)" gives the grade (was part of the name).
+        assert rows["L153-t91!6"].functie == "Expert criminalist" and rows["L153-t91!6"].grad_treapta == "gradul I"
+        # "curier diplomatic I, referent cabinet" gives gradul I; "Secretar I, consul" too.
+        assert rows["L153-t82!7"].grad_treapta == "gradul I"
+        assert (rows["L153-t81!7"].functie, rows["L153-t81!7"].grad_treapta) == ("Secretar, consul", "gradul I")
+
+    def test_the_social_assistance_table_superseded_by_oug_19_is_not_in_the_grid(self, law):
+        assert not [r for r in law.rows if r.sheet == "L153-t45"]
+        assert any(r.sheet == "OUG19-t18" and r.functie == "Infirmieră" and r.lei_min == 4260 for r in law.rows)
+
+    def test_the_health_type_of_unit_changes_the_value(self, law):
+        a1 = law.estimate(dict(functie="Medic specialist", anexa="II", tip_unitate="a.1"), as_of=AFTER_JULY)
+        a4 = law.estimate(dict(functie="Medic specialist", anexa="II", tip_unitate="a.4"), as_of=AFTER_JULY)
+        assert (a1.lei_min, a4.lei_min) == (11187, 10963)
+
+    def test_the_draft_variant_is_unchanged(self, grid):
+        """Rule 3 of the brief: the draft result does not move. One value, read before the change."""
+        result = grid.estimate(dict(functie="Îngrijitor", anexa="VIII"), gradation=0)
+        assert result.varianta == "2026-07-17" and result.disclaimer == sg.DISCLAIMER
+
+
+@law_only
+class TestLawLocalRange:
+    LOCAL = dict(functie="Consilier", anexa="VIII", regim="funcționar public",
+                 grad_treapta="superior", studii="licenta", nivel_administrativ="local")
+
+    @pytest.mark.parametrize("unit,cap", [
+        (dict(tip="comuna", populatie=2500), math.ceil(1.10 * math.ceil(3.0 * 2415))),   # poz. 28, OUG 53/2024
+        (dict(tip="comuna", populatie=3000), math.ceil(1.10 * math.ceil(3.0 * 2415))),
+        (dict(tip="comuna", populatie=3001), math.ceil(1.10 * math.ceil(3.5 * 2415))),   # poz. 27
+        (dict(tip="comuna", populatie=7000), math.ceil(1.10 * math.ceil(4.0 * 2415))),   # poz. 26
+        (dict(tip="comuna", populatie=25000), math.ceil(5.0 * 2415)),                    # poz. 22: no 10%
+        (dict(tip="oras", populatie=8000), math.ceil(1.10 * math.ceil(4.5 * 2415))),     # poz. 25
+        (dict(tip="oras", populatie=15000), math.ceil(1.10 * math.ceil(5.0 * 2415))),    # poz. 23
+        (dict(tip="oras", populatie=30000), math.ceil(5.5 * 2415)),                      # poz. 21
+        (dict(tip="oras", populatie=100000), math.ceil(6.0 * 2415)),                     # poz. 20
+        (dict(tip="oras", populatie=100001), math.ceil(6.5 * 2415)),                     # poz. 19
+        (dict(tip="resedinta", populatie=60000), 8 * 2415),
+        (dict(tip="sector", populatie=None), 8 * 2415),
+        (dict(tip="capitala", populatie=None), 9 * 2415),
+        (dict(tip="judet", populatie=None), 8 * 2415),
+    ])
+    def test_the_cap_follows_the_type_and_the_population_of_the_unit(self, law, unit, cap):
+        result = law.estimate(dict(self.LOCAL, uat_unitati=[unit]), as_of=AFTER_JULY)
+        assert result.lei_min == 5641            # the territorial table: 4,905 x 1.15
+        assert result.lei_max == cap
+        assert result.incredere == "interval"
+        assert result.motiv.startswith("Consiliul local stabilește salariul")
+        assert any("tabelul unităților teritoriale" in w for w in result.avertismente)
+
+    def test_a_commune_without_a_population_takes_the_widest_commune_cap(self, law):
+        result = law.estimate(dict(self.LOCAL, uat_unitati=[dict(tip="comuna", populatie=None)]),
+                              as_of=AFTER_JULY)
+        assert result.lei_max == math.ceil(5.0 * 2415) == 12075
+
+    def test_an_ambiguous_name_takes_the_widest_of_its_units(self, law):
+        units = [dict(tip="comuna", populatie=2500), dict(tip="oras", populatie=30000)]
+        result = law.estimate(dict(self.LOCAL, uat_unitati=units), as_of=AFTER_JULY)
+        assert result.lei_max == math.ceil(5.5 * 2415)
+
+    def test_an_unknown_unit_takes_the_widest_cap_and_says_so(self, law):
+        result = law.estimate(dict(self.LOCAL), as_of=AFTER_JULY)
+        assert result.lei_max == 19320 and "necunoscut" in result.motiv
+        assert any("nu a putut fi determinată" in w for w in result.avertismente)
+
+    def test_a_non_local_post_is_not_a_range(self, law):
+        result = law.estimate(dict(self.LOCAL, nivel_administrativ="teritorial"), as_of=AFTER_JULY)
+        assert result.lei_min == result.lei_max == 5641 and result.incredere == "exact"
+
+    def test_the_plafon_table_has_one_row_per_unit_type_with_its_source(self):
+        rows = list(csv.DictReader((sg.DATA_DIR / "plafon-local.csv").open(encoding="utf-8")))
+        assert len(rows) == 14
+        for r in rows:
+            assert int(r["plafon_lei"]) == math.ceil(float(r["coeficient"]) * 2415)
+            assert "Anexa IX" in r["sursa"] and "rând" in r["sursa"]
+            raised = "OUG 53/2024 art. II" in r["sursa"]
+            assert float(r["majorare"]) == (1.10 if raised else 1.0)
+            assert int(r["plafon_maxim_lei"]) == math.ceil(round(int(r["plafon_lei"]) * float(r["majorare"]), 6))
+        assert sum("OUG 53/2024 art. II" in r["sursa"] for r in rows) == 6      # poz. 23-28
+
+    def test_the_population_ranges_of_a_unit_type_do_not_overlap_or_leave_a_gap(self):
+        rows = list(csv.DictReader((sg.DATA_DIR / "plafon-local.csv").open(encoding="utf-8")))
+        for kinds in ({"comună"}, {"oraș", "oraș/municipiu"}):
+            for pop in range(0, 300_000, 500):
+                hits = [r for r in rows if r["tip_unitate"] in kinds
+                        and int(r["populatie_min"] or 0) <= pop
+                        and (not r["populatie_max"] or pop <= int(r["populatie_max"]))]
+                assert len(hits) <= 1, (kinds, pop)
+                if pop <= 50_000 or kinds != {"comună"}:
+                    assert hits, (kinds, pop)
+
+
+@law_only
+class TestLawMinimumWage:
+    def test_the_minimum_wage_by_date(self, law):
+        assert law.minimum_wage(date(2025, 1, 1)) == 4050
+        assert law.minimum_wage(date(2026, 6, 30)) == 4050
+        assert law.minimum_wage(date(2026, 7, 1)) == 4325
+        assert law.minimum_wage(date(2024, 12, 31)) == 0       # before the table: no floor
+
+    def test_a_pay_below_the_minimum_is_raised_to_it(self, law):
+        selector = S1_FUNCTIONS["F6"][0]              # muncitor necalificat: 2,535 x 1.15 = 2,916
+        assert law.estimate(selector, as_of=date(2026, 3, 31)).lei_min == 4050
+        assert law.estimate(selector, as_of=date(2026, 9, 30)).lei_min == 4325
+
+    def test_the_floor_does_not_touch_a_pay_above_it(self, law):
+        selector = S1_FUNCTIONS["F10"][0]
+        assert law.estimate(selector, as_of=date(2026, 3, 31)).lei_min == 10963
+
+
+class TestHospitalClassifier:
+    @pytest.mark.parametrize("name,expected", [
+        ("Spitalul Clinic Județean de Urgență Oradea", "a.1"),
+        ("Spitalul Universitar de Urgență București", "a.1"),
+        ("Institutul Național de Boli Infecțioase „Prof.dr.Matei Balș”", "a.1"),
+        ("INSTITUL CLINIC DE URGENȚE OFTALMOLOGICE", "a.1"),
+        ("Spitalul Județean de Urgență Slatina", "a.4"),
+        ("Spitalul Municipal Sighișoara", "a.4"),
+        ("Școala Gimnazială Nr. 1 Tuzla", "a.4"),
+        ("", "a.4"),
+    ])
+    def test_clinical_by_name_other_when_unsure(self, est, name, expected):
+        assert est.hospital_type(name) == expected
+
+
+@law_only
+class TestPrecedenceAndFormat:
+    """ADR 0008 rule 4 and the JSON of the brief: the top level keeps the old keys."""
+
+    def _pair(self, law, grid):
+        selector = dict(functie="Îngrijitor", anexa="VIII", regim="personal contractual")
+        return law.estimate(selector, as_of=AFTER_JULY), grid.estimate(selector), selector
+
+    def test_the_law_figure_takes_the_top_level_and_the_draft_goes_under_proiect(self, est, law, grid):
+        lw, dr, sel = self._pair(law, grid)
+        assert lw.lei_min is not None and dr.lei_min is not None
+        payload = est.assemble(lw, dr, sel, sel)
+        assert payload["baza"] == "lege_in_vigoare"
+        assert payload["lei_min"] == lw.lei_min and payload["varianta"] == sg.LAW_VERSION
+        assert payload["proiect"]["baza"] == "proiect" and payload["proiect"]["lei_min"] == dr.lei_min
+
+    def test_the_draft_figure_takes_the_top_level_when_the_law_has_no_row(self, est, law, grid):
+        _, dr, sel = self._pair(law, grid)
+        none = law.estimate(dict(functie="qwertyuiop"), as_of=AFTER_JULY)
+        assert none.lei_min is None
+        payload = est.assemble(none, dr, sel, sel)
+        assert payload["baza"] == "proiect" and payload["lei_min"] == dr.lei_min
+        assert "proiect" not in payload
+
+    def test_the_export_reads_the_top_level_and_an_old_row_has_no_baza(self, est, law, grid):
+        spec = importlib.util.spec_from_file_location(
+            "export_under_test_salary", REPO_ROOT / "export-to-sqlite.py")
+        exp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(exp)
+        lw, dr, sel = self._pair(law, grid)
+        new = exp._salary_columns(json.dumps(est.assemble(lw, dr, sel, sel)))
+        assert (new["min"], new["max"], new["variant"]) == (lw.lei_min, lw.lei_max, sg.LAW_VERSION)
+        old_row = {k: v for k, v in dr.as_dict().items()}          # the format before this change
+        assert "baza" not in old_row
+        old = exp._salary_columns(json.dumps(old_row))
+        assert (old["min"], old["max"]) == (dr.lei_min, dr.lei_max)

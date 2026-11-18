@@ -24,20 +24,38 @@ import math
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from datetime import date
 from difflib import SequenceMatcher
 from functools import lru_cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent.resolve() / "data" / "salarii"
 DEFAULT_VERSION = "2026-07-17"
+#: The grid of Legea 153/2017 as it applies in 2026 (ADR 0008). Its rows hold lei
+#: values, not coefficients; `build-salary-grid.py --source lege-153` writes it.
+LAW_VERSION = "lege153-2026"
 
 DISCLAIMER = (
     "Estimare bazată pe un proiect de lege neadoptat; "
     "nu reprezintă un calcul salarial oficial."
 )
 
-#: Population bands, widest first. Only Anexa VIII local rows are banded.
-POPULATION_BANDS = ["peste 200.000", "50.000-200.000", "10.000-50.000", "sub 10.000"]
+DISCLAIMER_LAW = (
+    "Estimare după Legea 153/2017 și actele care au menținut salariile în 2026; "
+    "nu este un calcul salarial oficial."
+)
+
+#: The unit kinds that `uat.units_for()` returns, and the `tip_unitate` values of
+#: `plafon-local.csv` that each kind can match. A town that is not a county seat
+#: matches the rows of "oraș" and "oraș/municipiu"; the population picks one.
+CAP_ROWS_FOR_UNIT = {
+    "capitala": {"capitală"},
+    "judet": {"consiliu județean"},
+    "resedinta": {"municipiu reședință de județ"},
+    "sector": {"sector"},
+    "oras": {"oraș", "oraș/municipiu"},
+    "comuna": {"comună"},
+}
 
 #: The extraction schema uses ASCII enum values (`personal_contractual`), the
 #: workbook uses Romanian prose (`personal contractual`). One map, here, so the
@@ -105,6 +123,13 @@ class GridRow:
     coef_min: float
     coef_max: float
     needs_review: bool
+    # Law-in-force grid only. A draft row has `lei_min is None` and computes
+    # coefficient x reference value; a law row has lei values from the annexes.
+    lei_min: float | None = None
+    lei_max: float | None = None
+    act_sursa: str = ""
+    tip_unitate: str = ""          # health: a.1 clinical ... a.4 other (OUG 19/2024)
+    multiplicator_regula: float = 1.0
 
     @property
     def ref(self) -> str:
@@ -160,10 +185,13 @@ class SalaryEstimate:
 class Grid:
     """The coefficient registry for one dataset version."""
 
-    def __init__(self, version: str, rows: list[GridRow], params: dict):
+    def __init__(self, version: str, rows: list[GridRow], params: dict,
+                 plafon: list[dict] | None = None):
         self.version = version
         self.rows = rows
         self.params = params
+        #: Local cap per type of unit and population (`plafon-local.csv`); law grid only.
+        self.plafon = plafon or []
         self.by_cod: dict[str, list[GridRow]] = {}
         self.by_name: dict[str, list[GridRow]] = {}
         #: normalised synonym -> the spelling the workbook uses, for display.
@@ -288,6 +316,21 @@ class Grid:
         # (21.00201026 principal, 21.00201028 debutant). The function *name* is
         # the one key that means the same thing in both.
         rows = list(self.by_name.get(name, [])) if name else []
+        # Other spellings of the same function (the draft row's synonyms): the
+        # law and the draft do not always list the same alternatives.
+        for alt in selector.get("functie_alt") or []:
+            if rows:
+                break
+            rows = list(self.by_name.get(norm(alt), []))
+        if not rows and name:
+            # Last resort: a stored name that is the start of a longer one
+            # ("Medic rezident anul VI" for "Medic rezident anul VI - VII").
+            for n in [name] + [norm(a) for a in selector.get("functie_alt") or []]:
+                if len(n.split()) >= 2:
+                    rows = [r for key, rs in self.by_name.items()
+                            if key.startswith(n + " ") for r in rs]
+                    if rows:
+                        break
         if not rows and cod:
             rows = list(self.by_cod.get(cod, []))
             # Reached only when the name is missing: widen along the grade axis
@@ -334,6 +377,7 @@ class Grid:
         rows = narrow(rows, "tip_post", selector.get("tip_post"))
         rows = narrow(rows, "nivel_administrativ", selector.get("nivel_administrativ"))
         rows = narrow(rows, "banda_populatie", selector.get("banda_populatie"))
+        rows = narrow(rows, "tip_unitate", selector.get("tip_unitate"))
 
         studii = selector.get("studii")
         if studii:
@@ -347,7 +391,44 @@ class Grid:
         return rows
 
     # -- the calculator ----------------------------------------------------
-    def estimate(self, selector: dict, *, gradation: int = 0) -> SalaryEstimate:
+    def minimum_wage(self, as_of: date | None = None) -> float:
+        """The gross minimum wage on a date (`salariu_minim_brut` in `parametri.json`)."""
+        iso = (as_of or date.today()).isoformat()
+        steps = [m for m in self.params.get("salariu_minim_brut", []) if m["de_la"] <= iso]
+        return float(max(steps, key=lambda m: m["de_la"])["lei"]) if steps else 0.0
+
+    def local_cap(self, selector: dict) -> tuple[int | None, str]:
+        """The Art. 11 alin. (4) cap for a local post, and how it was chosen.
+
+        The cap comes from the units that the employer can be (`uat_unitati`, from
+        `uat.units_for()`): the row of its type and population. A unit with no
+        population takes the widest row of its type. With no unit, the widest cap (not the Capital's).
+        The cap includes the 10% of OUG 53/2024 art. II where it applies.
+        """
+        rows = [(r, int(float(r["plafon_maxim_lei"]))) for r in self.plafon]
+        if not rows:
+            return None, "tabelul plafonului lipsește"
+        caps = []
+        for unit in selector.get("uat_unitati") or []:
+            kinds = CAP_ROWS_FOR_UNIT.get(unit.get("tip"), set())
+            pop = unit.get("populatie")
+            for r, cap in rows:
+                if r["tip_unitate"] not in kinds:
+                    continue
+                lo = int(r["populatie_min"] or 0)
+                hi = int(r["populatie_max"]) if r["populatie_max"] else None
+                if pop is None or (lo <= pop and (hi is None or pop <= hi)):
+                    caps.append(cap)
+        if caps:
+            return max(caps), "tipul și populația unității administrativ-teritoriale"
+        # The Capital is always known by name, so an unknown unit is not the Capital.
+        return (max(cap for r, cap in rows if r["tip_unitate"] != "capitală"),
+                "unitatea necunoscută: cel mai mare plafon")
+
+    def estimate(self, selector: dict, *, gradation: int = 0,
+                 as_of: date | None = None) -> SalaryEstimate:
+        if self.version == LAW_VERSION:
+            return self._estimate_law(selector, gradation, as_of)
         variant = self.variant
         rows = self.select(selector)
         if not rows:
@@ -399,6 +480,72 @@ class Grid:
             avertismente=warnings,
         )
 
+    def _estimate_law(self, selector: dict, gradation: int, as_of: date | None) -> SalaryEstimate:
+        """Pay under Legea 153/2017: `ceil(lei x regula x gradation)`, never below the minimum wage.
+
+        A local post (Anexa VIII, employer in local administration) is a range. The
+        lower end is the value of the territorial table, because Anexa VIII has no lei
+        value for a local post. The upper end is the cap of Art. 11 alin. (4).
+        """
+        variant = self.variant
+        local = selector.get("nivel_administrativ") == "local"
+        sel = dict(selector, nivel_administrativ="teritorial") if local else selector
+        rows = self.select(sel)
+        if not rows:
+            return SalaryEstimate(
+                None, None, None, None, gradation, self.version,
+                variant.valoare_referinta_lei, "necunoscut",
+                motiv="Nicio poziție din grila legii în vigoare nu corespunde selectorului.",
+                disclaimer=DISCLAIMER_LAW,
+            )
+        local = local and all(r.anexa == "VIII" for r in rows)
+        mult = self.multiplier(gradation)
+        floor = self.minimum_wage(as_of)
+
+        def pay(r: GridRow, lei: float) -> int:
+            # A management row already holds the top gradation (Art. 19 alin. (2)).
+            m = 1.0 if r.tip_post == "conducere" else mult
+            return int(max(math.ceil(round(lei * r.multiplicator_regula * m, 6)), floor))
+
+        lo = min(pay(r, r.lei_min) for r in rows)
+        hi = max(pay(r, r.lei_max) for r in rows)
+
+        warnings: list[str] = []
+        if any(r.needs_review for r in rows):
+            warnings.append("Cel puțin un rând din grilă este marcat pentru verificare manuală.")
+        if not selector.get("studii") and len({r.studii for r in rows}) > 1:
+            warnings.append("Nivelul de studii nu a putut fi determinat; intervalul acoperă mai multe niveluri.")
+        if len(rows) > 4 and lo != hi:
+            warnings.append(f"Selectorul corespunde la {len(rows)} poziții din grilă.")
+
+        motiv = f"{len(rows)} rând(uri) din Anexa {rows[0].anexa}, {rows[0].act_sursa.split(';')[0]}"
+        if local:
+            cap, cap_basis = self.local_cap(selector)
+            if cap:
+                hi = max(hi, cap)
+            if cap_basis.startswith("unitatea necunoscută"):
+                warnings.append("Unitatea administrativ-teritorială nu a putut fi determinată; "
+                                "limita de sus este cel mai mare plafon legal.")
+            warnings.append(
+                "Anexa VIII nu are valori în lei pentru funcțiile din administrația locală; "
+                "limita de jos este valoarea din tabelul unităților teritoriale.")
+            motiv = (f"Consiliul local stabilește salariul, până la plafonul legal (Art. 11 alin. (4)): "
+                     f"{cap_basis}. {motiv}")
+            confidence = "interval"
+        elif lo == hi:
+            confidence = "exact"
+        else:
+            confidence = "interval"
+
+        return SalaryEstimate(
+            lei_min=lo, lei_max=hi, coef_min=None, coef_max=None,
+            gradatie=gradation, varianta=self.version,
+            valoare_referinta=variant.valoare_referinta_lei,
+            incredere=confidence, motiv=motiv,
+            randuri=[r.ref for r in rows[:12]], avertismente=warnings,
+            disclaimer=DISCLAIMER_LAW,
+        )
+
 
 def _row_from_csv(d: dict) -> GridRow:
     return GridRow(
@@ -410,8 +557,12 @@ def _row_from_csv(d: dict) -> GridRow:
         nivel_administrativ=d["nivel_administrativ"],
         banda_populatie=d["banda_populatie"], grad_treapta=d["grad_treapta"],
         vechime=d["vechime"], studii=d["studii"], sectiune=d["sectiune"],
-        coef_min=float(d["coef_min"]), coef_max=float(d["coef_max"]),
+        coef_min=float(d["coef_min"] or 0), coef_max=float(d["coef_max"] or 0),
         needs_review=d["needs_review"] == "1",
+        lei_min=float(d["lei_min"]) if d.get("lei_min") else None,
+        lei_max=float(d["lei_max"]) if d.get("lei_max") else None,
+        act_sursa=d.get("act_sursa", ""), tip_unitate=d.get("tip_unitate", ""),
+        multiplicator_regula=float(d.get("multiplicator_regula") or 1.0),
     )
 
 
@@ -428,4 +579,49 @@ def load_grid(version: str = DEFAULT_VERSION, data_dir: str | None = None) -> Gr
         raise ValueError(f"unknown variant {version!r}; known: {sorted(params['variante'])}")
     with grid_csv.open(encoding="utf-8") as fh:
         rows = [_row_from_csv(d) for d in csv.DictReader(fh)]
-    return Grid(version, rows, params)
+    plafon = []
+    plafon_csv = base / "plafon-local.csv"
+    if version == LAW_VERSION and plafon_csv.exists():
+        with plafon_csv.open(encoding="utf-8") as fh:
+            plafon = list(csv.DictReader(fh))
+    return Grid(version, rows, params, plafon)
+
+
+_TRAIL_RANK = re.compile(r"\s+[-–]?\s*(debutant|principal|specialist)\s*$", re.I)
+_TRAIL_GRADE = re.compile(r"\s+(?:gradul?\s+)?(?:IV|I{1,3}|V)(?:\s?A)?$")
+
+
+def selector_for_law(selector: dict, draft: Grid) -> dict:
+    """Map a selector that was written against the draft grid to the law grid.
+
+    The occupation dictionary stores `functie_grila` as one spelling of a draft row.
+    The law lists the same function with other alternatives, so the selector also
+    carries every spelling that the draft rows with that name have (`functie_alt`).
+    The LLM does not run again: this is the whole mapping.
+    """
+    out = dict(selector)
+    raw = (selector.get("functie") or "").strip(" *")
+    name = norm(selector.get("functie") or "")
+    alts: list[str] = []
+
+    def add(x: str):
+        x = x.strip(" *,;")
+        if len(x) > 2 and norm(x) != name and x not in alts:
+            alts.append(x)
+
+    for r in draft.by_name.get(name, []):
+        for syn in r.sinonime:
+            add(syn)
+    # The dictionary often stores a comma list, or a name with its grade as a Roman
+    # numeral ("Cercetător științific II"); the law splits or drops both.
+    for piece in [raw] + re.split(r"\s*[;,/]\s*", raw):
+        add(piece)
+        add(_TRAIL_GRADE.sub("", piece))
+        m = _TRAIL_RANK.search(piece)
+        if m:
+            add(piece[:m.start()])
+            if not out.get("grad_treapta"):
+                out["grad_treapta"] = m.group(1).lower()
+    if alts:
+        out["functie_alt"] = alts
+    return out

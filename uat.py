@@ -79,6 +79,7 @@ class PopulationRow(NamedTuple):
     tip: str          # "oras" (municipiu or oraș) or "comuna"
     county: str       # norm()ed canonical county
     population: int
+    seat: bool = False  # resedinta_judet == "da"
 
 
 @lru_cache(maxsize=1)
@@ -98,7 +99,8 @@ def load_populations() -> dict[str, tuple[PopulationRow, ...]]:
                 continue
             tip = (r.get("tip") or "oras").strip().lower()
             table.setdefault(norm(r["nume"]), []).append(
-                PopulationRow(tip, norm(r.get("judet")), int(r["populatie"])))
+                PopulationRow(tip, norm(r.get("judet")), int(r["populatie"]),
+                              (r.get("resedinta_judet") or "").strip().lower() == "da"))
     return {k: tuple(v) for k, v in table.items()}
 
 
@@ -175,17 +177,15 @@ def parse_employer(employer: str) -> tuple[str, str]:
     return uat_type, rest.strip(" .-–—")
 
 
-def _population_bands(key: str, uat_type: str, county: str) -> frozenset[str] | None:
-    """Band set from the census table, or None when the table cannot decide.
+def _candidate_rows(key: str, uat_type: str, county: str) -> tuple[PopulationRow, ...]:
+    """The census rows that can be the unit, or `()` when the table has none.
 
     Rows are filtered by unit type (a commune never borrows a town's population),
-    then by county when one is known. If the survivors still span several bands
-    the name is ambiguous (Ștefănești without a county) and the caller falls back
-    to the type rules rather than guess.
+    then by county when one is known.
     """
     rows = load_populations().get(key, ())
     if not rows:
-        return None
+        return ()
     if uat_type == "comuna":
         tip_groups = [("comuna",)]
     elif uat_type:  # municipiu, oraș, and sector/județ (only towns share those names)
@@ -204,9 +204,53 @@ def _population_bands(key: str, uat_type: str, county: str) -> frozenset[str] | 
         if county:
             in_county = [r for r in cands if r.county == norm(county)]
             cands = in_county or cands
-        bands = frozenset(band_for_population(r.population) for r in cands)
-        return bands if len(bands) == 1 else None
-    return None
+        return tuple(cands)
+    return ()
+
+
+def _population_bands(key: str, uat_type: str, county: str) -> frozenset[str] | None:
+    """Band set from the census table, or None when the table cannot decide.
+
+    If the surviving rows still span several bands the name is ambiguous
+    (Ștefănești without a county) and the caller falls back to the type rules
+    rather than guess.
+    """
+    cands = _candidate_rows(key, uat_type, county)
+    if not cands:
+        return None
+    bands = frozenset(band_for_population(r.population) for r in cands)
+    return bands if len(bands) == 1 else None
+
+
+def units_for(employer: str, county: str | None = None) -> list[dict]:
+    """The administrative units that an employer can be, for the local pay cap.
+
+    Each unit is `{"tip", "populatie"}`. `tip` is `capitala`, `sector`, `judet`,
+    `resedinta` (municipiu reședință de județ), `oras` (any other town) or `comuna`.
+    `populatie` is `None` when the table has no row. Several units come back when
+    the name is ambiguous (the same name in two counties); the caller takes the
+    widest cap. An empty list means "the employer is not a known unit".
+    """
+    uat_type, name = parse_employer(employer)
+    key = norm(name)
+    if uat_type == "sector":
+        return [{"tip": "sector", "populatie": None}]
+    if uat_type == "judet":
+        return [{"tip": "judet", "populatie": None}]
+    if key == "bucuresti":
+        return [{"tip": "capitala", "populatie": None}]
+    if not key:
+        return []
+    rows = _candidate_rows(key, uat_type, employer_county(employer) or canonical_county(county))
+    if not rows:
+        if not uat_type:
+            return []
+        return [{"tip": "comuna" if uat_type == "comuna" else "oras", "populatie": None}]
+    units = {}
+    for r in rows:
+        tip = "comuna" if r.tip == "comuna" else ("resedinta" if r.seat else "oras")
+        units[(tip, r.population)] = {"tip": tip, "populatie": r.population}
+    return list(units.values())
 
 
 def bands_for(employer: str, county: str | None = None) -> tuple[frozenset[str], str]:

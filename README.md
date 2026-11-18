@@ -146,6 +146,36 @@ python build-salary-grid.py --version-id 2026-08-20   # rebuild the registry
 python pipeline.py --steps occupations,salary,export-sqlite --force
 ```
 
+**Two baselines (ADR 0008).** The law in force is Legea 153/2017 with the 2026 pay rules
+(`baza: lege_in_vigoare`, grid `lege153-2026`). The draft is `baza: proiect`. The top level of
+`salary_estimate` holds the law figure, and the draft figure sits under `proiect`. When the law
+has no row for a posting, the draft figure takes the top level. A row with no `baza` is an old
+row, and its figure is a draft figure. So `sal_min`, `sal_max` and the filter need no change.
+
+```bash
+python build-salary-grid.py --source lege-153 --report   # parse the consolidated HTML of the law
+python build-salary-grid.py --source lege-153            # write grila-lege153-2026.csv, plafon-local.csv
+python estimate-salaries.py --dry-run --hospital-names   # counts per baza, per anexă; hospital classes
+```
+
+The source is the consolidated HTML in `docs/salarii/lege-153/` (Legea 153/2017 id 298840,
+OUG 19/2024 id 279777, downloaded 2026-11-18). Each grid row names its table and row
+(`sheet`, `source_row`, `act_sursa`). The rule that turns a 2022 annex value into the pay of 2026
+is in `data/salarii/parametri.json` (`factori_2022_2026`): × 1.15 for Anexa VIII and the annexes of
+OUG 53/2024; the June 2024 column of OUG 19/2024 for health; the June 2024 column of OUG 128/2023
+for education. Then the gradation, and never below the minimum gross wage of the date
+(`salariu_minim_brut`). A local post (primărie, county council) is a range: the territorial table
+is the lower end, and the cap of Art. 11 alin. (4) is the upper end (`plafon-local.csv`: one row for
+each vice-mayor row of Anexa IX lit. C, by type of unit and population; positions 23-28 carry the
+extra 10% of OUG 53/2024 art. II). `uat.units_for()` gives the type and the population of the employer.
+The population file `data/uat-populatie.csv` is a copy of `core-assets/data/geo/uat-populatie.csv`
+(core-assets commit 961c4ff, INS RPL 2021). Do not run `ops/build-uat-population.py`: it writes an older
+file over the copy. The 552 rows of Anexele III, IV and V were reviewed on 2026-11-18, and table 45
+(Anexa II pct. 3.3) is left out because OUG 19/2024 Anexa 2 replaces it.
+The hospital type (`a.1` clinical, `a.4` other) comes from the employer name (`hospital_type()`
+in `estimate-salaries.py`). Run Python with `.venv/bin/python`. Known gaps are in
+`parametri.json` (`lacune_cunoscute_lege153`).
+
 `data/salarii/` and `data/ocupatii/` are git-tracked on purpose: every figure the
 site shows must stay traceable to a sheet and row, including under an older
 variant. `python build-salary-grid.py --report` prints coverage and the rows

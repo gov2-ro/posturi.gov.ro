@@ -45,6 +45,6 @@ if ($_sc_dist['total'] > 0):
     </li>
 <?php endforeach; ?>
   </ul>
-  <p class="g2-text-meta">Salariul anunțat sau, pentru cele mai multe posturi, cel estimat din grila de salarizare propusă (gradația 0).</p>
+  <p class="g2-text-meta">Salariul anunțat sau, pentru cele mai multe posturi, cel estimat după legea în vigoare (Legea 153/2017), la gradația 0.</p>
 </figure>
 <?php endif;

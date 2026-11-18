@@ -425,6 +425,29 @@ class Grid:
         return (max(cap for r, cap in rows if r["tip_unitate"] != "capitală"),
                 "unitatea necunoscută: cel mai mare plafon")
 
+    def row_pay(self, row: GridRow, gradation: int = 0,
+                as_of: date | None = None) -> tuple[int, int]:
+        """The gross pay of one grid row at one gradation: `(lei_min, lei_max)`.
+
+        The one place with the pay formula (ADR 0008). `estimate()` and the export of the
+        estimator page both call it.
+
+        - Law grid: `ceil(lei x regula x gradation)`, never below the minimum wage on `as_of`.
+          A management row already holds the top gradation (Art. 19 alin. (2)).
+        - Draft grid: `ceil(coeficient x valoare_referinta x gradation)`.
+        """
+        mult = self.multiplier(gradation)
+        if self.version == LAW_VERSION:
+            floor = self.minimum_wage(as_of)
+            m = 1.0 if row.tip_post == "conducere" else mult
+
+            def pay(lei: float) -> int:
+                return int(max(math.ceil(round(lei * row.multiplicator_regula * m, 6)), floor))
+
+            return pay(row.lei_min), pay(row.lei_max)
+        vr = self.variant.valoare_referinta_lei
+        return math.ceil(row.coef_min * vr * mult), math.ceil(row.coef_max * vr * mult)
+
     def estimate(self, selector: dict, *, gradation: int = 0,
                  as_of: date | None = None) -> SalaryEstimate:
         if self.version == LAW_VERSION:
@@ -440,7 +463,6 @@ class Grid:
 
         coef_min = min(r.coef_min for r in rows)
         coef_max = max(r.coef_max for r in rows)
-        mult = self.multiplier(gradation)
         vr = variant.valoare_referinta_lei
 
         warnings: list[str] = []
@@ -467,8 +489,8 @@ class Grid:
             warnings.append(f"Selectorul corespunde la {len(rows)} poziții din grilă.")
 
         return SalaryEstimate(
-            lei_min=math.ceil(coef_min * vr * mult),
-            lei_max=math.ceil(coef_max * vr * mult),
+            lei_min=min(self.row_pay(r, gradation, as_of)[0] for r in rows),
+            lei_max=max(self.row_pay(r, gradation, as_of)[1] for r in rows),
             coef_min=round(coef_min, 6),
             coef_max=round(coef_max, 6),
             gradatie=gradation,
@@ -499,16 +521,9 @@ class Grid:
                 disclaimer=DISCLAIMER_LAW,
             )
         local = local and all(r.anexa == "VIII" for r in rows)
-        mult = self.multiplier(gradation)
-        floor = self.minimum_wage(as_of)
-
-        def pay(r: GridRow, lei: float) -> int:
-            # A management row already holds the top gradation (Art. 19 alin. (2)).
-            m = 1.0 if r.tip_post == "conducere" else mult
-            return int(max(math.ceil(round(lei * r.multiplicator_regula * m, 6)), floor))
-
-        lo = min(pay(r, r.lei_min) for r in rows)
-        hi = max(pay(r, r.lei_max) for r in rows)
+        pays = [self.row_pay(r, gradation, as_of) for r in rows]
+        lo = min(p[0] for p in pays)
+        hi = max(p[1] for p in pays)
 
         warnings: list[str] = []
         if any(r.needs_review for r in rows):

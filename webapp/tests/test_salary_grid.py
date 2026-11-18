@@ -543,3 +543,54 @@ class TestStatedSalaryIsMonthly:
     ])
     def test_only_a_monthly_figure_is_kept(self, exp, inferred, expected):
         assert exp._stated_salary(inferred) == expected
+
+
+@law_only
+class TestRowPay:
+    """`Grid.row_pay()` is the one pay formula: `estimate()` is the min and max of it over the rows."""
+
+    @staticmethod
+    def _from_rows(grid, selector, gradation=0, as_of=AFTER_JULY):
+        rows = grid.select(selector)
+        pays = [grid.row_pay(r, gradation, as_of) for r in rows]
+        return rows, min(p[0] for p in pays), max(p[1] for p in pays)
+
+    def _management_row(self, law):
+        return next(r for r in law.rows if r.tip_post == "conducere")
+
+    @pytest.mark.parametrize("name,selector", [
+        ("central exact", S1_FUNCTIONS["F10"][0]),
+        ("central range", dict(functie="Consilier", anexa="VIII", regim="funcționar public",
+                               nivel_administrativ="teritorial", grad_treapta="superior")),
+        ("hospital tip_unitate", dict(functie="Medic specialist", anexa="II", tip_unitate="a.1")),
+    ])
+    @pytest.mark.parametrize("gradation", [0, 3])
+    def test_the_law_estimate_is_the_min_and_max_of_row_pay(self, law, name, selector, gradation):
+        rows, lo, hi = self._from_rows(law, selector, gradation)
+        assert rows, name
+        est = law.estimate(selector, gradation=gradation, as_of=AFTER_JULY)
+        assert (est.lei_min, est.lei_max) == (lo, hi), name
+
+    def test_a_local_post_takes_its_lower_end_from_row_pay(self, law):
+        selector = dict(TestLawLocalRange.LOCAL)
+        rows, lo, hi = self._from_rows(law, dict(selector, nivel_administrativ="teritorial"))
+        est = law.estimate(dict(selector, uat_unitati=[dict(tip="comuna", populatie=3000)]), as_of=AFTER_JULY)
+        assert est.lei_min == lo == 5641
+        assert est.lei_max >= hi
+
+    def test_a_management_row_ignores_the_gradation(self, law):
+        row = self._management_row(law)
+        assert law.row_pay(row, 0, AFTER_JULY) == law.row_pay(row, 5, AFTER_JULY)
+
+    def test_the_draft_estimate_is_the_min_and_max_of_row_pay(self, grid):
+        selector = dict(functie="Consilier", anexa="VIII", regim="funcționar public", grad_treapta="superior")
+        for gradation in (0, 3):
+            rows, lo, hi = self._from_rows(grid, selector, gradation)
+            est = grid.estimate(selector, gradation=gradation)
+            assert (est.lei_min, est.lei_max) == (lo, hi)
+        row = rows[0]
+        assert grid.row_pay(row, 0) == (math.ceil(row.coef_min * 4100), math.ceil(row.coef_max * 4100))
+
+    def test_the_gradation_raises_a_non_management_row(self, law):
+        row = next(r for r in law.rows if r.tip_post != "conducere" and r.lei_min > 6000)
+        assert law.row_pay(row, 3, AFTER_JULY)[0] > law.row_pay(row, 0, AFTER_JULY)[0]

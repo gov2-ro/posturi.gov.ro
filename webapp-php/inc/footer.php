@@ -19,8 +19,6 @@ $_footer_groups = [
 ]; ?>
 <footer class="g2-footer mt-12">
   <div class="g2-footer-in g2-container">
-    <?php /* The project logo (assets/g2-0.png, scaled down in static/). */ ?>
-    <a href="/" class="shrink-0"><img src="/static/logo-g2-128.png" alt="posturi.gov2.ro, prima pagină" width="64" height="64" class="h-16 w-16"></a>
     <?php foreach ($_footer_groups as $_fg_title => $_fg_links): ?>
     <div>
       <h2 class="g2-label mb-1"><?= e($_fg_title) ?></h2>
@@ -32,6 +30,8 @@ $_footer_groups = [
       </ul>
     </div>
     <?php endforeach; ?>
+    <?php /* The project logo (assets/g2-0.png, scaled down in static/), in the free space at the right of the link groups. */ ?>
+    <a href="/" class="ml-auto shrink-0 self-start"><img src="/static/logo-g2-128.png" alt="posturi.gov2.ro, prima pagină" width="96" height="96" class="h-24 w-24"></a>
     <?php /* Each part is one inline block, so a line break falls between two parts and not inside one. */ ?>
     <p class="g2-text-meta basis-full">
       <?php $_sep = '<span aria-hidden="true">&ensp;&middot;&ensp;</span>'; ?>

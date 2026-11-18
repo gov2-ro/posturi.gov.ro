@@ -125,7 +125,7 @@ test('footer: four groups of links, then the disclaimer; no skin picker', async 
   await page.goto('/');
   const foot = page.locator('footer');
   await expect(foot.locator('h2')).toHaveText(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect']);
-  await expect(foot.locator('ul li')).toHaveCount(17);   // 12 fixed links + the five themed pages (their own group)
+  await expect(foot.locator('ul li')).toHaveCount(18);   // 13 fixed links + the five themed pages (their own group)
   const order = await foot.evaluate((f) => {
     const q = (s) => f.querySelector(s);
     const pos = (el) => el.getBoundingClientRect().top + window.scrollY;

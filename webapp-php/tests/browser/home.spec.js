@@ -32,7 +32,7 @@ const domainHref = (dom, county) => {
 };
 const domTotal = (dom) => Object.values(dom.counties).reduce((a, b) => a + b, 0);
 // A domain with a themed page links to it (the county goes in the fragment); the others link to the list.
-const THEMED = { sanatate: 'sanatate', administratie: 'administratie', financiar: 'financiar', social: 'social', educatie: 'social' };   // domain key => theme slug
+const THEMED = { sanatate: 'sanatate', administratie: 'administratie', financiar: 'financiar', social: 'social', educatie: 'social', meseriasi: 'meserii', paza: 'meserii', soferi: 'meserii', necalificati: 'meserii' };   // domain key => theme slug
 const hrefOf = (d, key, county) => (THEMED[key] ? `/${THEMED[key]}/` + (county ? '#' + county : '') : domainHref(d.items[key], county));
 const tileLink = (page, sector) => tile(page, sector).locator('a');
 /** "(1.197)" → 1197 */
@@ -104,7 +104,7 @@ test('footer: four groups of links, then the disclaimer; no skin picker', async 
   await page.goto('/');
   const foot = page.locator('footer');
   await expect(foot.locator('h2')).toHaveText(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect']);
-  await expect(foot.locator('ul li')).toHaveCount(16);   // 12 fixed links + the four themed pages (their own group)
+  await expect(foot.locator('ul li')).toHaveCount(17);   // 12 fixed links + the five themed pages (their own group)
   const order = await foot.evaluate((f) => {
     const q = (s) => f.querySelector(s);
     const pos = (el) => el.getBoundingClientRect().top + window.scrollY;

@@ -57,7 +57,7 @@ foreach ($theme['sections'] as $sec) {
     }
     $row = [];
     foreach ($candidates as $v => $label) {
-        $it = home_item($param . ':' . $v, $label, home_merge_params($base, [$param => [$v]]));
+        $it = home_item($param . ':' . $v, $label, theme_item_params($base, $param, (string)$v));
         if ($it['n'] > 0) $row[] = $it;
     }
     // `labels` keeps its own order, unless the section says `order => 'count'` (then `limit` keeps the first items after the sort).
@@ -79,6 +79,15 @@ foreach ($theme['sections'] as $sec) {
         }
         $sec['items'] = $row;
     }
+    if (!empty($sec['sprite_icons']) && empty($theme['icon_file'])) {
+        // Symbols of the page sprite (the same as the landing page): value => id. A value with none has no icon, and its text lines up.
+        $sec['has_icons'] = false;
+        foreach ($row as $i => $it) {
+            $row[$i]['icon'] = $sec['sprite_icons'][preg_replace('/^[^:]*:/', '', $it['id'])] ?? null;
+            if ($row[$i]['icon'] !== null) $sec['has_icons'] = true;
+        }
+        $sec['items'] = $row;
+    }
     if ($row) $sections[] = $sec;
 }
 $other = null;
@@ -92,7 +101,7 @@ $ts = null;
 $hist = $theme['history']['family'] ?? null;   // one family (string) or a list of families
 foreach ($theme['sections'] as $sec) if ($sec['type'] === 'stats' && ((is_string($hist) && $hist !== '') || (is_array($hist) && $hist))) {
     $groups = $theme['history']['groups'] ?? [];
-    $gs = theme_group_series($hist, $groups, 12);
+    $gs = theme_group_series($hist, $groups, 12, (array)($theme['history']['cor'] ?? []));
     $weekly = [];
     foreach (home_week_starts(12) as $i => $start) $weekly[] = ['start' => $start, 'n' => $gs['total'][$i]];
     $series = [];

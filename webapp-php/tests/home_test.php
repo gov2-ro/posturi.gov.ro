@@ -199,7 +199,7 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
     }
     assert_same(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect'], array_keys($groups), 'four footer groups');
     assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/']], $groups['Posturi'], 'footer: Posturi');
-    assert_same([['Sănătate', '/sanatate/'], ['Administrație', '/administratie/'], ['Financiar', '/financiar/'], ['Asistență socială și consiliere', '/social/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
+    assert_same([['Sănătate', '/sanatate/'], ['Administrație', '/administratie/'], ['Financiar', '/financiar/'], ['Asistență socială și consiliere', '/social/'], ['Meserii și muncitori', '/meserii/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
     assert_same([['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'], ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/']], $groups['Urmărește'], 'footer: Urmărește');
     assert_same(['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'], array_column($groups['Proiect'], 0), 'footer: Proiect');
     assert_contains('/despre/#confidentialitate', $home, 'footer: privacy anchor');
@@ -542,6 +542,8 @@ run_suite('the domain items link to their themed page; every other item links to
     $keys = array_column(HOME_DOMAINS, 'key');
     foreach ($owner as $key => $slug) assert_true(in_array($key, $keys, true), "$slug: $key is a key of HOME_DOMAINS");
     foreach (['sanatate', 'administratie', 'financiar'] as $k) assert_same($k, $owner[$k] ?? null, "the theme $k lists its own domain");
+    // The four groups of manual and service work are four domains of one page (brief 3): the four items link to /meserii/.
+    foreach (['meseriasi', 'paza', 'soferi', 'necalificati'] as $k) assert_same('meserii', $owner[$k] ?? null, "the domain $k is in the theme meserii");
     // Social and Educație are two domains of one page (brief 4): both items link to /social/.
     assert_same('social', $owner['social'] ?? null, 'the domain social is in the theme social');
     assert_same('social', $owner['educatie'] ?? null, 'the domain educatie is in the theme social');
@@ -566,14 +568,15 @@ run_suite('the domain items link to their themed page; every other item links to
             assert_false($li->hasAttribute('data-theme-href'), "$key: no data-theme-href");
         }
     }
-    foreach (['administratie', 'financiar', 'sanatate', 'social', 'educatie'] as $k) assert_true(isset($themed[$k]), "the item $k is on the page");
+    foreach (['administratie', 'financiar', 'sanatate', 'social', 'educatie', 'necalificati'] as $k) assert_true(isset($themed[$k]), "the item $k is on the page");
+    assert_same('/meserii/', $themed['necalificati'] ?? null, 'the item "Muncitori necalificați" links to /meserii/');
     assert_same('/social/', $themed['social'] ?? null, 'the item "Social" links to /social/');
     assert_same('/social/', $themed['educatie'] ?? null, 'the item "Educație" links to /social/');
     // The count of an item does not change: it is the result count of the list of its own filter.
     foreach ($themed as $key => $_) {
         $li = $x->query('//*[@data-home-tile][@data-domain="' . $key . '"]')->item(0);
         $d = array_values(array_filter(HOME_DOMAINS, fn($d) => $d['key'] === $key))[0];
-        assert_same(list_count($srv['base'], home_list_url(['family' => [$d['family']]])), paren_number($x->query('.//*[@data-tile-count]', $li)->item(0)->textContent), "$key: its count is the count of its list");
+        assert_same(list_count($srv['base'], home_list_url(['family' => [$d['family']]] + (isset($d['cor']) ? ['cor' => $d['cor']] : []))), paren_number($x->query('.//*[@data-tile-count]', $li)->item(0)->textContent), "$key: its count is the count of its list");
     }
     stop_fixture_server($srv, $fdb);
 });

@@ -714,6 +714,68 @@ test.describe('/social/', () => {
   });
 });
 
+// ---- The theme /meserii/ (tests/fixtures/professional_db.php, add_meserii_fixture(): the family tehnic, COR 5, 7, 8, 9; own port) ----
+// 11 postings (cluj 4, ilfov 7); Categorii: 7 = 3, 5 = 3, 9 = 3, 8 = 2; the chart in posts: Meseriași 9, Îngrijire 4, Șoferi 4, Necalificați 5.
+test.describe('/meserii/', () => {
+  test.use({ baseURL: 'http://127.0.0.1:8827' });
+
+  test('the sections are in order; "Categorii" has the four groups with their icons; no horizontal overflow', async ({ page }) => {
+    await page.goto('/meserii/');
+    await expect(page.locator('h1#h-theme')).toHaveText('Meserii și muncitori (11)');
+    const ids = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-labelledby')));
+    expect(ids).toEqual(['h-theme', 'h-categorii', 'h-meserii', 'h-angajatori', 'h-studii', 'h-noi', 'h-notificari']);
+    const cats = await page.locator('section[aria-labelledby="h-categorii"] li[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain));
+    expect(cats).toEqual(['cor:7', 'cor:5', 'cor:9', 'cor:8']);
+    await expect(page.locator('section[aria-labelledby="h-categorii"] li[data-home-tile] svg')).toHaveCount(4);
+    await expect(page.locator('[data-domain="other"]')).toHaveCount(0);
+    await noOverflow(page, '/meserii/');
+    const wide = await page.evaluate(() => Array.from(document.querySelectorAll('main li, main a')).filter((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1).length);
+    expect(wide, 'items that stick out of the page').toBe(0);
+  });
+
+  test('a "Categorii" item opens the list of its group only, with the same count, also inside a county', async ({ page }) => {
+    for (const id of ['cor:7', 'cor:8', 'occupation:Muncitor calificat']) {
+      await page.goto('/meserii/');
+      const n = paren(await tile(page, id).locator('[data-tile-count]').textContent());
+      await tile(page, id).locator('a').click();
+      if (id.startsWith('cor:')) await expect(page).toHaveURL(new RegExp(`cor%5B%5D=${id.slice(4)}&family`));
+      expect(num(await page.locator('#results-status').textContent().then((t) => t.match(/[\d.]+/)[0])), id).toBe(n);
+    }
+    await page.goto('/meserii/');
+    await page.locator('button[data-county="cluj"]').click();
+    await expect(page.locator('h1#h-theme')).toHaveText(/\(4\)$/);
+    const href = await tile(page, 'cor:7').locator('a').getAttribute('href');
+    expect(href).toBe(itemHref((await data(page)).items['cor:7'], 'cluj'));
+    expect(href.match(/cor%5B%5D=/g).length, 'one cor[] in the link of the county').toBe(1);
+  });
+
+  test('the chart: "Toate" stacks the four COR groups; the posts of the archive with a COR code count', async ({ page }) => {
+    await page.goto('/meserii/');
+    const d = await panelData(page);
+    expect(d.series.map((s) => s.name)).toEqual(['Meseriași', 'Îngrijire și servicii', 'Șoferi', 'Necalificați']);
+    expect(d.series.map((s) => sum(s.values))).toEqual([9, 4, 4, 5]);
+    expect(sum(d.total)).toBe(22);
+    const buttons = await page.locator('[data-theme-stats] button[data-chart-series]').allTextContents();
+    expect(buttons.map((t) => t.trim())).toEqual(['Toate', 'Meseriași', 'Îngrijire și servicii', 'Șoferi', 'Necalificați']);
+    const b = await bars(page);
+    b.forEach((segs, i) => expect(sum(segs.map((x) => x.h)) > 0 || d.total[i] === 0, `week ${i + 1}`).toBe(true));
+  });
+
+  test('the landing page: the four domain items link to /meserii/, with the county in the fragment', async ({ page }) => {
+    await page.goto('/');
+    for (const k of ['meseriasi', 'paza', 'soferi', 'necalificati']) {
+      await expect(page.locator(`[data-home-tile][data-domain="${k}"] a`)).toHaveAttribute('href', '/meserii/');
+    }
+    await page.locator('[data-county="cluj"]').click();
+    for (const k of ['meseriasi', 'paza', 'soferi']) {
+      await expect(page.locator(`[data-home-tile][data-domain="${k}"] a`)).toHaveAttribute('href', '/meserii/#cluj');
+    }
+    await page.locator('[data-home-tile][data-domain="meseriasi"] a').click();
+    await expect(page).toHaveURL(/\/meserii\/#cluj$/);
+    await expect(page.locator('#home-judet')).toHaveValue('cluj');
+  });
+});
+
 // ---- The button "Toate județele" after the title ----
 test.describe('the button "Toate județele"', () => {
   const clear = (page) => page.locator('[data-county-clear]');

@@ -2846,6 +2846,15 @@ function home_merge_params(array $base, array $extra): array {
     return $base;
 }
 
+/**
+ * The parameters of an item of a `values` section of a themed page: the base filter and `$param` = `$value`. When `$param` is a key
+ * of the base filter, the value replaces the base values (base `cor` [5, 7, 8, 9] and the value 7 give `cor` [7]); else the value
+ * is added, as home_merge_params() does.
+ */
+function theme_item_params(array $base, string $param, string $value): array {
+    return array_key_exists($param, $base) ? array_replace($base, [$param => [$value]]) : home_merge_params($base, [$param => [$value]]);
+}
+
 /** The filter parameters of an item, as form fields (`family[]` => [values]): the shape of the JSON of the page. */
 function home_item_fields(array $params): array {
     $out = [];
@@ -3063,16 +3072,29 @@ function home_weekly_postings(int $weeks = 12, ?string $family = null): array {
 
 /**
  * The group of an occupation, for the buttons of the chart: the index of the first group of $groups that holds it, or null.
- * A group has `label` and any of `values` (exact occupations), `prefixes` (the occupation starts with one) and `except` (exact
- * occupations that a prefix does not take). So an occupation is in one group at most.
+ * A group has `label` and any of `values` (exact occupations), `prefixes` (the occupation starts with one), `except` (exact
+ * occupations that a prefix does not take) and `prefixes_cor` (the COR code of the posting starts with one; needs $occ_group).
+ * So a posting is in one group at most.
  */
-function theme_group_of(array $groups, string $occupation): ?int {
+function theme_group_of(array $groups, string $occupation, string $occ_group = ''): ?int {
     foreach ($groups as $i => $g) {
         if (in_array($occupation, $g['values'] ?? [], true)) return $i;
         if (in_array($occupation, $g['except'] ?? [], true)) continue;
         foreach ($g['prefixes'] ?? [] as $prefix) if (str_starts_with($occupation, (string)$prefix)) return $i;
+        // `prefixes_cor`: the COR code (`occ_group`) of the posting starts with one of them (a posting with no code is in no such group).
+        if ($occ_group !== '') foreach ($g['prefixes_cor'] ?? [] as $prefix) if (str_starts_with($occ_group, (string)$prefix)) return $i;
     }
     return null;
+}
+
+/** True when the table `archived_postings` has the column (an export made before the column existed has not). */
+function archive_has_column(string $col): bool {
+    static $cols = null;
+    if ($cols === null) {
+        $cols = [];
+        foreach (db()->query('PRAGMA table_info(archived_postings)')->fetchAll() as $r) $cols[(string)$r['name']] = true;
+    }
+    return isset($cols[$col]);
 }
 
 /**
@@ -3082,11 +3104,12 @@ function theme_group_of(array $groups, string $occupation): ?int {
  * is in one group at most (theme_group_of()), so no series is above the total.
  *
  * @param list<array> $groups see theme_group_of()
+ * @param list<string> $cor COR prefixes (theme key `history.cor`), or none
  * @return array{total:list<int>, groups:list<list<int>>, none:int, counties:array<string,array{t:list<int>, s:list<list<int>>}>}
  *         `none` is the number of postings of the weeks that are in no group; `counties` has the weekly total and the group
  *         series of each county (a posting with no county is in no county)
  */
-function theme_group_series(string|array $family, array $groups, int $weeks = 12): array {
+function theme_group_series(string|array $family, array $groups, int $weeks = 12, array $cor = []): array {
     $starts = home_week_starts($weeks);
     $idx = array_flip($starts);
     $from = $starts[0];
@@ -3095,21 +3118,34 @@ function theme_group_series(string|array $family, array $groups, int $weeks = 12
     // One family or a list of families (`IN`): a posting is in one family, so no posting is counted twice.
     $fams = array_values(array_unique(array_map('strval', (array)$family)));
     $in = implode(', ', array_fill(0, count($fams), '?'));
+    // `$cor` (theme key `history.cor`): only the postings whose COR code (`occ_group`) starts with one of the prefixes, in both tables.
+    // An archive of an export made before `occ_group` existed adds nothing to such a chart (it cannot be told which row is in the prefixes).
+    $cor = array_values(array_filter(array_map('strval', $cor), fn($v) => preg_match('/^\d{1,4}$/', $v)));
+    $has_og = archive_has_column('occ_group');
+    $likes = fn(string $c) => ' AND (' . implode(' OR ', array_fill(0, count($cor), "$c LIKE ?")) . ')';
+    $cj = $cor ? $likes('occ_group') : '';
+    $ca = !$cor ? '' : ($has_og ? $likes('a.occ_group') : ' AND 0');
+    $binds = [...$fams];
+    foreach ($cor as $c) $binds[] = $c . '%';
+    array_push($binds, ...$fams);
+    if ($cor && $has_og) foreach ($cor as $c) $binds[] = $c . '%';
+    array_push($binds, $from, $to);
+    $og_a = $has_og ? 'a.occ_group' : "''";
     $st = db()->prepare(
-        "SELECT j, occ, d, SUM(p) AS c FROM (
-            SELECT judet_slug AS j, occ_canonical AS occ, substr(published_at, 1, 10) AS d, $pj AS p FROM job_postings WHERE inf_profession_family IN ($in)
+        "SELECT j, occ, og, d, SUM(p) AS c FROM (
+            SELECT judet_slug AS j, occ_canonical AS occ, occ_group AS og, substr(published_at, 1, 10) AS d, $pj AS p FROM job_postings WHERE inf_profession_family IN ($in)$cj
             UNION ALL
-            SELECT a.judet_slug, a.occ_canonical, substr(a.published_at, 1, 10), $pa FROM archived_postings a
-            WHERE a.id NOT IN (SELECT id FROM job_postings) AND a.inf_profession_family IN ($in)
-         ) WHERE d >= ? AND d < ? GROUP BY j, occ, d");
-    $st->execute([...$fams, ...$fams, $from, $to]);
+            SELECT a.judet_slug, a.occ_canonical, $og_a, substr(a.published_at, 1, 10), $pa FROM archived_postings a
+            WHERE a.id NOT IN (SELECT id FROM job_postings) AND a.inf_profession_family IN ($in)$ca
+         ) WHERE d >= ? AND d < ? GROUP BY j, occ, og, d");
+    $st->execute($binds);
     $zero = array_fill(0, $weeks, 0);
     $out = ['total' => $zero, 'groups' => array_fill(0, count($groups), $zero), 'none' => 0, 'counties' => []];
     foreach ($st->fetchAll() as $r) {
         $w = $idx[(new DateTimeImmutable((string)$r['d'], new DateTimeZone('Europe/Bucharest')))->modify('monday this week')->format('Y-m-d')] ?? null;
         if ($w === null) continue;
         $c = (int)$r['c'];
-        $g = theme_group_of($groups, (string)$r['occ']);
+        $g = theme_group_of($groups, (string)$r['occ'], (string)$r['og']);
         $out['total'][$w] += $c;
         if ($g === null) $out['none'] += $c; else $out['groups'][$g][$w] += $c;
         $j = (string)$r['j'];

@@ -114,7 +114,9 @@ run_suite('/sanatate/?… is a 301 to /?… with the base filter and the given p
         '/sanatate/?q=asistent' => '/?' . HEALTH . '&q=asistent',
         '/sanatate/?judet%5B%5D=cluj&sort=deadline' => '/?' . HEALTH . '&judet%5B%5D=cluj&sort=deadline',
         '/sanatate/?medspec%5B%5D=Cardiologie&page=2' => '/?' . HEALTH . '&medspec%5B%5D=Cardiologie&page=2',
-        '/sanatate/?family%5B%5D=juridic' => '/?family%5B%5D=juridic&family%5B%5D=s%C4%83n%C4%83tate',
+        // A key of the base filter: the given value replaces the base value (as in a section of the page).
+        '/sanatate/?family%5B%5D=juridic' => '/?family%5B%5D=juridic',
+        '/sanatate/?family%5B%5D=&q=x' => '/?' . HEALTH . '&q=x',
         '/sanatate/?q=&judet%5B%5D=' => '/?' . HEALTH,
         '/sanatate?q=x' => '/?' . HEALTH . '&q=x',
     ];
@@ -137,13 +139,13 @@ run_suite('the sitemap lists the theme; the footer links to it, in the group "Pa
     $x = xp($home);
     assert_same(0, $x->query('//*[@data-home-themes]')->length, 'no line "Pagini tematice" on the landing page');
     $links = $x->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a');
-    assert_same(4, $links->length, 'four themed pages in the footer group');
-    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/social/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($links)), 'their links, in configuration order');
-    assert_same(['Sănătate', 'Administrație', 'Financiar', 'Asistență socială și consiliere'], array_map(fn($a) => trim($a->textContent), iterator_to_array($links)), 'their link texts');
+    assert_same(5, $links->length, 'five themed pages in the footer group');
+    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/social/', '/meserii/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($links)), 'their links, in configuration order');
+    assert_same(['Sănătate', 'Administrație', 'Financiar', 'Asistență socială și consiliere', 'Meserii și muncitori'], array_map(fn($a) => trim($a->textContent), iterator_to_array($links)), 'their link texts');
     assert_same(1, $x->query('//footer//a[@href="/sanatate/"]')->length, 'one footer link');
-    foreach (['/administratie/', '/financiar/', '/social/'] as $slug) assert_contains('<loc>' . $base . $slug . '</loc>', $sm, "sitemap entry $slug");
+    foreach (['/administratie/', '/financiar/', '/social/', '/meserii/'] as $slug) assert_contains('<loc>' . $base . $slug . '</loc>', $sm, "sitemap entry $slug");
     [, $llms] = http_page($base, '/llms.txt');
-    foreach (['/sanatate/', '/administratie/', '/financiar/', '/social/'] as $slug) assert_contains('](' . $base . $slug . ')', $llms, "llms.txt lists $slug");
+    foreach (['/sanatate/', '/administratie/', '/financiar/', '/social/', '/meserii/'] as $slug) assert_contains('](' . $base . $slug . ')', $llms, "llms.txt lists $slug");
 });
 
 run_suite('every count equals the result count of its link; an item with count 0 is not on the page', function () use ($base) {
@@ -898,6 +900,177 @@ run_suite('/social/: the buttons of the chart; the sections need no other templa
 
 stop_fixture_server($srvs, $dbs);
 
+// ---- the theme "meserii": a section narrows inside the base filter, the chart by COR group (brief 3) ----
+
+$dbm = theme_db('meserii');
+add_meserii_fixture(new PDO('sqlite:' . $dbm));
+$srvm = start_fixture_server($dbm);
+$basem = $srvm['base'];
+const MESERII_BASE = 'cor%5B%5D=5&cor%5B%5D=7&cor%5B%5D=8&cor%5B%5D=9&family%5B%5D=tehnic';   // the order of search_key(): sorted
+const MESERII_COR = "(occ_group LIKE '5%' OR occ_group LIKE '7%' OR occ_group LIKE '8%' OR occ_group LIKE '9%')";
+
+run_suite('/meserii/ renders: title, canonical, h1 with the count, icon, sections in order, no line "other", same bytes for each reader', function () use ($basem) {
+    [$st, $h] = http_page($basem, '/meserii/');
+    assert_same(200, $st, '/meserii/ answers 200');
+    assert_contains('<link rel="canonical" href="' . $basem . '/meserii/">', $h, 'canonical');
+    assert_contains('<title>Meserii și muncitori — posturi.gov2.ro</title>', $h, 'title');
+    assert_same(1, preg_match('#<meta name="description" content="Posturi de meseriași și muncitori din sectorul public: #', $h), 'the description');
+    assert_same(1, preg_match_all('#<h1[ >]#', $h), 'one h1');
+    assert_contains('<span>Meserii și muncitori<span data-county-title></span><span data-title-count class="text-base font-normal text-ink-muted">&nbsp;(11)</span></span></h1>', $h, 'h1 and count: 10 postings and 1005');
+    assert_same(1, xp($h)->query('//h1/svg[@aria-hidden="true"]/use[@href="#i-domain-meseriasi"]')->length, 'the icon of the theme');
+    preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($h, (int)strpos($h, '<main')), $s);
+    assert_same(['h-theme', 'h-categorii', 'h-meserii', 'h-angajatori', 'h-studii', 'h-noi', 'h-notificari'], $s[1], 'sections, in order');
+    assert_same(0, xp($h)->query('//li[@data-domain="other"]')->length, 'no line other');
+    assert_same(['meseriasi', 'paza', 'soferi', 'necalificati'], themes()['meserii']['domains'], 'the four domains of the theme');
+    assert_well_formed($h, '/meserii/');
+    [, $h2, $hd2] = http_page($basem, '/meserii/', ['Cookie: pg_x=1', 'Accept-Language: en']);
+    assert_same($h, $h2, 'the same bytes for another reader');
+    assert_true(!isset($hd2['set-cookie']), 'no cookie');
+    foreach (['bg-amber', 'text-slate', 'bg-white', '#1d4f91'] as $raw) assert_not_contains($raw, $h, "no raw palette: $raw");
+    assert_not_contains('health-icons.svg', $h, 'no icon file');
+    $names = [];
+    foreach (xp($h)->query('//form[@data-home-search]//select') as $sel) $names[] = $sel->getAttribute('name');
+    assert_same(['occupation[]', 'inst[]', 'judet[]'], $names, 'the selects: occupation, institution, county');
+    assert_same(11, list_count($basem, '/?' . MESERII_BASE), 'the base list: the four COR groups of the family tehnic');
+    [, $sm] = http_page($basem, '/sitemap.xml');
+    assert_contains('<loc>' . $basem . '/meserii/</loc>', $sm, 'sitemap');
+    assert_contains('](' . $basem . '/meserii/)', http_page($basem, '/llms.txt')[1], 'llms.txt');
+});
+
+run_suite('/meserii/?… redirects: a given value of a key of the base filter replaces the base values; the other keys merge', function () use ($basem) {
+    $cases = [
+        '/meserii/?q=x' => '/?' . MESERII_BASE . '&q=x',
+        '/meserii/?cor%5B%5D=7' => '/?cor%5B%5D=7&family%5B%5D=tehnic',
+        '/meserii/?cor%5B%5D=7&cor%5B%5D=9&sort=deadline' => '/?cor%5B%5D=7&cor%5B%5D=9&family%5B%5D=tehnic&sort=deadline',
+        '/meserii/?cor%5B%5D=&q=x' => '/?' . MESERII_BASE . '&q=x',
+        '/meserii/?judet%5B%5D=cluj&cor%5B%5D=8' => '/?cor%5B%5D=8&family%5B%5D=tehnic&judet%5B%5D=cluj',
+        '/meserii/?family%5B%5D=it' => '/?cor%5B%5D=5&cor%5B%5D=7&cor%5B%5D=8&cor%5B%5D=9&family%5B%5D=it',
+    ];
+    foreach ($cases as $path => $to) {
+        [$st, , $h] = http_page($basem, $path);
+        assert_same(301, $st, "$path is a 301");
+        assert_same($to, $h['location'] ?? '', "$path goes to $to");
+    }
+    assert_same(3, list_count($basem, $cases['/meserii/?cor%5B%5D=7']), 'the target of cor[]=7 is the list of the group 7: 3 postings');
+});
+
+run_suite('"Categorii": each item narrows inside the base filter (one cor[], not the four); its count is the result count of its link; sprite icons', function () use ($basem) {
+    $h = http_page($basem, '/meserii/')[1];
+    $x = xp($h);
+    $items = tile_items($x);
+    assert_same([7 => 3, 5 => 3, 9 => 3, 8 => 2], items_of($items, 'cor:'), 'by count, ties in the order of the labels');
+    $want = ['cor:7' => ['Meseriași și muncitori calificați', 'i-domain-meseriasi'], 'cor:5' => ['Pază, îngrijire și servicii', 'i-domain-paza'],
+             'cor:8' => ['Șoferi și operatori', 'i-domain-soferi'], 'cor:9' => ['Muncitori necalificați', 'i-domain-necalificati']];
+    foreach ($want as $id => [$label, $icon]) {
+        $it = $items[$id];
+        $c = substr($id, 4);
+        assert_same($label, $it['label'], "$id: the text of the landing item");
+        assert_same(1, preg_match_all('/cor%5B%5D=/', $it['href']), "$id: one cor[] in the link");
+        assert_contains("cor%5B%5D=$c&", $it['href'] . '&', "$id: its own value");
+        assert_contains('family%5B%5D=tehnic', $it['href'], "$id: the family stays");
+        assert_same($it['count'], list_count($basem, $it['href']), "$id: the count is the result count of its link");
+        assert_same(1, $x->query('//li[@data-domain="' . $id . '"]/svg[@aria-hidden="true"]/use[@href="#' . $icon . '"]')->length, "$id: the icon of its landing item");
+        assert_same(1, $x->query('//symbol[@id="' . $icon . '"]')->length, "$id: the symbol is in the sprite");
+    }
+    // The other sections keep the four values in their links (they are not narrowing the key `cor`).
+    foreach ($items as $id => $it) if (!str_starts_with($id, 'cor:') && $id !== 'all') {
+        assert_same(4, preg_match_all('/cor%5B%5D=/', $it['href']), "$id: the four COR values stay");
+        assert_same($it['count'], list_count($basem, $it['href']), "$id: the count is the result count of its link");
+    }
+    // Meserii: the occupations of the theme, by count (limit 16; 9 values have postings), the sum is the base count.
+    $occ = items_of($items, 'occupation:');
+    assert_same(9, count($occ), 'Meserii: 9 occupations');
+    assert_same(2, $occ['Muncitor calificat'], 'Muncitor calificat: 2 (2101, 2103)');
+    assert_same(2, $occ['Îngrijitor'], 'Îngrijitor: 2');
+    assert_same(11, array_sum($occ), 'the occupations add up to the base count');
+    assert_true(array_values($occ) === (function () use ($occ) { $v = array_values($occ); rsort($v); return $v; })(), 'Meserii: largest first');
+});
+
+run_suite('the four landing items link to /meserii/', function () use ($basem) {
+    $x = xp(http_page($basem, '/')[1]);
+    $found = [];
+    foreach (['meseriasi', 'paza', 'soferi', 'necalificati'] as $k) {
+        $li = $x->query('//*[@data-home-tile][@data-domain="' . $k . '"]');
+        if (!$li->length) continue;
+        $found[] = $k;
+        assert_same('/meserii/', $x->query('.//a', $li->item(0))->item(0)->getAttribute('href'), "$k: the link is /meserii/");
+        assert_same('/meserii/', $li->item(0)->getAttribute('data-theme-href'), "$k: data-theme-href (the county goes in the fragment)");
+    }
+    assert_same(['meseriasi', 'paza', 'soferi', 'necalificati'], $found, 'the four items are on the landing page');
+});
+
+run_suite('the chart by COR group: the total of a week and each group equal a direct count of the same predicate, live and archive', function () use ($basem, $dbm) {
+    [, $h] = http_page($basem, '/meserii/');
+    preg_match('#<script type="application/json" id="theme-panel-data">(.*?)</script>#s', $h, $m);
+    $d = json_decode($m[1], true);
+    $pdo = new PDO('sqlite:' . $dbm);
+    $starts = [];
+    for ($i = 0, $t = new DateTimeImmutable('2026-07-06'); $i < 12; $i++) $starts[] = $t->modify("+$i weeks")->format('Y-m-d');
+    // The same posts expression as the chart (POSTS_SIDE), the same predicate on both tables, an id once.
+    $weekly = fn(string $pred, ?string $county = null) => array_map(fn($w) => (int)$pdo->query("SELECT COALESCE(SUM(p), 0) FROM (
+            SELECT substr(published_at,1,10) d, " . POSTS_SIDE . " p FROM job_postings WHERE inf_profession_family = 'tehnic' AND $pred" . ($county ? " AND judet_slug = '$county'" : '') . "
+            UNION ALL SELECT substr(published_at,1,10), " . POSTS_SIDE . " FROM archived_postings WHERE inf_profession_family = 'tehnic' AND $pred" . ($county ? " AND judet_slug = '$county'" : '') . " AND id NOT IN (SELECT id FROM job_postings))
+            WHERE d >= '$w' AND d < date('$w', '+7 days')")->fetchColumn(), $starts);
+    $want = $weekly(MESERII_COR);
+    assert_same($want, $d['total'], 'the total of each week equals a direct sum of posts with the COR predicate, live and archive');
+    assert_same(22, array_sum($want), 'the 12 weeks hold 22 posts: 9 + 4 + 4 + 5 (see add_meserii_fixture())');
+    assert_true($weekly('1 = 1') !== $d['total'], 'the family alone is a different series (COR 2 and no code are not in the theme)');
+    assert_same(['Meseriași', 'Îngrijire și servicii', 'Șoferi', 'Necalificați'], array_column($d['series'], 'name'), 'the 4 groups, in order');
+    $sum = array_fill(0, 12, 0);
+    foreach (['7', '5', '8', '9'] as $i => $c) {
+        assert_same($weekly("occ_group LIKE '$c%'"), $d['series'][$i]['values'], "group $c: the weekly posts");
+        foreach ($d['series'][$i]['values'] as $w => $v) $sum[$w] += $v;
+    }
+    assert_same([9, 4, 4, 5], array_map(fn($s) => array_sum($s['values']), $d['series']), 'the posts of each group in the 12 weeks');
+    assert_same($d['total'], $sum, 'the four groups hold every post: "Alte ocupații" is 0');
+    foreach ($d['counties'] as $slug => $c) {
+        assert_same($weekly(MESERII_COR, $slug), $c['t'], "$slug: the weekly total, in posts");
+        $cs = array_fill(0, 12, 0);
+        foreach ($c['s'] as $s) foreach ($s as $w => $v) $cs[$w] += $v;
+        assert_same($c['t'], $cs, "$slug: its groups add up to its total");
+    }
+    assert_same(['cluj', 'ilfov'], (function () use ($d) { $k = array_keys($d['counties']); sort($k); return $k; })(), 'the counties');
+    // The archive part counts: without the archive rows the total is lower (9301 = 4 posts on 8 Jul, 9302, 9303 = 2, 9305).
+    $live = array_sum(array_map(fn($w) => (int)$pdo->query("SELECT COALESCE(SUM(" . POSTS_SIDE . "), 0) FROM job_postings WHERE inf_profession_family = 'tehnic' AND " . MESERII_COR . " AND substr(published_at,1,10) >= '$w' AND substr(published_at,1,10) < date('$w', '+7 days')")->fetchColumn(), $starts));
+    assert_same(22 - 8, $live, 'the live postings hold 14 of the 22 posts: the archive adds 8 (4 + 1 + 2 + 1; the row with the id of 2101 is not counted twice)');
+});
+
+run_suite('an export with no occ_group in the archive: the chart with `cor` counts the live postings only, and does not fail; a chart with no `cor` is the same as before', function () use ($dbm) {
+    $old = sys_get_temp_dir() . '/posturi-theme-oldarchive-' . getmypid() . '.sqlite';
+    copy($dbm, $old);
+    $pdo = new PDO('sqlite:' . $old);
+    $pdo->exec('ALTER TABLE archived_postings DROP COLUMN occ_group');
+    $pdo = null;
+    $code = '$t = themes()["meserii"]["history"]; $r = theme_group_series($t["family"], $t["groups"], 12, $t["cor"]);
+             $h = themes()["sanatate"]["history"]; $a = theme_group_series($h["family"], $h["groups"], 12); $b = theme_group_series($h["family"], $h["groups"], 12, []);
+             echo json_encode(["total" => array_sum($r["total"]), "groups" => array_map("array_sum", $r["groups"]), "has" => archive_has_column("occ_group"), "same" => $a == $b, "health" => array_sum($a["total"])]);';
+    $r = json_decode(php_on($old, 'require "' . __DIR__ . '/../inc/themes.php"; ' . $code), true);
+    @unlink($old);
+    assert_true(is_array($r), 'no fatal error against an archive with no occ_group');
+    assert_same(false, $r['has'], 'archive_has_column() sees that the column is missing');
+    assert_same(14, $r['total'], 'live postings only: 14 posts');
+    assert_same([5, 3, 2, 4], $r['groups'], 'the groups, live only: 7 = 5, 5 = 3, 8 = 2, 9 = 4 (2109, 2110, 1005)');
+    assert_same(true, $r['same'], 'a theme with no `cor`: the same with and without the argument');
+    assert_true($r['health'] > 0, 'the health chart still counts the archive (family only)');
+});
+
+run_suite('theme_group_of(): prefixes_cor takes the COR code; a posting with no code is in no such group; the first group that holds it wins', function () {
+    $g = [['label' => 'A', 'prefixes_cor' => ['7']], ['label' => 'B', 'prefixes' => ['Șofer'], 'prefixes_cor' => ['8']], ['label' => 'C', 'prefixes_cor' => ['83']]];
+    assert_same(0, theme_group_of($g, 'Zugrav', '7132'), 'the code 7132 is in A');
+    assert_same(null, theme_group_of($g, 'Zugrav', ''), 'no code: in no group');
+    assert_same(null, theme_group_of($g, 'Zugrav', '2511'), 'another code: in no group');
+    assert_same(1, theme_group_of($g, 'Șofer', ''), 'the occupation prefix still works');
+    assert_same(1, theme_group_of($g, 'Altceva', '8322'), '8322 is in B and C: the first group holds it');
+    assert_same(null, theme_group_of([['label' => 'X', 'prefixes' => ['Medic']]], 'Zugrav', '7132'), 'a group with no prefixes_cor ignores the code');
+});
+
+run_suite('server log: meserii has no warnings, notices or fatals', function () use ($srvm) {
+    $log = (string)@file_get_contents($srvm['log'] ?? '');
+    foreach (['Warning', 'Notice', 'Fatal', 'Deprecated'] as $w) assert_not_contains("PHP $w", $log, "no $w");
+});
+
+stop_fixture_server($srvm, $dbm);
+
 // ---- the occupation chips of the list ----
 
 const CHIP_BASE = 'family%5B%5D=tehnic&cor%5B%5D=5';
@@ -1125,7 +1298,7 @@ run_suite('a second theme from the configuration: the same template, no change',
     assert_same('/?family%5B%5D=tehnic&q=x', $hd['location'] ?? '', 'merges its own base filter');
     assert_contains('<loc>' . $base2 . '/justitie/</loc>', http_page($base2, '/sitemap.xml')[1], 'sitemap');
     $home = xp(http_page($base2, '/')[1]);
-    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/social/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
+    assert_same(['/sanatate/', '/administratie/', '/financiar/', '/social/', '/meserii/', '/justitie/', '/cifre/', '/gol/'], array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($home->query('//footer//h2[.="Pagini tematice"]/following-sibling::ul[1]//a'))), 'footer links, in configuration order');
     assert_same(1, $home->query('//footer//a[@href="/justitie/"]')->length, 'footer link');
     // A theme with no `icon_file`: no icon, no reference to the file (also with `icons` in a section).
     assert_not_contains('health-icons.svg', $h, 'no icon file in a theme with no icon_file');

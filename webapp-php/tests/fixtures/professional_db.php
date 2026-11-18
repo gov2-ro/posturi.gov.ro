@@ -13,6 +13,7 @@ function build_professional_fixture_db(string $path): void {
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $db->exec(professional_sql());
     $db->exec(social_sql());   // ids 2025-2030: no administrație or financiar suite counts them
+    add_meserii_fixture($db);  // ids 2101-2113 and the archive rows 9301-9308: the family `tehnic` with COR codes
 }
 
 /**
@@ -98,4 +99,71 @@ function social_sql(): string {
         . $ins(9204, '2026-07-08', 'Referent', 'administrație', null)
         . $ins(9205, '2026-07-08', 'Asistent social', 'social', 7)
         . "UPDATE archived_postings SET id=2025 WHERE id=9205;\n";   // the id of a live posting: counted once, as the live one
+}
+
+/**
+ * The theme "meserii" (docs/briefs/2026-11-17-theme-meserii.md): live postings 2101-2113 (copies of 2003 with other values, so they
+ * need no other columns) and archive rows with a COR code (`occ_group`). Today is 2026-10-03: the chart covers 2026-07-06 to 2026-09-27.
+ *   id   family       occ_group  occupation           employer  county  published   posts
+ *   2101 tehnic       7231       Muncitor calificat   scoala    cluj    2026-07-08  1
+ *   2102 tehnic       7233       Lăcătuș mecanic      spital    ilfov   2026-07-15  1
+ *   2103 tehnic       7112       Muncitor calificat   primarie  cluj    2026-08-05  3
+ *   2104 tehnic       5153       Îngrijitor           scoala    ilfov   2026-07-15  1
+ *   2105 tehnic       5153       Îngrijitor           scoala    ilfov   2026-08-05  1
+ *   2106 tehnic       5120       Bucătar              scoala    cluj    2026-08-12  1
+ *   2107 tehnic       8322       Șofer                primarie  ilfov   2026-07-22  1
+ *   2108 tehnic       8322       Șofer autosanitară   spital    cluj    2026-08-19  1
+ *   2109 tehnic       9629       Paznic               scoala    ilfov   2026-07-08  1
+ *   2110 tehnic       9629       Portar               spital    ilfov   2026-09-02  2
+ *   2111 tehnic       2511       Programator          primarie  cluj    2026-07-08  1   (COR 2: not in the theme)
+ *   2112 tehnic       (none)     Muncitor             primarie  cluj    2026-07-08  1   (no COR code: not in the theme)
+ *   2113 cultură      8322      Șofer                primarie  ilfov   2026-07-08  1   (another family: not in the theme)
+ * The shared fixture adds 1005 (tehnic, COR 9, status unknown, which counts as active): in the theme.
+ * Archive: 9301 tehnic 7132 (4 posts, 8 Jul), 9302 tehnic 5130 (22 Jul), 9303 tehnic 8322 (2 posts, 12 Aug), 9304 tehnic 2511 (12 Aug: COR 2),
+ * 9305 tehnic 9 (2 Sep), 9306 tehnic with no code (15 Jul), 9307 cultură 7 (15 Jul), 9308 tehnic 7 with the id of the live 2101 (counted once).
+ */
+function add_meserii_fixture(PDO $db): void {
+    $rows = [
+        // id => [family, occ_group, occupation, employer_kind, county, published, posts]
+        2101 => ['tehnic', '7231', 'Muncitor calificat', 'scoala', 'cluj', '2026-07-08', 1],
+        2102 => ['tehnic', '7233', 'Lăcătuș mecanic', 'spital', 'ilfov', '2026-07-15', 1],
+        2103 => ['tehnic', '7112', 'Muncitor calificat', 'primarie', 'cluj', '2026-08-05', 3],
+        2104 => ['tehnic', '5153', 'Îngrijitor', 'scoala', 'ilfov', '2026-07-15', 1],
+        2105 => ['tehnic', '5153', 'Îngrijitor', 'scoala', 'ilfov', '2026-08-05', 1],
+        2106 => ['tehnic', '5120', 'Bucătar', 'scoala', 'cluj', '2026-08-12', 1],
+        2107 => ['tehnic', '8322', 'Șofer', 'primarie', 'ilfov', '2026-07-22', 1],
+        2108 => ['tehnic', '8322', 'Șofer autosanitară', 'spital', 'cluj', '2026-08-19', 1],
+        2109 => ['tehnic', '9629', 'Paznic', 'scoala', 'ilfov', '2026-07-08', 1],
+        2110 => ['tehnic', '9629', 'Portar', 'spital', 'ilfov', '2026-09-02', 2],
+        2111 => ['tehnic', '2511', 'Programator', 'primarie', 'cluj', '2026-07-08', 1],
+        2112 => ['tehnic', '', 'Muncitor', 'primarie', 'cluj', '2026-07-08', 1],
+        2113 => ['cultură', '8322', 'Șofer', 'primarie', 'ilfov', '2026-07-08', 1],
+    ];
+    $db->exec('CREATE TEMP TABLE m_job AS SELECT * FROM job_postings WHERE id = 2003');
+    $db->exec('CREATE TEMP TABLE m_role AS SELECT * FROM posting_roles WHERE posting_id = 2003');
+    $has_text = (bool)$db->query("SELECT 1 FROM sqlite_master WHERE name = 'posting_text'")->fetchColumn();
+    if ($has_text) $db->exec('CREATE TEMP TABLE m_text AS SELECT * FROM posting_text WHERE posting_id = 2003');
+    foreach ($rows as $id => [$fam, $og, $occ, $kind, $county, $date, $posts]) {
+        $db->exec(sprintf("UPDATE m_job SET id=%d, url='https://x/%d', inf_profession_family=%s, occ_group=%s, occ_canonical=%s, employer_kind=%s, judet_slug=%s, judet_name=%s,
+            published_at=%s, nr_posturi=%d", $id, $id, $db->quote($fam), $db->quote($og), $db->quote($occ), $db->quote($kind), $db->quote($county), $db->quote(ucfirst($county)),
+            $db->quote("$date 09:00:00"), $posts));
+        $db->exec('INSERT INTO job_postings SELECT * FROM m_job');
+        $db->exec("UPDATE m_role SET posting_id=$id, study_level='" . ($id % 2 ? 'liceala' : 'scoala_generala') . "', skills='[]'");
+        $db->exec('INSERT INTO posting_roles SELECT * FROM m_role');
+        if ($has_text) { $db->exec("UPDATE m_text SET posting_id=$id"); $db->exec('INSERT INTO posting_text SELECT * FROM m_text'); }
+    }
+    $db->exec('DROP TABLE m_job'); $db->exec('DROP TABLE m_role');
+    if ($has_text) $db->exec('DROP TABLE m_text');
+    $ins = fn(int $id, string $date, string $occ, string $fam, string $og, ?int $n) =>
+        "INSERT INTO archived_postings (id, url, title, employer_id, employer_name, judet_name, judet_slug, locality, published_at, expires_at, apply_deadline, cancelled, nr_posturi, occ_canonical, inf_profession_family, occ_group, sal_min, sal_max, summary)
+         VALUES ($id, 'https://x/$id', 't', 1, 'e', 'Cluj', 'cluj', '', '$date 09:00:00', NULL, NULL, 0, " . ($n ?? 'NULL') . ", '$occ', '$fam', '$og', NULL, NULL, '');\n";
+    $db->exec($ins(9301, '2026-07-08', 'Zugrav', 'tehnic', '7132', 4)
+        . $ins(9302, '2026-07-22', 'Îngrijitor', 'tehnic', '5130', null)
+        . $ins(9303, '2026-08-12', 'Șofer', 'tehnic', '8322', 2)
+        . $ins(9304, '2026-08-12', 'Programator', 'tehnic', '2511', null)
+        . $ins(9305, '2026-09-02', 'Muncitor necalificat', 'tehnic', '9', null)
+        . $ins(9306, '2026-07-15', 'Muncitor', 'tehnic', '', null)
+        . $ins(9307, '2026-07-15', 'Referent', 'cultură', '7', null)
+        . $ins(9308, '2026-07-08', 'Muncitor calificat', 'tehnic', '7', 6)
+        . "UPDATE archived_postings SET id=2101 WHERE id=9308;\n");
 }

@@ -24,8 +24,11 @@ declare(strict_types=1);
  *                `more` (source json: the text of the link to the list, when more values exist than `limit`);
  *                optional `order` ('count': a `labels` section sorts its items by count, largest first, and `limit` then keeps the
  *                first ones; with no `order` it keeps the order of `labels`; the text of an item is its `labels` text);
- *                optional `columns` (3: three columns from lg; default: as many as fit) and, with the theme key `icon_file`: `icons`
- *                value => symbol id, `icon_default`, `icon_size` (classes, default `h-6 w-6`); a value with none of them has no icon
+ *                When `param` is a key of the base filter (`cor` in /meserii/), the item replaces the base values with its own value
+ *                (theme_item_params()), and so does a redirect of `/{slug}/?cor[]=7`.
+ *                optional `columns` (3: three columns from lg; default: as many as fit) and `icons`
+ *                value => symbol id (a symbol of the file `icon_file` of the theme; with no `icon_file`, no icon), `icon_default`, `icon_size` (classes, default `h-6 w-6`); a value with none of them has no icon.
+ *                `sprite_icons` (value => symbol id of the page sprite, for a theme with no `icon_file`) gives the same, with the symbols of the landing page
  *     counties   the county map, in the first screen beside the title and the search (not in the section flow; `id` is
  *                not shown). The map is the control that selects a county; the search form keeps its own select
  *     stats      the statistics panel, in the first screen below the link to all postings (not in the section flow):
@@ -33,9 +36,11 @@ declare(strict_types=1);
  *     recent     the two short lists, "Noi azi" and "Se închid în 3 zile"
  *     follow     the notification cards (calendar and RSS of the base filter)
  *   icon_file    optional: the file in static/ with the symbols of the item icons (no `icon_file` = no icon, no reference)
- *   history      optional: the part of the archive that belongs to the theme: `family` (a profession family, or a list of them: any of them) and `groups`,
- *                the buttons of the chart after "Toate": each has `label` and any of `values` (exact occupations), `prefixes`
- *                and `except` (exact occupations that a prefix does not take); an occupation is in the first group that holds it.
+ *   history      optional: the part of the archive that belongs to the theme: `family` (a profession family, or a list of them: any of them),
+ *                optional `cor` (a list of COR prefixes: only the postings whose `occ_group` starts with one of them; an archive with no
+ *                `occ_group` column then adds nothing) and `groups`, the buttons of the chart after "Toate": each has `label` and any of
+ *                `values` (exact occupations), `prefixes`, `except` (exact occupations that a prefix does not take) and `prefixes_cor`
+ *                (the `occ_group` of the posting starts with one of them); a posting is in the first group that holds it.
  *                No `history` = no chart; no `groups` = a chart with no buttons
  *   search_selects optional: selects in the search form, in place of the text field: a list of `param`, `label`, `all` (the
  *                text of the empty option), `source` (`json` or `column`), `column` and an optional `labels` (value => text: the
@@ -276,6 +281,51 @@ function themes(): array {
                               'note'   => 'Infirmieri, îngrijitori, bucătari și alte posturi din centre și cămine.',
                               'params' => ['inst' => ['asistenta-sociala'], 'family_not' => ['social', 'educație']]],
         ],
+
+        // The four groups of manual and service work: the family `tehnic` with the COR groups 5, 7, 8 and 9 (brief 3). A section with
+        // `param` `cor` narrows inside the base filter: its item replaces the four values with one (theme_item_params()).
+        'meserii' => [
+            'label'       => 'Meserii și muncitori',
+            'icon'        => 'i-domain-meseriasi',
+            'domains'     => ['meseriasi', 'paza', 'soferi', 'necalificati'],
+            'base'        => ['family' => ['tehnic'], 'cor' => ['5', '7', '8', '9']],
+            // The archive part takes the postings of the family with these COR prefixes (`occ_group`); the groups are COR groups too.
+            'history'     => ['family' => 'tehnic', 'cor' => ['5', '7', '8', '9'],
+                              'groups' => [
+                                  ['label' => 'Meseriași', 'prefixes_cor' => ['7']],
+                                  ['label' => 'Îngrijire și servicii', 'prefixes_cor' => ['5']],
+                                  ['label' => 'Șoferi', 'prefixes_cor' => ['8']],
+                                  ['label' => 'Necalificați', 'prefixes_cor' => ['9']],
+                              ]],
+            'title'       => 'Meserii și muncitori',
+            'h1'          => 'Meserii și muncitori',
+            'description' => 'Posturi de meseriași și muncitori din sectorul public: muncitori calificați, îngrijitori, bucătari, șoferi, paznici '
+                           . 'și muncitori necalificați, la școli, spitale și primării, pe județe și nivel de studii.',
+            'all_label'   => 'Toate anunțurile de meserii și muncitori',
+            'placeholder' => 'Caută: muncitor, șofer, îngrijitor, paznic…',
+            'search_selects' => [
+                ['param' => 'occupation', 'label' => 'Ocupație', 'all' => 'Toate ocupațiile', 'source' => 'column', 'column' => 'occ_canonical'],
+                ['param' => 'inst', 'label' => 'Instituție', 'all' => 'Toate instituțiile', 'source' => 'column', 'column' => 'employer_kind',
+                 'labels' => EMPLOYER_KIND_LABELS],
+            ],
+            'sections'    => [
+                ['type' => 'stats', 'id' => 'statistici'],
+                // The labels and the icons of the four landing items; sprite symbols of the page (no `icon_file`).
+                ['type' => 'values', 'id' => 'categorii', 'title' => 'Categorii', 'param' => 'cor', 'source' => 'labels', 'order' => 'count',
+                 'labels' => ['7' => 'Meseriași și muncitori calificați', '5' => 'Pază, îngrijire și servicii', '8' => 'Șoferi și operatori',
+                              '9' => 'Muncitori necalificați'],
+                 'sprite_icons' => ['7' => 'i-domain-meseriasi', '5' => 'i-domain-paza', '8' => 'i-domain-soferi', '9' => 'i-domain-necalificati']],
+                ['type' => 'values', 'id' => 'meserii', 'title' => 'Meserii', 'param' => 'occupation',
+                 'source' => 'column', 'column' => 'occ_canonical', 'limit' => 16],
+                ['type' => 'values', 'id' => 'angajatori', 'title' => 'Angajatori', 'param' => 'inst', 'source' => 'labels', 'order' => 'count',
+                 'labels' => EMPLOYER_KIND_LABELS],
+                ['type' => 'counties', 'id' => 'judete'],
+                ['type' => 'values', 'id' => 'studii', 'title' => 'Studii', 'param' => 'studies_level',
+                 'source' => 'labels', 'labels' => STUDIES_LABELS],
+                ['type' => 'recent', 'id' => 'noi'],
+                ['type' => 'follow', 'id' => 'notificari'],
+            ],
+        ],
     ];
     $extra = getenv('POSTURI_THEMES_EXTRA');
     if (is_string($extra) && $extra !== '' && is_file($extra)) {
@@ -294,12 +344,22 @@ function theme_for_uri(string $uri): ?array {
 
 /**
  * The URL that `/{slug}/?…` redirects to: the list `/?…` with the base filter and the given
- * parameters together (ADR 0004: a filtered list has one URL). `sort`, `page` and `title` stay;
+ * parameters together (a given value of a key of the base filter replaces the base values) (ADR 0004: a filtered list has one URL). `sort`, `page` and `title` stay;
  * blank values go.
  */
 function theme_redirect_url(array $theme, array $get): string {
     $keep = array_intersect_key($get, ['sort' => 1, 'page' => 1, 'title' => 1]);
-    $merged = home_merge_params($theme['base'], array_diff_key($get, $keep));
+    $given = array_diff_key($get, $keep);
+    // A key of the base filter: the given values replace the base values (as in a `values` section), `/meserii/?cor[]=7` is
+    // `family=tehnic` and `cor=7`. Blank values are ignored, so a blank value keeps the base values. Other keys merge.
+    $base = $theme['base'];
+    foreach ($given as $k => $v) {
+        if (!array_key_exists($k, $base)) continue;
+        $vals = array_values(array_filter((array)$v, fn($x) => is_string($x) && trim($x) !== ''));
+        if ($vals) $base[$k] = $vals;
+        unset($given[$k]);
+    }
+    $merged = home_merge_params($base, $given);
     $parts = [search_key($merged)];
     foreach ($keep as $k => $v) {
         if (is_string($v) && trim($v) !== '') $parts[] = rawurlencode((string)$k) . '=' . rawurlencode($v);

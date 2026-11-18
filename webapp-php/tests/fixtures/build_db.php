@@ -229,9 +229,11 @@ CREATE TABLE archived_postings (
     employer_name TEXT NOT NULL DEFAULT '', judet_name TEXT NOT NULL DEFAULT '', judet_slug TEXT NOT NULL DEFAULT '',
     locality TEXT NOT NULL DEFAULT '', published_at TEXT, expires_at TEXT, apply_deadline TEXT,
     cancelled INTEGER NOT NULL DEFAULT 0, nr_posturi INTEGER, occ_canonical TEXT NOT NULL DEFAULT '',
-    inf_profession_family TEXT NOT NULL DEFAULT '', sal_min REAL, sal_max REAL, summary TEXT NOT NULL DEFAULT ''
+    inf_profession_family TEXT NOT NULL DEFAULT '', sal_min REAL, sal_max REAL, summary TEXT NOT NULL DEFAULT '',
+    occ_group TEXT NOT NULL DEFAULT ''   -- as the export (brief 2): the COR code; the chart of a theme with `history.cor` filters by it
 );
-INSERT INTO archived_postings VALUES
+INSERT INTO archived_postings (id, url, title, employer_id, employer_name, judet_name, judet_slug, locality, published_at, expires_at,
+    apply_deadline, cancelled, nr_posturi, occ_canonical, inf_profession_family, sal_min, sal_max, summary) VALUES
     (9001, 'https://posturi.gov.ro/anunt/fixture-9001', 'Asistent medical principal', 1, 'Spitalul Clinic Județean Cluj',
      'Cluj', 'cluj', 'Cluj-Napoca', '2026-08-01 09:00:00', '2026-09-15 23:59:59', '2026-08-20', 0, 2,
      'Asistent medical', 'sănătate', 4800, 4800, 'Concurs pentru **asistent medical principal** la secția ATI.'),

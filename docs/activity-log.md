@@ -2,6 +2,31 @@
 
 ## 2026
 
+### 2026-11-18 — Theme `/meserii/`: manual and service work (brief 3; not deployed)
+
+**Opus review (2026-11-18): accepted.** Checked against brief 3 and the Opus decisions: narrowing inside the base filter (`theme_item_params()`); the redirect replaces a base key. Side effect accepted: `/sanatate/?family[]=juridic` now goes to the Juridic list, where before it merged both families. The chart by COR sums posts. All 20 PHP suites pass (Opus re-run); the agent's full Playwright run after its last change: 825 passed, 60 skipped. The local dev export predates brief 2: its archive has no `occ_group`, so the first weeks of the `/meserii/` chart are empty there; the next export fills them.
+
+Brief `docs/briefs/2026-11-17-theme-meserii.md`. Sonnet built it on the tree after briefs 1, 2, 4 and 5. Opus review is open.
+
+**Done**
+- Template rule 1: `theme_item_params()` (`helpers.php`). In a `values` section whose `param` is a key of the base filter, the item replaces the base values (`cor` [5, 7, 8, 9] and 7 give `cor` [7]). `home_merge_params()` is unchanged.
+- `theme_redirect_url()` (`inc/themes.php`): a given value of a key of the base filter replaces the base value (decision of Opus). `/meserii/?cor[]=7` goes to `/?cor[]=7&family[]=tehnic`. A blank value keeps the base. Other keys merge. This also changes `/sanatate/?family[]=juridic`: it is now `/?family[]=juridic` (the old test expected both families).
+- Template rule 2: `history.cor` and `prefixes_cor` (`theme_group_series()`, `theme_group_of()`). Both tables are filtered by `occ_group` prefixes. The sums stay posts (`posts_sql()`). `archive_has_column()`: with no `occ_group` column in the archive, a chart with `cor` counts live postings only and does not fail. A theme with no `cor` renders as before.
+- Section key `sprite_icons` (value => symbol of the page sprite): the "Categorii" items show the icons of the landing items. The key `icons` is unchanged: an existing test requires that `icons` without `icon_file` shows no icon.
+- Theme `meserii` in `inc/themes.php`; the four landing items link to it; the footer, sitemap and llms.txt list it. README route list.
+- Tests: `theme_test.php` 1,247 assertions (new suites: render, redirect, Categorii, landing links, chart by COR, archive without `occ_group`, `theme_group_of()`); `home_test.php` 928. Fixtures: `archived_postings` has `occ_group`; `add_meserii_fixture()` (ids 2101-2113, archive 9301-9308) in the professional fixture. `theme.spec.js`: four tests on `/meserii/`.
+
+**Measured** (dev database `data/_dev/posturi-new.sqlite`, clock 2026-10-19)
+- Active postings: Meseriași (7) 102, Îngrijire și servicii (5) 75, Șoferi (8) 63, Necalificați (9) 43; total 283.
+- Posts in the 12 weeks (27 Jul to 18 Oct), live only: 229, 234, 162, 133; total 758 (equals a direct SQL sum).
+- The dev export was made before brief 2: its archive has no `occ_group`. 1,137 archive rows of the family `tehnic` in those weeks are not counted. After a new export the chart counts them.
+- `Server-Timing` total of `/meserii/`, 6 requests: 24.7, 25.3, 24.9, 25.4, 25.7, 25.6 ms.
+
+**Decided**
+- Replace, not merge, in the redirect (Opus). Cost of merge: `/meserii/?cor[]=7` would give all four groups.
+- Four chart groups; every COR 5, 7, 8, 9 posting is in a group, so "Alte ocupații" is 0.
+- Mutations that the new checks fail against: `home_merge_params()` in `theme_item_params()`; no COR clause on the archive; archive read without the column guard; `prefixes_cor` ignored; no replace in the redirect; domain `paza` removed; `history.cor` removed; posts replaced by 1.
+
 ### 2026-11-18 — Chart palette and county map scale (Opus; not deployed)
 
 No brief (owner requests; small changes, done by Opus).

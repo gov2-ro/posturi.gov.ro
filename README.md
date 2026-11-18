@@ -694,7 +694,7 @@ the `.htaccess` deny rules. Apache never loads it.
 
 | Path | Purpose |
 |------|---------|
-| `index.php` | Front controller — routes `/` (the landing page; with any parameter, the list), `/posturi/` (the unfiltered list; `/posturi/?…` is a 301 to `/?…`; ADR 0004), `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/sanatate/`, `/administratie/`, `/financiar/`, `/social/` and each other themed page of `inc/themes.php` (`/{slug}/?…` is a 301 to `/?…` with the base filter), `/robots.txt`, `/sitemap.xml`, `/llms.txt` (a Markdown text for language models, built from the code: pages, themes, filter parameters, data date; llmstxt.org) |
+| `index.php` | Front controller — routes `/` (the landing page; with any parameter, the list), `/posturi/` (the unfiltered list; `/posturi/?…` is a 301 to `/?…`; ADR 0004), `/job/123-slug/`, `/angajatori/`, `/statistici/`, `/despre/`, `/sanatate/`, `/administratie/`, `/financiar/`, `/social/`, `/meserii/` and each other themed page of `inc/themes.php` (`/{slug}/?…` is a 301 to `/?…` with the base filter), `/robots.txt`, `/sitemap.xml`, `/llms.txt` (a Markdown text for language models, built from the code: pages, themes, filter parameters, data date; llmstxt.org) |
 | `db.php` | PDO singleton for `posturi.sqlite` |
 | `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |

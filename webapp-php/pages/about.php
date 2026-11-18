@@ -25,11 +25,12 @@ require __DIR__ . '/../inc/header.php';
     <div class="min-w-0 max-w-screen-md">
 
       <div class="prose-body text-sm leading-relaxed text-ink space-y-4">
-        <img src="/static/logo-g2-256.png" alt="" width="128" height="128" class="float-right ml-4 mb-2 h-24 w-24 sm:h-32 sm:w-32">
-        <p>
+        <img src="/static/logo-g2-256.png" alt="" width="160"  class="float-right ml-4 mb-2 ">
+        <p style="font-size: 1.25em; line-height: 1.5em;">
           <strong>posturi.gov2.ro</strong> este un explorator independent al anunțurilor de angajare din sectorul
-          public, fără nicio afiliere oficială cu posturi.gov.ro sau cu autoritățile publice.
+          public, <mark>fără nicio afiliere oficială cu posturi.gov.ro sau cu autoritățile publice</mark>.
         </p>
+        <hr/>
         <p>
           Datele sunt preluate periodic de pe portalul oficial <a href="https://posturi.gov.ro" class="text-gov hover:underline" target="_blank" rel="noopener">posturi.gov.ro</a>
           și procesate automat pentru a permite căutare avansată, filtrare și statistici.
@@ -256,10 +257,10 @@ require __DIR__ . '/../inc/header.php';
           posturi.gov.ro, pentru candidați.
         </p>
         <hr /><?= toc_h2($toc, 'contact') ?>
-        <p>
-          Sugestii și greșeli: <a href="https://forms.gle/96WusM2qr4pbUXhW7" target="_blank" rel="noopener">formular</a>,
+        <p style="font-size: 1.15em; line-height: 1.5em;">
+          Sugestii, sesizări & încurajări: <a href="https://forms.gle/96WusM2qr4pbUXhW7" target="_blank" rel="noopener">formular</a> (gForm),
           <a href="mailto:<?= e(FEEDBACK_EMAIL) ?>"><?= e(FEEDBACK_EMAIL) ?></a>
-          sau GitHub: <a href="https://github.com/gov2-ro/posturi.gov.ro/issues" target="_blank" rel="noopener">gov2-ro/posturi.gov.ro</a>.
+          sau GitHub (<a href="https://github.com/gov2-ro/posturi.gov.ro/issues" target="_blank" rel="noopener">gov2-ro/posturi.gov.ro</a>).
         </p>
 
         <p style="margin-top: 8vh; margin-bottom: 18vh;">

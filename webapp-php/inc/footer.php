@@ -30,8 +30,8 @@ $_footer_groups = [
       </ul>
     </div>
     <?php endforeach; ?>
-    <?php /* The project logo (assets/g2-0.png, scaled down in static/), in the free space at the right of the link groups. */ ?>
-    <a href="/" class="ml-auto shrink-0 self-start"><img src="/static/logo-g2-128.png" alt="posturi.gov2.ro, prima pagină" width="96" height="96" class="h-24 w-24"></a>
+    <?php /* The gov2 logo (assets/g2-0.png, scaled down in static/), links to gov2.ro; in the free space at the right of the link groups. */ ?>
+    <a href="https://gov2.ro" target="_blank" rel="noopener" class="ml-auto shrink-0 self-start"><img src="/static/logo-g2-128.png" alt="gov2.ro" width="128" height="128"></a>
     <?php /* Each part is one inline block, so a line break falls between two parts and not inside one. */ ?>
     <p class="g2-text-meta basis-full">
       <?php $_sep = '<span aria-hidden="true">&ensp;&middot;&ensp;</span>'; ?>

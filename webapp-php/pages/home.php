@@ -327,6 +327,7 @@ $heading = 'g2-heading-section';
     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
       <?php foreach ([
           ['Pot aplica?', 'Verifică dacă îndeplinești condițiile unui post.', '/pot-aplica/'],
+          ['Estimator de salariu', 'Află cât plătește o funcție, după lege și după proiect.', '/estimator-salariu/'],
           ['Pentru angajatori', 'Asistent pentru redactarea unui anunț de angajare.', '/pentru-angajatori/anunt/'],
       ] as [$ttitle, $ttext, $thref]): ?>
       <a href="<?= e($thref) ?>" class="g2-tile flex flex-col gap-1 p-4 text-ink no-underline hover:border-gov">

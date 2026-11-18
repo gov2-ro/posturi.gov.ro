@@ -37,7 +37,7 @@ $srv = start_fixture_server($db);
 $base = $srv['base'];
 
 $PAGES = ['/', '/posturi/', '/job/1001-asistent-medical-generalist/', '/angajatori/', '/statistici/', '/salvate/',
-          '/alerte/', '/pot-aplica/', '/pentru-angajatori/anunt/', '/despre/', '/nu-exista/', '/?q%5B%5D=x'];
+          '/alerte/', '/pot-aplica/', '/estimator-salariu/', '/estimator-salariu/?rand=L153-t1%211&g=3', '/pentru-angajatori/anunt/', '/despre/', '/nu-exista/', '/?q%5B%5D=x'];
 $VER = GOV2_DS_VERSION;
 
 run_suite('no page has a skin attribute, a skin link or the picker', function () use ($base, $PAGES) {

@@ -53,7 +53,7 @@ run_suite('each link is on the base URL of the site or on the repository; each i
             assert_same('https://github.com/gov2-ro/posturi.gov.ro', $url, 'the only other link is the repository');
         }
     }
-    foreach (['/', '/posturi/', '/statistici/', '/angajatori/', '/despre/', '/pot-aplica/', '/posturi.rss', '/posturi.atom', '/posturi.ics', '/sitemap.xml'] as $path) {
+    foreach (['/', '/posturi/', '/statistici/', '/angajatori/', '/despre/', '/pot-aplica/', '/estimator-salariu/', '/posturi.rss', '/posturi.atom', '/posturi.ics', '/sitemap.xml'] as $path) {
         assert_contains('](' . $base . $path . ')', implode("\n", $lines), "$path is listed");
     }
 });

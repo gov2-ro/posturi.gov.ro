@@ -93,7 +93,7 @@ require __DIR__ . '/../inc/header.php';
         </figure>
         <p>
           <strong>Proiectul de lege.</strong> Un proiect de lege din iulie 2026 propune alte salarii. Legea
-          nu este adoptată. Site-ul calculează și cifra după proiect, dar nu o afișează încă.
+          nu este adoptată. <a href="/estimator-salariu/" class="text-gov hover:underline">Estimatorul de salariu</a> arată și cifra după proiect.
         </p>
         <p>
           <strong>Sursele.</strong> Site-ul a citit textul legii la 18 noiembrie 2026.

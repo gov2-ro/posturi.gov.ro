@@ -156,6 +156,13 @@ foreach ([$nohistory, $oldest_nohistory] as $file) {
     $hdb = null;
 }
 
+// UX-SALARY-ESTIMATOR: exports from before the estimator tables. The page says it is not available.
+$nosalary = "$tmp-nosalary.sqlite";
+copy($current, $nosalary);
+$sdb = new PDO("sqlite:$nosalary", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+foreach (['salary_grid_rows', 'salary_grid_pay', 'salary_grid_link', 'salary_cap', 'salary_param'] as $t) $sdb->exec("DROP TABLE $t");
+$sdb = null;
+
 run_suite('shim reproduces the exported status vocabulary row for row', function () use ($current, $legacy) {
     $want = (new PDO("sqlite:$current"))
         ->query("SELECT id, application_status FROM job_postings ORDER BY id")
@@ -330,6 +337,7 @@ $shapes = [
     'an export from before the v5 columns (BETA-V5)'          => $nov5,
     'an export with no publication_monthly (FIX-09)'          => $nohistory,
     'the oldest export without roles, evidence or publication_monthly' => $oldest_nohistory,
+    'an export with no salary estimator tables (UX-SALARY-ESTIMATOR)' => $nosalary,
 ];
 // Requirement filters on an export without posting_roles = the posting-level predicates.
 $flat_cases = [
@@ -371,6 +379,18 @@ foreach ($shapes as $label => $file) {
             assert_not_contains('Anunțuri publicate, în total', $body, 'no all-history total is inferred from the slice');
             assert_not_contains('Pe luna publicării (toată baza de date)', $body, 'no history chart');
             assert_contains('Export curent', $body, 'the current export is labelled');
+        });
+    }
+    if ($file === $nosalary) {
+        run_suite("the salary estimator says unavailable, with HTTP 200, against $label", function () use ($srv) {
+            foreach (['/estimator-salariu/', '/estimator-salariu/?q=consilier', '/estimator-salariu/?rand=L153-t1!1'] as $u) {
+                $ctx = stream_context_create(['http' => ['ignore_errors' => true]]);
+                $body = (string)@file_get_contents($srv['base'] . $u, false, $ctx);
+                $status = preg_match('#^HTTP/\S+\s+(\d+)#', $http_response_header[0] ?? '', $m) ? (int)$m[1] : 0;
+                assert_same(200, $status, "$u: 200");
+                assert_contains('Estimatorul nu este disponibil acum.', $body, "$u: message");
+                assert_not_contains('Warning', $body, "$u: no warning");
+            }
         });
     }
     if ($file === $nollm) {

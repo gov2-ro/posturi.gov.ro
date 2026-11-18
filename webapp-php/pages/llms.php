@@ -48,6 +48,7 @@ echo $link('Statistici', '/statistici/', 'cifre despre anunțuri și despre date
 echo $link('Angajatori', '/angajatori/', 'angajatorii și anunțurile lor');
 echo $link('Despre și metodologie', '/despre/', 'de unde vin datele și cum sunt prelucrate');
 echo $link('Pot aplica?', '/pot-aplica/', 'verifică dacă îndeplinești condițiile unui post');
+echo $link('Estimator de salariu', '/estimator-salariu/', 'salariul de bază brut și net al unei funcții, după Legea 153/2017 și după proiectul de lege');
 
 echo "\n## Date și fluxuri\n\n";
 echo $link('Flux RSS', '/posturi.rss', 'anunțurile noi, în format RSS');

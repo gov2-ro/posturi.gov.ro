@@ -557,6 +557,11 @@ require __DIR__ . '/../inc/header.php';
             <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
               <span><?= e($pl['text']) ?></span></p>
             <?php endif; ?>
+            <?php /* The estimator opens on the first law row of this estimate (brief UX-SALARY-ESTIMATOR, decision 7). */
+            $_est_ref = ($sal['baza'] ?? '') === 'lege_in_vigoare' && salary_est_available() ? (string)(($sal['randuri'] ?? [])[0] ?? '') : '';
+            if ($_est_ref !== ''): ?>
+            <p class="mt-1 text-xs" data-salary-estimator-link><a href="<?= e(salary_est_row_url($_est_ref, 0, ($sal['selector']['nivel_administrativ'] ?? '') === 'local')) ?>" class="text-gov underline">Calculează cu altă gradație</a></p>
+            <?php endif; ?>
             <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-muted">
               <p><?= e((string)($sal['disclaimer'] ?? '')) ?></p>
               <details class="open:basis-full">

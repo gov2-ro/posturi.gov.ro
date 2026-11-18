@@ -114,8 +114,8 @@
       fill="#ffffff" stroke="#6f777b" stroke-width="1" stroke-dasharray="4 3" />
     <text fill="#505a5f" text-anchor="middle" font-size="16">
       <tspan x="340" y="750">După proiect:</tspan>
-      <tspan x="340" y="770">calculată, dar</tspan>
-      <tspan x="340" y="790">încă neafișată</tspan>
+      <tspan x="340" y="770">numai în</tspan>
+      <tspan x="340" y="790">estimator</tspan>
     </text>
 
     <rect x="60" y="844" width="360" height="80" rx="8"
@@ -131,8 +131,8 @@
       fill="#ffffff" stroke="#505a5f" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
       <tspan x="240" y="990">Ce vede cititorul</tspan>
-      <tspan x="240" y="1010">lista, filtrul „Salariu”, graficul</tspan>
-      <tspan x="240" y="1030">și pagina anunțului</tspan>
+      <tspan x="240" y="1010">lista, filtrul „Salariu”, graficul,</tspan>
+      <tspan x="240" y="1030">pagina anunțului și estimatorul de salariu</tspan>
     </text>
   </g>
 

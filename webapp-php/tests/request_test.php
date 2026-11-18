@@ -105,7 +105,7 @@ run_suite('valid and legacy query shapes keep working', function () use ($base) 
 });
 
 run_suite('all public routes answer', function () use ($base) {
-    foreach (['/', '/posturi/', '/angajatori', '/angajatori/', '/angajator/spitalul-clinic-judetean-cluj/', '/statistici', '/despre', '/robots.txt', '/sitemap.xml'] as $path) {
+    foreach (['/', '/posturi/', '/angajatori', '/angajatori/', '/angajator/spitalul-clinic-judetean-cluj/', '/statistici', '/despre', '/estimator-salariu/', '/estimator-salariu/?q=consilier', '/robots.txt', '/sitemap.xml'] as $path) {
         [$status, $body] = fetch_page($base, $path);
         assert_same(200, $status, "$path — 200");
         assert_not_contains('Fatal error', $body, "$path — no fatal");

@@ -31,11 +31,12 @@ sm_url($origin . '/posturi/',    $last_update, 'daily',   '0.9');
 sm_url($origin . '/angajatori/', $last_update, 'weekly',  '0.6');
 sm_url($origin . '/statistici/', $last_update, 'weekly',  '0.5');
 sm_url($origin . '/despre/',     null,         'monthly', '0.3');
+sm_url($origin . '/estimator-salariu/', null,  'monthly', '0.5');
 foreach (array_keys(themes()) as $theme_slug) {
     sm_url($origin . '/' . $theme_slug . '/', $last_update, 'daily', '0.8');
 }
 
-$budget = SITEMAP_MAX_URLS - 5 - count(themes());
+$budget = SITEMAP_MAX_URLS - 6 - count(themes());
 
 // Job pages — freshest first, so a truncated sitemap keeps the useful half.
 $rows = db()->query(

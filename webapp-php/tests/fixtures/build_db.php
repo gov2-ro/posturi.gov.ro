@@ -593,6 +593,7 @@ SQL);
     }
 
     if ($split) fixture_split_posting_text($db);
+    fixture_salary_estimator($db);
 }
 
 /** [month, judet_id, postings, cancelled] — SUM(postings) = 152, cancelled 8, undated 3. */
@@ -951,4 +952,116 @@ function fixture_insert_evidence(PDO $db): void {
     $add(1013, 0, 'skill', 1, 'Word <b>', 'text extras <script>x</script>', 'unverified', 'not_found');
     $add(1013, 0, 'skill', 2, 'GIS', 'GIS', 'unverified', 'too_short');
     $add(1013, 0, 'credential', 0, 'Permis categoria B', null, 'absent', 'no_evidence_field');
+}
+
+
+/**
+ * The tables of the salary estimator page (export-to-sqlite.py::export_salary_estimator), with a
+ * few hand-written grid rows. The pay is computed here with the formula of salary_grid.Grid.row_pay():
+ * this is the fixture, not the page, and tests/salary_estimator_test.php reads the page against these figures.
+ *
+ * Law: Consilier (central and territorial, grade superior and principal), Asistent medical (unit a.1 and a.4),
+ * Director general (management), Referent. Draft: Consilier (two population bands), Asistent medical,
+ * and Soldat (Anexa VI, no law row). The law Referent and Director general have no draft row.
+ */
+const FIXTURE_SALARY_LAW = 'lege153-2026';
+const FIXTURE_SALARY_DRAFT = '2026-07-17';
+const FIXTURE_SALARY_MULT = [1.0, 1.075, 1.12875, 1.1851875, 1.2148171875, 1.2451876171875];
+
+function fixture_salary_estimator(PDO $db): void {
+    $db->exec(<<<'SQL'
+CREATE TABLE salary_grid_rows (version TEXT NOT NULL, ref TEXT NOT NULL, anexa TEXT NOT NULL, sectiune TEXT NOT NULL DEFAULT '',
+    functie TEXT NOT NULL, sinonime TEXT NOT NULL DEFAULT '', regim TEXT NOT NULL DEFAULT '', tip_post TEXT NOT NULL DEFAULT '',
+    nivel_administrativ TEXT NOT NULL DEFAULT '', banda_populatie TEXT NOT NULL DEFAULT '', grad_treapta TEXT NOT NULL DEFAULT '',
+    studii TEXT NOT NULL DEFAULT '', tip_unitate TEXT NOT NULL DEFAULT '', act_sursa TEXT NOT NULL DEFAULT '',
+    needs_review INTEGER NOT NULL DEFAULT 0, cautare TEXT NOT NULL DEFAULT '', PRIMARY KEY (version, ref));
+CREATE TABLE salary_grid_pay (version TEXT NOT NULL, ref TEXT NOT NULL, gradatie INTEGER NOT NULL, lei_min INTEGER NOT NULL,
+    lei_max INTEGER NOT NULL, PRIMARY KEY (version, ref, gradatie)) WITHOUT ROWID;
+CREATE TABLE salary_grid_link (law_ref TEXT NOT NULL, draft_ref TEXT NOT NULL, PRIMARY KEY (law_ref, draft_ref)) WITHOUT ROWID;
+CREATE TABLE salary_cap (id INTEGER PRIMARY KEY, tip_unitate TEXT NOT NULL, populatie_min INTEGER, populatie_max INTEGER,
+    plafon_maxim_lei INTEGER NOT NULL);
+CREATE TABLE salary_param (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+SQL);
+    $norm = function (string $s): string {
+        $s = strtr(mb_strtolower($s, 'UTF-8'), ['ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ț' => 't']);
+        return trim(preg_replace('/[^a-z0-9]+/', ' ', $s));
+    };
+    // [version, ref, anexa, functie, sinonime, regim, tip_post, nivel, banda, grad, studii, unit, lei_min, lei_max]
+    $L = FIXTURE_SALARY_LAW; $D = FIXTURE_SALARY_DRAFT;
+    $act = 'Legea 153/2017 Anexa VIII (2022) x 1,15';
+    $rows = [
+        [$L, 'L153-t1!1', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', 'central', '', 'superior', 'S', '', 6580, 6580],
+        [$L, 'L153-t1!2', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', 'central', '', 'principal', 'S', '', 5791, 5791],
+        [$L, 'L153-t2!1', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', 'teritorial', '', 'superior', 'S', '', 5641, 5641],
+        [$L, 'L153-t2!2', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', 'teritorial', '', 'principal', 'S', '', 5245, 5245],
+        [$L, 'L153-t3!1', 'II', 'Asistent medical', 'Asistent medical|Asistent medical generalist', '', 'execuție', '', '', 'principal', 'PL', 'a.1', 5474, 5474],
+        [$L, 'L153-t3!2', 'II', 'Asistent medical', 'Asistent medical|Asistent medical generalist', '', 'execuție', '', '', 'principal', 'PL', 'a.4', 5460, 5460],
+        [$L, 'L153-t4!1', 'III', 'Director general', 'Director general', '', 'conducere', '', '', '', 'S', '', 9000, 11000],
+        [$L, 'L153-t5!1', 'VIII', 'Referent', 'Referent', 'funcționar public', 'execuție', 'central', '', 'superior', 'M', '', 4700, 4700],
+        [$D, 'D1!1', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', '', 'sub 10.000', 'superior', 'S', '', null, null, 1.35, 1.35],
+        [$D, 'D1!2', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', '', 'peste 200.000', 'superior', 'S', '', null, null, 1.85, 1.85],
+        [$D, 'D2!1', 'II', 'Asistent medical', 'Asistent medical|Asistent medical generalist', '', 'execuție', '', '', 'principal', 'PL', '', null, null, 1.5, 1.5],
+        [$D, 'D3!1', 'VI', 'Soldat', 'Soldat voluntar', '', 'execuție', '', '', '', 'M', '', null, null, 1.1, 1.1],
+    ];
+    $ins = $db->prepare('INSERT INTO salary_grid_rows VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    $pay = $db->prepare('INSERT INTO salary_grid_pay VALUES (?,?,?,?,?)');
+    foreach ($rows as $r) {
+        [$ver, $ref, $anexa, $fn, $syn, $regim, $post, $nivel, $banda, $grad, $studii, $unit, $lmin, $lmax] = $r;
+        $ins->execute([$ver, $ref, $anexa, 'Funcții de execuție', $fn, str_replace('|', ' | ', $syn), $regim, $post, $nivel, $banda, $grad, $studii, $unit,
+                       $ver === $L ? $act : '', 0, $norm($fn . ' ' . str_replace('|', ' ', $syn))]);
+        for ($g = 0; $g <= 5; $g++) {
+            $m = FIXTURE_SALARY_MULT[$g];
+            if ($ver === $L) {
+                $mm = $post === 'conducere' ? 1.0 : $m;
+                $pay->execute([$ver, $ref, $g, max((int)ceil(round($lmin * $mm, 6)), 4325), max((int)ceil(round($lmax * $mm, 6)), 4325)]);
+            } else {
+                $pay->execute([$ver, $ref, $g, (int)ceil($r[14] * 4100 * $m), (int)ceil($r[15] * 4100 * $m)]);
+            }
+        }
+    }
+    $link = $db->prepare('INSERT INTO salary_grid_link VALUES (?,?)');
+    foreach ([['L153-t1!1', 'D1!1'], ['L153-t1!1', 'D1!2'], ['L153-t2!1', 'D1!1'], ['L153-t2!1', 'D1!2'],
+              ['L153-t1!2', 'D1!1'], ['L153-t2!2', 'D1!1'], ['L153-t3!1', 'D2!1'], ['L153-t3!2', 'D2!1']] as $l) $link->execute($l);
+    $db->exec("INSERT INTO salary_cap VALUES (1, 'capitală', NULL, NULL, 21735), (2, 'oraș', 10001, 20000, 13283),
+        (3, 'comună', 3001, 5000, 9299), (4, 'comună', 0, 3000, 7970)");
+    $param = $db->prepare('INSERT INTO salary_param VALUES (?,?)');
+    $gr = [];
+    foreach ([[0, 0, 3], [1, 3, 5], [2, 5, 10], [3, 10, 15], [4, 15, 20], [5, 20, null]] as [$n, $a, $z]) {
+        $gr[] = ['nivel' => $n, 'vechime_min_ani' => $a, 'vechime_max_exclusiv_ani' => $z, 'multiplicator_cumulat' => FIXTURE_SALARY_MULT[$n]];
+    }
+    foreach ([
+        'law' => ['version' => $L, 'eticheta' => 'Legea 153/2017 în vigoare', 'valoare_referinta_lei' => 2415, 'status_juridic' => 'în vigoare'],
+        'draft' => ['version' => $D, 'eticheta' => 'Varianta II — MMFTSS 16/17 iulie 2026', 'valoare_referinta_lei' => 4100, 'status_juridic' => 'proiect neadoptat'],
+        'gradatii' => $gr,
+        'salariu_minim' => ['lei' => 4325, 'de_la' => '2026-07-01', 'act' => 'HG 146/2026'],
+    ] as $k => $v) $param->execute([$k, json_encode($v, JSON_UNESCAPED_UNICODE)]);
+}
+
+/**
+ * Law estimates for fixture postings, in the format of estimate-salaries.py (`baza` lege_in_vigoare, `randuri`),
+ * with sal_min and sal_max that agree with the grid. Returns [posting id => [ref, local?]] for the parity test.
+ * Only the salary fixtures call it: the other suites expect these postings to have no sal_json.
+ */
+function fixture_seed_law_estimates(PDO $db): array {
+    $est = function (string $ref, bool $local, ?int $cap) use ($db): array {
+        $st = $db->prepare("SELECT lei_min, lei_max FROM salary_grid_pay WHERE version = ? AND ref = ? AND gradatie = 0");
+        $st->execute([FIXTURE_SALARY_LAW, $ref]);
+        [$lo, $hi] = array_map('intval', $st->fetch(PDO::FETCH_NUM));
+        if ($cap) $hi = max($hi, $cap);
+        $sel = ['functie' => 'Consilier', 'anexa' => 'VIII'] + ($local ? ['nivel_administrativ' => 'local'] : []);
+        return [$lo, $hi, json_encode(['lei_min' => $lo, 'lei_max' => $hi, 'gradatie' => 0, 'varianta' => FIXTURE_SALARY_LAW,
+            'valoare_referinta' => 2415, 'incredere' => $local ? 'interval' : 'exact', 'randuri' => [$ref], 'avertismente' => [],
+            'disclaimer' => 'Estimare după Legea 153/2017; nu este un calcul salarial oficial.', 'baza' => 'lege_in_vigoare',
+            'selector' => $sel], JSON_UNESCAPED_UNICODE)];
+    };
+    $upd = $db->prepare("UPDATE job_postings SET sal_min = ?, sal_max = ?, sal_variant = ? WHERE id = ?");
+    $txt = $db->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = ?");   // the split layout (PERF-SPLIT)
+    $out = [];
+    foreach ([[1001, 'L153-t3!1', false, null], [1002, 'L153-t2!1', true, 7970], [1003, 'L153-t1!1', false, null]] as [$id, $ref, $local, $cap]) {
+        [$lo, $hi, $json] = $est($ref, $local, $cap);
+        $upd->execute([$lo, $hi, FIXTURE_SALARY_LAW, $id]);
+        $txt->execute([$json, $id]);
+        $out[$id] = [$ref, $local];
+    }
+    return $out;
 }

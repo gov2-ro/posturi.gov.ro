@@ -218,6 +218,8 @@ if ($is_root && !$hx_fragment && !$_GET) {
     require __DIR__ . '/pages/saved.php';
 } elseif ($uri === '/pot-aplica' || $uri === '/pot-aplica/') {
     require __DIR__ . '/pages/eligibility_tool.php';
+} elseif ($uri === '/estimator-salariu' || $uri === '/estimator-salariu/') {
+    require __DIR__ . '/pages/salary_estimator.php';
 } elseif ($uri === '/pentru-angajatori/anunt' || $uri === '/pentru-angajatori/anunt/') {
     require __DIR__ . '/pages/employer_builder.php';
 } elseif ($uri === '/despre' || $uri === '/despre/') {

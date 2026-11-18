@@ -3248,3 +3248,329 @@ function home_short_date(string $iso): string {
     if ($d->format('Y') !== substr(ro_today(), 0, 4)) $s .= ' ' . $d->format('Y');
     return $s;
 }
+
+// ---- Salary estimator (/estimator-salariu/) ----
+//
+// Python computes, PHP looks up (ADR 0008): export-to-sqlite.py writes the pay of every grid row at
+// gradation 0-5 (salary_grid.Grid.row_pay()). Nothing here repeats the pay formula. The page takes
+// the min and max of the rows that the reader selects, adds the local cap and converts to net.
+
+/** The tables that the export writes for the estimator. An older export has none of them. */
+const SALARY_EST_TABLES = ['salary_grid_rows', 'salary_grid_pay', 'salary_grid_link', 'salary_cap', 'salary_param'];
+
+/** The choices of step 2: URL parameter => [column of salary_grid_rows, label]. */
+const SALARY_EST_DIMS = [
+    'sec'    => ['sectiune', 'Categorie'],
+    'regim'  => ['regim', 'Regim'],
+    'nivel'  => ['nivel_administrativ', 'Nivel administrativ'],
+    'post'   => ['tip_post', 'Tip de post'],
+    'grad'   => ['grad_treapta', 'Grad sau treaptă'],
+    'studii' => ['studii', 'Studii'],
+    'unit'   => ['tip_unitate', 'Tip de unitate sanitară'],
+];
+
+const SALARY_EST_STUDY_LABELS = [
+    'S' => 'superioare', 'SSD' => 'superioare de scurtă durată', 'M' => 'medii', 'G' => 'generale', 'PL' => 'postliceale',
+    'PL/M' => 'postliceale sau medii', 'M/G' => 'medii sau generale',
+];
+
+const SALARY_EST_UNIT_LABELS = [
+    'a.1' => 'a.1, unități clinice', 'a.2' => 'a.2, anatomie patologică și medicină legală',
+    'a.3' => 'a.3, ambulanță și urgențe', 'a.4' => 'a.4, alte unități sanitare',
+];
+
+/** True when the export has the tables of the estimator (an older export does not). */
+function salary_est_available(): bool {
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $in = "'" . implode("','", SALARY_EST_TABLES) . "'";
+        $n = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table','view') AND name IN ($in)")->fetchColumn();
+        $ok = $n === count(SALARY_EST_TABLES)
+            && (int)db()->query("SELECT COUNT(*) FROM salary_grid_rows")->fetchColumn() > 0;
+    } catch (Throwable $e) {
+        $ok = false;
+    }
+    return $ok;
+}
+
+/** salary_param as an array: law, draft, gradatii, salariu_minim, exported_on, link. */
+function salary_est_params(): array {
+    static $p = null;
+    if ($p !== null) return $p;
+    $p = [];
+    foreach (db()->query("SELECT key, value FROM salary_param") as $r) {
+        $p[$r['key']] = json_decode((string)$r['value'], true);
+    }
+    return $p;
+}
+
+/** The search key of salary_grid_rows.cautare: lower case, no diacritics, letters and digits only (as salary_grid.norm()). */
+function salary_est_norm(string $s): string {
+    $s = strtr(mb_strtolower($s, 'UTF-8'), [
+        'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't',
+        'á' => 'a', 'à' => 'a', 'ä' => 'a', 'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e', 'í' => 'i', 'ï' => 'i',
+        'ó' => 'o', 'ö' => 'o', 'ô' => 'o', 'ú' => 'u', 'ü' => 'u', 'ç' => 'c',
+    ]);
+    return trim(preg_replace('/[^a-z0-9]+/', ' ', $s) ?? '');
+}
+
+/** The words of a search (at most 6, at least 2 characters each), normalised. */
+function salary_est_tokens(string $q): array {
+    $t = array_filter(array_unique(explode(' ', salary_est_norm($q))), fn($w) => strlen($w) >= 2);
+    return array_slice(array_values($t), 0, 6);
+}
+
+const SALARY_EST_ANNEX_ORDER = ['I' => 1, 'II' => 2, 'III' => 3, 'IV' => 4, 'V' => 5, 'VI' => 6, 'VII' => 7, 'VIII' => 8, 'IX' => 9];
+
+/** Shorten a long function name (a row can list 20 alternatives). */
+function salary_est_short(string $s, int $max = 140): string {
+    return mb_strlen($s) > $max ? rtrim(mb_substr($s, 0, $max - 1)) . '…' : $s;
+}
+
+/**
+ * Step 1: the functions whose name or synonym holds every word of the query, from the law grid and,
+ * for a function that the law does not list, from the draft. One item for each (grid, annex, function).
+ *
+ * @return array{total:int, shown:int, groups:array<string, array<int, array>>}
+ *         groups: heading => items [b (lege|proiect), ref (its first row: the link to step 2), a, f, name, also, n]
+ */
+function salary_est_search(string $q, int $limit = 60): array {
+    $tokens = salary_est_tokens($q);
+    $out = ['total' => 0, 'shown' => 0, 'groups' => []];
+    if (!$tokens) return $out;
+    $par = $tokens ? array_map(fn($t) => '%' . $t . '%', $tokens) : [];
+    $like = implode(' AND ', array_fill(0, count($tokens), 'r.cautare LIKE ?'));
+    $p = salary_est_params();
+    $items = [];
+    foreach ([['lege', $p['law']['version'], false], ['proiect', $p['draft']['version'], true]] as [$b, $version, $draft]) {
+        $sql = "SELECT r.ref, r.anexa, r.functie, r.sectiune, r.sinonime, r.cautare,
+                       EXISTS (SELECT 1 FROM salary_grid_link k WHERE k.draft_ref = r.ref) AS linked
+                FROM salary_grid_rows r WHERE r.version = ? AND $like ORDER BY r.rowid";
+        $st = db()->prepare($sql);
+        $st->execute(array_merge([$version], $par));
+        foreach ($st->fetchAll() as $r) {
+            $key = $b . '|' . $r['anexa'] . '|' . $r['functie'];
+            if (!isset($items[$key])) {
+                // The synonym that matches, when the name itself does not.
+                $also = '';
+                if (!array_reduce($tokens, fn($c, $t) => $c && str_contains(salary_est_norm($r['functie']), $t), true)) {
+                    foreach (explode(' | ', (string)$r['sinonime']) as $syn) {
+                        $n = salary_est_norm($syn);
+                        if (array_reduce($tokens, fn($c, $t) => $c && str_contains($n, $t), true)) { $also = $syn; break; }
+                    }
+                }
+                $items[$key] = ['b' => $b, 'ref' => $r['ref'], 'a' => $r['anexa'], 'f' => $r['functie'], 'sec' => $r['sectiune'],
+                                'name' => $r['functie'], 'also' => $also, 'n' => 0, 'linked' => 0];
+            }
+            $items[$key]['n']++;
+            $items[$key]['linked'] += (int)$r['linked'];
+        }
+    }
+    // A draft function that has a law row is reached through the law; only the others stay.
+    $items = array_filter($items, fn($i) => $i['b'] === 'lege' || $i['linked'] === 0);
+    usort($items, fn($x, $y) => [$x['b'] === 'lege' ? 0 : 1, SALARY_EST_ANNEX_ORDER[$x['a']] ?? 99, $x['sec'], $x['name']]
+                           <=> [$y['b'] === 'lege' ? 0 : 1, SALARY_EST_ANNEX_ORDER[$y['a']] ?? 99, $y['sec'], $y['name']]);
+    $out['total'] = count($items);
+    foreach (array_slice($items, 0, $limit) as $i) {
+        $head = ($i['b'] === 'proiect' ? 'Numai în proiect · ' : '') . 'Anexa ' . $i['a'] . ($i['sec'] !== '' ? ' · ' . salary_est_short($i['sec'], 90) : '');
+        $out['groups'][$head][] = $i;
+        $out['shown']++;
+    }
+    return $out;
+}
+
+/** One grid row by its ref (`$b`: lege|proiect), or null. A URL carries a ref: a function name can be 900 characters long. */
+function salary_est_row(string $b, string $ref): ?array {
+    $p = salary_est_params();
+    $st = db()->prepare("SELECT * FROM salary_grid_rows WHERE version = ? AND ref = ?");
+    $st->execute([$b === 'proiect' ? $p['draft']['version'] : $p['law']['version'], $ref]);
+    return $st->fetch() ?: null;
+}
+
+/** The rows of the function of a row (same grid, annex and name), in grid order. */
+function salary_est_function_rows(array $row): array {
+    $st = db()->prepare("SELECT * FROM salary_grid_rows WHERE version = ? AND anexa = ? AND functie = ? ORDER BY rowid");
+    $st->execute([$row['version'], $row['anexa'], $row['functie']]);
+    return $st->fetchAll();
+}
+
+/**
+ * The choices of step 2 for a function: for each dimension with more than one value among its rows,
+ * the values in grid order. A blank value is `_`. "local" joins `nivel` for an Anexa VIII function that has a
+ * territorial row: the pay of a local post comes from that row and the cap (ADR 0008, rule 3).
+ *
+ * @return array<string, array{label:string, options:array<string,string>}>
+ */
+function salary_est_dims(array $rows): array {
+    $dims = [];
+    foreach (SALARY_EST_DIMS as $param => [$col, $label]) {
+        $vals = [];
+        foreach ($rows as $r) $vals[(string)$r[$col]] = true;
+        $has_local = $param === 'nivel' && isset($vals['teritorial']) && ($rows[0]['anexa'] ?? '') === 'VIII';
+        if (count($vals) < 2 && !$has_local) continue;
+        $opts = [];
+        foreach (array_keys($vals) as $v) {
+            $opts[$v === '' ? '_' : $v] = salary_est_dim_label($param, $v);
+        }
+        if ($has_local) $opts['local'] = 'local (primărie, consiliu județean)';
+        $dims[$param] = ['label' => $label, 'options' => $opts];
+    }
+    return $dims;
+}
+
+function salary_est_dim_label(string $param, string $v): string {
+    if ($v === '') return 'nespecificat';
+    return match ($param) {
+        'studii' => SALARY_EST_STUDY_LABELS[$v] ?? $v,
+        'unit'   => SALARY_EST_UNIT_LABELS[$v] ?? $v,
+        'sec'    => salary_est_short($v, 90),
+        default  => $v,
+    };
+}
+
+/** Keep the rows that match the chosen values ($chosen: param => value; '' = every value, '_' = blank, 'local' = territorial). */
+function salary_est_filter(array $rows, array $chosen): array {
+    foreach (SALARY_EST_DIMS as $param => [$col]) {
+        $v = (string)($chosen[$param] ?? '');
+        if ($v === '') continue;
+        $want = $v === '_' ? '' : ($v === 'local' ? 'teritorial' : $v);
+        $rows = array_values(array_filter($rows, fn($r) => (string)$r[$col] === $want));
+    }
+    return $rows;
+}
+
+/** The pay (lei_min, lei_max) of the given rows at one gradation, keyed by ref. */
+function salary_est_pay(string $version, array $refs, int $g): array {
+    $out = [];
+    foreach (array_chunk(array_values(array_unique($refs)), 400) as $chunk) {
+        $st = db()->prepare("SELECT ref, lei_min, lei_max FROM salary_grid_pay WHERE version = ? AND gradatie = ? AND ref IN ("
+            . implode(',', array_fill(0, count($chunk), '?')) . ")");
+        $st->execute(array_merge([$version, $g], $chunk));
+        foreach ($st->fetchAll() as $r) $out[$r['ref']] = [(int)$r['lei_min'], (int)$r['lei_max']];
+    }
+    return $out;
+}
+
+/** The draft rows that the link table pairs with these law rows. */
+function salary_est_draft_rows(array $law_refs): array {
+    $p = salary_est_params();
+    $refs = [];
+    foreach (array_chunk(array_values(array_unique($law_refs)), 400) as $chunk) {
+        $st = db()->prepare("SELECT DISTINCT draft_ref FROM salary_grid_link WHERE law_ref IN ("
+            . implode(',', array_fill(0, count($chunk), '?')) . ")");
+        $st->execute($chunk);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $r) $refs[$r] = true;
+    }
+    $out = [];
+    foreach (array_chunk(array_keys($refs), 400) as $chunk) {
+        $st = db()->prepare("SELECT * FROM salary_grid_rows WHERE version = ? AND ref IN ("
+            . implode(',', array_fill(0, count($chunk), '?')) . ") ORDER BY rowid");
+        $st->execute(array_merge([$p['draft']['version']], $chunk));
+        foreach ($st->fetchAll() as $r) $out[] = $r;
+    }
+    return $out;
+}
+
+/** The local caps (salary_cap), by id. */
+function salary_est_caps(): array {
+    return db()->query("SELECT * FROM salary_cap ORDER BY id")->fetchAll();
+}
+
+/** "comună, până la 3.000 de locuitori": the type and population of a cap row. */
+function salary_est_cap_label(array $c): string {
+    $f = fn($n) => number_format((int)$n, 0, ',', '.');
+    $lo = $c['populatie_min']; $hi = $c['populatie_max'];
+    $pop = ($lo === null && $hi === null) ? ''
+         : ($hi === null ? ', peste ' . $f((int)$lo - 1 > 0 ? (int)$lo - 1 : 0) . ' de locuitori'
+         : ((int)$lo <= 0 ? ', până la ' . $f($hi) . ' de locuitori' : ', ' . $f($lo) . '–' . $f($hi) . ' de locuitori'));
+    return $c['tip_unitate'] . $pop;
+}
+
+/** The cap that the page uses without a choice: the widest one that is not the Capital's (as Grid.local_cap()). */
+function salary_est_default_cap(array $caps): ?array {
+    $best = null;
+    foreach ($caps as $c) {
+        if ($c['tip_unitate'] === 'capitală') continue;
+        if ($best === null || (int)$c['plafon_maxim_lei'] > (int)$best['plafon_maxim_lei']) $best = $c;
+    }
+    return $best;
+}
+
+/**
+ * Everything the page shows for one function and one set of choices.
+ *
+ * @param array $in  b (lege|proiect), ref (a row of the function), dims (param => value), g (0-5), cap (cap id or 0)
+ * @return array|null  null when the function does not exist
+ */
+function salary_est_compute(array $in): ?array {
+    $p = salary_est_params();
+    $b = $in['b'] === 'proiect' ? 'proiect' : 'lege';
+    $row = salary_est_row($b, (string)$in['ref']);
+    if (!$row) return null;
+    $all = salary_est_function_rows($row);
+    $g = max(0, min(5, (int)($in['g'] ?? 0)));
+    $dims = salary_est_dims($all);
+    // A value that is not an option of this function means "every value".
+    $chosen = [];
+    foreach ($dims as $param => $d) {
+        $v = (string)(($in['dims'] ?? [])[$param] ?? '');
+        $chosen[$param] = isset($d['options'][$v]) ? $v : '';
+    }
+    $local = ($chosen['nivel'] ?? '') === 'local';
+    $rows = salary_est_filter($all, $chosen);
+    $res = ['b' => $b, 'ref' => $row['ref'], 'a' => $row['anexa'], 'f' => $row['functie'], 'g' => $g, 'dims' => $dims, 'chosen' => $chosen,
+            'local' => $local, 'n_all' => count($all), 'rows' => $rows, 'law' => null, 'draft' => null, 'cap' => null,
+            'caps' => [], 'hints' => []];
+
+    $unchosen = [];
+    foreach ($dims as $param => $d) {
+        if ($chosen[$param] !== '' || $param === 'nivel' && count($d['options']) < 2) continue;
+        if (count(array_unique(array_map(fn($r) => $r[SALARY_EST_DIMS[$param][0]], $rows))) > 1) $unchosen[] = mb_strtolower($d['label']);
+    }
+    $res['hints'] = $unchosen;
+
+    if ($b === 'lege') {
+        $pay = salary_est_pay($p['law']['version'], array_column($rows, 'ref'), $g);
+        $lo = $hi = null;
+        foreach ($rows as $r) {
+            [$a, $z] = $pay[$r['ref']] ?? [null, null];
+            if ($a === null) continue;
+            $lo = $lo === null ? $a : min($lo, $a);
+            $hi = $hi === null ? $z : max($hi, $z);
+        }
+        $law = ['rows' => $rows, 'pay' => $pay, 'lo' => $lo, 'hi' => $hi, 'local' => $local,
+                'mgmt' => $rows && count(array_filter($rows, fn($r) => $r['tip_post'] === 'conducere')) === count($rows)];
+        if ($local && $lo !== null) {
+            $caps = salary_est_caps();
+            $cap = null;
+            foreach ($caps as $c) if ((int)$c['id'] === (int)($in['cap'] ?? 0)) $cap = $c;
+            $res['cap_chosen'] = $cap !== null;
+            $cap = $cap ?? salary_est_default_cap($caps);
+            if ($cap) $law['hi'] = max($law['hi'], (int)$cap['plafon_maxim_lei']);
+            $res['cap'] = $cap;
+            $res['caps'] = $caps;
+        }
+        $res['law'] = $rows ? $law : null;
+        // The draft: the rows that the link table pairs with the law rows.
+        $drows = $rows ? salary_est_draft_rows(array_column($rows, 'ref')) : [];
+        if ($drows) {
+            $dpay = salary_est_pay($p['draft']['version'], array_column($drows, 'ref'), $g);
+            $res['draft'] = ['rows' => $drows, 'pay' => $dpay,
+                             'lo' => min(array_column($dpay, 0)), 'hi' => max(array_column($dpay, 1)),
+                             'bands' => count(array_unique(array_filter(array_column($drows, 'banda_populatie'))))];
+        }
+    } else {
+        $dpay = salary_est_pay($p['draft']['version'], array_column($rows, 'ref'), $g);
+        if ($rows && $dpay) {
+            $res['draft'] = ['rows' => $rows, 'pay' => $dpay, 'lo' => min(array_column($dpay, 0)), 'hi' => max(array_column($dpay, 1)),
+                             'bands' => count(array_unique(array_filter(array_column($rows, 'banda_populatie'))))];
+        }
+    }
+    return $res;
+}
+
+/** The estimator URL of one law row: the link of the detail page. `$local` keeps the range of a local post. */
+function salary_est_row_url(string $ref, int $g = 0, bool $local = false): string {
+    return '/estimator-salariu/?rand=' . rawurlencode($ref) . '&g=' . $g . ($local ? '&nivel=local' : '');
+}

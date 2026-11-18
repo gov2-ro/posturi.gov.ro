@@ -25,5 +25,7 @@ if (($argv[2] ?? '') === 'salary') {
     $pdo = new PDO('sqlite:' . $path);
     $pdo->exec("UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = NULL, inf_salary_max = NULL WHERE id BETWEEN 2011 AND 2020");
     $pdo->exec("UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = 0, inf_salary_max = 0 WHERE id IN (2021, 2022)");
+    // Three postings with a law estimate, for the estimator page (tests/browser/salary_estimator.spec.js).
+    fixture_seed_law_estimates($pdo);
 }
 echo "$path\n";

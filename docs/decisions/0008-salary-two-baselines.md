@@ -1,6 +1,6 @@
 # 0008 — Salary: two baselines, the law in force first
 
-Date: 2026-11-18. Status: **proposed**. The owner chose rules 1–5 on 2026-11-18, after spikes S1 and S2 (`docs/audits/2026-11-18-salary-s1-current-law.md`, `docs/audits/2026-11-18-salary-s2-transparency-lists.md`). The owner accepted rule 7 on 2026-11-18. Rule 8 needs the owner's confirmation.
+Date: 2026-11-18. Status: **proposed**. The owner chose rules 1–5 on 2026-11-18, after spikes S1 and S2 (`docs/audits/2026-11-18-salary-s1-current-law.md`, `docs/audits/2026-11-18-salary-s2-transparency-lists.md`). The owner accepted rule 7 on 2026-11-18 and rule 8 on 2026-11-19. Rule 6 is not yet confirmed.
 
 ## Context
 
@@ -23,7 +23,7 @@ The owner also asked about salariile.ro/compara. It has no model to copy. Each o
 5. **Context is not an estimate.** The INS figures (TEMPO FOM106E, FOM106G, FOM121A) and the eJobs/Paylab figures go next to an estimate, with source and period. They never give the figure of a posting, the sort order or the filter.
 6. **The switch rule.** When the new law is in the Monitorul Oficial, its grid becomes `lege_in_vigoare`. The 153/2017 grid becomes a previous version and stays in `data/salarii/`, so that old figures stay traceable.
 7. **The filter keeps its keys.** The values of `salary_bucket` do not change (`net-sub-3000` … `fara-estimare`, ADR 0001). Their meaning becomes "net pay under the figure of rule 4". A saved search or an email subscription can therefore get other postings once, on the day of the switch. The activity log records the counts per value before and after. *(Accepted by the owner, 2026-11-18. On the snapshot of 9 Sep, 528 of 1,822 active postings change their value.)*
-8. **INS data is derived, not copied.** `ops/build-ins-context.py` reads `../tempo-ins-dump` and writes one small table, `data/salarii/ins-context.csv` (a few hundred rows, each with its matrix and period). The project does not copy the TEMPO files (`core-assets/docs/projects.md`). *Owner to confirm.*
+8. **INS data is derived, not copied.** `ops/build-ins-context.py` reads `../tempo-ins-dump` and writes one small table, `data/salarii/ins-context.csv` (a few hundred rows, each with its matrix and period). The project does not copy the TEMPO files (`core-assets/docs/projects.md`). *(Accepted by the owner, 2026-11-19, with the estimator wizard: the INS context comes in now, as one line on the estimator result.)*
 
 ## Consequences
 

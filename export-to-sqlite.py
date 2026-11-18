@@ -640,7 +640,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             "schema": schema, "body": r["body_markdown"], "contact_phone": r["contact_phone"],
             "contact_email": r["contact_email"], "published_at": fmt_date(r["published_at"]),
             "apply_deadline": deadline["date"], "deadline_source": deadline["source"],
-            "inf_salary_min": inferred.get("salary_min"), "v3_contract_duration": v3["contract_duration"],
+            "inf_salary_min": _stated_salary(inferred)[0], "v3_contract_duration": v3["contract_duration"],
             "v3_schedule": v3["schedule"], "calendar_events": cal_counts.get(r["id"], 0),
             "attachment_meta": json.loads(r["attachment_meta"] or "[]"),
         })
@@ -698,8 +698,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             req_comp,
             inferred.get("experience_years"),
             inferred.get("studies_required"),
-            inferred.get("salary_min"),
-            inferred.get("salary_max"),
+            *_stated_salary(inferred),
             r["occ_canonical"], r["occ_cor_code"], r["occ_isco_group"], r["occ_confidence"],
             est["min"], est["max"], est["confidence"], est["variant"], r["salary_estimate"],
             v4["funding_source"], v4["funding_programme"],
@@ -1087,6 +1086,24 @@ def write_build_meta(con: sqlite3.Connection, *, active_only: bool,
             detail_fetched_rows,
         ),
     )
+
+
+#: A stated salary below this is not monthly pay: posting 16966 states 60 lei, an
+#: hourly rate (DATA-SALARY-NOT-MONTHLY). Below the floor the export drops the stated
+#: figure, so the row falls back to the estimate. The full-time minimum wage is
+#: 4,050-4,325 lei, so even a quarter-time post states more than 1,000 lei.
+STATED_SALARY_MIN_LEI = 1000
+
+
+def _stated_salary(inferred: dict) -> tuple:
+    """`(min, max)` of the stated salary, or `(None, None)` when it is not monthly pay."""
+    lo, hi = inferred.get("salary_min"), inferred.get("salary_max")
+    try:
+        if lo is None or float(lo) < STATED_SALARY_MIN_LEI:
+            return None, None
+    except (TypeError, ValueError):
+        return None, None
+    return lo, hi
 
 
 def _salary_columns(salary_json_text) -> dict:

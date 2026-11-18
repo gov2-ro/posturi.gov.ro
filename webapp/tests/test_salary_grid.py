@@ -493,3 +493,53 @@ class TestPrecedenceAndFormat:
         assert "baza" not in old_row
         old = exp._salary_columns(json.dumps(old_row))
         assert (old["min"], old["max"]) == (dr.lei_min, dr.lei_max)
+
+
+@law_only
+class TestCouncilRange:
+    """GRID153-CAP-SELECTOR: Art. 11 covers all Anexa VIII staff of a council employer,
+    also when the draft selector names no level (workers, drivers, asistent social)."""
+
+    COUNCIL = {"employer_name": "Primăria Comunei Mircea Vodă", "employer_category": "Primării",
+               "judet_name": "Constanța"}
+    SCHOOL = {"employer_name": "Liceul Teoretic Ion Creangă", "employer_category": "Instituții locale",
+              "judet_name": "Constanța"}
+
+    def test_a_council_worker_with_no_level_gets_the_local_range(self, est, law):
+        sel = est.law_selector({"anexa": "VIII", "functie": "Muncitor calificat"}, self.COUNCIL, sg.load_grid())
+        assert sel["nivel_administrativ"] == "local" and "uat_unitati" in sel
+        result = law.estimate(sel, as_of=AFTER_JULY)
+        assert result.incredere == "interval" and result.lei_max > result.lei_min
+        assert "Consiliul local" in result.motiv
+
+    def test_a_local_level_outside_a_council_is_a_fixed_annex_value(self, est):
+        sel = est.law_selector({"anexa": "VIII", "functie": "Consilier", "nivel_administrativ": "local"},
+                               self.SCHOOL, sg.load_grid())
+        assert sel["nivel_administrativ"] == "teritorial" and "uat_unitati" not in sel
+
+    def test_another_annex_at_a_council_is_not_a_range(self, est):
+        sel = est.law_selector({"anexa": "II", "functie": "Asistent medical"}, self.COUNCIL, sg.load_grid())
+        assert sel.get("nivel_administrativ") != "local"
+
+
+class TestStatedSalaryIsMonthly:
+    """DATA-SALARY-NOT-MONTHLY: a stated salary under 1,000 lei is not monthly pay."""
+
+    @pytest.fixture(scope="class")
+    def exp(self):
+        spec = importlib.util.spec_from_file_location(
+            "export_under_test_stated", REPO_ROOT / "export-to-sqlite.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    @pytest.mark.parametrize("inferred, expected", [
+        ({"salary_min": 60, "salary_max": 60}, (None, None)),          # posting 16966: an hourly rate
+        ({"salary_min": 999.9, "salary_max": 5000}, (None, None)),
+        ({"salary_min": 1000, "salary_max": None}, (1000, None)),      # a quarter-time post
+        ({"salary_min": 5250, "salary_max": 6100}, (5250, 6100)),
+        ({}, (None, None)),
+        ({"salary_min": "n/a"}, (None, None)),
+    ])
+    def test_only_a_monthly_figure_is_kept(self, exp, inferred, expected):
+        assert exp._stated_salary(inferred) == expected

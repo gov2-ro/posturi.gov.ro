@@ -168,11 +168,13 @@ def law_selector(selector: dict, posting: dict, draft_grid) -> dict:
     sel = salary_grid.selector_for_law(selector, draft_grid)
     if sel.get("anexa") == "II":
         sel["tip_unitate"] = hospital_type(posting["employer_name"])
-    if sel.get("nivel_administrativ") == "local":
-        if council_employer(posting):
-            sel["uat_unitati"] = uat.units_for(posting["employer_name"], posting.get("judet_name"))
-        else:
-            sel["nivel_administrativ"] = "teritorial"      # fixed annex value, no range
+    # Art. 11 covers the whole Anexa VIII ("Administrație") staff of a council employer,
+    # also when the draft selector names no level (workers, drivers, asistent social).
+    if sel.get("anexa") == "VIII" and council_employer(posting):
+        sel["nivel_administrativ"] = "local"
+        sel["uat_unitati"] = uat.units_for(posting["employer_name"], posting.get("judet_name"))
+    elif sel.get("nivel_administrativ") == "local":
+        sel["nivel_administrativ"] = "teritorial"          # fixed annex value, no range
     return sel
 
 

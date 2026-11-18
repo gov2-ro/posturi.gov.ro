@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-11-19 — Spike: pay of EU-funded and PNRR posts (Sonnet, brief SALARY-EU-SPIKE)
+
+**Done**
+- Report `docs/audits/2026-11-18-salary-eu-projects.md` and sample `docs/audits/2026-11-18-salary-eu-sample.csv` (60 rows). No code, export, ADR or site change.
+- Counts (export `tmp/261118/grid153/posturi-after2.sqlite`, all statuses): 472 postings with `funding_kind` EU/PNRR; 355 with a grid figure; 2 with a stated pay (`inf_salary_min`); 117 with no figure. On the scrape date 2026-09-09: 122 of 1,882 active postings (119 EU, 3 PNRR), 93 with a grid figure.
+- Sample (stratified 30 / 20 / 10, seed 20261118): 59 of 60 case 2 (Wilson 95 %: 91.1–99.7 %), 0 case 1 (0–6.0 %), 1 unclear. Part-time 39 of 60 (52.4–75.8 %); fixed-term 55 of 60 (81.9–96.4 %); pay amount stated 9 of 60 (8.1–26.1 %).
+- Law: HG 325/2018 is repealed by HG 234/2023 art. 4. In force: HG 234/2023 (MO 219/2023-03-16), amended by HG 1.009/2025 (MO 1076/2025-11-21) and HG 357/2026 (MO 358/2026-04-30). Art. 16 alin. (1): up to 40 % on the base pay, in proportion to the time; alin. (10^2): project-hired staff get the hourly rates of the funding request and the applicant guide.
+- Grid against stated pay: the stated net hourly rate is 1.9–3.9 times the grid net hourly pay (median 3.0; 8 postings; 168 h = full time).
+- Recommendations: D1 yes (with a narrower trigger), D2 yes at low priority, D3 new fields. Backlog items updated.
+
+**Hard**
+- The export holds data to 2026-09-09 (newest `last_seen_at`), so the build on 2026-11-18 marks 9,695 of 9,756 rows `closed`; only 5 EU/PNRR postings are "open". I used "active on 2026-09-09" instead (`apply_deadline >= '2026-09-09'` or none).
+- `v4_funding_source` is set on 13 rows, `v4_funding_programme` on none: no v4 extraction in this export. Agreement with `funding_kind` could be tested on 2 rows only.
+- The text of 472 postings comes from a few templates (ECI, home care projects), so the 60 are not independent and the intervals are too narrow.
+- Attachment text: 470 of 472 files are in `data/downloads/`; I converted them with `pandoc`, `textutil` and `pdftotext`. `data/md/` holds only 5 of them.
+
+**Decided**
+- Opus believed that HG 325/2018 sets the maximum levels. Measured: it is repealed and no act sets a maximum in lei. I record the correction instead of looking for amounts that do not exist. Cost of the alternative: a wrong cap in the estimator.
+- Not verified, left open: caps in the applicant guides of the programmes; a 2026 freeze on the Art. 16 raise; HG 357/2026 read through the consolidated Regulation only.
+
 ### 2026-11-18 — Salary estimator page `/estimator-salariu/` (Sonnet, brief UX-SALARY-ESTIMATOR; not deployed)
 
 **Done**

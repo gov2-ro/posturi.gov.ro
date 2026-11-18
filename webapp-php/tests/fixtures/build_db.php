@@ -149,7 +149,13 @@ CREATE TABLE job_postings (
     quality_json            TEXT,
     apply_deadline          TEXT,
     deadline_source         TEXT NOT NULL DEFAULT '',
-    application_status      TEXT NOT NULL DEFAULT ''
+    application_status      TEXT NOT NULL DEFAULT '',
+    project_hire            INTEGER NOT NULL DEFAULT 0,
+    proj_pay_amount         REAL,
+    proj_pay_unit           TEXT NOT NULL DEFAULT '',
+    proj_pay_basis          TEXT NOT NULL DEFAULT '',
+    proj_hours_month        REAL,
+    proj_pay_quote          TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE posting_roles (
     posting_id        INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
@@ -1090,4 +1096,20 @@ function fixture_seed_law_estimates(PDO $db): array {
         $out[$id] = [$ref, $local];
     }
     return $out;
+}
+
+
+/**
+ * Three project-hired posts (SALARY-EU-DETAIL), made from the law-estimate postings of fixture_seed_law_estimates():
+ * they keep their grid figure (sal_min, sal_json), which the page must NOT show.
+ * 1001: 50 lei/oră net, 84 ore/lună (≈ 4.200 lei net: gross 5.857); 1002: 2.100 lei net/lună (no hours); 1003: no pay stated.
+ * Returns [id => case]. Call after fixture_seed_law_estimates().
+ */
+function fixture_seed_project_posts(PDO $db): array {
+    $upd = $db->prepare("UPDATE job_postings SET funding_kind = 'fonduri_europene', project_hire = 1, proj_pay_amount = ?, proj_pay_unit = ?,
+        proj_pay_basis = ?, proj_hours_month = ?, proj_pay_quote = ? WHERE id = ?");
+    $upd->execute([50, 'ora', 'net', 84, 'începând cu data angajării, 84 ore/lună, 50 lei/oră net, timp de lucru inegal distribuit', 1001]);
+    $upd->execute([2100, 'luna', 'net', null, 'având norma de lucru de 42 ore/lună, salariu net 2.100 lei, pentru perioada de 42 luni', 1002]);
+    $upd->execute([null, '', '', null, '', 1003]);
+    return [1001 => 'hour', 1002 => 'month', 1003 => 'none'];
 }

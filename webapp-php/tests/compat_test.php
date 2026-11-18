@@ -102,6 +102,15 @@ foreach ($vdb->query("SELECT name FROM pragma_table_info('job_postings') WHERE n
 }
 $vdb = null;
 
+// SALARY-EU-DETAIL: the export live before the project_hire and proj_* columns (every other column present).
+$noproj = "$tmp-noproj.sqlite";
+copy($current, $noproj);
+$pjdb = new PDO("sqlite:$noproj", null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+foreach (['project_hire', 'proj_pay_amount', 'proj_pay_unit', 'proj_pay_basis', 'proj_hours_month', 'proj_pay_quote'] as $col) {
+    $pjdb->exec("ALTER TABLE job_postings DROP COLUMN $col");
+}
+$pjdb = null;
+
 // DATA-04: exports from before posting_roles existed. `noroles` has every other
 // column; `oldest-noroles` is the oldest shape with the table gone as well.
 $noroles = "$tmp-noroles.sqlite";
@@ -313,7 +322,7 @@ run_suite('shim works on a read-only file', function () use ($legacy) {
 $paths = ['/', '/posturi/', '/?status=closed', '/?status=unknown', '/?status=soon', '/?q=medic',
           '/?funding=fonduri_europene', '/?funding=buget_local', '/?sector=sanatate',
           '/?occupation=Referent', '/?duration=determinata', '/?schedule=norma_intreaga',
-          '/?has_salary=1', '/?shift=1',
+          '/?has_salary=1', '/?shift=1', '/?salary_bucket%5B%5D=net-3000-4000', '/?salary_bucket%5B%5D=fara-estimare',
           '/?eqf%5B%5D=4', '/?eqf%5B%5D=6&exp_level%5B%5D=fara', '/?studies_level%5B%5D=licenta',
           '/?exp_level%5B%5D=5plus', '/?skill%5B%5D=Excel', '/?credential%5B%5D=autorizatie',
           '/?isced%5B%5D=04_afaceri_administratie_drept', '/?q=expert&eqf%5B%5D=6',
@@ -338,6 +347,7 @@ $shapes = [
     'an export with no publication_monthly (FIX-09)'          => $nohistory,
     'the oldest export without roles, evidence or publication_monthly' => $oldest_nohistory,
     'an export with no salary estimator tables (UX-SALARY-ESTIMATOR)' => $nosalary,
+    'an export from before the project_hire columns (SALARY-EU-DETAIL)' => $noproj,
 ];
 // Requirement filters on an export without posting_roles = the posting-level predicates.
 $flat_cases = [

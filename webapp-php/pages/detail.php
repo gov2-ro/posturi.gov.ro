@@ -514,9 +514,29 @@ require __DIR__ . '/../inc/header.php';
       // estimate box, and the estimate becomes one note in it. The deduced conditions then leave out "Salariu" (the box has it).
       $stated = (float)($p['inf_salary_min'] ?? 0) > 0 ? list_salary($p) : null;
       if ($stated) unset($cond['Salariu']);
+      // A post hired for an EU/PNRR project (SALARY-EU-DETAIL): the pay is the hourly rate of the project, never the grid.
+      // No grid figure, no meter, no estimator link, no deduced "Salariu"; the pay the text states, with its source, else the box alone.
+      $proj = !empty($p['project_hire']);
+      $proj_pay = $proj ? project_pay_view($p) : null;
+      if ($proj) { $show_sal = false; $no_sal = false; $stated = null; unset($cond['Salariu']); }
       ?>
-      <?php if ($cond || $tag_groups || $terms || $bib || $show_sal || $no_sal || $stated): ?>
+      <?php if ($cond || $tag_groups || $terms || $bib || $show_sal || $no_sal || $stated || $proj): ?>
       <div class="mb-4 divide-y divide-line text-sm">
+
+        <?php if ($proj): ?>
+        <section class="py-2" data-pay-project>
+          <div class="inline-block max-w-full rounded-lg border border-info-line bg-info px-3 py-2 align-top">
+            <p class="font-semibold text-info-ink" data-pay-project-note>Post finanțat din fonduri europene: salariul depinde de bugetul proiectului.</p>
+            <?php if ($proj_pay): ?>
+            <p class="mt-1 text-lg font-semibold text-ink [overflow-wrap:anywhere]" data-pay-project-figure><?= e($proj_pay['full']) ?></p>
+            <?php if ($proj_pay['note'] !== ''): ?><p class="text-xs text-ink-muted"><?= e($proj_pay['note']) ?></p><?php endif; ?>
+            <?php if ($proj_pay['quote'] !== ''): ?>
+            <p class="mt-1 text-xs text-ink-muted [overflow-wrap:anywhere]" data-pay-project-quote>Din anunț: „<?= e($proj_pay['quote']) ?>”</p>
+            <?php endif; ?>
+            <?php endif; ?>
+          </div>
+        </section>
+        <?php endif; ?>
 
         <?php /* The salary first: a stated figure, else the estimate. */ ?>
         <?php if ($stated): ?>

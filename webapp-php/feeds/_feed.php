@@ -239,7 +239,16 @@ function feed_details(array $r, array $events): array {
         $est_gross = ($lo === $hi ? $lo : $lo . '–' . $hi) . ' lei brut';
     }
     $stated = (float)($r['inf_salary_min'] ?? 0) > 0 ? list_salary($r) : null;
-    if ($stated) {
+    $proj = !empty($r['project_hire']);
+    if ($proj) {
+        // A post hired for an EU/PNRR project (SALARY-EU-DETAIL): the pay of the project, never the grid.
+        $pp = project_pay_view($r);
+        feed_put($x, 'Post finanțat din fonduri europene', 'salariul depinde de bugetul proiectului');
+        if ($pp) {
+            feed_put($x, 'Salariu anunțat', $pp['full'] . ($pp['note'] !== '' ? ' (' . $pp['note'] . ')' : ''));
+            feed_put($x, 'Din anunț', '„' . $pp['quote'] . '”');
+        }
+    } elseif ($stated) {
         feed_put($x, 'Salariu anunțat', $stated['text'] . ' / lună');
         feed_put($x, 'Brut anunțat', $stated['gross'] . ' brut / lună, din anunț');
         if ($est_net !== '') feed_put($x, 'Conform legii salarizării (propunere)', $est_net . ' (' . $est_gross . ') / lună, la gradația 0');
@@ -249,7 +258,7 @@ function feed_details(array $r, array $events): array {
         feed_put($x, 'Despre estimare', (string)($sal['disclaimer'] ?? ''));
     }
     $cond = posting_inferred_conditions($r);
-    if ($stated) unset($cond['Salariu']);
+    if ($stated || $proj) unset($cond['Salariu']);
     foreach ($cond as $k => $v) feed_put($x, $k, $v);
     foreach (inferred_tags($r) as $g) {
         feed_put($x, $g['label'], implode(', ', array_map(fn($v) => ucfirst((string)$v), $g['values'])));

@@ -14,10 +14,14 @@ function db(): PDO {
             header('Content-Type: text/plain; charset=utf-8');
             die("Database not found. Run: python export-to-sqlite.py");
         }
-        $pdo = new PDO('sqlite:' . $path, null, null, [
+        $opts = [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
+        ];
+        // PHP 8.4+: PDO::connect() returns the driver class (Pdo\Sqlite), which has createFunction().
+        $pdo = method_exists('PDO', 'connect') ? PDO::connect('sqlite:' . $path, null, null, $opts)
+                                               : new PDO('sqlite:' . $path, null, null, $opts);
+        register_sql_functions($pdo);
         // No journal_mode=WAL. This copy is a read-only replica: WAL would make PHP
         // create -shm/-wal beside it (the document root may not be writable), and a
         // -wal surviving an rsync swap describes a database that is gone, which
@@ -28,6 +32,20 @@ function db(): PDO {
         $pdo->exec("PRAGMA query_only=1;");
     }
     return $pdo;
+}
+
+/**
+ * SALARY-EU-DETAIL: SALARY_EXPR turns the net pay of a project-hired post into gross with
+ * gross_for_net(), the one net/gross formula (helpers.php). SQLite calls it as a function of
+ * the same name. An SQLite function lives on the connection, so it is registered on every one.
+ */
+function register_sql_functions(PDO $pdo): void {
+    $fn = static fn($net) => $net === null ? null : gross_for_net((int)round((float)$net));
+    if (method_exists($pdo, 'createFunction')) {
+        $pdo->createFunction('gross_for_net', $fn, 1);          // PHP 8.4+, Pdo\Sqlite
+    } else {
+        $pdo->sqliteCreateFunction('gross_for_net', $fn, 1);    // PHP 5.3 to 8.3
+    }
 }
 
 /**
@@ -113,6 +131,13 @@ function shim_legacy_export(PDO $pdo): void {
         'tags'                   => "'[]'",       // 2026-10-18: distinctive tags
         'quality'                => 'NULL',       // and the internal quality score
         'quality_json'           => 'NULL',
+        // 2026-11-19: posts hired for a project and the pay they state (classify.project_hire/pay).
+        'project_hire'           => '0',
+        'proj_pay_amount'        => 'NULL',
+        'proj_pay_unit'          => "''",
+        'proj_pay_basis'         => "''",
+        'proj_hours_month'       => 'NULL',
+        'proj_pay_quote'         => "''",
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

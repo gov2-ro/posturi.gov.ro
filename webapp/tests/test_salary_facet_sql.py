@@ -74,7 +74,9 @@ class TestPhpCallSites:
                 for name in ("helpers.php", "pages/list.php")}
 
     def test_the_expression_is_defined_once(self, sources):
-        assert "const SALARY_EXPR = 'COALESCE(j.inf_salary_min, j.sal_min)'" in sources["helpers.php"]
+        # 2026-11-19: a CASE on project_hire; every other post keeps the old precedence.
+        assert sources["helpers.php"].count("const SALARY_EXPR = ") == 1
+        assert "' ELSE COALESCE(j.inf_salary_min, j.sal_min) END'" in sources["helpers.php"]
 
     @pytest.mark.parametrize("name", ["helpers.php", "pages/list.php"])
     def test_every_salary_comparison_casts_its_bind(self, sources, name):

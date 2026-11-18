@@ -207,6 +207,14 @@ function usd_label(float $v): string {
  * @return array{label: string, text: string, gross: string, estimated: bool}|null
  */
 function list_salary(array $p): ?array {
+    if (!empty($p['project_hire'])) {
+        // A post hired for an EU/PNRR project: never a grid figure (SALARY-EU-DETAIL).
+        $pv = project_pay_view($p);
+        $short = $pv ? ($pv['month'] ?? $pv['rate']) : 'salariu din bugetul proiectului';
+        return ['label' => $pv ? 'Salariu anunțat' : 'Post finanțat din fonduri europene', 'text' => $short,
+                'gross' => '', 'estimated' => false, 'project' => true,
+                'title' => $pv ? $pv['full'] : 'Post finanțat din fonduri europene: salariul depinde de bugetul proiectului'];
+    }
     foreach ([['inf_salary_min', 'inf_salary_max', 'Salariu anunțat', false],
               ['sal_min', 'sal_max', 'Salariu estimat', true]] as [$lo, $hi, $label, $estimated]) {
         $min = $p[$lo] ?? null;
@@ -219,6 +227,39 @@ function list_salary(array $p): ?array {
         return ['label' => $label, 'text' => net_label((float)$min, $rawmax), 'gross' => $gross, 'estimated' => $estimated];
     }
     return null;
+}
+
+/**
+ * The pay a project-hired post states, as words (SALARY-EU-DETAIL; the columns come from
+ * classify.project_pay()). `rate` is the figure with its unit and basis ("50 lei/oră net"),
+ * `hours` the hours per month, `month` the month figure ("≈ 4.200 lei net/lună": the figure
+ * itself when the unit is a month; rate × hours when the unit is an hour and the hours are
+ * known; none otherwise), `note` says when the basis is not stated, `full` joins the parts.
+ * Null when the post states no pay.
+ *
+ * @return array{rate: string, hours: ?string, month: ?string, note: string, full: string, quote: string}|null
+ */
+function project_pay_view(array $p): ?array {
+    $amount = (float)($p['proj_pay_amount'] ?? 0);
+    $unit = (string)($p['proj_pay_unit'] ?? '');
+    if (empty($p['project_hire']) || $amount <= 0 || !in_array($unit, ['ora', 'luna'], true)) return null;
+    $basis = (string)($p['proj_pay_basis'] ?? '');
+    $b = $basis === 'brut' || $basis === 'net' ? ' ' . $basis : '';
+    $fmt = static fn(float $v): string => number_format($v, fmod($v, 1.0) === 0.0 ? 0 : 2, ',', '.');
+    $hours = (float)($p['proj_hours_month'] ?? 0);
+    $month = null;
+    if ($unit === 'luna') {
+        $rate = $fmt($amount) . ' lei' . $b . '/lună';
+        $month = $rate;
+    } else {
+        $rate = $fmt($amount) . ' lei/oră' . $b;
+        if ($hours > 0) $month = '≈ ' . $fmt($amount * $hours) . ' lei' . $b . '/lună';
+    }
+    $hours_s = $unit === 'ora' && $hours > 0 ? $fmt($hours) . ' ore/lună' : null;
+    $full = $unit === 'luna' ? $rate : $rate . ($hours_s ? ' · ' . $hours_s : '') . ($month ? ' ' . $month : '');
+    return ['rate' => $rate, 'hours' => $hours_s, 'month' => $month,
+            'note' => $b === '' ? 'brut sau net nespecificat' : '', 'full' => $full,
+            'quote' => (string)($p['proj_pay_quote'] ?? '')];
 }
 
 /**
@@ -274,6 +315,7 @@ function pay_quintiles(): ?array {
 
 /** Level 1–5 of a row's pay against pay_quintiles(), with a sentence that says so; null without one. */
 function pay_level(array $p): ?array {
+    if (!empty($p['project_hire'])) return null;       // the pay of a project post is not on the grid scale
     $v = (float)($p['inf_salary_min'] ?? 0) > 0 ? (float)$p['inf_salary_min'] : (float)($p['sal_min'] ?? 0);
     if ($v <= 0 || !($q = pay_quintiles())) return null;
     $level = 1;
@@ -1108,6 +1150,19 @@ const SELECTOR_FIELD_LABELS = [
 // ---- Salary/experience buckets ----
 
 /**
+ * The month pay a project-hired post states, as a gross figure in SQL (NULL when it states none, or
+ * an hourly rate without hours). A net figure becomes gross with gross_for_net(), an SQLite function
+ * of the PDO connection (db.php); a basis that is not stated counts as gross, as for every stated
+ * pay (DATA-SALARY-GROSS-NET). A project-hired post never takes the grid figure.
+ */
+const PROJECT_MONTH_EXPR = "(CASE WHEN j.proj_pay_amount > 0
+        AND (j.proj_pay_unit = 'luna' OR (j.proj_pay_unit = 'ora' AND j.proj_hours_month > 0))
+    THEN (CASE WHEN j.proj_pay_basis = 'net'
+        THEN gross_for_net(j.proj_pay_amount * (CASE WHEN j.proj_pay_unit = 'ora' THEN j.proj_hours_month ELSE 1 END))
+        ELSE j.proj_pay_amount * (CASE WHEN j.proj_pay_unit = 'ora' THEN j.proj_hours_month ELSE 1 END) END)
+    END)";
+
+/**
  * The pay figure the site filters and sorts on, in SQL.
  *
  * An announced salary wins where one exists, but only 44 of 9,757 postings
@@ -1115,7 +1170,8 @@ const SELECTOR_FIELD_LABELS = [
  * Defined once because three call sites have to agree: build_filters(), the
  * facet counts in pages/list.php, and the landing shortcut.
  */
-const SALARY_EXPR = 'COALESCE(j.inf_salary_min, j.sal_min)';
+const SALARY_EXPR = 'CASE WHEN j.project_hire = 1 THEN ' . PROJECT_MONTH_EXPR
+    . ' ELSE COALESCE(j.inf_salary_min, j.sal_min) END';
 
 /**
  * The date the site treats as "can I still apply?".

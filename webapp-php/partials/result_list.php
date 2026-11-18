@@ -14,11 +14,18 @@ $chips = $active_chips ?? [];
 $_sr = null;
 if ($total_count && function_exists('facet_scope')) {
     $_sr_s = facet_scope('');
-    $_sr_st = db()->prepare("SELECT j.inf_salary_min AS a, j.inf_salary_max AS b, j.sal_min AS c, j.sal_max AS d FROM job_postings j {$_sr_s['join']}"
+    // A project-hired post counts by its stated month pay (SALARY_EXPR), never by the grid: `p` is that figure.
+    $_sr_st = db()->prepare("SELECT j.inf_salary_min AS a, j.inf_salary_max AS b, j.sal_min AS c, j.sal_max AS d,
+        j.project_hire AS ph, " . PROJECT_MONTH_EXPR . " AS p FROM job_postings j {$_sr_s['join']}"
         . ($_sr_s['where'] ? ' WHERE ' . implode(' AND ', $_sr_s['where']) : ''));
     $_sr_st->execute($_sr_s['binds']);
     [$_sr_lo, $_sr_hi] = [[], []];
     foreach ($_sr_st as $_sr_r) {
+        if ((int)$_sr_r['ph'] === 1) {
+            if ((float)$_sr_r['p'] < 1000) continue;
+            $_sr_lo[] = $_sr_hi[] = net_from_gross((float)$_sr_r['p']);
+            continue;
+        }
         [$lo, $hi] = (float)$_sr_r['a'] > 0 ? [(float)$_sr_r['a'], (float)$_sr_r['b']] : [(float)$_sr_r['c'], (float)$_sr_r['d']];
         if ($lo < 1000) continue;
         $_sr_lo[] = net_from_gross($lo);
@@ -173,7 +180,7 @@ require __DIR__ . '/occupation_chips.php'; ?>
           <?php if ($sal || $labels || $meta): ?>
           <p class="pg-facts mt-1 text-xs leading-relaxed text-ink-muted">
             <?php if ($sal): ?>
-              <span class="pg-salary whitespace-nowrap" title="<?= e($sal['label']) ?> (net lunar) · brut: <?= e($sal['gross']) ?>">
+              <span class="pg-salary whitespace-nowrap" title="<?= isset($sal['title']) ? e($sal['title']) : e($sal['label']) . ' (net lunar) · brut: ' . e($sal['gross']) ?>">
                 <span class="pg-salary-label" role="img" aria-label="<?= e($sal['label']) ?>">💰</span>
                 <span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
                 <span class="pg-salary-kind">(estimat)</span><?php endif; ?>

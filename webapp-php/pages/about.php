@@ -78,6 +78,11 @@ require __DIR__ . '/../inc/header.php';
           corespunde unei funcții din lege nu are estimare. Filtrul „fără salariu estimat” îl arată.
         </p>
         <p>
+          <strong>Posturile pe proiecte europene.</strong> Un post angajat pentru un proiect cu fonduri europene
+          sau PNRR se plătește cu tariful orar din cererea de finanțare, nu cu grila legii. Site-ul nu
+          estimează salariul acestui post: arată tariful din anunț, când anunțul îl spune.
+        </p>
+        <p>
           <strong>În administrația locală</strong> consiliul local sau județean stabilește salariul, până la un plafon
           legal. Plafonul depinde de tipul și de populația localității. De aceea site-ul arată un interval:
           limita de jos este valoarea din tabelul legii, iar limita de sus este plafonul.

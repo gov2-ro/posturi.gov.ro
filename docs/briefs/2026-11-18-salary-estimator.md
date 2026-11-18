@@ -75,7 +75,13 @@ ADR 0008 rule 2 already allows the draft figure outside the list, the sort and t
    estimate.
 8. **`/despre/`**, section `salarii`: change only the sentence „Site-ul calculează și cifra după
    proiect, dar nu o afișează încă.” to say that the estimator page shows it, with a link. Keep
-   the owner's other text and the diagram as they are.
+   the owner's other text as it is.
+   The diagram (`docs/img/salariu-estimare.svg`, copy in `webapp-php/static/img/`) changes in two
+   boxes: „După proiect: calculată, dar încă neafișată” → the estimator shows it; „Ce vede
+   cititorul” gets „și estimatorul de salariu”. Edit the text only, then run
+   `python3 ~/.claude/references/svg-diagram-tool.py verifica <svg>` and `randeaza <svg> --iesire
+   docs/img/salariu-estimare.png`, open the PNG, and copy the SVG to the site folder. If the text
+   does not fit, stop and ask: the layout belongs to the diagram-designer agent.
 9. **Design.** gov2 DS components first (read `COMPONENTS.md` in the DS). Role tokens only; no raw
    Tailwind palette classes, no hex literals. Rules in `@layer app`. Copy the page shape of
    `pages/eligibility_tool.php`. The two result blocks sit side by side from `lg`, stacked below.

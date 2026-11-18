@@ -2,6 +2,32 @@
 
 ## 2026
 
+### 2026-11-19 — Estimator wizard and INS context line (Sonnet, brief UX-SALARY-WIZARD + SALARY-INS-LINE; not deployed)
+
+**Done**
+- Wizard in `pages/salary_estimator.php`: domain, studies, function, variants, result; one GET URL per step (`?d=`, `?d=&st=`, `?b=&fn=&st=&d=`). `?rand=&g=` and `?fn=` URLs work as before. Breadcrumb with the DS `.g2-breadcrumbs`; choices are whole-row links, at least 44 px (Tailwind tokens, no new CSS rule: `npm run css` made no change). An annex whose rows name no studies (VII, IX) skips step 2.
+- Title shortcut: field "Caută după titlul postului" above every step. Titles of postings first, then grid names, at most 30 each. New export tables `salary_title` and `salary_ins_context` (`export_salary_titles()`, `export_salary_ins_context()`); both build from the SQLite file itself and the CSV, so they run on an existing export with no Postgres.
+- `ops/build-ins-context.py` writes `data/salarii/ins-context.csv`. The result shows one INS line, with an optional county select (`jud`) that does not change the estimate.
+- Tests: PHP `salary_estimator_test.php` 165 assertions (was 80); all 21 PHP files pass (10,266 assertions). Python `webapp/tests/test_salary_wizard_export.py` 12 tests. Playwright `salary_estimator.spec.js` 24 runs (wizard at 375 and 1280, title shortcut, INS line). Full Playwright: 870 passed, 60 skipped, 3 failed: only `alerts.spec.js:54` (known, TEST-ALERTS-PRIVACY-LINK, not touched).
+
+**Measured** (export `tmp/261118/grid153/posturi-after2.sqlite`, copy in the scratchpad)
+- Functions per domain (law + unlinked draft), then by level S/SSD/PL/M/G: I 142 (100/26/6/44/9); II 148 (99/14/14/39/13); III 53 (40/17/15/21/15); IV 41 (38/3/3/4/-); V 81 (62/15/-/26/-); VI 34 (31/-/18/20/-); VII 20 and IX 53 (no studies in rows); VIII 267 (170/51/37/120/81).
+- `salary_title`: 1,492 rows from 9,750 postings (702 with 2 or more postings, 790 with 1).
+- INS: 172 rows = 4 national (FOM106G, 2026-05) + 168 county (42 x 4 sections; FOM106E 2024). Step 3 largest list (VIII, S: 170 functions): 81 KB HTML.
+
+**Hard**
+- FOM106E in `tempo-ins-dump` has only Masculin and Feminin: INS "Total" options were dropped at fetch. No both-sexes county cell exists. I weight the two sexes by FOM104F (the recipe of `docs/METHODOLOGY.md` in tempo-ins-dump): up to 1 leu from an INS cell.
+- FOM106G is CAEN Rev.3: letters shift by one (P administration, Q education, R health, S culture). The CSV keeps the Rev.2 letter.
+- The `gradatie` in `sal_json` is 0 for every posting, so `salary_title` stores `grad_treapta` of the estimate instead; the `?rand=` row sets the grade.
+- Draft study values are messy (`M + Licență`, `M; G`); a regex takes the codes S, SSD, PL, M, G, and a value with none is "no studies".
+
+**Decided**
+- County figure from FOM104F weights (a third matrix) instead of no county line. Cost of the alternative: no county choice.
+- A title with 1 posting and more than 8 words is dropped (announcement text, 207 of 925 singles over 60 characters). Not in the brief.
+- Periods differ: country monthly (2026-05), county annual (2024). Each line names its own period.
+- Annex labels and CAEN mapping assumed: VI, VII, IX labels from the law text; IX to O and VII to no sector (the brief names neither).
+- The choice-list component is local (`$choice` in the page). DS proposal not filed.
+
 ### 2026-11-19 — Spike: pay of EU-funded and PNRR posts (Sonnet, brief SALARY-EU-SPIKE)
 
 **Done**

@@ -32,6 +32,10 @@ if (!isset($_build_stamp)) {
   <title><?= e($_title) ?></title>
   <meta name="description" content="<?= e($_description) ?>">
   <link rel="canonical" href="<?= e($_canonical) ?>">
+  <?php /* Favicon: the civetch logo (../awesome-civetch/site/img/logo.png), padded to a square. */ ?>
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="posturi.gov2.ro">

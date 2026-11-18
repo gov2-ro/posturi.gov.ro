@@ -2,6 +2,32 @@
 
 ## 2026
 
+### 2026-11-18 — Salary estimator page `/estimator-salariu/` (Sonnet, brief UX-SALARY-ESTIMATOR; not deployed)
+
+**Done**
+- `salary_grid.py`: `Grid.row_pay(row, gradation, as_of)` is the one pay formula (law and draft). `estimate()` and `_estimate_law()` call it.
+- `export-to-sqlite.py`: `export_salary_estimator()` writes `salary_grid_rows`, `salary_grid_pay`, `salary_grid_link`, `salary_cap`, `salary_param` (new tables only). 4,102 grid rows, 24,612 pay figures, 7,126 links, 14 caps; about 3.9 MB added.
+- The page (`pages/salary_estimator.php`, `salary_est_*` in `helpers.php`): GET only, no JavaScript. Step 1 search, step 2 variants, law block first, draft block second, local range up to the chosen cap, `?rand=<ref>&g=<n>` direct entry.
+- Entry points: footer (Posturi), home tile (Instrumente), `llms.txt`, sitemap, link „Calculează cu altă gradație” in the detail-page salary box (law estimates only). `/despre/`: one sentence changed. Diagram: two boxes changed, `verifica` 0 warnings, PNG re-rendered, site copy updated.
+- Tests: Python `test_salary_grid.py` 114 → 129; PHP new `salary_estimator_test.php` (63 assertions) and updates to request, ds, llms, home, compat tests; all 21 PHP suites pass (10,161 assertions); Playwright `salary_estimator.spec.js` (4 tests × 3 viewports).
+
+**Measured**
+- Behaviour unchanged: 73,836 estimates (every row of both grids × gradation 0–5 × 3 local variants) are byte-identical before and after the refactor (JSON of `as_dict()`); the existing 114 salary tests pass.
+- Link coverage: law 1,446 of 1,913 rows have at least one draft row (75.6%); draft 1,693 of 2,189 rows have a law row (77.3%). Without the same-annex filter: 1,763 of 2,189 draft rows and 7,555 pairs, but the extra pairs are wrong (draft anexa VII matches law I, II, III, V, VIII by name; 636 pairs).
+- Step 1 page weight (no gzip on the dev server): empty page 24.5 KB; „consilier” 41 functions, 36.2 KB; „medic” 37.6 KB; „inspector” 49 functions, 38.7 KB. The list shows at most 60 functions.
+
+**Hard**
+- `GridRow.ref` is not unique: 75 law refs repeat (one source row holds two study levels, for example `L153-t64!12` for PL and M). The export suffixes the repeats with `#2`, `#3`; the first row keeps the plain ref, so a ref from `sal_json` still finds it.
+- A function name in a URL is too long: 23–34 rows have names over 300 characters, and `validated_query()` refuses a value over 300 bytes. The URL carries a ref (`fn=<ref>`), not the name.
+- `selector_for_law()` + `Grid.select()` alone link draft-only annexes (VI, VII, IX) to law rows of other annexes by name. The link keeps only law rows of the same annex.
+
+**Decided**
+- The function key is (grid, annex, name). The variants (category, regime, level, post type, grade, studies, hospital type) show only when the function has more than one value. A variant left open gives a range over all matching rows, and the page lists the open choices.
+- „local” is a value of the level choice for an Anexa VIII function with a territorial row; it gives the territorial value up to the cap, as `_estimate_law()`. Without a locality choice: the widest cap that is not the Capital, and the page says so.
+- Gradation above 5 in the URL reads as 5.
+- Left out: „Vezi posturile deschise pentru această funcție”. The list has no filter on a grid row (it filters on `occ_canonical` and COR codes).
+- `sectiune` is exported as the last segment of the source heading (shorter, readable); `cautare` is an extra column for the accent-free search.
+
 ### 2026-11-18 — Diagram „Cum estimăm salariul”; estimator brief (Opus + diagram-designer; not deployed)
 
 **Done**

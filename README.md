@@ -199,6 +199,8 @@ for the postings with no figure. Each net threshold is converted to a gross thre
 (`sub-3000` … `peste-7000`) stay valid with their old meaning, for saved searches and email
 subscriptions. Sporuri and the 20% cap are deliberately out of scope — see the activity log.
 
+**Estimator page (`/estimator-salariu/`).** The reader picks a function, the variants (grade, studies, regime, level, hospital type) and the gradation 0–5. The page shows the pay under Legea 153/2017 first and under the draft second. A local post shows a range up to the cap of the chosen locality. The page uses GET only, needs no JavaScript and has one URL for each state; `?rand=<ref>&g=<0-5>` opens a law row directly (the detail page links to it). `Grid.row_pay()` in `salary_grid.py` is the one pay formula. The export writes the pay of each row at each gradation, and PHP only looks it up (`salary_est_*` in `helpers.php`). An older export without the tables shows „Estimatorul nu este disponibil acum.”
+
 ### Județe (counties)
 
 The source badge has two shapes — `Timiş` before the 2026-07 redesign,
@@ -548,6 +550,8 @@ month, not a curve of how many jobs were open. An export without the table (or w
 only; db.php stands in an empty view. Reconciliation: `SELECT COALESCE(to_char(published_at,
 'YYYY-MM'),'unknown'), COUNT(*) FROM jobs_jobposting GROUP BY 1` must equal
 `SELECT month, SUM(postings) FROM publication_monthly GROUP BY 1`.
+
+The estimator tables (`export_salary_estimator()`): `salary_grid_rows` (both grids, one row each; a `ref` that repeats gets `#2`), `salary_grid_pay` (`version, ref, gradatie 0–5, lei_min, lei_max`, from `Grid.row_pay()`; the minimum-wage floor of the export date), `salary_grid_link` (each draft row and the law rows of the same annex that `selector_for_law()` + `Grid.select()` give), `salary_cap` (the 14 rows of `plafon-local.csv`) and `salary_param` (key → JSON: versions, gradations, minimum wage, link coverage). Measured on 2026-11-18: 4,102 rows, 24,612 pay figures, 7,126 links; 1,446 of 1,913 law rows have a draft row and 1,693 of 2,189 draft rows have a law row; about 3.9 MB.
 
 `posting_roles` (DATA-04) is the role read model: one row per advertised role, so a
 requirement search can demand that *one* role satisfies every condition. A posting whose

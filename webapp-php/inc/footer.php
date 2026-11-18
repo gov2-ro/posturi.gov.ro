@@ -106,5 +106,11 @@ $_footer_groups = [
 })();
 </script>
 
+<?php /* Cloudflare Web Analytics: cookieless, stores nothing on the device (BETA-CHROME).
+         Only on the live host, so local runs and tests send no page views. */ ?>
+<?php if (($_SERVER['HTTP_HOST'] ?? '') === 'posturi.gov2.ro'): ?>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "88d0d83c8a27414b9fd440433e0c0dae"}'></script>
+<?php endif; ?>
+
 </body>
 </html>

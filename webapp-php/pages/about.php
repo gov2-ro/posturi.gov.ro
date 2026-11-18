@@ -123,8 +123,9 @@ require __DIR__ . '/../inc/header.php';
     </p>
     <p>
       Site-ul este servit prin Cloudflare, care vede adresa IP și cererile, ca orice rețea de livrare.
-      Folosim statisticile de trafic Cloudflare (agregate, fără cookie-uri) ca să știm câte pagini sunt
-      vizitate. Formularul de sugestii este un Google Form (se aplică politica Google), iar problemele
+      Folosim statisticile de trafic Cloudflare și Cloudflare Web Analytics ca să știm câte pagini sunt
+      vizitate. Un script mic de la Cloudflare măsoară vizita. El nu folosește cookie-uri, nu salvează nimic
+      în browserul dvs. și nu vă urmărește de la un site la altul. Noi vedem doar totaluri. Formularul de sugestii este un Google Form (se aplică politica Google), iar problemele
       raportate pe GitHub sunt publice.
     </p>
     <p class="text-xs text-ink-muted">

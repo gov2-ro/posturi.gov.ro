@@ -82,6 +82,15 @@ require __DIR__ . '/../inc/header.php';
           legal. Plafonul depinde de tipul și de populația localității. De aceea site-ul arată un interval:
           limita de jos este valoarea din tabelul legii, iar limita de sus este plafonul.
         </p>
+        <figure class="my-6 flex flex-col gap-2">
+          <img src="/static/img/salariu-estimare.svg" width="480" height="1128" loading="lazy"
+               class="h-auto w-full max-w-[30rem] rounded border border-line"
+               alt="Când anunțul spune salariul, site-ul îl afișează pe acela. Altfel, site-ul estimează salariul de bază brut din grila Legii 153/2017, după funcție și angajator, folosește grila proiectului de lege doar când legea nu are rând, și arată salariul net.">
+          <figcaption class="g2-text-meta">
+            Cum estimăm salariul: întâi salariul anunțat, apoi grila Legii 153/2017, iar grila proiectului
+            de lege numai când legea nu are rând. Toate cifrele sunt estimări, nu calcule oficiale.
+          </figcaption>
+        </figure>
         <p>
           <strong>Proiectul de lege.</strong> Un proiect de lege din iulie 2026 propune alte salarii. Legea
           nu este adoptată. Site-ul calculează și cifra după proiect, dar nu o afișează încă.

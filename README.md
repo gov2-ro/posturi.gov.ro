@@ -125,8 +125,17 @@ looks like from the outside.
 ### Estimated pay (`salarii/`, `ocupatii/`)
 
 Romanian public-sector postings essentially never state a salary — **44 of 9,757**
-do in the body, 5 of 917 attachments — so pay is *derived* from the 2026 draft
-salary law rather than scraped.
+do in the body, 5 of 917 attachments — so pay is *derived* from the salary grids
+rather than scraped: Legea 153/2017 (in force) first, the 2026 draft law only when
+the law has no row (ADR 0008).
+
+<img src="docs/img/salariu-estimare.png" width="480" alt="Când anunțul spune salariul, site-ul îl afișează pe acela. Altfel, site-ul estimează salariul de bază brut din grila Legii 153/2017, după funcție și angajator, folosește grila proiectului de lege doar când legea nu are rând, și arată salariul net.">
+
+*Figure (Romanian, also on `/despre/`): stated pay first, then the Legea 153/2017 grid, then the
+draft grid as a fallback; gross to net last. Source: `docs/img/salariu-estimare.svg`; the site
+copy is `webapp-php/static/img/salariu-estimare.svg` — change both.*
+
+The scripts behind the figure:
 
 ```
 docs/salarii/…xlsx  --build-salary-grid.py-->  data/salarii/grila-<versiune>.csv

@@ -2,6 +2,23 @@
 
 ## 2026
 
+### 2026-11-18 — Diagram „Cum estimăm salariul”; estimator brief (Opus + diagram-designer; not deployed)
+
+**Done**
+- The diagram-designer agent drew the salary flow in Romanian: `docs/img/salariu-estimare.svg` + `.png` (viewBox 480 × 1128, 11 nodes, 13 edges in 2 styles, 0 hops; `verifica`: 0 warnings). The site copy is `webapp-php/static/img/salariu-estimare.svg` (7.7 KB). The PNG is 960 × 2256 px, 245 KB.
+- `/despre/`, section `salarii`: a `<figure>` after the paragraph on local administration, at most 30rem wide. At 375 px it is 343 × 803 px and readable; at 1280 px it is 480 px wide. No horizontal overflow.
+- `README.md` § Estimated pay: the figure (PNG, `width="480"`), and the opening sentence says Legea 153/2017 first, the draft second. The ASCII block of scripts stays: it names the scripts, the figure does not.
+- Backlog: UX-SALARY-ESTIMATOR (`[~]`), STATS-SALARY-PATTERNS (owner request: statistics, patterns, cost of living), DATA-SALARY-STALE-COPY. Brief: `docs/briefs/2026-11-18-salary-estimator.md`.
+
+**Hard**
+- The agent drew the code, not the ADR, and listed 13 differences. Two matter for the figure: rule 4(c) is coded (the draft figure takes the top level when the law has no row), and rule 2 is not (no page shows the `proiect` figure). The figure says both.
+- The agent put „estimatorul de salariu (pagină nouă)” in the box „Ce vede cititorul”. The page does not exist yet, so Opus removed the line and re-ran `verifica` / `randeaza`. The estimator brief adds it back.
+- An `<img>` SVG does not see the page fonts. The agent chose the stack Arial / Liberation Sans / Helvetica (the tool checks text fit with Arial metrics; ≥ 21 px slack per box), not outlined text (5–10× the file size, not selectable).
+
+**Decided**
+- Estimator: Python precomputes the pay of each grid row at gradations 0–5 in the export; PHP only looks up and converts to net. Cost of the alternative (the formula again in PHP): two formulas that drift, guarded only by a parity test.
+- One portrait figure for both places, not a landscape one: at 340 px a landscape figure has text under 9 px.
+
 ### 2026-11-18 — /despre/ anchors renamed by the owner; project logo (Opus; not deployed)
 
 **Done**

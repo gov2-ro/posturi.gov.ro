@@ -129,10 +129,11 @@ do in the body, 5 of 917 attachments — so pay is *derived* from the salary gri
 rather than scraped: Legea 153/2017 (in force) first, the 2026 draft law only when
 the law has no row (ADR 0008).
 
-<img src="docs/img/salariu-estimare.png" width="480" alt="Când anunțul spune salariul, site-ul îl afișează pe acela. Altfel, site-ul estimează salariul de bază brut din grila Legii 153/2017, după funcție și angajator, folosește grila proiectului de lege doar când legea nu are rând, și arată salariul net.">
+<img src="docs/img/salariu-estimare.png" width="480" alt="Pentru un post angajat pe un proiect cu fonduri europene sau PNRR, site-ul arată tariful din anunț și nu folosește grila. Pentru celelalte posturi arată salariul anunțat sau estimează salariul de bază brut din grila Legii 153/2017, cu grila proiectului de lege doar când legea nu are rând, și arată salariul net.">
 
-*Figure (Romanian, also on `/despre/`): stated pay first, then the Legea 153/2017 grid, then the
-draft grid as a fallback; gross to net last. Source: `docs/img/salariu-estimare.svg`; the site
+*Figure (Romanian, also on `/despre/`): first the EU/PNRR project test (a project hire shows the
+posting's rate, never the grid), then stated pay, then the Legea 153/2017 grid, then the draft grid
+as a fallback; gross to net last. Source: `docs/img/salariu-estimare.svg`; the site
 copy is `webapp-php/static/img/salariu-estimare.svg` — change both.*
 
 **Project-hired posts.** A post hired for an EU or PNRR project is paid at the hourly rate of the

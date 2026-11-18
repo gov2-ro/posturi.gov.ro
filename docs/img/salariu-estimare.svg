@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 1128" width="480" height="1128"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 1378" width="480" height="1378"
   font-family="Arial, 'Liberation Sans', Helvetica, sans-serif" role="img" aria-labelledby="f1-titlu f1-desc">
   <title id="f1-titlu">Cum estimăm salariul</title>
-  <desc id="f1-desc">Când anunțul spune salariul, site-ul îl afișează pe acela. Altfel, site-ul estimează salariul de bază brut din grila Legii 153/2017, după funcție și angajator, folosește grila proiectului de lege doar când legea nu are rând, și arată salariul net.</desc>
+  <desc id="f1-desc">Pentru un post angajat pe un proiect cu fonduri europene sau PNRR, site-ul arată tariful din anunț și nu folosește grila. Pentru celelalte posturi arată salariul anunțat sau estimează salariul de bază brut din grila Legii 153/2017, cu grila proiectului de lege doar când legea nu are rând, și arată salariul net.</desc>
 
-  <rect width="480" height="1128" fill="#ffffff" />
+  <rect width="480" height="1378" fill="#ffffff" />
   <defs>
     <marker id="f1-sageata-secundar" viewBox="0 0 10 10" refX="9" refY="5"
       markerWidth="7" markerHeight="7" orient="auto">
@@ -16,34 +16,47 @@
   </defs>
 
   <!-- Grila: pagină îngustă, 480, ca textul să rămână lizibil la 340 px pe telefon.
-       Coloana principală 60–420 (centru 240); jumătăți 60–220 (centru 140) și 260–420 (centru 340).
-       Două culoare verticale: x=42 (proiectul de lege) și x=438 (salariul anunțat și legea).
-       Rândurile la pas 120: cutii de 80 (rândul 1: 60), spațiu 40. -->
+       Coloana principală 60–410 (centru 235); jumătăți 60–210 (centru 135) și 260–410 (centru 335).
+       Trei culoare verticale: x=42 (ramura „Nu” sus, apoi proiectul de lege),
+       x=428 (salariul anunțat și legea), x=444 (postul angajat pentru un proiect).
+       Rândurile la pas 120: cutii de 80 (rândurile 0 și 1: 60), spațiu 40. -->
 
   <!-- 1. MUCHII: proiectul de lege (gri, punctat) -->
   <g fill="none" stroke="#505a5f" stroke-width="1.5" stroke-dasharray="5 4">
-    <!-- același selector merge și în grila proiectului, pe culoarul din stânga -->
-    <path d="M60,404 H42 V644 H60" marker-end="url(#f1-sageata-secundar)" />
-    <path d="M140,684 V724" marker-end="url(#f1-sageata-secundar)" />
-    <path d="M340,684 V724" marker-end="url(#f1-sageata-secundar)" />
-    <path d="M240,684 V844" marker-end="url(#f1-sageata-secundar)" />
-    <path d="M60,764 H42 V964" marker-end="url(#f1-sageata-secundar)" />
+    <!-- același selector merge și în grila proiectului de lege, pe culoarul din stânga -->
+    <path d="M60,624 H42 V864 H60" marker-end="url(#f1-sageata-secundar)" />
+    <path d="M135,904 V944" marker-end="url(#f1-sageata-secundar)" />
+    <path d="M335,904 V944" marker-end="url(#f1-sageata-secundar)" />
+    <path d="M235,904 V1064" marker-end="url(#f1-sageata-secundar)" />
+    <path d="M60,984 H42 V1184" marker-end="url(#f1-sageata-secundar)" />
   </g>
 
-  <!-- 2. MUCHII: salariul anunțat și legea în vigoare (brand, plin, gros) -->
+  <!-- 2. MUCHII: postul angajat pentru un proiect UE sau PNRR (gri, plin) -->
+  <g fill="none" stroke="#505a5f" stroke-width="1.5">
+    <path d="M235,184 V224" marker-end="url(#f1-sageata-secundar)" />
+    <!-- magistrală pe culoarul din dreapta: tariful merge la cititor așa cum e,
+         iar în filtrul „Salariu” tariful brut sau nespecificat trece prin calculul net -->
+    <path d="M410,264 H444 V1124" />
+    <path d="M444,1124 H410" marker-end="url(#f1-sageata-secundar)" />
+    <path d="M444,1124 V1184" marker-end="url(#f1-sageata-secundar)" />
+  </g>
+
+  <!-- 3. MUCHII: salariul anunțat și legea în vigoare (brand, plin, gros) -->
   <g fill="none" stroke="#1d4fbf" stroke-width="2.5">
-    <path d="M160,84 V124" marker-end="url(#f1-sageata-activ)" />
-    <path d="M296,164 H336" marker-end="url(#f1-sageata-activ)" />
-    <path d="M160,204 V244" marker-end="url(#f1-sageata-activ)" />
-    <path d="M240,324 V364" marker-end="url(#f1-sageata-activ)" />
-    <path d="M240,444 V484" marker-end="url(#f1-sageata-activ)" />
+    <path d="M240,84 V124" marker-end="url(#f1-sageata-activ)" />
+    <!-- ramura „Nu” a testului de proiect, pe culoarul din stânga -->
+    <path d="M42,184 V344" marker-end="url(#f1-sageata-activ)" />
+    <path d="M266,384 H302" marker-end="url(#f1-sageata-activ)" />
+    <path d="M145,424 V464" marker-end="url(#f1-sageata-activ)" />
+    <path d="M235,544 V584" marker-end="url(#f1-sageata-activ)" />
+    <path d="M235,664 V704" marker-end="url(#f1-sageata-activ)" />
     <!-- magistrală pe culoarul din dreapta: salariul anunțat, iar grila legii se leagă la ea -->
-    <path d="M438,204 V884 H420" marker-end="url(#f1-sageata-activ)" />
-    <path d="M420,524 H438" />
-    <path d="M240,924 V964" marker-end="url(#f1-sageata-activ)" />
+    <path d="M410,384 H428 V1094 H410" marker-end="url(#f1-sageata-activ)" />
+    <path d="M410,744 H428" />
+    <path d="M235,1144 V1184" marker-end="url(#f1-sageata-activ)" />
   </g>
 
-  <!-- 3. NODURI -->
+  <!-- 4. NODURI -->
   <g>
     <!-- intrarea -->
     <rect x="24" y="24" width="432" height="60" rx="8"
@@ -53,95 +66,113 @@
       <tspan x="240" y="70">angajatorul, textul anunțului</tspan>
     </text>
 
-    <rect x="24" y="124" width="272" height="80" rx="8"
+    <!-- testul de proiect: înaintea salariului anunțat -->
+    <rect x="24" y="124" width="432" height="60" rx="8"
       fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
-      <tspan x="160" y="150">Anunțul spune salariul?</tspan>
-      <tspan x="160" y="170">LLM citește salariul de bază</tspan>
-      <tspan x="160" y="190">brut, de la 1.000 lei în sus</tspan>
+      <tspan x="240" y="150">Post angajat pentru un proiect UE sau PNRR?</tspan>
+      <tspan x="240" y="170">Potrivire de text în anunț.</tspan>
     </text>
 
-    <rect x="336" y="124" width="120" height="80" rx="8"
-      fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
+    <rect x="60" y="224" width="350" height="80" rx="8"
+      fill="#ffffff" stroke="#505a5f" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
-      <tspan x="396" y="160">Da: salariu</tspan>
-      <tspan x="396" y="180">anunțat</tspan>
+      <tspan x="235" y="250">Da: tariful din anunț (lei/oră × ore/lună),</tspan>
+      <tspan x="235" y="270">sau „salariul depinde de bugetul proiectului”.</tspan>
+      <tspan x="235" y="290">Fără grilă.</tspan>
     </text>
 
-    <rect x="60" y="244" width="360" height="80" rx="8"
+    <rect x="24" y="344" width="242" height="80" rx="8"
       fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
-      <tspan x="240" y="270">Nu: funcția din lege</tspan>
-      <tspan x="240" y="290">LLM alege funcția din grilă și studiile.</tspan>
-      <tspan x="240" y="310">Gradul vine din titlu. LLM nu dă cifre.</tspan>
+      <tspan x="145" y="370">Nu: anunțul spune salariul?</tspan>
+      <tspan x="145" y="390">LLM citește salariul de bază</tspan>
+      <tspan x="145" y="410">brut, de la 1.000 lei în sus</tspan>
     </text>
 
-    <rect x="60" y="364" width="360" height="80" rx="8"
+    <rect x="302" y="344" width="108" height="80" rx="8"
       fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
-      <tspan x="240" y="390">Angajatorul și localitatea</tspan>
-      <tspan x="240" y="410">Tipul și populația UAT.</tspan>
-      <tspan x="240" y="430">Tipul spitalului, din nume (OUG 19/2024).</tspan>
+      <tspan x="356" y="380">Da: salariu</tspan>
+      <tspan x="356" y="400">anunțat</tspan>
+    </text>
+
+    <rect x="60" y="464" width="350" height="80" rx="8"
+      fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
+    <text fill="#0b0c0c" text-anchor="middle" font-size="16">
+      <tspan x="235" y="490">Nu: funcția din lege</tspan>
+      <tspan x="235" y="510">LLM alege funcția din grilă și studiile.</tspan>
+      <tspan x="235" y="530">Gradul vine din titlu. LLM nu dă cifre.</tspan>
+    </text>
+
+    <rect x="60" y="584" width="350" height="80" rx="8"
+      fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
+    <text fill="#0b0c0c" text-anchor="middle" font-size="16">
+      <tspan x="235" y="610">Angajatorul și localitatea</tspan>
+      <tspan x="235" y="630">Tipul și populația UAT.</tspan>
+      <tspan x="235" y="650">Tipul spitalului, din nume (OUG 19/2024).</tspan>
     </text>
 
     <!-- nodul plin: pasul central -->
-    <rect x="60" y="484" width="360" height="80" rx="8"
+    <rect x="60" y="704" width="350" height="80" rx="8"
       fill="#1d4fbf" stroke="#0b3d91" stroke-width="1.5" />
     <text fill="#ffffff" text-anchor="middle" font-size="16">
-      <tspan x="240" y="510">Grila Legii 153/2017: salariu de bază brut</tspan>
-      <tspan x="240" y="530">gradația 0, cel puțin 4.325 lei (salariul minim)</tspan>
-      <tspan x="240" y="550">Administrația locală: interval până la plafon</tspan>
+      <tspan x="235" y="730">Grila Legii 153/2017: salariu de bază brut</tspan>
+      <tspan x="235" y="750">gradația 0, cel puțin 4.325 lei (salariul minim)</tspan>
+      <tspan x="235" y="770">Administrația locală: interval până la plafon</tspan>
     </text>
 
     <!-- proiectul de lege: cutii secundare -->
-    <rect x="60" y="604" width="360" height="80" rx="8"
+    <rect x="60" y="824" width="350" height="80" rx="8"
       fill="#ffffff" stroke="#6f777b" stroke-width="1" stroke-dasharray="4 3" />
     <text fill="#505a5f" text-anchor="middle" font-size="16">
-      <tspan x="240" y="630">Grila proiectului de lege (neadoptat):</tspan>
-      <tspan x="240" y="650">coeficient × 4.100 lei, gradația 0.</tspan>
-      <tspan x="240" y="670">Site-ul o folosește când legea nu are rând.</tspan>
+      <tspan x="235" y="850">Grila proiectului de lege (neadoptat):</tspan>
+      <tspan x="235" y="870">coeficient × 4.100 lei, gradația 0.</tspan>
+      <tspan x="235" y="890">Site-ul o folosește când legea nu are rând.</tspan>
     </text>
 
-    <rect x="60" y="724" width="160" height="80" rx="8"
+    <rect x="60" y="944" width="150" height="80" rx="8"
       fill="#ffffff" stroke="#6f777b" stroke-width="1" stroke-dasharray="4 3" />
     <text fill="#505a5f" text-anchor="middle" font-size="16">
-      <tspan x="140" y="750">Nicio grilă</tspan>
-      <tspan x="140" y="770">nu are rând:</tspan>
-      <tspan x="140" y="790">fără estimare</tspan>
+      <tspan x="135" y="970">Nicio grilă</tspan>
+      <tspan x="135" y="990">nu are rând:</tspan>
+      <tspan x="135" y="1010">fără estimare</tspan>
     </text>
 
-    <rect x="260" y="724" width="160" height="80" rx="8"
+    <rect x="260" y="944" width="150" height="80" rx="8"
       fill="#ffffff" stroke="#6f777b" stroke-width="1" stroke-dasharray="4 3" />
     <text fill="#505a5f" text-anchor="middle" font-size="16">
-      <tspan x="340" y="750">După proiect:</tspan>
-      <tspan x="340" y="770">numai în</tspan>
-      <tspan x="340" y="790">estimator</tspan>
+      <tspan x="335" y="970">După proiectul</tspan>
+      <tspan x="335" y="990">de lege: numai</tspan>
+      <tspan x="335" y="1010">în estimator</tspan>
     </text>
 
-    <rect x="60" y="844" width="360" height="80" rx="8"
+    <rect x="60" y="1064" width="350" height="80" rx="8"
       fill="#d2e2f1" stroke="#1d4fbf" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
-      <tspan x="240" y="870">Salariu net = brut − CAS 25 % − CASS 10 %</tspan>
-      <tspan x="240" y="890">− impozit 10 % (cu deducerea personală).</tspan>
-      <tspan x="240" y="910">Fără persoane în întreținere.</tspan>
+      <tspan x="235" y="1090">Salariu net = brut − CAS 25 % − CASS 10 %</tspan>
+      <tspan x="235" y="1110">− impozit 10 % (cu deducerea personală).</tspan>
+      <tspan x="235" y="1130">Fără persoane în întreținere.</tspan>
     </text>
 
     <!-- ieșirea -->
-    <rect x="24" y="964" width="432" height="80" rx="8"
+    <rect x="24" y="1184" width="432" height="80" rx="8"
       fill="#ffffff" stroke="#505a5f" stroke-width="1.5" />
     <text fill="#0b0c0c" text-anchor="middle" font-size="16">
-      <tspan x="240" y="990">Ce vede cititorul</tspan>
-      <tspan x="240" y="1010">lista, filtrul „Salariu”, graficul,</tspan>
-      <tspan x="240" y="1030">pagina anunțului și estimatorul de salariu</tspan>
+      <tspan x="240" y="1210">Ce vede cititorul</tspan>
+      <tspan x="240" y="1230">lista, filtrul „Salariu”, graficul,</tspan>
+      <tspan x="240" y="1250">pagina anunțului și estimatorul de salariu</tspan>
     </text>
   </g>
 
-  <!-- 5. LEGENDĂ: două stiluri folosite, două intrări, pe două rânduri (pagină îngustă) -->
+  <!-- 5. LEGENDĂ: trei stiluri folosite, trei intrări, câte una pe rând (pagină îngustă) -->
   <g>
-    <line x1="24" y1="1074" x2="74" y2="1074" stroke="#1d4fbf" stroke-width="2.5" />
-    <text x="84" y="1080" fill="#0b0c0c" font-size="16">Salariul anunțat și legea în vigoare</text>
-    <line x1="24" y1="1104" x2="74" y2="1104" stroke="#505a5f" stroke-width="1.5"
+    <line x1="24" y1="1294" x2="74" y2="1294" stroke="#1d4fbf" stroke-width="2.5" />
+    <text x="84" y="1300" fill="#0b0c0c" font-size="16">Salariul anunțat și legea în vigoare</text>
+    <line x1="24" y1="1324" x2="74" y2="1324" stroke="#505a5f" stroke-width="1.5" />
+    <text x="84" y="1330" fill="#0b0c0c" font-size="16">Post angajat pentru un proiect UE sau PNRR</text>
+    <line x1="24" y1="1354" x2="74" y2="1354" stroke="#505a5f" stroke-width="1.5"
       stroke-dasharray="5 4" />
-    <text x="84" y="1110" fill="#505a5f" font-size="16">Grila proiectului de lege (neadoptat)</text>
+    <text x="84" y="1360" fill="#505a5f" font-size="16">Grila proiectului de lege (neadoptat)</text>
   </g>
 </svg>

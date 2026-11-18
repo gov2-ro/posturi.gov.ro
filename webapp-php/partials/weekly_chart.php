@@ -50,6 +50,8 @@ if ($_wc_with_data >= 4):
     // The colour class of group i: the local categorical palette, in order (assets/app.css, --c-cat-1 to -4). Written out, so that
     // Tailwind (which reads the PHP files, not static/theme-panel.js) keeps the classes.
     $_wc_cls = ['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'];
+    // The bars are at most 28rem wide with their date row (owner, 2026-11-18: full width made them too fat). The line keeps the full width.
+    $_wc_wcap = $_wc_line ? '' : ' max-w-md';
 ?>
         <figure class="flex flex-col gap-2 border-t border-line pt-4"<?= $_wc_js ?>>
           <figcaption class="<?= !empty($wc['caption_hidden']) ? 'sr-only' : 'g2-label' ?>"><?= e($wc['caption']) ?></figcaption>
@@ -66,7 +68,7 @@ if ($_wc_with_data >= 4):
           </div>
           <?php endif; ?>
           <svg role="img" aria-label="<?= e($wc['caption']) ?>, ultimele 12 săptămâni complete: între <?= e($fmt($_wc_min)) ?> și <?= e(posturi_label($_wc_max)) ?>"
-               viewBox="0 0 320 64" preserveAspectRatio="none" class="block h-16 w-full overflow-visible"<?= $_wc_js ? ' data-chart-svg' : '' ?>>
+               viewBox="0 0 320 64" preserveAspectRatio="none" class="block h-16 w-full overflow-visible<?= $_wc_wcap ?>"<?= $_wc_js ? ' data-chart-svg' : '' ?>>
             <?php if ($_wc_line): ?>
             <path d="<?= e($_wc_area) ?>" class="fill-chart/15 stroke-none"></path>
             <polyline points="<?= e(implode(' ', $_wc_pts)) ?>" fill="none" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" class="stroke-chart"></polyline>
@@ -107,7 +109,7 @@ if ($_wc_with_data >= 4):
             </g>
             <?php endif; ?>
           </svg>
-          <div class="g2-text-meta flex flex-wrap justify-between gap-x-3">
+          <div class="g2-text-meta flex flex-wrap justify-between gap-x-3<?= $_wc_wcap ?>">
             <span><?= e(home_short_date($_wc_weekly[0]['start'])) ?></span>
             <span<?= $_wc_js ? ' data-chart-stats' : '' ?>>min <?= e($fmt($_wc_min)) ?> · max <?= e($fmt($_wc_max)) ?> · ultima <?= e($fmt($_wc_last)) ?></span>
             <span><?= e(home_short_date(end($_wc_weekly)['start'])) ?></span>

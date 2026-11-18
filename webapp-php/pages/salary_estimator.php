@@ -92,7 +92,8 @@ $crumbs = static function (array $trail): string {
     return $out . '</ol></nav>';
 };
 // A choice of a step: a large row that is one link (at least 44 px high).
-// DS-PROPOSAL (not filed): a list of choices as links, like radios. Local until the DS has one.
+// DS-PROPOSAL https://github.com/gov2-ro/gov2ro-design-system/issues/13 (`.g2-choices` / `.g2-choice`):
+// a list of choices as links, like radios. Local until the DS has one; then use the DS class.
 $choice = static function (string $href, string $label, string $meta = '', string $attr = ''): string {
     return '<li><a class="flex min-h-[44px] items-center justify-between gap-3 border border-line bg-surface px-4 py-3 text-ink no-underline hover:bg-sunken" href="'
         . e($href) . '" ' . $attr . '><span>' . e($label) . '</span>'

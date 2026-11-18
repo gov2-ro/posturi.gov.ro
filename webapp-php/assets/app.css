@@ -603,6 +603,30 @@
   body:has(.g2-container > .pg-band:last-child) .g2-footer { margin-top: 0; }
 }
 
+/* 2026-11-18 (owner): the menu button of the header (inc/header.php). Below sm the nav links are in a column under
+   the button; from sm the button is hidden and the nav is the DS row. The button has `hidden` until the script in the
+   header shows it, so without script the nav is the DS row at every width. Local; the DS header has no menu button: https://github.com/gov2-ro/gov2ro-design-system/issues/12 */
+@layer app {
+  .pg-nav-toggle { display: none; }
+  @media (max-width: 639px) {
+    .pg-nav-toggle:not([hidden]) {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 44px;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid rgb(var(--c-on-bar) / 0.6);
+      border-radius: var(--radius-md);
+      color: rgb(var(--c-on-bar));
+      font-weight: 600;
+      font-size: var(--g2-font-size-meta);
+    }
+    .pg-nav-toggle[aria-expanded="true"] { background: rgb(var(--c-on-bar) / 0.12); }
+    .pg-nav-toggle[aria-expanded="false"] + .g2-nav { display: none; }
+    .pg-nav-toggle[aria-expanded="true"] + .g2-nav { flex-basis: 100%; flex-direction: column; margin-left: 0; padding-bottom: 0.5rem; }
+  }
+}
+
 /* 2026-11-17 (brief nav-toc-theme-hero): the table of contents of Statistici and Despre (partials/toc.php).
    Local; the DS has no such component. DS proposal candidate: "table of contents / in-page navigation".
    Below lg a block of links above the content; from lg a sticky 14rem column. The link of the section in

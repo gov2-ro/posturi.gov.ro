@@ -1162,6 +1162,16 @@ const SALARY_NET_BUCKETS = [
     ['key' => 'net-sub-3000',   'label' => 'sub 3.000 lei net',        'min' => null, 'max' => 3000],
     ['key' => 'net-3000-4000',  'label' => '3.000 – 4.000 lei net',    'min' => 3000, 'max' => 4000],
     ['key' => 'net-4000-5000',  'label' => '4.000 – 5.000 lei net',    'min' => 4000, 'max' => 5000],
+    ['key' => 'net-5000-7000',  'label' => '5.000 – 7.000 lei net',    'min' => 5000, 'max' => 7000],
+    ['key' => 'net-peste-7000', 'label' => 'peste 7.000 lei net',      'min' => 7000, 'max' => null],
+];
+
+/**
+ * Net values that the filter does not list but that stay valid (2026-11-18: "peste 5.000" became
+ * 5.000 – 7.000 and peste 7.000). A saved search, an email subscription and a link of the
+ * landing page select the same postings as before.
+ */
+const SALARY_NET_LEGACY = [
     ['key' => 'net-peste-5000', 'label' => 'peste 5.000 lei net',      'min' => 5000, 'max' => null],
 ];
 
@@ -1173,7 +1183,7 @@ const SALARY_NONE_LABEL = 'fără salariu estimat';
  * The gross lei (to the cent) from which net_from_gross() gives at least $net: a net threshold
  * as a gross one, found once per request, so that the SQL compares the stored gross column
  * (index-friendly). net_from_gross() dips by 1-3 lei at each 50-lei step of the deduction
- * between 4.325 and 6.325 gross, but it crosses 3.000, 4.000 and 5.000 net once and stays above
+ * between 4.325 and 6.325 gross, but it crosses 3.000, 4.000, 5.000 and 7.000 net once and stays above
  * (tests/discovery_test.php checks this over every cent around each threshold), so a binary
  * search finds the one crossing.
  */
@@ -1206,7 +1216,7 @@ function salary_bucket_sql(string $key): ?array {
         if ($b['max'] !== null) { $w[] = SALARY_EXPR . ' < CAST(? AS REAL)'; $bind[] = $b['max']; }
         return [$w, $bind];
     }
-    foreach (SALARY_NET_BUCKETS as $b) {
+    foreach ([...SALARY_NET_BUCKETS, ...SALARY_NET_LEGACY] as $b) {
         if ($b['key'] !== $key) continue;
         $w = [SALARY_EXPR . ' IS NOT NULL', SALARY_EXPR . ' > 0'];
         $bind = [];
@@ -1220,7 +1230,7 @@ function salary_bucket_sql(string $key): ?array {
 /** The label of any salary_bucket value (net, old gross, none); the key itself when unknown. */
 function salary_bucket_label(string $key): string {
     if ($key === SALARY_NONE) return SALARY_NONE_LABEL;
-    foreach ([SALARY_NET_BUCKETS, SALARY_BUCKETS] as $set) {
+    foreach ([SALARY_NET_BUCKETS, SALARY_NET_LEGACY, SALARY_BUCKETS] as $set) {
         foreach ($set as $b) if ($b['key'] === $key) return $b['label'];
     }
     return $key;
@@ -1827,7 +1837,7 @@ const MULTI_PARAMS = [
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
-    'regime', 'inst', 'cor', 'medspec',
+    'regime', 'inst', 'cor', 'medspec', 'salary_bucket',
     // NEGATABLE_PARAMS' exclusion lists
     'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
     'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not', 'cor_not',
@@ -2230,7 +2240,7 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     $studies    = (array)($p['studies_level'] ?? []);
     $remote     = $p['remote']       ?? '';
     $computer   = $p['computer']     ?? '';
-    $sal_bucket = $p['salary_bucket'] ?? '';
+    $sal_bucket = (array)($p['salary_bucket'] ?? []);
     $exp_before = $p['expires_before'] ?? '';
     $exp_after  = $p['expires_after']  ?? '';
     $status     = $p['status'] ?? DEFAULT_STATUS;
@@ -2457,9 +2467,21 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // SQLite compares a REAL against a TEXT — and a number is always less than
     // a string, making every `>=` false. The old `inf_salary_min >= ?` only
     // worked because a bare column carries REAL affinity and converts the bind.
-    if ($sal_bucket && $excl !== 'salary_bucket' && ($sb = salary_bucket_sql((string)$sal_bucket))) {
-        array_push($where, ...$sb[0]);
-        array_push($binds, ...$sb[1]);
+    //
+    // Several values combine with OR (a checkbox group): each value is its own AND of fragments in parentheses.
+    if ($sal_bucket && $excl !== 'salary_bucket') {
+        $sal_or = [];
+        $sal_binds = [];
+        foreach ($sal_bucket as $sv) {
+            $sb = is_scalar($sv) ? salary_bucket_sql((string)$sv) : null;
+            if (!$sb) continue;
+            $sal_or[] = '(' . implode(' AND ', $sb[0]) . ')';
+            array_push($sal_binds, ...$sb[1]);
+        }
+        if ($sal_or) {
+            $where[] = '(' . implode(' OR ', $sal_or) . ')';
+            array_push($binds, ...$sal_binds);
+        }
     }
 
     // Shift work is a yes/no a reader either wants or rules out, so it is a
@@ -2824,6 +2846,30 @@ function home_item_counts(array $params): array {
         if ((string)$r['j'] !== '') $counties[(string)$r['j']] = (int)$r['c'];
     }
     return ['n' => $n, 'counties' => $counties];
+}
+
+/**
+ * The salary chart (partials/salary_chart.php): the active postings of the filter $base by range of net pay, one row for each
+ * SALARY_NET_BUCKETS range in the order of the filter, then the row "fără salariu estimat" (SALARY_NONE). Each count is the result
+ * count of its link (home_item_counts(), home_list_url(): the rule of the landing page, ADR 0004), so the chart and the filter
+ * cannot disagree. `counties` is the count for each county (judet_slug), for the county selection of a themed page; `params` are
+ * the filter parameters of the link. A key of $base wins over `salary_bucket`.
+ *
+ * @return array{rows: list<array{key:string,label:string,n:int,counties:array<string,int>,params:array,href:string,none:bool}>, total:int}
+ *         `total` is the sum of the five ranges: 0 means that no posting of the scope has a salary figure.
+ */
+function salary_distribution(array $base = []): array {
+    $rows = [];
+    $total = 0;
+    foreach ([...SALARY_NET_BUCKETS, ['key' => SALARY_NONE, 'label' => SALARY_NONE_LABEL]] as $b) {
+        $params = $base + ['salary_bucket' => $b['key']];
+        $c = home_item_counts($params);
+        $none = $b['key'] === SALARY_NONE;
+        if (!$none) $total += $c['n'];
+        $rows[] = ['key' => $b['key'], 'label' => $b['label'], 'n' => $c['n'], 'counties' => $c['counties'],
+                   'params' => $params, 'href' => home_list_url($params), 'none' => $none];
+    }
+    return ['rows' => $rows, 'total' => $total];
 }
 
 /**

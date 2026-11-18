@@ -105,6 +105,7 @@ if (!isset($_build_stamp)) {
   <symbol id="i-domain-it" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8l-4 4l4 4"/><path d="M17 8l4 4l-4 4"/><path d="M14 4l-4 16"/></symbol>
   <symbol id="i-chart-bar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -6"/><path d="M15 9a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -10"/><path d="M9 5a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1l0 -14"/><path d="M4 20h14"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6l-12 12"/><path d="M6 6l12 12"/></symbol>   <?php /* Tabler "x" (ADR 0006) */ ?>
+  <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>   <?php /* Tabler "menu-2" */ ?>
   <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/></symbol>
   <symbol id="i-brand-github" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/></symbol>
 </defs></svg>
@@ -119,8 +120,10 @@ if (!isset($_build_stamp)) {
    (robots_disclaimer()), the first-visit welcome below, the footer and /despre/
    — and feedback to the [?!] button in the footer. Below sm the stamp and the
    version's commit drop out; the footer still carries the stamp.
-   ADR 0005: the DS header (.g2-header, .g2-wordmark, .g2-nav). The row wraps at
-   320 px, with no menu button. */ ?>
+   ADR 0005: the DS header (.g2-header, .g2-wordmark, .g2-nav).
+   2026-11-18 (owner): below sm the nav is behind a menu button (.pg-nav-toggle).
+   The button ships hidden; the script after the nav shows it. Without script the
+   row wraps as before. Local; the DS header has no menu button: https://github.com/gov2-ro/gov2ro-design-system/issues/12 */ ?>
 <?php $_stamp = build_stamp_relative(); $_code = code_version(); ?>
 <header class="g2-header">
   <span class="g2-ro-corner" aria-hidden="true"></span>
@@ -137,16 +140,21 @@ if (!isset($_build_stamp)) {
       <?php endif; ?>
     </p>
 
-    <?php /* 2026-11-16 (UX-05): four links, all visible at each width; the row wraps
-       at 320 px. "Pot aplica?" and Angajatori moved to the landing page and the
-       footer. The saved count is the browser-local number of saved items (UX-09);
-       it stays hidden until saved.js has read the state. */ ?>
-    <nav aria-label="Navigare principală" class="g2-nav ml-auto">
+    <?php /* 2026-11-16 (UX-05): four links. "Pot aplica?" and Angajatori moved to the
+       landing page and the footer. The saved count is the browser-local number of
+       saved items (UX-09); it stays hidden until saved.js has read the state.
+       2026-11-18: below sm the links are in a column under the menu button. */ ?>
+    <button type="button" class="pg-nav-toggle ml-auto" data-nav-toggle aria-controls="site-nav" hidden><?= icon('i-menu', 'h-5 w-5 shrink-0') ?>Meniu</button>
+    <nav id="site-nav" aria-label="Navigare principală" class="g2-nav ml-auto">
       <a href="/posturi/">Posturi</a>
       <a href="/salvate/"><?= icon('i-bell', 'pref-ico mr-1 shrink-0') ?>Salvate<span data-saved-count hidden class="ml-1 font-mono text-xs"></span></a>
       <a href="/statistici/">Statistici</a>
       <a href="/despre/">Despre</a>
     </nav>
+    <?php /* The menu button: shown by script, so that the links stay reachable without it. Escape closes the menu. */ ?>
+    <script>(function(){var b=document.querySelector('[data-nav-toggle]');if(!b)return;b.hidden=false;b.setAttribute('aria-expanded','false');
+      b.addEventListener('click',function(){b.setAttribute('aria-expanded',b.getAttribute('aria-expanded')==='true'?'false':'true')});
+      document.addEventListener('keydown',function(e){if(e.key==='Escape'&&b.getAttribute('aria-expanded')==='true'){b.setAttribute('aria-expanded','false');b.focus()}})})()</script>
   </div>
 </header>
 

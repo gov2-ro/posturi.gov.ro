@@ -36,7 +36,7 @@
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
-    'regime', 'inst', 'cor', 'medspec',
+    'regime', 'inst', 'cor', 'medspec', 'salary_bucket',
     'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
     'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not', 'cor_not',
     'studies_level_not', 'exp_level_not'
@@ -119,7 +119,30 @@
       if (rec) st.recs[k] = rec; else st.invalid[k] = s[k];
     });
     st.defaultId = typeof data.defaultId === 'string' ? data.defaultId : null;
+    rekey(st);
     return st;
+  }
+
+  /**
+   * ADR 0001 amendment (2026-11-18): `salary_bucket` became a multi-value parameter, so an old record
+   * has a key that differs from searchKey() of itself. Re-key it; keep sort, label and dates. When two
+   * records get one key, the newer savedAt wins. The result is written back once (status is 'ok' here).
+   */
+  function rekey(st) {
+    var moved = false;
+    var ids = Object.keys(st.recs);
+    ids.forEach(function (k) {
+      var nk = searchKey('?' + k);
+      if (nk === k || nk === '' || nk.length > 1500 || !KEY_RE.test(nk)) return;
+      var r = st.recs[k];
+      delete st.recs[k];
+      moved = true;
+      var other = st.recs[nk];
+      if (other && Date.parse(other.savedAt) >= Date.parse(r.savedAt)) { /* keep the newer one */ }
+      else st.recs[nk] = { key: nk, qs: nk, sort: r.sort, label: r.label, savedAt: r.savedAt, openedAt: r.openedAt };
+      if (st.defaultId === k) st.defaultId = nk;
+    });
+    if (moved) write(st);
   }
 
   /** Write and read back. Returns true only when the value persisted. */

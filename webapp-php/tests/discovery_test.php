@@ -184,7 +184,7 @@ run_suite('a bookmarked selection opens its group and stays removable', function
         'funding[]=buget_local'         => ['funding', 'funding[]', 'buget_local'],
         'level[]=executie'              => ['level', 'level[]', 'executie'],
         'employer_cat[]=' . rawurlencode('Funcție publică') => ['employer_cat', 'employer_cat[]', 'Funcție publică'],
-        'salary_bucket=3000-4000'       => ['salary_bucket', 'salary_bucket', '3000-4000'],
+        'salary_bucket=3000-4000'       => ['salary_bucket', 'salary_bucket[]', '3000-4000'],
     ];
     foreach ($cases as $qs => [$group, $field, $value]) {
         $html = get_html($base, '/?status=all&' . str_replace(['[', ']'], ['%5B', '%5D'], $qs));
@@ -487,7 +487,7 @@ run_suite('filter list order: Județ, Localitate, Domeniu profesional, then the 
 // ---- UX salary-net: the net buckets, the postings with no estimate, the note ----
 
 run_suite('net thresholds as gross thresholds: the filter and the displayed figure agree at every edge', function () {
-    foreach ([3000 => 5036.0, 4000 => 6837.0, 5000 => 8548.0] as $net => $gross) {
+    foreach ([3000 => 5036.0, 4000 => 6837.0, 5000 => 8548.0, 7000 => 11967.0] as $net => $gross) {
         assert_same($gross, gross_for_net($net), "gross threshold of $net lei net");
         assert_true(net_from_gross($gross) >= $net, "the threshold itself shows $net or more");
         assert_true(net_from_gross($gross - 0.01) < $net, "one cent below shows less than $net");
@@ -499,7 +499,8 @@ run_suite('net thresholds as gross thresholds: the filter and the displayed figu
         }
         assert_same(0, $bad, "no cent within 30 lei of $gross disagrees with the threshold");
     }
-    assert_same(salary_bucket_label('net-peste-5000'), 'peste 5.000 lei net', 'net label');
+    assert_same(salary_bucket_label('net-peste-7000'), 'peste 7.000 lei net', 'net label');
+    assert_same(salary_bucket_label('net-peste-5000'), 'peste 5.000 lei net', 'a legacy net value keeps its label');
     assert_same('peste 7.000 lei brut', salary_bucket_label('peste-7000'), 'an old value says "brut"');
     assert_same('fără salariu estimat', salary_bucket_label('fara-estimare'), 'none label');
 });
@@ -519,11 +520,13 @@ function salary_db(): array {
         1002 => [null, 6837.0],   // net 4.000
         1004 => [null, 8547.0],   // net 4.999
         1005 => [null, 8548.0],   // net 5.000
-        1008 => [9000.0, 3000.0], // the stated figure wins: net 5.000+
+        1008 => [9000.0, 3000.0], // the stated figure wins: net 5.000–7.000
         2001 => [0.0, null],      // a zero is no figure
         2002 => [null, 2500.0],   // net under 3.000
-        2003 => [null, 20000.0],  // net 5.000+
+        2003 => [null, 20000.0],  // net 7.000+
         2004 => [null, 5035.99],  // a fraction under the threshold
+        2005 => [null, 11966.99], // net 6.999: under 7.000
+        2006 => [null, 11967.0],  // net 7.000
     ];
     $up = $pdo->prepare("UPDATE job_postings SET inf_salary_min = ?, inf_salary_max = ?, sal_min = ?, sal_max = ? WHERE id = ?");
     foreach ($rows as $id => [$inf, $sal]) $up->execute([$inf, $inf, $sal, $sal, $id]);
@@ -537,27 +540,31 @@ $sb = $sal_srv['base'];
 run_suite('each net bucket and "fara-estimare" select the postings whose displayed net is in the bucket', function () use ($sb, $sal_rows) {
     $active = result_ids($sb, '');
     // The bucket of each active posting from its displayed net figure, not from gross_for_net().
-    $want = ['net-sub-3000' => [], 'net-3000-4000' => [], 'net-4000-5000' => [], 'net-peste-5000' => [], 'fara-estimare' => []];
+    $want = ['net-sub-3000' => [], 'net-3000-4000' => [], 'net-4000-5000' => [], 'net-5000-7000' => [], 'net-peste-7000' => [], 'fara-estimare' => []];
     foreach ($active as $id) {
         [$inf, $sal] = $sal_rows[$id] ?? [null, null];
         $g = ($inf !== null) ? $inf : $sal;
         if ($g === null || $g <= 0) { $want['fara-estimare'][] = $id; continue; }
         $n = net_from_gross($g);
-        $k = $n < 3000 ? 'net-sub-3000' : ($n < 4000 ? 'net-3000-4000' : ($n < 5000 ? 'net-4000-5000' : 'net-peste-5000'));
+        $k = $n < 3000 ? 'net-sub-3000' : ($n < 4000 ? 'net-3000-4000' : ($n < 5000 ? 'net-4000-5000' : ($n < 7000 ? 'net-5000-7000' : 'net-peste-7000')));
         $want[$k][] = $id;
     }
-    assert_true(count($want['net-3000-4000']) > 0 && count($want['net-4000-5000']) > 0 && count($want['net-peste-5000']) > 0, 'the fixture fills every net bucket');
+    assert_true(count($want['net-3000-4000']) > 0 && count($want['net-4000-5000']) > 0 && count($want['net-5000-7000']) > 0 && count($want['net-peste-7000']) > 0, 'the fixture fills every net bucket');
     $total = 0;
     foreach ($want as $key => $ids) {
         assert_same($ids, result_ids($sb, 'salary_bucket=' . $key), "ids of $key");
         $total += count($ids);
     }
-    assert_same(count($active), $total, 'the five buckets add up to the active total');
+    assert_same(count($active), $total, 'the six buckets add up to the active total');
+    // The legacy value "peste 5.000" (SALARY_NET_LEGACY) selects the two buckets above 5.000.
+    $over5 = array_merge($want['net-5000-7000'], $want['net-peste-7000']); sort($over5);
+    $legacy = result_ids($sb, 'salary_bucket=net-peste-5000'); sort($legacy);
+    assert_same($over5, $legacy, 'net-peste-5000 = 5.000–7.000 + peste 7.000');
     // Literal edges: 5035 and 5035.99 are under 3.000 net, 5036 is in, 6836 / 6837 and 8547 / 8548 likewise.
     assert_true(in_array(1001, $want['net-sub-3000'], true) && in_array(2004, $want['net-sub-3000'], true), '5.035 and 5.035,99 gross: under 3.000 net');
     assert_true(in_array(1006, $want['net-3000-4000'], true) && in_array(1007, $want['net-3000-4000'], true), '5.036 and 6.836 gross: 3.000–4.000 net');
     assert_true(in_array(1002, $want['net-4000-5000'], true) && in_array(1004, $want['net-4000-5000'], true), '6.837 and 8.547 gross: 4.000–5.000 net');
-    assert_true(in_array(1005, $want['net-peste-5000'], true) && in_array(1008, $want['net-peste-5000'], true), '8.548 gross and a stated figure: 5.000+ net');
+    assert_true(in_array(1005, $want['net-5000-7000'], true) && in_array(1008, $want['net-5000-7000'], true), '8.548 gross and a stated figure: 5.000–7.000 net');
     assert_true(in_array(2001, $want['fara-estimare'], true), 'a zero figure has no estimate');
 });
 
@@ -572,24 +579,81 @@ run_suite('the displayed net and the bucket agree row by row', function () use (
     }
 });
 
-run_suite('the salary filter lists the five options with the counts of their links', function () use ($sb) {
+run_suite('the salary filter lists the six options with the counts of their links', function () use ($sb) {
     $html = get_html($sb, '/posturi/');
     $x = xpath_for($html);
     $vals = [];
-    foreach ($x->query('//input[@name="salary_bucket"]') as $in) $vals[] = $in->getAttribute('value');
-    assert_same(['net-sub-3000', 'net-3000-4000', 'net-4000-5000', 'net-peste-5000', 'fara-estimare'], $vals, 'options in order; no old gross value');
+    foreach ($x->query('//input[@name="salary_bucket[]"]') as $in) $vals[] = $in->getAttribute('value');
+    assert_same(['net-sub-3000', 'net-3000-4000', 'net-4000-5000', 'net-5000-7000', 'net-peste-7000', 'fara-estimare'], $vals, 'options in order; no old gross or legacy net value');
     foreach ($vals as $v) {
-        $in = $x->query('//input[@name="salary_bucket" and @value="' . $v . '"]')->item(0);
+        $in = $x->query('//input[@name="salary_bucket[]" and @value="' . $v . '"]')->item(0);
         $label = trim(preg_replace('/\s+/', ' ', $in->parentNode->textContent));
         assert_same(count(result_ids($sb, 'salary_bucket=' . $v)), paren_or_trailing($label), "count of $v");
     }
     assert_contains('Net lunar estimat, la gradația 0.', $html, 'help text');
 });
 
+run_suite('salary_bucket is a multi-value parameter: values combine with OR', function () use ($sb) {
+    $a = result_ids($sb, 'salary_bucket%5B%5D=net-5000-7000');
+    $b = result_ids($sb, 'salary_bucket%5B%5D=net-peste-7000');
+    $none = result_ids($sb, 'salary_bucket%5B%5D=fara-estimare');
+    $low = result_ids($sb, 'salary_bucket%5B%5D=net-sub-3000');
+    $both = result_ids($sb, 'salary_bucket%5B%5D=net-5000-7000&salary_bucket%5B%5D=net-peste-7000');
+    $want = array_merge($a, $b); sort($want); sort($both);
+    assert_true(count($a) > 0 && count($b) > 0, 'the fixture fills both ranges');
+    assert_same($want, $both, 'two ranges: the union of the two lists');
+    assert_same(count($a) + count($b), count($both), 'the count is the sum of the two counts');
+    $mix = result_ids($sb, 'salary_bucket%5B%5D=net-sub-3000&salary_bucket%5B%5D=fara-estimare'); sort($mix);
+    $want = array_merge($low, $none); sort($want);
+    assert_same($want, $mix, 'a range and "fără salariu estimat": both sets');
+    // An unknown value among known ones is dropped; unknown only: no filter.
+    assert_same($a, result_ids($sb, 'salary_bucket%5B%5D=net-5000-7000&salary_bucket%5B%5D=nope'), 'an unknown value is dropped');
+    assert_same(count(result_ids($sb, '')), count(result_ids($sb, 'salary_bucket%5B%5D=nope')), 'only an unknown value: no filter');
+    // The legacy scalar URL is the same search.
+    assert_same($a, result_ids($sb, 'salary_bucket=net-5000-7000'), 'scalar and array give the same list');
+    assert_same(search_key(['salary_bucket' => 'net-3000-4000']), search_key(['salary_bucket' => ['net-3000-4000']]), 'scalar and array give the same search key');
+    assert_same('salary_bucket%5B%5D=net-3000-4000', search_key(['salary_bucket' => 'net-3000-4000']), 'the key is the multi-value form');
+    // Both options stay checked, and each option count is still the count of its own link.
+    $x = xpath_for(get_html($sb, '/?salary_bucket%5B%5D=net-5000-7000&salary_bucket%5B%5D=net-peste-7000'));
+    assert_same(2, $x->query('//input[@name="salary_bucket[]" and @checked]')->length, 'both boxes are checked');
+    // The legacy value: the chip.
+    assert_contains('peste 5.000 lei net', get_html($sb, '/?salary_bucket%5B%5D=net-peste-5000'), 'the legacy value keeps its chip');
+    // The note: a range -> note with link to fara-estimare[] only; none only -> the "none" form; both -> no note.
+    $has = fn(string $qs) => str_contains(get_html($sb, '/?' . $qs), 'data-salary-note');
+    assert_true($has('salary_bucket%5B%5D=net-5000-7000&salary_bucket%5B%5D=net-peste-7000'), 'two ranges: the note');
+    assert_true($has('salary_bucket%5B%5D=fara-estimare'), 'none only: the note, in its own form');
+    assert_true(!$has('salary_bucket%5B%5D=net-sub-3000&salary_bucket%5B%5D=fara-estimare'), 'a range and none: no note');
+});
+
 /** The trailing number of "peste 5.000 lei net 4". */
 function paren_or_trailing(string $label): int {
     return preg_match('/(\d[\d.]*)\s*$/u', $label, $m) ? (int)str_replace('.', '', $m[1]) : -1;
 }
+
+run_suite('the salary range after the result count: lowest–highest net, the median from 5 figures, "K din N" (owner, 2026-11-18)', function () use ($sb, $sal_rows) {
+    $range = function (string $qs) use ($sb): string {
+        $x = xpath_for(get_html($sb, $qs === '' ? '/posturi/' : '/?' . $qs));   // bare `/` is the landing page (ADR 0004)
+        $n = $x->query('//*[@data-salary-range]');
+        return $n->length ? trim(preg_replace('/\s+/u', ' ', $n->item(0)->textContent)) : '';
+    };
+    $fmt = fn(float $v): string => number_format((int)round($v), 0, ',', '.');
+    foreach (['', 'salary_bucket%5B%5D=net-3000-4000&salary_bucket%5B%5D=net-4000-5000'] as $qs) {
+        $ids = result_ids($sb, $qs);
+        $lo = [];
+        foreach ($ids as $id) {
+            [$inf, $sal] = $sal_rows[$id] ?? [null, null];
+            $g = ($inf !== null && $inf > 0) ? $inf : $sal;   // the fixture has min = max on every row
+            if ($g !== null && $g >= 1000) $lo[] = net_from_gross($g);
+        }
+        sort($lo);
+        $k = count($lo);
+        $want = ' · salariu net ≈ ' . ($fmt(min($lo)) === $fmt(max($lo)) ? $fmt(min($lo)) : $fmt(min($lo)) . '–' . $fmt(max($lo))) . ' lei';
+        if ($k >= 5) $want .= ', mediana ' . $fmt($k % 2 ? $lo[intdiv($k, 2)] : ($lo[$k / 2 - 1] + $lo[$k / 2]) / 2) . ' lei';
+        if ($k < count($ids)) $want .= ' (' . $k . ' din ' . count($ids) . ')';
+        assert_same(trim($want, ' ·'), trim($range($qs), ' ·'), "the range of " . ($qs ?: 'the whole list'));
+    }
+    assert_same('', $range('salary_bucket%5B%5D=fara-estimare'), 'no range when no result has a figure');
+});
 
 run_suite('the note above a salary-filtered list: text, count and link', function () use ($sb) {
     $note = function (string $qs) use ($sb): array {
@@ -607,7 +671,7 @@ run_suite('the note above a salary-filtered list: text, count and link', functio
     assert_true($none > 0, 'the fixture has postings with no figure');
     assert_same($none, $n, 'N = the postings with no estimate');
     assert_contains("$first $none anunțuri care se potrivesc cu celelalte filtre nu au o estimare. Vezi-le", $text, 'net bucket: the note');
-    assert_same('?salary_bucket=fara-estimare', $href, 'the link: the same search with fara-estimare');
+    assert_same('?salary_bucket%5B%5D=fara-estimare', $href, 'the link: the same search with fara-estimare');
     assert_same($n, list_count($sb, '/' . $href), 'the count of the link equals N');
     // An old gross value gets the same note.
     [$text, $n] = $note('salary_bucket=peste-7000');

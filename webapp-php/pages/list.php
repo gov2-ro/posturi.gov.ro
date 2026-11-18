@@ -18,7 +18,7 @@ $studies_lvls = (array)($_GET['studies_level']  ?? []);
 $anomaly_flags = (array)($_GET['anomaly']       ?? []);
 $remote       = $_GET['remote']        ?? '';
 $computer     = $_GET['computer']      ?? '';
-$sal_bucket   = $_GET['salary_bucket'] ?? '';
+$sal_bucket   = array_values(array_filter(array_map('strval', array_filter((array)($_GET['salary_bucket'] ?? []), 'is_scalar')), fn($v) => trim($v) !== ''));
 $exp_before   = $_GET['expires_before'] ?? '';
 $exp_after    = $_GET['expires_after']  ?? '';
 $status       = $_GET['status']        ?? DEFAULT_STATUS;
@@ -478,13 +478,15 @@ $salary_options = [];
 // The note above the results when a salary filter is on (UX salary-net): what the filter leaves out.
 // N = the postings that match the other filters and have no figure = the count of "Vezi-le".
 $salary_note = null;
-if ($sal_bucket !== '' && salary_bucket_sql((string)$sal_bucket) !== null) {
-    if ($sal_bucket === SALARY_NONE) {
+// Known values only. "None" with a range: no note (the list already has both sets).
+$sal_known = array_values(array_unique(array_filter($sal_bucket, fn($v) => salary_bucket_sql($v) !== null)));
+if ($sal_known) {
+    if ($sal_known === [SALARY_NONE]) {
         $salary_note = ['none' => true];
-    } else {
+    } elseif (!in_array(SALARY_NONE, $sal_known, true)) {
         [$nw, $nb] = salary_bucket_sql(SALARY_NONE);
         $salary_note = ['none' => false, 'n' => scope_count(facet_scope('salary_bucket'), $nw, $nb),
-                        'href' => qs_with('salary_bucket', SALARY_NONE)];
+                        'href' => str_replace('salary_bucket%5B0%5D', 'salary_bucket%5B%5D', qs_with('salary_bucket', [SALARY_NONE]))];
     }
 }
 

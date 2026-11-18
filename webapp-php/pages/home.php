@@ -29,8 +29,13 @@ $weekly = home_weekly_postings(12);
 // ---- Ready-made searches ----
 $combos = [
     ['title' => 'Peste 5.000 lei net, în afara sectorului medical',
-     'params' => ['salary_bucket' => 'net-peste-5000', 'isced_not' => ['09_sanatate_asistenta_sociala']],
-     'tags' => ['peste 5.000 lei net', 'fără Sănătate și asistență socială']],
+     // Two exclusions (2026-11-18): about half of the v4 postings have no ISCED field, so `isced_not` alone kept 12 posts of
+     // doctors; the professional domain (`family`, filled for every posting) drops them. Both: 46 postings, none medical.
+     'params' => ['salary_bucket' => 'net-peste-5000', 'isced_not' => ['09_sanatate_asistenta_sociala'], 'family_not' => ['sănătate']],
+     'tags' => ['peste 5.000 lei net', 'fără Sănătate și asistență socială', 'fără domeniul Sănătate']],
+    ['title' => 'Peste 7.000 lei net',
+     'params' => ['salary_bucket' => 'net-peste-7000'],
+     'tags' => ['peste 7.000 lei net']],
     ['title' => '3.000–4.000 lei net, normă parțială, pe proiecte PNRR sau europene',
      'params' => ['salary_bucket' => 'net-3000-4000', 'schedule' => ['norma_partiala'], 'funding' => ['pnrr', 'fonduri_europene']],
      'tags' => ['3.000–4.000 lei net', 'normă parțială', 'PNRR', 'fonduri europene']],
@@ -132,13 +137,7 @@ foreach (STUDIES_LABELS as $key => $label) {
 }
 $groups[] = ['title' => 'Studii', 'items' => $studies];
 
-// Salary: the four net buckets, each with the result count of its link (not "fără salariu estimat").
-$salaries = [];
-foreach (SALARY_NET_BUCKETS as $bk) {
-    $n = home_count_for(['salary_bucket' => $bk['key']]);
-    if ($n > 0) $salaries[] = ['label' => $bk['label'], 'n' => $n, 'href' => home_list_url(['salary_bucket' => $bk['key']])];
-}
-$groups[] = ['title' => 'Salariu', 'items' => $salaries];
+// The salary ranges are the salary chart below the domain band (partials/salary_chart.php): the same links and counts.
 
 $occupations = [];
 foreach (db()->query(
@@ -281,11 +280,21 @@ $heading = 'g2-heading-section';
         </ul>
       </div>
 
-      <?php $cm_counts = $county_total;
+      <?php /* 2026-11-18 (owner): below lg the map is above the domains that it filters. */
+            $cm_counts = $county_total; $cm_class = 'max-lg:order-first';
             require __DIR__ . '/../partials/county_map.php'; ?>
     </div>
     <?php require __DIR__ . '/../partials/home_data.php'; ?>
   </section>
+
+  <?php /* 3.3b Salary chart (2026-11-18, brief UX-SALARY-CHART): the whole country; it does not follow the county map. The server output is the same for every reader. */ ?>
+  <?php $sc = ['dist' => salary_distribution(), 'class' => 'flex max-w-3xl flex-col gap-2']; ob_start(); require __DIR__ . '/../partials/salary_chart.php'; $sc_html = ob_get_clean(); ?>
+  <?php if ($sc_html !== ''): ?>
+  <section id="salarii" aria-labelledby="h-sal" class="flex flex-col gap-3">
+    <h2 id="h-sal" class="<?= $heading ?>">Cât se plătește în sectorul public</h2>
+    <?= $sc_html ?>
+  </section>
+  <?php endif; ?>
 
   <?php /* 3.4 Other starting points */ ?>
   <section aria-labelledby="h-start" class="flex flex-col">

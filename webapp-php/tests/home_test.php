@@ -290,13 +290,14 @@ run_suite('every ready-made search and chip link is the canonical URL', function
     assert_same(1, $x->query('.//h3//svg', $th)->length, 'the themed card has the icon of the theme');
     $hrefs = array_map(fn($a) => $a->getAttribute('href'), iterator_to_array($x->query('//li[@data-home-example]//a')));
     assert_same([
-        '/?isced_not%5B%5D=09_sanatate_asistenta_sociala&salary_bucket=net-peste-5000',
-        '/?funding%5B%5D=fonduri_europene&funding%5B%5D=pnrr&salary_bucket=net-3000-4000&schedule%5B%5D=norma_partiala',
+        '/?family_not%5B%5D=s%C4%83n%C4%83tate&isced_not%5B%5D=09_sanatate_asistenta_sociala&salary_bucket%5B%5D=net-peste-5000',
+        // '/?salary_bucket=net-peste-7000' (Peste 7.000 lei net): no fixture posting, so the card is not on the page.
+        '/?funding%5B%5D=fonduri_europene&funding%5B%5D=pnrr&salary_bucket%5B%5D=net-3000-4000&schedule%5B%5D=norma_partiala',
         '/?exp_level%5B%5D=fara',
         '/?level%5B%5D=Func%C8%9Bii%20de%20conducere',
         '/?duration%5B%5D=determinata&funding%5B%5D=fonduri_europene',
         '/?lang%5B%5D=hu',
-    ], $hrefs, 'the six ready-made searches, in order (Hungarian last)');
+    ], $hrefs, 'the ready-made searches with results, in order (Hungarian last)');
     // The Hungarian card: a flag before the title, lang="hu" on the title only.
     $hu = $x->query('//section[@aria-labelledby="h-combo"]//li[@data-home-example][.//a[@href="/?lang%5B%5D=hu"]]')->item(0);
     assert_same('hu', $x->query('.//*[@lang]', $hu)->item(0)->getAttribute('lang'), 'lang="hu" on the title');
@@ -342,26 +343,43 @@ run_suite('an item with count 0 is not on the page', function () use ($base) {
     stop_fixture_server($s2, $bare);
 });
 
+run_suite('the salary chart of the landing page: five ranges and "fără salariu estimat", each count is the result count of its link', function () use ($base) {
+    [, $home] = http_page($base, '/');
+    $x = xp($home);
+    $fig = $x->query('//section[@id="salarii"]//figure');
+    assert_same(1, $fig->length, 'one chart');
+    assert_true(strpos($home, 'id="salarii"') > strpos($home, 'id="domenii"') && strpos($home, 'id="salarii"') < strpos($home, 'id="h-start"'), 'after the domain band, before "Sau începe de aici"');
+    assert_same('Salariul net lunar', trim($x->query('.//figcaption', $fig->item(0))->item(0)->textContent), 'the caption');
+    $rows = $x->query('.//ul/li', $fig->item(0));
+    assert_same(6, $rows->length, 'five ranges and the row "fără"');
+    $keys = [];
+    foreach ($rows as $li) {
+        $a = $x->query('.//a', $li)->item(0);
+        $href = $a->getAttribute('href');
+        parse_str((string)parse_url($href, PHP_URL_QUERY), $q);
+        $keys[] = $q['salary_bucket'][0] ?? '';
+        $count = lead_number($x->query('.//*[contains(@class, "g2-mono")]', $li)->item(0)->textContent);
+        assert_same(list_count($base, $href), $count, "count = result count of $href");
+        assert_same(1, $x->query('.//a//*[@aria-hidden="true"]', $li)->length, 'the bar is hidden from assistive technology');
+    }
+    assert_same(array_column(SALARY_NET_BUCKETS, 'key'), array_slice($keys, 0, 5), 'the five ranges, in the order of the filter');
+    assert_same(SALARY_NONE, $keys[5], '"fără salariu estimat" is the last row');
+    assert_contains('border-t', $rows->item(5)->getAttribute('class'), 'a rule above the row "fără"');
+    assert_contains('bg-ink-faint', $rows->item(5)->C14N(), 'its bar is neutral');
+    assert_not_contains('data-salary-row', $home, 'the landing chart does not follow the county');
+});
+
 run_suite('the starting-point groups: labels without "După", the salary and institution groups, counts of their links', function () use ($base) {
     [, $home] = http_page($base, '/');
     $x = xp($home);
     $titles = [];
     foreach ($x->query('//section[@aria-labelledby="h-start"]//h3') as $h) $titles[] = trim($h->textContent);
-    assert_same(['Studii', 'Salariu', 'Ocupație', 'Domeniu angajator', 'Tip instituție', 'Alte filtre'], $titles, 'the six groups, in order');
+    assert_same(['Studii', 'Ocupație', 'Domeniu angajator', 'Tip instituție', 'Alte filtre'], $titles, 'the five groups, in order: the salary ranges are the salary chart now');
     assert_not_contains('După studii', $home, 'no "După studii"');
     assert_not_contains('După ocupație', $home, 'no "După ocupație"');
     assert_not_contains('După angajator', $home, 'no "După angajator"');
     $items = fn(string $title) => $x->query('//section[@aria-labelledby="h-start"]//h3[.="' . $title . '"]/following-sibling::ul[1]/li');
-    // Salary: the four net buckets that count above 0, each with the count of its link; never "fără salariu estimat".
-    $sal = $items('Salariu');
-    assert_true($sal->length >= 2, 'the salary group has items');
-    foreach ($sal as $li) {
-        $a = $x->query('.//a', $li)->item(0);
-        assert_contains('salary_bucket=net-', $a->getAttribute('href'), 'a net bucket link');
-        assert_contains(' lei net', $a->textContent, 'the label says net');
-        assert_same(list_count($base, $a->getAttribute('href')), lead_number($x->query('.//*[@data-home-count]', $li)->item(0)->textContent), 'count = result count of ' . $a->getAttribute('href'));
-    }
-    assert_not_contains('fara-estimare', $home, 'no "fără estimare" on the landing page');
+    assert_same(0, $items('Salariu')->length, 'no "Salariu" row: the chart below the domain band has the same links');
     // Institution type: each value of the filter "Instituție" with a count above 0, largest first.
     $inst = $items('Tip instituție');
     $got = [];
@@ -525,7 +543,7 @@ run_suite('hero form and figures', function () use ($base) {
     assert_not_contains('Mai multe statistici', $home, 'the old statistics link is gone');
     // Section order.
     preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($home, (int)strpos($home, '<main')), $s);
-    assert_same(['h-hero', 'h-combo', 'h-dom', 'h-start', 'h-now', 'h-follow', 'h-tools'], $s[1], 'seven sections, in order');
+    assert_same(['h-hero', 'h-combo', 'h-dom', 'h-sal', 'h-start', 'h-now', 'h-follow', 'h-tools'], $s[1], 'eight sections, in order (the salary chart after the domain band)');
     assert_contains('id="domenii"', $home, 'the section of the domains has the id domenii');
     // Wireframe annotations are not on the page.
     foreach (['1 · HERO', '[date ilustrative]', '[ilustrativ', 'CĂUTĂRI COMBINATE', 'NOTIFICĂRI'] as $note) assert_not_contains($note, $home, "no annotation: $note");
@@ -631,21 +649,20 @@ run_suite('the weekly chart: shown from 4 weeks with data, counted once, 12 comp
     $html = home_html($db);
     assert_contains('min ' . min($per_week) . ' · max ' . max($per_week) . ' · ultima ' . end($per_week), $html, 'min, max and last');
     assert_contains('între ' . min($per_week) . ' și ' . max($per_week), $html, 'the svg label');
-    // The bars, drawn on the side from the counts: 12 slots of 26.67, a bar is half a slot, the axis is from 0 to the largest week (60 high).
-    $hi = max($per_week);
-    $x = xp($html);
-    $bars = $x->query('//svg[@role="img"]//g[@data-bar]');
-    assert_same(12, $bars->length, 'twelve bars');
+    // The line (owner, 2026-11-18: the landing chart is a line again), drawn on the side from the counts: 12 points in 320 x 64,
+    // x = i / 11 * 320, y from 4 (the largest week) to 60 (the smallest week).
+    [$lo, $hi] = [min($per_week), max($per_week)];
+    $pts = [];
     foreach ($per_week as $i => $v) {
-        $r = $x->query('.//rect', $bars->item($i));
-        assert_same(1, $r->length, "week $i: one bar");
-        assert_same(round(60 * $v / $hi, 2), round((float)$r->item(0)->getAttribute('height'), 2), "week $i: the height of the bar, from 0 to the largest week");
-        assert_same(round($i * 320 / 12 + 320 / 12 / 4, 2), round((float)$r->item(0)->getAttribute('x'), 2), "week $i: the place of the bar");
-        assert_same(round(320 / 12 / 2, 2), round((float)$r->item(0)->getAttribute('width'), 2), "week $i: the width of the bar is half of its slot");
-        assert_same('pg-seg', $r->item(0)->getAttribute('class'), "week $i: a single series, the colour of the line");
-        assert_same(true, (bool)preg_match('/^săpt\. \d+ [a-z]{3}: ' . preg_quote(number_format($v, 0, ',', '.'), '/') . ' (de )?post(uri)?$/u', $x->query('./title', $r->item(0))->item(0)->textContent), "week $i: the title of the bar");
+        $y = $hi === $lo ? 32 : 4 + (1 - ($v - $lo) / ($hi - $lo)) * 56;
+        $pts[] = round($i / 11 * 320, 1) . ',' . round($y, 1);
     }
-    assert_not_contains('<polyline', $html, 'no line');
+    $x = xp($html);
+    $line = $x->query('//svg[@role="img"]//polyline');
+    assert_same(1, $line->length, 'one line');
+    assert_same(implode(' ', $pts), $line->item(0)->getAttribute('points'), 'the points of the line, from the smallest to the largest week');
+    assert_same(1, $x->query('//svg[@role="img"]//path[contains(@class,"fill-chart")]')->length, 'the area under the line');
+    assert_same(0, $x->query('//svg[@role="img"]//g[@data-bar]')->length, 'no bars on the landing chart');
     assert_not_contains('Estimare: un anunț', $html, 'no sentence about the estimate (owner, 2026-11-18)');
     assert_contains('<figcaption class="g2-label">Posturi publicate pe săptămână</figcaption>', $html, 'the caption of the landing chart');
     assert_contains('aria-label="Posturi publicate pe săptămână, ultimele 12 săptămâni complete: între ', $html, 'the label of the landing chart');

@@ -5,7 +5,7 @@
 // in tests/home_test.php); a county selected on the map changes their counts and links.
 const { test, expect } = require('@playwright/test');
 
-const SECTIONS = ['h-hero', 'h-combo', 'h-dom', 'h-start', 'h-now', 'h-follow', 'h-tools'];
+const SECTIONS = ['h-hero', 'h-combo', 'h-dom', 'h-sal', 'h-start', 'h-now', 'h-follow', 'h-tools'];
 
 const errors = new WeakMap();
 test.beforeEach(async ({ page }) => {
@@ -61,16 +61,37 @@ test('the seven sections are present in order; no horizontal overflow', async ({
     .filter((el) => !el.closest('[data-home-js]') || !el.matches('[data-county]'))
     .filter((el) => !el.matches('[data-home-link]') && !el.closest('[data-home-example], [data-home-theme-example]'))
     .filter((el) => !el.closest('footer ul'))   // the link lists of the footer have their own check (24 px, no overlap)
+    .filter((el) => !el.closest('#salarii'))    // the salary chart rows: compact, 32 px (owner, 2026-11-18); their own check
     .filter((el) => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
     .map((el) => ({ t: (el.textContent || '').trim().slice(0, 30), h: el.getBoundingClientRect().height }))
     .filter((o) => o.h < 43.5));
   expect(small, 'targets under 44 px').toEqual([]);
 });
 
-test('the four navigation links are visible and wrap at 320 px; "Salvate" has a bell and the saved count', async ({ page, viewport }) => {
+test('the four navigation links: in a row from sm, behind the menu button below sm; "Salvate" has a bell and the saved count', async ({ page, viewport }) => {
   for (const url of ['/', '/posturi/']) {
     await page.goto(url);
     const links = page.locator('nav[aria-label="Navigare principală"] a');
+    const toggle = page.locator('[data-nav-toggle]');
+    if (viewport.width < 640) {
+      // 2026-11-18: the links are hidden until the reader opens the menu; Escape closes it.
+      await expect(toggle).toBeVisible();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(toggle).toHaveAttribute('aria-controls', 'site-nav');
+      await expect(links.first()).toBeHidden();
+      await toggle.click();
+      await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      await expect(links.first()).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(links.first()).toBeHidden();
+      await toggle.click();
+      // One link under the other.
+      const y = await links.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top));
+      for (let i = 1; i < y.length; i++) expect(y[i], `link ${i} below link ${i - 1}`).toBeGreaterThan(y[i - 1]);
+    } else {
+      await expect(toggle).toBeHidden();
+    }
     // No "Alerte" item in the masthead: /salvate/ carries the way to the alerts.
     await expect(links).toHaveText(['Posturi', /^Salvate/, 'Statistici', 'Despre']);
     await expect(links).toHaveCount(4);
@@ -702,23 +723,53 @@ test('a domain item with a themed page links to it; with a county the link has t
 // The shared fixture has fewer than 4 weeks with postings, so the chart is hidden there; the theme fixture (health postings in 10 weeks) shows it.
 test.describe('the landing chart', () => {
 test.use({ baseURL: 'http://127.0.0.1:8824' });
-test('the weekly chart: 12 thin bars of one colour, posts, a title on each, a baseline and no grid; the estimate is said; no overflow', async ({ page }) => {
+test('the weekly chart: a line and its area (owner, 2026-11-18), posts, no bars; no overflow', async ({ page }) => {
   await page.goto('/');
-  const fig = page.locator('figure:has(svg[role="img"] g[data-bar])');
+  const fig = page.locator('figure:has(svg[role="img"] polyline)');
   await expect(fig.locator('figcaption')).toHaveText('Posturi publicate pe săptămână');
   await expect(fig.getByText('Estimare: un anunț')).toHaveCount(0);
-  await expect(fig.locator('svg[role="img"] g[data-bar]'), 'twelve weeks').toHaveCount(12);
-  // The landing chart has no groups: one bar for each week with posts, all of the colour of the first series. Mutation: a line (polyline) or a grid.
-  const bars = await fig.locator('svg rect').evaluateAll((rs) => rs.map((r) => ({ c: r.getAttribute('class'), h: parseFloat(r.getAttribute('height')), t: r.querySelector('title').textContent, w: r.getBoundingClientRect().width })));
-  expect(bars.length, 'at least 4 weeks with posts').toBeGreaterThanOrEqual(4);
-  bars.forEach((b) => { expect(b.c).toBe('pg-seg'); expect(b.t).toMatch(/^săpt\. \d+ [a-z]{3}: \d+ (de )?post(uri)?$/); });
-  expect(Math.max(...bars.map((b) => b.h)), 'the tallest bar reaches the top of the axis (0 to the largest week)').toBe(60);
-  const slot = (await fig.locator('svg[role="img"]').boundingBox()).width / 12;
-  bars.forEach((b) => expect(b.w / slot, 'a bar is half of its slot: thin, with space between').toBeCloseTo(0.5, 1));
-  await expect(fig.locator('svg line'), 'one baseline, no grid').toHaveCount(1);
-  await expect(fig.locator('svg polyline, svg path')).toHaveCount(0);
+  await expect(fig.locator('svg polyline'), 'one line').toHaveCount(1);
+  const pts = (await fig.locator('svg polyline').getAttribute('points')).split(' ');
+  expect(pts.length, 'twelve weeks').toBe(12);
+  await expect(fig.locator('svg path'), 'the area under the line').toHaveCount(1);
+  await expect(fig.locator('svg g[data-bar], svg rect'), 'no bars').toHaveCount(0);
   await expect(fig.locator('svg[role="img"]')).toHaveAttribute('aria-label', /^Posturi publicate pe săptămână, ultimele 12 săptămâni complete: între \d+ și [\d.]+ (de )?post(uri)?$/);
   const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
   expect(o, 'no horizontal overflow').toBeLessThanOrEqual(1);
 });
+});
+
+test('the county map: beside the domains from lg, above them below lg (2026-11-18)', async ({ page, viewport }) => {
+  await page.goto('/');
+  const map = await page.locator('#domenii .pg-map').boundingBox();
+  const tile = await page.locator('[data-home-tile]').first().boundingBox();
+  if (viewport.width >= 1024) expect(map.x, 'the map is right of the domains').toBeGreaterThan(tile.x + tile.width - 1);
+  else expect(map.y + map.height, 'the map is above the domains that it filters').toBeLessThanOrEqual(tile.y);
+});
+
+test('the salary chart: six rows, bars in proportion, links that match the counts; no overflow; compact 32 px rows', async ({ page, viewport }) => {
+  await page.goto('/');
+  const fig = page.locator('#salarii figure');
+  await expect(fig.locator('figcaption')).toHaveText('Salariul net lunar');
+  const rows = fig.locator('li');
+  await expect(rows).toHaveCount(6);
+  const info = await rows.evaluateAll((els) => els.map((li) => ({
+    n: parseInt(li.querySelector('.g2-mono').textContent.replace(/\./g, ''), 10),
+    w: li.querySelector('a span span[aria-hidden="true"]').getBoundingClientRect().width,
+    track: li.querySelector('a span span[aria-hidden="true"]').parentElement.getBoundingClientRect().width - 64,
+    h: li.querySelector('a').getBoundingClientRect().height,
+    href: li.querySelector('a').getAttribute('href'),
+  })));
+  const max = Math.max(...info.map((r) => r.n));
+  info.forEach((r) => {
+    if (r.n === max) expect(r.w, 'the longest bar fills the track').toBeGreaterThan(r.track - 1);
+    if (r.n > 0) expect(r.w, 'a count above 0 has a bar of at least 2 px').toBeGreaterThanOrEqual(1.9);
+    expect(r.h, 'a compact row (owner, 2026-11-18): a target of at least 24 px').toBeGreaterThanOrEqual(23.5);
+    // From sm the label and the bar share one line; below sm the label is above the bar, so the row is taller.
+    if (viewport.width >= 640) expect(r.h, 'a compact row: under 44 px').toBeLessThan(43.5);
+  });
+  // A click on a row opens the list with the same count.
+  const i = info.findIndex((r) => r.n > 0);
+  await rows.nth(i).locator('a').click();
+  expect(num(await page.locator('#results-status').textContent())).toBe(info[i].n);
 });

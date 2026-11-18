@@ -118,3 +118,12 @@ test('/statistici: bars stay inside their panels', async ({ page }) => {
     expect(box.x + box.width, id + ' right edge').toBeLessThanOrEqual(vw + 1);
   }
 });
+
+test('/statistici: the salary chart section; no horizontal overflow', async ({ page }) => {
+  await page.goto('/statistici/');
+  await expect(page.locator('#salarii h2')).toHaveText('Salarii');
+  await expect(page.locator('#salarii figure li')).toHaveCount(6);
+  await expect(page.locator('nav[aria-label="Cuprins"] a[href="#h-salarii"]')).toHaveCount(1);
+  const o = await page.evaluate(() => document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth);
+  expect(o, 'horizontal overflow').toBeLessThanOrEqual(1);
+});

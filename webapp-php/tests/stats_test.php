@@ -263,9 +263,20 @@ run_suite('the table of contents of Statistici: one link for each h2, in page or
     $h2 = [];
     foreach ($x->query('//main//h2') as $h) $h2[] = $h->getAttribute('id');
     assert_same($h2, $hrefs, 'the links are the h2 ids, in order');
-    assert_same(['h-export-curent', 'h-istoric', 'h-costuri'], $hrefs, 'the three sections');
+    assert_same(['h-export-curent', 'h-salarii', 'h-istoric', 'h-costuri'], $hrefs, 'the four sections');
     foreach ($x->query('//main//h2') as $h) assert_same('-1', $h->getAttribute('tabindex'), $h->getAttribute('id') . ' takes focus');
     assert_same(1, $x->query('//*[@id="export-curent"]')->length, 'the old anchor stays');
+});
+
+run_suite('Salarii: the section, its TOC entry and the chart of the active postings', function () use ($x, $tmp) {
+    assert_same(1, $x->query('//nav[@aria-label="Cuprins"]//a[@href="#h-salarii"][.="Salarii"]')->length, 'the TOC entry');
+    assert_same(1, $x->query('//section[@id="salarii"]//h2[@id="h-salarii"]')->length, 'the section and its h2');
+    assert_same(6, $x->query('//section[@id="salarii"]//figure//li')->length, 'five ranges and "fără"');
+    assert_same(1, $x->query('//section[@id="salarii"]//figcaption[.="Salariul net lunar"]')->length, 'the caption');
+    // No posting with a salary figure: no section and no TOC entry.
+    [, $x2] = stats_page("$tmp-nosal.sqlite", fn(PDO $p) => $p->exec('UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = NULL, inf_salary_max = NULL'));
+    assert_same(0, $x2->query('//*[@id="salarii"]')->length, 'no section without a salary figure');
+    assert_same(0, $x2->query('//nav[@aria-label="Cuprins"]//a[@href="#h-salarii"]')->length, 'no TOC entry');
 });
 
 foreach (glob("$tmp-*") ?: [] as $f) @unlink($f);

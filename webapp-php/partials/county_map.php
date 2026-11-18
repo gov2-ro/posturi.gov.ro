@@ -4,6 +4,7 @@
  *
  * In:  $cm_counts = array<slug,int> (postings of each county), $county_name = Closure(string): string
  *      optional $cm_label_hidden = true: the label above the map is for assistive technology only (a themed page)
+ *      optional $cm_class = string: more classes on the root (the landing page puts the map first below lg)
  */
 declare(strict_types=1);
 ?>
@@ -11,7 +12,7 @@ declare(strict_types=1);
 $_cm_counts = [];
 foreach (HOME_COUNTY_TILES as [$_cm_slug]) $_cm_counts[$_cm_slug] = (int)($cm_counts[$_cm_slug] ?? 0);
 $_cm_breaks = home_map_breaks($_cm_counts); ?>
-<div data-home-js hidden class="flex min-w-0 flex-col gap-2.5">
+<div data-home-js hidden class="flex min-w-0 flex-col gap-2.5<?= !empty($cm_class) ? ' ' . e($cm_class) : '' ?>">
   <span class="<?= !empty($cm_label_hidden) ? 'sr-only' : 'g2-label' ?>" id="map-label">Posturi active pe județe</span>
   <div role="group" aria-label="Alege județul pe hartă" class="pg-map"<?= !empty($cm_label_hidden) ? ' aria-labelledby="map-label"' : '' ?>>
     <?php foreach (HOME_COUNTY_TILES as $code => [$slug, $col, $row]):

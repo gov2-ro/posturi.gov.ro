@@ -62,8 +62,13 @@ async function expectFocus(page, locator, what) {
   }
 }
 
-test('keyboard focus: a navigation link, a sector link, the search button, the search input', async ({ page }) => {
+test('keyboard focus: a navigation link, a sector link, the search button, the search input', async ({ page, viewport }) => {
   await page.goto('/');
+  // Below sm the links are behind the menu button (2026-11-18).
+  if (viewport.width < 640) {
+    await expectFocus(page, page.locator('[data-nav-toggle]'), 'menu button');
+    await page.locator('[data-nav-toggle]').click();
+  }
   await expectFocus(page, page.locator('nav[aria-label="Navigare principală"] a').first(), 'navigation link');
   await expectFocus(page, page.locator('[data-home-tile] a').first(), 'sector link');
   await expectFocus(page, page.getByRole('button', { name: 'Caută', exact: true }), 'search button');

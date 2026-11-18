@@ -131,11 +131,13 @@ $ttl = $total ?: 1;
 
 $page_title = 'Statistici';
 // The table of contents and the headings of the sections come from this one array (heading id => text).
+$sal_dist = salary_distribution();   // the salary chart (brief UX-SALARY-CHART); no section when no active posting has a salary figure
 $toc = [
     'h-export-curent' => 'Export curent',
     'h-istoric'       => 'Istoric: anunțuri publicate pe lună',
     'h-costuri'       => 'Costuri inferență',
 ];
+if ($sal_dist['total'] > 0) $toc = array_slice($toc, 0, 1, true) + ['h-salarii' => 'Salarii'] + array_slice($toc, 1, null, true);
 $head_extra = '<script src="/static/toc.js?v=' . (@filemtime(__DIR__ . '/../static/toc.js') ?: '1') . '" defer></script>';
 require __DIR__ . '/../inc/header.php';
 ?>
@@ -412,6 +414,17 @@ require __DIR__ . '/../inc/header.php';
   </section>
 
   <!-- Historical publication intake (publication_monthly) -->
+  <?php /* 2026-11-18 (brief UX-SALARY-CHART): the salary chart; all active postings. The two figures "Cu salariu anunțat" and "Doar salariu estimat" stay in "Export curent" (they share a row with another figure). */ ?>
+  <?php $sc = ['dist' => $sal_dist, 'class' => 'flex max-w-3xl flex-col gap-2']; $fmt = static fn(int $n): string => number_format($n, 0, ',', '.');
+        ob_start(); require __DIR__ . '/../partials/salary_chart.php'; $sc_html = ob_get_clean(); ?>
+  <?php if ($sc_html !== ''): ?>
+  <section id="salarii" aria-labelledby="h-salarii" class="mb-12">
+  <?= toc_h2($toc, 'h-salarii', 'font-display text-2xl italic font-semibold text-ink mb-1') ?>
+  <p class="text-xs text-ink-faint mb-5">Anunțurile active, după salariul net lunar. Fiecare rând duce la lista anunțurilor din interval.</p>
+  <?= $sc_html ?>
+  </section>
+  <?php endif; ?>
+
   <section id="istoric" aria-labelledby="h-istoric" class="mb-12">
     <?= toc_h2($toc, 'h-istoric', 'font-display text-2xl italic font-semibold text-ink mb-1') ?>
     <?php if ($hist === null): ?>

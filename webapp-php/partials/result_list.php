@@ -5,6 +5,33 @@
 $start = ($page - 1) * $PAGE_SIZE + 1;
 $end   = min($page * $PAGE_SIZE, $total_count);
 $chips = $active_chips ?? [];
+
+// 2026-11-18 (owner): the net salary range of the results, after the count. The figure of a posting is the one of its row
+// (list_salary(): the stated salary, else the estimate from the grid), as net pay (net_from_gross()). The range is the lowest
+// lower figure to the highest upper figure; the median is the median of the lower figures (the figure the salary filter uses),
+// shown from 5 postings with a figure. The scope is the list itself (facet_scope('') applies every filter). A figure under
+// 1.000 lei gross is not a monthly salary (posting 16966 states 60 lei, an hourly rate; DATA-SALARY-NOT-MONTHLY): the range skips it.
+$_sr = null;
+if ($total_count && function_exists('facet_scope')) {
+    $_sr_s = facet_scope('');
+    $_sr_st = db()->prepare("SELECT j.inf_salary_min AS a, j.inf_salary_max AS b, j.sal_min AS c, j.sal_max AS d FROM job_postings j {$_sr_s['join']}"
+        . ($_sr_s['where'] ? ' WHERE ' . implode(' AND ', $_sr_s['where']) : ''));
+    $_sr_st->execute($_sr_s['binds']);
+    [$_sr_lo, $_sr_hi] = [[], []];
+    foreach ($_sr_st as $_sr_r) {
+        [$lo, $hi] = (float)$_sr_r['a'] > 0 ? [(float)$_sr_r['a'], (float)$_sr_r['b']] : [(float)$_sr_r['c'], (float)$_sr_r['d']];
+        if ($lo < 1000) continue;
+        $_sr_lo[] = net_from_gross($lo);
+        $_sr_hi[] = net_from_gross(max($lo, $hi));
+    }
+    if ($_sr_lo) {
+        sort($_sr_lo);
+        $_sr_k = count($_sr_lo);
+        $_sr_med = $_sr_k % 2 ? $_sr_lo[intdiv($_sr_k, 2)] : ($_sr_lo[$_sr_k / 2 - 1] + $_sr_lo[$_sr_k / 2]) / 2;
+        $_sr = ['min' => (int)round(min($_sr_lo)), 'max' => (int)round(max($_sr_hi)), 'median' => (int)round($_sr_med), 'k' => $_sr_k];
+    }
+}
+$_sr_fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
 ?>
 
 <?php if (!empty($is_htmx)): ?>
@@ -21,6 +48,9 @@ $chips = $active_chips ?? [];
     <?php if ($total_count): ?>
       <span class="font-mono font-medium text-ink"><?= $total_count ?></span>
       <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?>
+      <?php if ($_sr): ?>
+      <span data-salary-range title="Salariul anunțat sau, pentru cele mai multe posturi, cel estimat din grila de salarizare propusă (gradația 0)."> · salariu net ≈ <span class="text-ink"><?= $_sr['min'] === $_sr['max'] ? e($_sr_fmt($_sr['min'])) : e($_sr_fmt($_sr['min'])) . '–' . e($_sr_fmt($_sr['max'])) ?> lei</span><?php if ($_sr['k'] >= 5): ?>, mediana <span class="text-ink"><?= e($_sr_fmt($_sr['median'])) ?> lei</span><?php endif; ?><?php if ($_sr['k'] < $total_count): ?> <span class="text-ink-faint">(<?= e($_sr_fmt($_sr['k'])) ?> din <?= e($_sr_fmt($total_count)) ?>)</span><?php endif; ?></span>
+      <?php endif; ?>
     <?php else: ?>
       Niciun rezultat
     <?php endif; ?>

@@ -336,3 +336,38 @@ test('invalid records are dropped on read and kept in storage', async ({ page })
   const s = await stored(page);
   expect(Object.keys(s.searches).sort()).toEqual(['q=bad', 'q=ok', TWO_KEY].sort());
 });
+
+// ADR 0001 amendment (2026-11-18): `salary_bucket` is a multi-value parameter, so an old record is re-keyed on read.
+test('an old salary_bucket record is re-keyed on read; the toggle shows it as saved; no duplicate', async ({ page }) => {
+  const OLD = 'salary_bucket=net-3000-4000';
+  const NEW = 'salary_bucket%5B%5D=net-3000-4000';
+  await seedSearches(page, [
+    rec(OLD, { label: 'Salariu', sort: 'deadline', savedAt: '2026-10-02T10:00:00.000Z', openedAt: '2026-10-03T10:00:00.000Z' }),
+    rec('q=ok'),
+  ], OLD);
+  await page.goto('/?salary_bucket=net-3000-4000');
+  await expect(toggle(page)).toHaveAttribute('aria-pressed', 'true');
+  const s = await stored(page);
+  expect(Object.keys(s.searches).sort()).toEqual(['q=ok', NEW].sort());
+  expect(s.searches[NEW]).toEqual({ key: NEW, qs: NEW, sort: 'deadline', label: 'Salariu', savedAt: '2026-10-02T10:00:00.000Z', openedAt: '2026-10-03T10:00:00.000Z' });
+  expect(s.defaultId).toBe(NEW);
+  expect(s.version).toBe(1);
+  // Reading again changes nothing.
+  const before = await storedRaw(page);
+  await page.goto('/salvate/');
+  expect(await storedRaw(page)).toBe(before);
+});
+
+test('two records that get one key after re-keying: the newer savedAt stays', async ({ page }) => {
+  const OLD = 'salary_bucket=net-3000-4000';
+  const NEW = 'salary_bucket%5B%5D=net-3000-4000';
+  await seedSearches(page, [
+    rec(OLD, { label: 'old', savedAt: '2026-10-05T10:00:00.000Z' }),
+    rec(NEW, { label: 'new', savedAt: '2026-10-01T10:00:00.000Z' }),
+  ]);
+  await page.goto('/salvate/');
+  const s = await stored(page);
+  expect(Object.keys(s.searches)).toEqual([NEW]);
+  expect(s.searches[NEW].label).toBe('old');
+  expect(s.searches[NEW].savedAt).toBe('2026-10-05T10:00:00.000Z');
+});

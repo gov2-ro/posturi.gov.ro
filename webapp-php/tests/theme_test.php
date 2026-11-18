@@ -29,7 +29,7 @@ putenv('POSTURI_TODAY=2026-10-03');
 const POSTS_SIDE = 'CASE WHEN nr_posturi >= 1 AND nr_posturi <= 30 THEN nr_posturi ELSE 1 END';
 const HEALTH = 'family%5B%5D=s%C4%83n%C4%83tate';
 // The county map is in the first screen (section h-theme), so the "counties" section has no section of its own.
-const SECTION_IDS = ['h-theme', 'h-specialitati', 'h-ocupatii', 'h-studii', 'h-noi', 'h-notificari'];
+const SECTION_IDS = ['h-theme', 'h-specialitati', 'h-ocupatii', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'];
 
 function theme_db(string $tag, string $extra_sql = ''): string {
     $path = sys_get_temp_dir() . "/posturi-theme-$tag-" . getmypid() . '.sqlite';
@@ -473,6 +473,45 @@ run_suite('the search form of /sanatate/: three selects and the button, no text 
     assert_same(paren_number($x->query('//h1//span[@data-title-count]')->item(0)->textContent), list_count($base, $hd['location']), 'the base list has the count of the title');
 });
 
+run_suite('the salary chart of /sanatate/: a section just before "Noi și pe terminate", the counts equal the links, the JSON counts add up to the national counts', function () use ($base, $db) {
+    [, $h] = http_page($base, '/sanatate/');
+    $x = xp($h);
+    // 2026-11-18 (owner): not in the panel; the last section before "Noi și pe terminate".
+    assert_same(0, $x->query('//*[@data-theme-stats]//figure[@data-salary-chart]')->length, 'no salary chart in the panel');
+    $fig = $x->query('//section[@aria-labelledby="h-salarii"]//figure[@data-salary-chart]');
+    assert_same(1, $fig->length, 'one salary chart, in the section "Salarii"');
+    $sec = $x->query('//section[@aria-labelledby="h-salarii"]')->item(0);
+    $next = $x->query('following-sibling::section[1]', $sec)->item(0);
+    assert_same('h-noi', $next ? $next->getAttribute('aria-labelledby') : null, 'the next section is "Noi și pe terminate"');
+    $rows = $x->query('.//li[@data-salary-row]', $fig->item(0));
+    assert_same(6, $rows->length, 'five ranges and "fără"');
+    preg_match('#<script type="application/json" id="theme-panel-data">(.*?)</script>#s', $h, $m);
+    $d = json_decode($m[1], true);
+    assert_same(6, count($d['salary']['rows']), 'the JSON has the six rows');
+    $national = [];
+    foreach ($rows as $i => $li) {
+        $a = $x->query('.//a', $li)->item(0);
+        $href = $a->getAttribute('href');
+        $key = $li->getAttribute('data-salary-row');
+        $n = lead_number($x->query('.//*[@data-salary-count]', $li)->item(0)->textContent);
+        $national[$key] = $n;
+        assert_contains('family%5B%5D=s%C4%83n%C4%83tate', $href, "$key: the link has the base filter of the theme");
+        assert_same(list_count($base, $href), $n, "$key: count = result count of its link");
+        $j = $d['salary']['rows'][$i];
+        assert_same($key, $j['key'], 'the JSON row has the same key');
+        assert_same($n, array_sum($j['counties']), "$key: the counties add up to the national count");
+        assert_true((isset($j['fields']['salary_bucket']) || isset($j['fields']['salary_bucket[]'])) && isset($j['fields']['family[]']), "$key: the fields of the link are in the JSON");
+        // One county: the count of the JSON is the result count of the link with judet[].
+        foreach ($j['counties'] as $slug => $cn) {
+            assert_same($cn, list_count($base, '/?judet%5B%5D=' . $slug . '&' . substr($href, 2)), "$key / $slug: the county count is the result count of its link");
+            break;
+        }
+    }
+    // Without a `stats` section there is no chart: the landing page is not a themed page.
+    [, $home] = http_page($base, '/');
+    assert_not_contains('data-salary-chart', $home, 'no county-following chart on the landing page');
+});
+
 run_suite('the county data of the panel: the weekly values of each county equal SQL on the side; the title count of a county is the count of its list; the sums over the counties equal the national values', function () use ($base, $db) {
     [, $h] = http_page($base, '/sanatate/');
     preg_match('#<script type="application/json" id="theme-panel-data">(.*?)</script>#s', $h, $m);
@@ -615,8 +654,8 @@ $basep = $srvp['base'];
 
 run_suite('/administratie/ and /financiar/ render: title, canonical, h1, icon, sections in order, one h1, same bytes for each reader', function () use ($basep) {
     $cases = [
-        'administratie' => ['Posturi în administrație', 'i-domain-administratie', ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari'], 10],
-        'financiar' => ['Posturi financiar-contabile', 'i-domain-financiar', ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-programe', 'h-studii', 'h-noi', 'h-notificari'], 12],
+        'administratie' => ['Posturi în administrație', 'i-domain-administratie', ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'], 10],
+        'financiar' => ['Posturi financiar-contabile', 'i-domain-financiar', ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-programe', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'], 12],
     ];
     foreach ($cases as $slug => [$title, $icon, $sections, $n]) {
         [$st, $h, $hd] = http_page($basep, "/$slug/");
@@ -783,7 +822,7 @@ run_suite('/social/ renders: title, canonical, h1 with the count, icon, sections
     assert_same(1, xp($h)->query('//h1/svg[@aria-hidden="true"]/use[@href="#i-sector-asistenta_sociala"]')->length, 'the icon of the theme');
     assert_same(1, xp($h)->query('//symbol[@id="i-sector-asistenta_sociala"]')->length, 'the symbol is in the sprite');
     preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($h, (int)strpos($h, '<main')), $s);
-    assert_same(['h-theme', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari'], $s[1], 'sections, in order');
+    assert_same(['h-theme', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'], $s[1], 'sections, in order');
     assert_well_formed($h, '/social/');
     [, $h2, $hd2] = http_page($bases, '/social/', ['Cookie: pg_x=1', 'Accept-Language: en']);
     assert_same($h, $h2, 'the same bytes for another reader');
@@ -919,7 +958,7 @@ run_suite('/meserii/ renders: title, canonical, h1 with the count, icon, section
     assert_contains('<span>Meserii și muncitori<span data-county-title></span><span data-title-count class="text-base font-normal text-ink-muted">&nbsp;(11)</span></span></h1>', $h, 'h1 and count: 10 postings and 1005');
     assert_same(1, xp($h)->query('//h1/svg[@aria-hidden="true"]/use[@href="#i-domain-meseriasi"]')->length, 'the icon of the theme');
     preg_match_all('#<section[^>]*aria-labelledby="([^"]+)"#', substr($h, (int)strpos($h, '<main')), $s);
-    assert_same(['h-theme', 'h-categorii', 'h-meserii', 'h-angajatori', 'h-studii', 'h-noi', 'h-notificari'], $s[1], 'sections, in order');
+    assert_same(['h-theme', 'h-categorii', 'h-meserii', 'h-angajatori', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'], $s[1], 'sections, in order');
     assert_same(0, xp($h)->query('//li[@data-domain="other"]')->length, 'no line other');
     assert_same(['meseriasi', 'paza', 'soferi', 'necalificati'], themes()['meserii']['domains'], 'the four domains of the theme');
     assert_well_formed($h, '/meserii/');
@@ -1426,7 +1465,9 @@ run_suite('the chart of a theme: 12 stacks; the segments of each week add up to 
     assert_same(['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'], array_map(fn($n) => preg_replace('/^.*(pg-c-\d).*$/', '$1', $n->getAttribute('class')), iterator_to_array($x->query('//button[@data-chart-series!="-1"]/span'))), 'the squares: the categorical palette in order');
     assert_same(1, $x->query('//span[@data-chart-other][contains(., "Alte ocupații")][not(self::button)]')->length, 'the legend entry "Alte ocupații", not a button');
     assert_not_contains('POSTURI_CHART_BARS', file_get_contents(__DIR__ . '/../partials/weekly_chart.php') . file_get_contents(__DIR__ . '/../static/theme-panel.js') . file_get_contents(__DIR__ . '/../helpers.php'), 'no switch of the prototype');
-    assert_not_contains('polyline', file_get_contents(__DIR__ . '/../partials/weekly_chart.php') . file_get_contents(__DIR__ . '/../static/theme-panel.js'), 'no polyline in the sources');
+    // The landing chart is a line again (owner, 2026-11-18); a themed page keeps the bars.
+    assert_not_contains('polyline', file_get_contents(__DIR__ . '/../static/theme-panel.js'), 'no polyline in the script of the themed page');
+    assert_same(0, $x->query('//*[@data-theme-stats]//polyline')->length, 'no line in the chart of a themed page');
     // No theme has more than 4 groups (the colours are 4); a fifth group needs a decision.
     require_once __DIR__ . '/../inc/themes.php';
     foreach (themes() as $slug => $t) assert_true(count($t['history']['groups'] ?? []) <= 4, "theme $slug: at most 4 chart groups");

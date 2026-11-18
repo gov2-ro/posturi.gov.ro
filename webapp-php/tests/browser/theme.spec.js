@@ -7,7 +7,7 @@ const { test, expect } = require('@playwright/test');
 test.use({ baseURL: 'http://127.0.0.1:8824' });
 
 // The county map is in the first screen (section h-theme); no section "Pe județe".
-const SECTIONS = ['h-theme', 'h-specialitati', 'h-ocupatii', 'h-studii', 'h-noi', 'h-notificari'];
+const SECTIONS = ['h-theme', 'h-specialitati', 'h-ocupatii', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'];
 const HEALTH = 'family%5B%5D=s%C4%83n%C4%83tate';
 
 const errors = new WeakMap();
@@ -179,7 +179,7 @@ test.describe('without script', () => {
   });
 });
 
-test('the first screen has two columns from lg: the map is in it at 1280 px, and follows the left column below lg', async ({ page, viewport }) => {
+test('the first screen has two columns from lg: the map is in it at 1280 px; below lg it is under the form and above the chart', async ({ page, viewport }) => {
   await page.goto('/sanatate/');
   const hero = page.locator('section[aria-labelledby="h-theme"]');
   const left = await hero.locator('h1').boundingBox();
@@ -196,7 +196,9 @@ test('the first screen has two columns from lg: the map is in it at 1280 px, and
     expect(legend.y).toBeGreaterThan(map.y + map.height - 1);
     expect(left.y).toBeLessThan(map.y + 40);
   } else {
-    expect(map.y, 'below the left column').toBeGreaterThan(all.y + all.height - 1);
+    // 2026-11-18 (owner): the map is above the chart that it filters.
+    expect(map.y, 'below the search form').toBeGreaterThan(form.y + form.height - 1);
+    expect(map.y + map.height, 'above the chart').toBeLessThanOrEqual(all.y);
     expect(map.x).toBeLessThan(40);
   }
   // The line under the map, and no select outside the search form.
@@ -245,7 +247,7 @@ test('the title has the icon of the theme, as decoration', async ({ page }) => {
 
 // ---- The statistics panel, the compact lists and the icons (ADR 0007) ----
 
-test('the statistics panel: left column at lg, above the map below lg; no overflow', async ({ page, viewport }) => {
+test('the statistics panel: left column at lg, below the map below lg; no overflow', async ({ page, viewport }) => {
   await page.goto('/sanatate/');
   const panel = page.locator('[data-theme-stats]');
   await expect(panel).toBeVisible();
@@ -257,12 +259,12 @@ test('the statistics panel: left column at lg, above the map below lg; no overfl
     expect(p.x + p.width, 'the panel is in the left column').toBeLessThanOrEqual(m.x + 1);
     expect(p.y, 'beside the map, in the first screen').toBeLessThan(m.y + 700);
   } else {
-    expect(p.y + p.height, 'the panel is above the map').toBeLessThanOrEqual(m.y);
+    expect(p.y, 'the panel is below the map (2026-11-18)').toBeGreaterThan(m.y);
     expect(p.x, 'it uses the page gutter').toBeLessThanOrEqual(24);
   }
   await expect(page.locator('table')).toHaveCount(0);
   await noOverflow(page, 'the panel');
-  await expect(panel.locator('figure')).toHaveCount(1);
+  await expect(panel.locator('figure')).toHaveCount(1);   // the weekly chart; the salary chart is a section lower on the page (2026-11-18)
   await expect(page.locator('[data-fig]')).toHaveCount(0);   // no figures row
   await expect(page.getByText('posturi active', { exact: true })).toHaveCount(0);
 });
@@ -598,12 +600,12 @@ test('the link to all postings is after the line of the other employers, not in 
 const PROFESSIONAL = {
   administratie: {
     h1: 'Posturi în administrație', n: 10, base: 'family%5B%5D=administra%C8%9Bie',
-    sections: ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari'],
+    sections: ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'],
     level: ['Funcții de execuție', 'Funcții de conducere'], inst: ['scoala', 'primarie', 'spital'], cluj: 4,
   },
   financiar: {
     h1: 'Posturi financiar-contabile', n: 12, base: 'family%5B%5D=financiar',
-    sections: ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-programe', 'h-studii', 'h-noi', 'h-notificari'],
+    sections: ['h-theme', 'h-tip-functie', 'h-ocupatii', 'h-angajatori', 'h-programe', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari'],
     level: ['Funcții de execuție', 'Funcții de conducere'], inst: ['scoala', 'spital', 'primarie', 'cultura'], cluj: 2,
   },
 };
@@ -677,7 +679,7 @@ test.describe('/social/', () => {
     await page.goto('/social/');
     await expect(page.locator('h1#h-theme')).toHaveText('Posturi în asistență socială și consiliere (5)');
     const ids = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-labelledby')));
-    expect(ids).toEqual(['h-theme', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-noi', 'h-notificari']);
+    expect(ids).toEqual(['h-theme', 'h-ocupatii', 'h-angajatori', 'h-domenii', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari']);
     const inst = await page.locator('section[aria-labelledby="h-angajatori"] li[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain.replace('inst:', '')));
     expect(inst, 'order => count').toEqual(['primarie', 'scoala', 'asistenta-sociala']);
     await expect(tile(page, 'other').locator('a')).toHaveText('Alte posturi la direcțiile de asistență socială');
@@ -723,7 +725,7 @@ test.describe('/meserii/', () => {
     await page.goto('/meserii/');
     await expect(page.locator('h1#h-theme')).toHaveText('Meserii și muncitori (11)');
     const ids = await page.locator('main section[aria-labelledby]').evaluateAll((els) => els.map((e) => e.getAttribute('aria-labelledby')));
-    expect(ids).toEqual(['h-theme', 'h-categorii', 'h-meserii', 'h-angajatori', 'h-studii', 'h-noi', 'h-notificari']);
+    expect(ids).toEqual(['h-theme', 'h-categorii', 'h-meserii', 'h-angajatori', 'h-studii', 'h-salarii', 'h-noi', 'h-notificari']);
     const cats = await page.locator('section[aria-labelledby="h-categorii"] li[data-home-tile]').evaluateAll((els) => els.map((e) => e.dataset.domain));
     expect(cats).toEqual(['cor:7', 'cor:5', 'cor:9', 'cor:8']);
     await expect(page.locator('section[aria-labelledby="h-categorii"] li[data-home-tile] svg')).toHaveCount(4);
@@ -824,4 +826,33 @@ test.describe('the button "Toate județele"', () => {
     await expect(clear(p)).toBeHidden();
     await ctx.close();
   });
+});
+
+test('the salary chart of /sanatate/: no overflow; a county changes the counts and the links; "Toate județele" restores them', async ({ page }) => {
+  await page.goto('/sanatate/');
+  await noOverflow(page, 'themed page with the salary chart');
+  const rows = page.locator('[data-salary-chart] li[data-salary-row]');
+  await expect(rows).toHaveCount(6);
+  const read = () => rows.evaluateAll((els) => els.map((li) => ({
+    n: parseInt(li.querySelector('[data-salary-count]').textContent.replace(/\./g, ''), 10),
+    href: li.querySelector('a').getAttribute('href'),
+    w: li.querySelector('[data-salary-bar]').getBoundingClientRect().width,
+  })));
+  const all = await read();
+  expect(all.reduce((a, r) => a + r.n, 0)).toBeGreaterThan(0);
+  all.forEach((r) => expect(r.href).toContain(HEALTH));
+  await page.locator('button[data-county="cluj"]').click();
+  const cluj = await read();
+  expect(JSON.stringify(cluj.map((r) => r.n))).not.toBe(JSON.stringify(all.map((r) => r.n)));
+  cluj.forEach((r) => expect(r.href).toContain('judet%5B%5D=cluj'));
+  // The count of a row is the count of its list.
+  const i = cluj.findIndex((r) => r.n > 0);
+  expect(i).toBeGreaterThanOrEqual(0);
+  await page.locator('button[data-county="cluj"]').click();   // a second click clears it
+  const back = await read();
+  expect(back.map((r) => r.n)).toEqual(all.map((r) => r.n));
+  expect(back.map((r) => r.href)).toEqual(all.map((r) => r.href));
+  await page.locator('button[data-county="cluj"]').click();
+  await page.locator(`[data-salary-row] a`).nth(i).click();
+  expect(num(await page.locator('#results-status').textContent())).toBe(cluj[i].n);
 });

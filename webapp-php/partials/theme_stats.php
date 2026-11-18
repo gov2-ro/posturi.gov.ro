@@ -4,12 +4,14 @@
  * occupations. The server writes the whole country (the same for every reader); static/theme-panel.js shows the county
  * that the reader selects, from the JSON block.
  *
+ * The salary chart ($ts['salary']) is not in the panel: pages/theme.php renders it before the `recent` section (2026-11-18).
+ *
  * In: $ts = ['weekly' => ?array (home_weekly_postings()), 'series' => ?array (theme_occupation_weeks()),
  *           'data' => the JSON block: the weekly values of each county]
  */
 declare(strict_types=1);
 ?>
-<div data-theme-stats class="flex min-w-0 flex-col gap-5">
+<div data-theme-stats class="flex min-w-0 flex-col gap-5 max-lg:order-last">
   <h2 class="sr-only">Statistici</h2>
   <?php if ($ts['weekly'] !== null): ?>
   <?php $wc = ['weekly' => $ts['weekly'], 'caption' => 'Posturi publicate pe săptămână', 'caption_hidden' => true, 'series' => $ts['series']];

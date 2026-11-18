@@ -622,6 +622,8 @@ test('widths: no horizontal overflow on list, saved, detail, employer; nav count
     await page.goto(url);
     await expect(page.locator('[data-saved-count]')).toHaveText('(12)');
     await noOverflow(page, name);
+    // Below sm the link is behind the menu button (2026-11-18).
+    if (page.viewportSize().width < 640) await page.locator('[data-nav-toggle]').click();
     await expect(page.locator('header nav a[href="/salvate/"]')).toBeVisible();
     await shot(page, testInfo, `layout-${name}`);
   }

@@ -2,6 +2,98 @@
 
 ## 2026
 
+### 2026-11-18 — Salary filter as a multi-select (brief BUG-SALARY-MULTI; Sonnet; not deployed)
+
+Brief `docs/briefs/2026-11-18-salary-multi-select.md`. **Opus review (2026-11-18): accepted.** Checked the OR clause in `build_filters()`, `al_migrate_salary_keys()` (anchored regex; a `q` value that contains the text is left alone) and `rekey()`. Accepted the edits outside the brief: `browser/salary.spec.js` (the salary fixture lives there) and one line of `home_test.php`. Opus added the log line of the migration count in `al_schema()` (the brief's deploy note asked for a count that nothing logged), and a test of the salary range above the list in `discovery_test.php`.
+
+**Done**
+- `salary_bucket` is in `MULTI_PARAMS` (`helpers.php`, `static/searches.js`) and out of `QUERY_SCALARS` (`query.php`). A scalar URL (`?salary_bucket=x`) is read as a one-value array.
+- `build_filters()`: each known value is its own group of fragments joined by AND, in parentheses; the groups join with OR. Unknown values are dropped; no known value gives no clause. The comment about `CAST(? AS REAL)` stays.
+- `pages/list.php`: `$sal_bucket` is an array of strings without blanks. The note shows when the selection has a known value and no `fara-estimare`. `fara-estimare` alone gives the "none" form. A range with `fara-estimare` gives no note. "Vezi-le" links to the other filters with `salary_bucket[]=fara-estimare` only. `partials/facets.php` passes the array.
+- Migration of the alert keys: `al_migrate_salary_keys()` in `inc/alerts.php`, called at the end of `al_schema()`, so it runs each time `al_db()` opens the database. It rewrites `salary_bucket=` to `salary_bucket%5B%5D=` at the start of a key and after `&`. It returns the number of rows changed.
+- Migration of the browser records: `rekey()` in `static/searches.js`, called by `load()` when the status is `ok`. It re-keys each record whose key differs from `searchKey('?' + key)`, keeps `sort`, `label`, `savedAt` and `openedAt`, follows `defaultId`, and keeps the newer `savedAt` on a collision. `VERSION` is unchanged.
+- Tests: `search_keys.json` (new keys, one new case), `discovery_test.php` (544; new suite for OR, scalar = array, note rules, legacy chip), `alerts_test.php` (185; migration, second run, `al_parse_key()`), `home_test.php` (URLs only, plus `[0]` when the test reads the key of a chart link), `salary.spec.js` (field name `salary_bucket[]`, URL patterns, two new tests), `searches.spec.js` (two re-key tests).
+
+**Measured**
+- Playwright (discovery, chips, searches, alerts, ds, salary): 219 passed, 3 skipped. PHP: all 20 suites pass (alerts 185, discovery 544, home 854, searches 59, stats 96, theme 1.286).
+- No unique index on (`email_index`, `search_key`): the schema has only `idx_sub_email` on `email_index`. A rewrite cannot collide at the database level. Two rows of one reader could hold the old and the new form only if a row was created after the deploy and before the first open of the database, which cannot happen (the migration runs in `al_db()`).
+- Dev data has no alerts database (no `subscriptions.sqlite`), so the migration would change 0 keys there. The VPS count is known after the first `bin/alerts.php` run.
+- Idempotence: the test runs the migration twice on four rows (three with the old form, one with `salary_bucket` only inside a `q` value). The first run changes 3, the second 0, and the keys are equal.
+
+**Hard**
+- `salary.spec.js` (not in the brief list) had the old field name and URL patterns, so it needed the same change.
+- `qs_with()` writes an array as `salary_bucket%5B0%5D=`; the link "Vezi-le" turns that into `%5B%5D`, so the key is canonical.
+
+**Decided**
+- The migration runs in `al_schema()`, not in a separate script: no manual step on the VPS. Cost: one `LIKE` query for each database open.
+- Records are re-keyed on read, not on a version bump: the version bump would make the other tabs refuse the store. Cost: one write on the first read after the deploy.
+
+### 2026-11-18 — Owner changes: line chart, compact salary chart, salary range above the list (Opus; not deployed)
+
+**Done**
+- Landing weekly chart: a line and its area again (owner: "it looks nicer"), on an axis from the smallest to the largest week, as before brief 5. It still counts posts (`posts_sql()`). A themed page keeps the bars and the stacked "Toate" (`partials/weekly_chart.php`: line when there is no `series`).
+- Salary chart: compact rows (at least 32 px; a link target of at least 24 px, as "Sau începe de aici"), a smaller gap above "fără salariu estimat".
+- Themed page: the salary chart is a section "Salarii" (`#h-salarii`) just before "Noi și pe terminate" (the `recent` section), no longer in the statistics panel. It still follows the county (`theme-panel.js` looks for it in the document). Width capped at `max-w-3xl`, as on `/`.
+- List: after "N anunțuri găsite", the net salary of the results: "salariu net ≈ MIN–MAX lei, mediana M lei (K din N)" (`partials/result_list.php`, scope `facet_scope('')`, so it follows every filter and the HTMX updates). MIN is the lowest lower figure, MAX the highest upper figure, the median is of the lower figures (the figure of the salary filter), shown from 5 postings. Figures under 1.000 lei gross are skipped (DATA-SALARY-NOT-MONTHLY).
+- Tests: `home_test.php` (the line points), `theme_test.php` (section order with `h-salarii`, the chart before `h-noi`, no line on a themed page).
+
+**Measured** (dev database, 1.197 active postings)
+- `/posturi/`: "≈ 2.397–14.391 lei, mediana 3.493 lei (994 din 1.197)". With the 60-lei posting the minimum was 39 lei net.
+- `/?family[]=sănătate`: "≈ 2.481–12.781 lei, mediana 3.937 lei (323 din 375)".
+
+**Decided**
+- Range and median, not the range alone: across the whole list the range is 2.397–14.391 lei and says little; the median says what is typical. Cost of the median: one more figure on the line.
+- The line only on the landing page: the stacked bars of a themed page show the groups, and a line cannot stack them. Owner may ask for lines there too.
+
+### 2026-11-18 — Salary chart (brief UX-SALARY-CHART; Sonnet; not deployed)
+
+Brief `docs/briefs/2026-11-18-salary-chart.md`. **Opus review (2026-11-18): accepted.** Checked against the brief: the partial, `salary_distribution()` and the county update in `theme-panel.js` (links built from `home_item_fields()` and the canonical `searchKey()`). Opus re-ran home 924, theme 1.284, stats 96, discovery 530, searches 57: all pass. Screenshots at 390 and 1280 px checked. Open for the owner: a range with 0 postings in the selected county is still a row and a link to an empty list (it keeps the scale readable).
+
+**Done**
+- `salary_distribution(array $base)` in `helpers.php`: the five ranges of `SALARY_NET_BUCKETS` and the row `fara-estimare`. Each row uses `home_item_counts()` and `home_list_url()`, so the count is the result count of its link. No change to an existing function.
+- `partials/salary_chart.php`: a `<figure>` with the caption "Salariul net lunar", a `<ul>` of six rows, the note in `g2-text-meta`. HTML and CSS bars (`bg-gov`; `bg-ink-faint` for "fără"), a rule above the "fără" row. A row is one link of at least 44 px; the bar is `aria-hidden`; the count is followed by a `sr-only` " anunțuri". It draws nothing when the five ranges sum to 0.
+- Landing page: new section `#salarii` ("Cât se plătește în sectorul public") between `#domenii` and "Sau începe de aici". The group "Salariu" of "Sau începe de aici" is removed. The chart does not follow the map.
+- Themed page: the chart is in the statistics panel under the weekly chart. `$ts['data']['salary']` has, for each row, the county counts and the fields of the link. `static/theme-panel.js` updates the width of the bar, the count, the `sr-only` unit and the link (with `judet[]`) on `posturi:county`.
+- `/statistici/`: new section "Salarii" (`#salarii`, TOC entry) after "Export curent"; none when no posting has a salary figure. The figures "Cu salariu anunțat" and "Doar salariu estimat" stay in "Export curent": they share a row of cards with "Publicare → expirare".
+- Tests: `home_test.php` (924: chart rows, counts = list counts, "Salariu" group gone, eight sections), `theme_test.php` (1,284: chart in the panel, JSON sums, county link), `stats_test.php` (96: section and TOC). Playwright: `home.spec.js`, `theme.spec.js`, `stats.spec.js` (overflow at 320, 375, 1280; click on a county, second click restores).
+
+**Measured** (dev database `data/_dev/posturi-new.sqlite`, 1.197 active postings)
+- Counts of the chart on `/`: sub 3.000: 356; 3.000–4.000: 397; 4.000–5.000: 85; 5.000–7.000: 53; peste 7.000: 104; fără salariu estimat: 202. The five ranges equal the distribution in the entry below.
+- Counts on `/sanatate/` (whole country): 38; 142; 43; 16; 84; fără 52.
+- `Server-Timing` total, 6 requests each, before (the tree with `salary_distribution()` returning no row) and after (ms). `/` before: 36.3, 29.9, 30.1, 31.6, 30.3, 30.6 (median 30.4); after: 33.3, 33.4, 33.2, 33.7, 36.0, 35.3 (median 33.5). `/sanatate/` before: 27.3, 26.8, 27.7, 26.8, 26.7, 27.8 (median 27.0); after: 28.6, 28.4, 28.8, 28.7, 30.0, 30.2 (median 28.75). Cost: about 3 ms on `/` and 1.7 ms on `/sanatate/`.
+- PHP: 20 suites pass (home 924, theme 1,284, stats 96, discovery 530). Playwright (home, theme, stats, ds): 318 passed.
+
+**Hard**
+- The first design put the count at the far end of a full-width track: at 1280 px a short bar was far from its count. Now the bar is a fraction of the row width minus the count (`calc((100% - 4rem) * f)`), and the count follows the bar.
+- A row at 24 px from `lg` failed the existing check "every link of the landing page is 44 px". All rows are 44 px.
+
+**Decided**
+- 44 px rows at every width: the landing page has this rule. Cost: a taller chart on desktop (6 x 44 px).
+- The county counts come from `home_item_counts()` (one query for each row, grouped by county): six queries for each chart. Cost of one query with a CASE: a second definition of the ranges that could differ from the filter.
+
+### 2026-11-18 — Salary 7.000 bucket, mobile menu, map order, medical card (Opus; not deployed)
+
+**Done**
+- Salary filter: `net-5000-7000` and `net-peste-7000` replace `net-peste-5000` in `SALARY_NET_BUCKETS`. `net-peste-5000` moves to `SALARY_NET_LEGACY`: `salary_bucket_sql()` and `salary_bucket_label()` accept it, the filter does not list it. The landing group "Salariu" lists the five buckets.
+- Landing card "Peste 7.000 lei net" (second list card). The card "Peste 5.000 lei net, în afara sectorului medical" also has `family_not[]=sănătate`.
+- Masthead: below sm a "Meniu" button (`.pg-nav-toggle`, `aria-expanded`, `aria-controls="site-nav"`, Escape closes) shows the links in a column. The button ships `hidden`; an inline script shows it. Without script the links wrap as before.
+- Map order below lg: on `/` the map is above the domain list (`max-lg:order-first`, `$cm_class` of `partials/county_map.php`). On a themed page the left column is `max-lg:contents` and the chart is `max-lg:order-last`, so the map is under the form and above the chart. The grid has `grid-cols-[minmax(0,1fr)]`: without it the select row overflowed at 390 px.
+- Tests: `discovery_test.php` (6 buckets, the 7.000 edge at 11.967 gross, the legacy value = the two top buckets), `home_test.php` (card links), `ds.spec.js`, `home.spec.js` (menu; map order), `theme.spec.js` (map above the chart).
+
+**Measured** (dev database `data/_dev/posturi-new.sqlite`, 1.197 active postings)
+- 7.000 lei net = 11.967 lei gross. Net distribution: under 3.000: 356; 3–4.000: 397; 4–5.000: 85; 5–6.000: 29; 6–7.000: 24; 7–8.000: 79; 8–10.000: 15; 10–12.000: 3; 12.000+: 7. So 5.000–7.000 = 53, peste 7.000 = 104. A cut above 7.000 gives buckets of 25 or fewer.
+- Stated salaries: 35 of 1.197 active postings; the filter uses them first (`SALARY_EXPR = COALESCE(inf_salary_min, sal_min)`).
+- The medical card: `isced_not` alone gave 58 postings, 12 of them doctors with `v3_isced_fields = '[]'`. `family_not` alone: 57 (6 "Director medical", domain administrație or financiar). Both: 46, none medical. 586 of 1.193 v4 postings have no ISCED field.
+- PHP: discovery 530, home 928, theme 1.247 assertions pass. Playwright (chrome, ds, home, theme): 321 passed.
+
+**Hard**
+- The salary checkboxes: `salary_bucket` is scalar, so a second checked box is lost. Not fixed here: a multi-select changes the canonical alert key (ADR 0001). Recorded as BUG-SALARY-MULTI.
+
+**Decided**
+- Split "peste 5.000" in two, not three: a cut at 8.000 or 10.000 leaves 25 or fewer postings above it. Cost of keeping one bucket: 104 of 157 postings above 5.000 are above 7.000, and the reader cannot see that.
+- Keep `net-peste-5000` valid: saved searches, alerts and the landing card use it. Cost of dropping it: those links would lose their salary filter without notice.
+- The menu button is local (the DS header says "no menu button"); DS proposal https://github.com/gov2-ro/gov2ro-design-system/issues/12.
+
 ### 2026-11-18 — Theme `/meserii/`: manual and service work (brief 3; not deployed)
 
 **Opus review (2026-11-18): accepted.** Checked against brief 3 and the Opus decisions: narrowing inside the base filter (`theme_item_params()`); the redirect replaces a base key. Side effect accepted: `/sanatate/?family[]=juridic` now goes to the Juridic list, where before it merged both families. The chart by COR sums posts. All 20 PHP suites pass (Opus re-run); the agent's full Playwright run after its last change: 825 passed, 60 skipped. The local dev export predates brief 2: its archive has no `occ_group`, so the first weeks of the `/meserii/` chart are empty there; the next export fills them.

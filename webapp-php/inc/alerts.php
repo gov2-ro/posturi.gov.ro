@@ -120,6 +120,29 @@ function al_schema(PDO $pdo): void {
             PRIMARY KEY (ip_hash, window_start)
         );
     ");
+    // BUG-SALARY-MULTI: log the number of migrated keys once (the first open after the deploy); later runs change 0.
+    $migrated = al_migrate_salary_keys($pdo);
+    if ($migrated > 0) error_log("alerts: migrated $migrated salary_bucket key(s) to salary_bucket[] (ADR 0001 amendment)");
+}
+
+/**
+ * Data migration, 2026-11-18 (ADR 0001, amendment): `salary_bucket` became a multi-value parameter, so
+ * its canonical key form is `salary_bucket%5B%5D=x`. Rewrite the old form at the start of a key and after
+ * each `&`. The parameter name keeps its place, so the order of the parameters stays canonical. A second
+ * run finds no old form and changes nothing. The table has no unique index on (email_index, search_key),
+ * so a rewrite cannot collide at the database level. Returns the number of rows changed.
+ */
+function al_migrate_salary_keys(PDO $pdo): int {
+    $rows = $pdo->query("SELECT id, search_key FROM subscriptions WHERE search_key LIKE '%salary\\_bucket=%' ESCAPE '\\'")->fetchAll();
+    $n = 0;
+    $upd = $pdo->prepare("UPDATE subscriptions SET search_key = ? WHERE id = ?");
+    foreach ($rows as $r) {
+        $new = preg_replace('/(^|&)salary_bucket=/', '$1salary_bucket%5B%5D=', (string)$r['search_key']);
+        if ($new === null || $new === $r['search_key']) continue;
+        $upd->execute([$new, $r['id']]);
+        $n++;
+    }
+    return $n;
 }
 
 // ---- Crypto and tokens ----

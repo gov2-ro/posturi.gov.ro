@@ -34,3 +34,7 @@ The empty key (no filters) is not a search. The reader cannot save it.
 - When a new facet parameter is added, the key rule needs no change.
 - Renaming a parameter breaks the saved searches that use it. A rename needs an alias in `validated_query()` and a migration of the stored keys.
 - Alternative not taken: keep the raw URL as the identity. Cost: duplicate saves, and the toggle shows "not saved" after a reordering by HTMX.
+
+## Amendment — 2026-11-18: `salary_bucket` becomes a multi-value parameter
+
+`salary_bucket` was scalar, so the key of `?salary_bucket=x` was `salary_bucket=x`. The filter showed checkboxes, and a second checked value was lost (BUG-SALARY-MULTI). The owner chose a multi-select. Under rule 4 the key is now `salary_bucket%5B%5D=x`. The rule itself does not change. The stored keys are migrated: the alerts database rewrites them when it opens, and `searches.js` re-keys the browser records when it reads them (brief `docs/briefs/2026-11-18-salary-multi-select.md`). Cost of the alternative (radio buttons, no key change): one salary range at a time, so a reader cannot select "5.000 – 7.000" and "peste 7.000" together.

@@ -459,6 +459,23 @@ run_suite('bin/alerts.php refuses to run without a config', function () use ($tm
     assert_true(isset($j['error']), 'JSON error');
 });
 
+run_suite('the salary_bucket keys are migrated to the multi-value form', function () {
+    $pdo = al_db();
+    $ins = $pdo->prepare("INSERT INTO subscriptions (email_sealed, email_index, search_key, token_hash, token_sealed, status, created_at)
+                          VALUES ('x', ?, ?, 'h', 's', 'confirmed', '2026-11-01T00:00:00Z')");
+    $old = ['salary_bucket=net-3000-4000', 'judet%5B%5D=cluj&salary_bucket=net-peste-7000', 'salary_bucket=fara-estimare&status=all', 'q=salary_bucket%3Dx'];
+    foreach ($old as $i => $k) $ins->execute(["mig$i", $k]);
+    assert_same(null, al_parse_key($old[0]), 'the old key is not canonical');
+    assert_same(3, al_migrate_salary_keys($pdo), 'three keys change; the one without the parameter does not');
+    $keys = $pdo->query("SELECT search_key FROM subscriptions WHERE email_index LIKE 'mig%' ORDER BY email_index")->fetchAll(PDO::FETCH_COLUMN);
+    assert_same(['salary_bucket%5B%5D=net-3000-4000', 'judet%5B%5D=cluj&salary_bucket%5B%5D=net-peste-7000',
+                 'salary_bucket%5B%5D=fara-estimare&status=all', 'q=salary_bucket%3Dx'], $keys, 'keys rewritten, same position');
+    foreach (array_slice($keys, 0, 3) as $k) assert_true(al_parse_key($k) !== null, "al_parse_key accepts $k");
+    assert_same(0, al_migrate_salary_keys($pdo), 'a second run changes nothing');
+    assert_same($keys, $pdo->query("SELECT search_key FROM subscriptions WHERE email_index LIKE 'mig%' ORDER BY email_index")->fetchAll(PDO::FETCH_COLUMN), 'keys are the same after the second run');
+    $pdo->exec("DELETE FROM subscriptions WHERE email_index LIKE 'mig%'");
+});
+
 // Tidy up.
 foreach (glob($tmp . '/*', GLOB_ONLYDIR) ?: [] as $d) { array_map('unlink', glob($d . '/*') ?: []); @rmdir($d); }
 array_map('unlink', glob($tmp . '/*') ?: []);

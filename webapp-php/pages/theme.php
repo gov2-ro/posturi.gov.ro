@@ -109,6 +109,9 @@ foreach ($theme['sections'] as $sec) if ($sec['type'] === 'stats' && ((is_string
     $ts = ['weekly' => $weekly, 'series' => $series];
     // For each county the weekly total and the weekly series of each group (the same sources as the chart); the page is the whole country.
     $ts['data'] = ['caption' => 'Posturi publicate pe săptămână', 'weeks' => array_map(fn($w) => home_short_date($w['start']), $weekly), 'total' => $gs['total'], 'series' => $series, 'counties' => $gs['counties']];
+    // The salary chart of the panel (partials/salary_chart.php): the base filter is the scope, and the data of each county go in the JSON block.
+    $ts['salary'] = salary_distribution($base);
+    $ts['data']['salary'] = ['rows' => array_map(fn($r) => ['key' => $r['key'], 'counties' => $r['counties'], 'fields' => home_item_fields($r['params'])], $ts['salary']['rows'])];
 }
 
 $ns = ['base' => $base] + home_new_soon($base, $today);
@@ -143,8 +146,10 @@ $heading = 'g2-heading-section';
   $has_map = false;
   foreach ($sections as $_s) if ($_s['type'] === 'counties') $has_map = true; ?>
   <section aria-labelledby="h-theme" class="pt-8">
-    <div class="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-10">
-      <div class="flex min-w-0 flex-col gap-4">
+    <?php /* 2026-11-18 (owner): below lg the map is above the chart that it filters. The left column is `contents` there, so its
+       children are items of the grid, and the chart (data-theme-stats, max-lg:order-last) comes after the map. */ ?>
+    <div class="grid grid-cols-[minmax(0,1fr)] <?= $has_map ? 'gap-4' : 'gap-8' ?> lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start lg:gap-10">
+      <div class="flex min-w-0 flex-col gap-4<?= $has_map ? ' max-lg:contents' : '' ?>">
 <?php /* The title and, with a map, the button "Toate județele": on one line from sm, below the title on a narrow screen. The button is
            not in the heading. Script only: static/home.js shows it while a county is selected and clears the county on a click. */ ?>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -199,6 +204,14 @@ $heading = 'g2-heading-section';
   <?php };
   foreach ($sections as $sec): ?>
     <?php if ($sec['type'] === 'recent') $render_other(); ?>
+    <?php /* 2026-11-18 (owner): the salary chart is the last section before "Noi și pe terminate" (a `recent` section). It follows
+       the county of the map (static/theme-panel.js, data `salary` of #theme-panel-data). */
+    if ($sec['type'] === 'recent' && $ts !== null && !empty($ts['salary']) && $ts['salary']['total'] > 0): ?>
+  <section aria-labelledby="h-salarii" class="flex flex-col gap-3">
+    <h2 id="h-salarii" class="<?= $heading ?>">Salarii</h2>
+    <?php $sc = ['dist' => $ts['salary'], 'js' => true, 'class' => 'flex max-w-3xl flex-col gap-2']; require __DIR__ . '/../partials/salary_chart.php'; ?>
+  </section>
+    <?php endif; ?>
     <?php if ($sec['type'] === 'values'): ?>
   <section aria-labelledby="h-<?= e($sec['id']) ?>" class="flex flex-col gap-3">
     <h2 id="h-<?= e($sec['id']) ?>" class="<?= $heading ?>"><?= e($sec['title']) ?></h2>

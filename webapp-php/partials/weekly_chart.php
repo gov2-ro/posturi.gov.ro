@@ -1,7 +1,8 @@
 <?php
 /**
- * The weekly chart: the posts published in each of the last 12 complete ISO weeks (posts_sql() in helpers.php), as 12 thin bars.
- * It draws nothing when fewer than 4 weeks have postings.
+ * The weekly chart: the posts published in each of the last 12 complete ISO weeks (posts_sql() in helpers.php). It draws nothing
+ * when fewer than 4 weeks have postings. Without `$wc['series']` (the landing page) it is a line and its area, on an axis from the
+ * smallest to the largest week (owner, 2026-11-18: the line looks better). With `$wc['series']` (a themed page) it is 12 thin bars.
  *
  * With `$wc['series']` (the occupation groups of a themed page) the chart has a row of buttons, "Toate" and one for each group, and
  * static/theme-panel.js draws the pressed button in the same chart. "Toate" is a stacked bar: one segment for each group, from the
@@ -35,6 +36,17 @@ if ($_wc_with_data >= 4):
     $_wc_slot = $_wc_w / $_wc_n;
     $_wc_scale = $_wc_hi > 0 ? $_wc_plot / $_wc_hi : 0;
     $_wc_last = end($_wc_vals);
+    // The line (no series): the points in a 320 x 64 box with 4 of padding, from the smallest to the largest week.
+    $_wc_line = !isset($wc['series']);
+    if ($_wc_line) {
+        $_wc_pts = [];
+        foreach ($_wc_vals as $_wc_i => $_wc_v) {
+            $_wc_px = $_wc_i / (count($_wc_vals) - 1) * 320;
+            $_wc_py = $_wc_max === $_wc_min ? 32 : 4 + (1 - ($_wc_v - $_wc_min) / ($_wc_max - $_wc_min)) * 56;
+            $_wc_pts[] = round($_wc_px, 1) . ',' . round($_wc_py, 1);
+        }
+        $_wc_area = 'M0,64 L' . implode(' L', $_wc_pts) . ' L320,64 Z';
+    }
     // The colour class of group i: the local categorical palette, in order (assets/app.css, --c-cat-1 to -4). Written out, so that
     // Tailwind (which reads the PHP files, not static/theme-panel.js) keeps the classes.
     $_wc_cls = ['pg-c-0', 'pg-c-1', 'pg-c-2', 'pg-c-3'];
@@ -55,6 +67,10 @@ if ($_wc_with_data >= 4):
           <?php endif; ?>
           <svg role="img" aria-label="<?= e($wc['caption']) ?>, ultimele 12 săptămâni complete: între <?= e($fmt($_wc_min)) ?> și <?= e(posturi_label($_wc_max)) ?>"
                viewBox="0 0 320 64" preserveAspectRatio="none" class="block h-16 w-full overflow-visible"<?= $_wc_js ? ' data-chart-svg' : '' ?>>
+            <?php if ($_wc_line): ?>
+            <path d="<?= e($_wc_area) ?>" class="fill-chart/15 stroke-none"></path>
+            <polyline points="<?= e(implode(' ', $_wc_pts)) ?>" fill="none" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" class="stroke-chart"></polyline>
+            <?php else: ?>
             <line x1="0" x2="320" y1="63.5" y2="63.5" class="pg-baseline" vector-effect="non-scaling-stroke"></line>
             <g<?= $_wc_js ? ' data-chart-bars' : '' ?>>
 <?php foreach ($_wc_weekly as $_wc_i => $_wc_wk):
@@ -89,6 +105,7 @@ if ($_wc_with_data >= 4):
               </g>
 <?php endforeach; ?>
             </g>
+            <?php endif; ?>
           </svg>
           <div class="g2-text-meta flex flex-wrap justify-between gap-x-3">
             <span><?= e(home_short_date($_wc_weekly[0]['start'])) ?></span>

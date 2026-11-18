@@ -594,3 +594,66 @@ class TestRowPay:
     def test_the_gradation_raises_a_non_management_row(self, law):
         row = next(r for r in law.rows if r.tip_post != "conducere" and r.lei_min > 6000)
         assert law.row_pay(row, 3, AFTER_JULY)[0] > law.row_pay(row, 0, AFTER_JULY)[0]
+
+
+@law_only
+class TestEstimatorExport:
+    """The tables of the estimator page: Python computes, PHP looks up."""
+
+    @pytest.fixture(scope="class")
+    def tables(self):
+        import sqlite3
+        spec = importlib.util.spec_from_file_location(
+            "export_under_test_estimator", REPO_ROOT / "export-to-sqlite.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        con = sqlite3.connect(":memory:")
+        coverage = mod.export_salary_estimator(con, today=AFTER_JULY)
+        yield con, coverage
+        con.close()
+
+    def test_every_grid_row_is_exported_with_six_gradations(self, tables, law):
+        con, _ = tables
+        draft = sg.load_grid()
+        assert con.execute("SELECT COUNT(*) FROM salary_grid_rows").fetchone()[0] == len(law.rows) + len(draft.rows)
+        assert con.execute("SELECT COUNT(*) FROM salary_grid_pay").fetchone()[0] == 6 * (len(law.rows) + len(draft.rows))
+
+    def test_the_pay_table_is_row_pay(self, tables, law):
+        con, _ = tables
+        draft = sg.load_grid()
+        for grid in (law, draft):
+            first = {}
+            for r in grid.rows:
+                first.setdefault(r.ref, r)           # the plain ref belongs to the first row
+            for ref, row in list(first.items())[::37]:
+                for g in range(6):
+                    got = con.execute("SELECT lei_min, lei_max FROM salary_grid_pay "
+                                      "WHERE version=? AND ref=? AND gradatie=?", (grid.version, ref, g)).fetchone()
+                    assert got == grid.row_pay(row, g, AFTER_JULY), (grid.version, ref, g)
+
+    def test_a_repeated_ref_gets_a_suffix_so_that_the_key_is_unique(self, tables, law):
+        con, _ = tables
+        assert len({r.ref for r in law.rows}) < len(law.rows)
+        assert con.execute("SELECT COUNT(*) FROM salary_grid_rows WHERE ref LIKE '%#2'").fetchone()[0] > 0
+
+    def test_the_link_pairs_rows_of_the_same_annex_and_reports_its_coverage(self, tables):
+        con, cov = tables
+        bad = con.execute("""SELECT COUNT(*) FROM salary_grid_link k
+            JOIN salary_grid_rows l ON l.version = ? AND l.ref = k.law_ref
+            JOIN salary_grid_rows d ON d.version = ? AND d.ref = k.draft_ref
+            WHERE l.anexa <> d.anexa""", (sg.LAW_VERSION, sg.DEFAULT_VERSION)).fetchone()[0]
+        assert bad == 0
+        assert cov["law_with_draft"] > 1000 and cov["draft_with_law"] > 1500
+        # A draft-only annex (military, dignitaries) has no law row.
+        assert con.execute("""SELECT COUNT(*) FROM salary_grid_link k
+            JOIN salary_grid_rows d ON d.version = ? AND d.ref = k.draft_ref
+            WHERE d.anexa IN ('VI', 'IX')""", (sg.DEFAULT_VERSION,)).fetchone()[0] == 0
+
+    def test_the_caps_and_the_parameters(self, tables, law):
+        con, _ = tables
+        assert con.execute("SELECT COUNT(*) FROM salary_cap").fetchone()[0] == len(law.plafon) == 14
+        params = {k: json.loads(v) for k, v in con.execute("SELECT key, value FROM salary_param")}
+        assert params["law"]["status_juridic"] == "în vigoare"
+        assert params["draft"]["valoare_referinta_lei"] == 4100
+        assert params["salariu_minim"]["lei"] == 4325 and params["salariu_minim"]["de_la"] == "2026-07-01"
+        assert [g["nivel"] for g in params["gradatii"]] == [0, 1, 2, 3, 4, 5]

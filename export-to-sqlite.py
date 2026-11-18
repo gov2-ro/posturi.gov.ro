@@ -27,6 +27,9 @@ Output: posturi.sqlite with tables:
                     the variant-table estimate before (not sliced by --active-only)
   publication_monthly — historical publication counts by month and county, from ALL of
                     Postgres whatever --active-only does to job_postings (FIX-09)
+  salary_grid_rows, salary_grid_pay, salary_grid_link, salary_cap, salary_param — the
+                    salary estimator page (/estimator-salariu/): both grids, the pay of each
+                    row at gradation 0-5, the law-draft link, the local caps, the parameters
   build_meta      — one row: when this file was built, from which commit and host
 """
 
@@ -51,6 +54,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import salary_grid  # noqa: E402  (the one pay formula: Grid.row_pay(), ADR 0008)
 import classify  # noqa: E402  (deterministic labels from the posting's words, 261016)
 import evidence  # noqa: E402  (pure quote locator: where an extracted requirement comes from)
 import posting_roles  # noqa: E402  (pure role read model, shared with later history work)
@@ -788,6 +792,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
     export_llm_costs(cur, con)
     export_publication_monthly(cur, con)
+    export_salary_estimator(con)
     if active_only:
         export_archive(cur, con)
 
@@ -1029,6 +1034,174 @@ def export_publication_monthly(cur, con: sqlite3.Connection) -> None:
         "INSERT INTO publication_monthly(agg_version, month, judet_id, postings, cancelled) "
         "VALUES (?,?,?,?,?)", rows)
     print(f"{len(rows)} rows, {sum(r[3] for r in rows)} announcements")
+
+
+SALARY_ESTIMATOR_DDL = """
+DROP TABLE IF EXISTS salary_grid_rows;
+DROP TABLE IF EXISTS salary_grid_pay;
+DROP TABLE IF EXISTS salary_grid_link;
+DROP TABLE IF EXISTS salary_cap;
+DROP TABLE IF EXISTS salary_param;
+-- The salary estimator page (/estimator-salariu/). Python computes, PHP looks up: the pay
+-- formula lives in salary_grid.Grid.row_pay() and nowhere else (ADR 0008).
+--   salary_grid_rows  one row per grid row of both versions. `ref` is GridRow.ref; a ref that
+--                     repeats in one version (one source row, two study levels) gets `#2`, `#3`. `version` is the law grid
+--                     (salary_grid.LAW_VERSION) or the draft variant; `sectiune` is the last
+--                     segment of the source heading; `cautare` is the accent-free search text
+--                     (salary_grid.norm() of the name and its synonyms).
+--   salary_grid_pay   the gross pay of a row at gradation 0-5. The law's minimum-wage floor
+--                     applies on the export date.
+--   salary_grid_link  a draft row and the law rows of the same annex that
+--                     selector_for_law() + Grid.select() give.
+--   salary_cap        the Art. 11 alin. (4) cap per type and population of a local unit.
+--   salary_param      key -> JSON: versions, gradations, minimum wage, link coverage.
+CREATE TABLE salary_grid_rows (
+    version             TEXT NOT NULL,
+    ref                 TEXT NOT NULL,
+    anexa               TEXT NOT NULL,
+    sectiune            TEXT NOT NULL DEFAULT '',
+    functie             TEXT NOT NULL,
+    sinonime            TEXT NOT NULL DEFAULT '',
+    regim               TEXT NOT NULL DEFAULT '',
+    tip_post            TEXT NOT NULL DEFAULT '',
+    nivel_administrativ TEXT NOT NULL DEFAULT '',
+    banda_populatie     TEXT NOT NULL DEFAULT '',
+    grad_treapta        TEXT NOT NULL DEFAULT '',
+    studii              TEXT NOT NULL DEFAULT '',
+    tip_unitate         TEXT NOT NULL DEFAULT '',
+    act_sursa           TEXT NOT NULL DEFAULT '',
+    needs_review        INTEGER NOT NULL DEFAULT 0,
+    cautare             TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (version, ref)
+);
+CREATE INDEX idx_salary_rows_fn ON salary_grid_rows(version, anexa, functie);
+CREATE TABLE salary_grid_pay (
+    version  TEXT NOT NULL,
+    ref      TEXT NOT NULL,
+    gradatie INTEGER NOT NULL,
+    lei_min  INTEGER NOT NULL,
+    lei_max  INTEGER NOT NULL,
+    PRIMARY KEY (version, ref, gradatie)
+) WITHOUT ROWID;
+CREATE TABLE salary_grid_link (
+    law_ref   TEXT NOT NULL,
+    draft_ref TEXT NOT NULL,
+    PRIMARY KEY (law_ref, draft_ref)
+) WITHOUT ROWID;
+CREATE INDEX idx_salary_link_draft ON salary_grid_link(draft_ref);
+CREATE TABLE salary_cap (
+    id               INTEGER PRIMARY KEY,
+    tip_unitate      TEXT NOT NULL,
+    populatie_min    INTEGER,
+    populatie_max    INTEGER,
+    plafon_maxim_lei INTEGER NOT NULL
+);
+CREATE TABLE salary_param (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+) WITHOUT ROWID;
+"""
+
+
+def _draft_selector(row) -> dict:
+    """The selector of one draft row, in grid vocabulary (what `Grid.select()` reads)."""
+    return {"functie": row.functie, "cod": row.cod, "anexa": row.anexa, "regim": row.regim,
+            "tip_post": row.tip_post, "nivel_administrativ": row.nivel_administrativ,
+            "grad_treapta": row.grad_treapta, "studii": row.studii}
+
+
+def salary_refs(grid) -> dict[int, str]:
+    """`id(row) -> ref` for a grid. `GridRow.ref` repeats when one source row holds two study
+    levels (75 law refs, for example `L153-t64!12` for PL and for M). The first row keeps the
+    plain ref, so a ref in `sal_json` finds it; the next ones get `#2`, `#3`."""
+    seen: dict[str, int] = {}
+    out = {}
+    for r in grid.rows:
+        seen[r.ref] = seen.get(r.ref, 0) + 1
+        out[id(r)] = r.ref if seen[r.ref] == 1 else f"{r.ref}#{seen[r.ref]}"
+    return out
+
+
+def salary_links(law, draft) -> list[tuple[str, str]]:
+    """`(law_ref, draft_ref)`: the law rows that each draft row maps to, in the same annex.
+
+    The annex filter keeps a draft-only annex (VI, VII, IX) from matching a law row of
+    another annex by name alone: the estimator then says "no law grid" for it.
+    """
+    law_refs, draft_refs = salary_refs(law), salary_refs(draft)
+    links = set()
+    for r in draft.rows:
+        for lr in law.select(salary_grid.selector_for_law(_draft_selector(r), draft)):
+            if lr.anexa == r.anexa:
+                links.add((law_refs[id(lr)], draft_refs[id(r)]))
+    return sorted(links)
+
+
+def export_salary_estimator(con: sqlite3.Connection, today=None) -> dict | None:
+    """Write the tables of the estimator page (see SALARY_ESTIMATOR_DDL). Returns the coverage.
+
+    A checkout without `data/salarii/` skips the tables; the page then says that the
+    estimator is not available.
+    """
+    print("Exporting the salary estimator tables...", end=" ", flush=True)
+    today = today or datetime.now(ZoneInfo("Europe/Bucharest")).date()
+    try:
+        law = salary_grid.load_grid(salary_grid.LAW_VERSION)
+        draft = salary_grid.load_grid(salary_grid.DEFAULT_VERSION)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"skipped ({exc})")
+        return None
+    con.executescript(SALARY_ESTIMATOR_DDL)
+
+    rows, pay = [], []
+    for grid in (law, draft):
+        refs = salary_refs(grid)
+        for r in grid.rows:
+            ref = refs[id(r)]
+            section = r.sectiune.split(" / ")[-1].strip()[:160]
+            rows.append((grid.version, ref, r.anexa, section, r.functie, " | ".join(r.sinonime),
+                         r.regim, r.tip_post, r.nivel_administrativ, r.banda_populatie,
+                         r.grad_treapta, r.studii, r.tip_unitate, r.act_sursa, int(r.needs_review),
+                         salary_grid.norm(" ".join((r.functie,) + r.sinonime))))
+            for g in range(6):
+                lo, hi = grid.row_pay(r, g, today)
+                pay.append((grid.version, ref, g, lo, hi))
+    con.executemany("INSERT INTO salary_grid_rows VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+    con.executemany("INSERT INTO salary_grid_pay VALUES (?,?,?,?,?)", pay)
+
+    links = salary_links(law, draft)
+    con.executemany("INSERT INTO salary_grid_link VALUES (?,?)", links)
+    coverage = {
+        "law_rows": len(law.rows), "law_with_draft": len({a for a, _ in links}),
+        "draft_rows": len(draft.rows), "draft_with_law": len({b for _, b in links}),
+        "pairs": len(links),
+    }
+
+    caps = [(i, c["tip_unitate"], int(c["populatie_min"]) if c["populatie_min"] else None,
+             int(c["populatie_max"]) if c["populatie_max"] else None, int(float(c["plafon_maxim_lei"])))
+            for i, c in enumerate(law.plafon, start=1)]
+    con.executemany("INSERT INTO salary_cap VALUES (?,?,?,?,?)", caps)
+
+    def variant(grid) -> dict:
+        v = grid.variant
+        return {"version": v.id, "eticheta": v.eticheta,
+                "valoare_referinta_lei": v.valoare_referinta_lei, "status_juridic": v.status_juridic}
+
+    steps = [m for m in law.params.get("salariu_minim_brut", []) if m["de_la"] <= today.isoformat()]
+    floor = max(steps, key=lambda m: m["de_la"]) if steps else None
+    params = {
+        "law": variant(law), "draft": variant(draft),
+        "gradatii": law.params["gradatii"]["niveluri"],
+        "salariu_minim": {"lei": floor["lei"], "de_la": floor["de_la"], "act": floor["act"]} if floor else None,
+        "exported_on": today.isoformat(),
+        "link": coverage,
+    }
+    con.executemany("INSERT INTO salary_param VALUES (?,?)",
+                    [(k, json.dumps(v, ensure_ascii=False)) for k, v in params.items()])
+    print(f"{len(rows)} rows, {len(pay)} pay figures, {len(links)} links "
+          f"(law {coverage['law_with_draft']}/{coverage['law_rows']}, "
+          f"draft {coverage['draft_with_law']}/{coverage['draft_rows']}), {len(caps)} caps")
+    return coverage
 
 
 def git_sha() -> str:

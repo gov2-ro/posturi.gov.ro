@@ -301,3 +301,12 @@ current counts or silently discard a deferred idea.
 
 Triaged 2026-11-15. The original list, with its completion notes, is in [archive-reference/backlog-261016-notes.md](archive-reference/backlog-261016-notes.md).
 
+
+
+## 2026-11-16 — VPS disk: prune and housekeeping (from the Hetzner/tempo move)
+
+Context: `/` on the VPS was 90% full. Already done 2026-11-16: `data/posturi.pre-v4.sqlite`, `data/schema-pre-v4.csv`, `data/schema-pre-v4.original.csv` and `~/posturi-2026-11-15.sql.gz` moved to `/mnt/HC_Volume_105444571/pax/...` with symlinks left in place. Owner has an off-box backup from 2026-11-16.
+
+- [ ] **Prune `data/downloads` (2.8 GB, 12.6k files, 1.7 GB older than 30 days)** — find out whether the pipeline re-downloads or dedups against this directory (check `ops/run-pipeline.sh` and the fetch code). If old files are not needed, move them to the volume or delete them; if they are needed, move them and symlink. The pipeline runs twice a day, so pause the cron during the move.
+- [ ] **Set a retention rule for `data/downloads`** (for example a nightly job that moves files older than 60 days to the volume), so the folder stops growing at ~240 MB per week.
+- [ ] **`.venv` is 446 MB and `data/anunturi` 352 MB** — check `anunturi.csv` (123 MB, rewritten each run) for rotation.

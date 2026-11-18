@@ -67,14 +67,36 @@ require __DIR__ . '/../inc/header.php';
 
     <?= toc_h2($toc, 'salarii') ?>
     <p>
-      Foarte puține anunțuri menționează salariul. Când îl menționează, îl afișăm ca „salariu anunțat”.
-      Altfel afișăm un <strong>salariu net estimat</strong>, calculat din grila de salarizare din
-      proiectul legii salarizării, după funcție, studii, grad și mărimea localității. Calculăm netul din
-      salariul brut al grilei, la gradația 0, fără persoane în întreținere. Filtrul „Salariu” folosește tot netul.
-      Salariul brut este pe pagina fiecărui anunț. Este o estimare orientativă, nu o ofertă: sporurile,
-      vechimea și încadrarea exactă le stabilește angajatorul. Un anunț al cărui titlu nu corespunde
-      unei funcții din grilă nu are estimare; filtrul „fără salariu estimat” îl arată.
+      <strong>Ce arată site-ul.</strong> Foarte puține anunțuri spun salariul. Când anunțul îl spune,
+      site-ul îl afișează ca „salariu anunțat”. Când anunțul nu îl spune, site-ul afișează o
+      <strong>estimare</strong> a salariului de bază brut după Legea 153/2017, la gradația 0.
+      Site-ul calculează salariul net din această sumă, fără persoane în întreținere. Filtrul „Salariu” folosește
+      tot salariul net. Salariul brut este pe pagina fiecărui anunț.
     </p>
+    <p>
+      <strong>Estimarea nu este un calcul oficial.</strong> Ea nu include sporurile, gradațiile de
+      vechime și indemnizația de hrană. Angajatorul stabilește salariul real. Un anunț al cărui titlu nu
+      corespunde unei funcții din lege nu are estimare. Filtrul „fără salariu estimat” îl arată.
+    </p>
+    <p>
+      <strong>În administrația locală</strong> consiliul local sau județean stabilește salariul, până la un plafon
+      legal. Plafonul depinde de tipul și de populația localității. De aceea site-ul arată un interval:
+      limita de jos este valoarea din tabelul legii, iar limita de sus este plafonul.
+    </p>
+    <p>
+      <strong>Proiectul de lege.</strong> Un proiect de lege din iulie 2026 propune alte salarii. Legea
+      nu este adoptată. Site-ul calculează și cifra după proiect, dar nu o afișează încă.
+    </p>
+    <p>
+      <strong>Sursele.</strong> Site-ul a citit textul legii la 18 noiembrie 2026.
+    </p>
+    <ul>
+      <li><a href="https://legislatie.just.ro/Public/DetaliiDocument/298840" class="text-gov hover:underline" target="_blank" rel="noopener">Legea-cadru 153/2017</a>, forma consolidată (legislatie.just.ro, id 298840)</li>
+      <li><a href="https://legislatie.just.ro/Public/DetaliiDocument/279777" class="text-gov hover:underline" target="_blank" rel="noopener">OUG 19/2024</a> (legislatie.just.ro, id 279777): salariile din sănătate și asistență socială</li>
+      <li>OUG 115/2023 și OUG 53/2024: majorările din 2024</li>
+      <li>Legea 141/2025: înghețarea salariilor în 2026</li>
+      <li>HG 146/2026: salariul minim brut din 1 iulie 2026</li>
+    </ul>
 
     <?= toc_h2($toc, 'anunturi-inchise') ?>
     <p>

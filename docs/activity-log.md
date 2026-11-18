@@ -29,6 +29,18 @@
 - Links: only Legea 153/2017 and OUG 19/2024 have a legislatie.just.ro id. The other four acts are plain text on the page. Cost: the reader cannot click.
 - No PHP test of the page: there is no test of `/despre/` beyond the HTTP 200 in `theme_test.php`. Rendered by hand and the PHP tests `ds`, `theme`, `home`, `discovery`, `feeds`, `v5`, `stats` pass.
 
+### 2026-11-18 — Pre-launch: favicon, council ranges, hourly pay, net first on /despre/ (Opus; not deployed)
+
+**Done.**
+- Favicon from the civetch logo (`bf579e7`). The live `/favicon.ico` was an empty file.
+- GRID153-CAP-SELECTOR (`cd83d86`): all Anexa VIII staff of a council employer get the local range. Before, the range depended on the level of the draft selector. Local dry run: 1,192 → 1,339 posts with a range; no lower end changes.
+- DATA-SALARY-NOT-MONTHLY, stopgap (`cd83d86`): the export drops a stated salary under 1,000 lei. In the 9 Sep snapshot, 10 of 16 stated salaries were hourly rates of 60–70 lei. They showed as „≈ 39 lei net” and fell into the lowest salary range.
+- `/despre/` „Salarii” (`644df23`): the site shows a net figure, and the text now names it first. The owner's edits of the privacy section are in the same commit.
+
+**Decided.**
+- The stated-salary floor is in the export, not in `SALARY_EXPR`. One place serves the filter, the sort, the list, the detail page and the feeds. Cost of the alternative (PHP): the same rule in four call sites.
+- The floor is 1,000 lei: even a quarter-time post at the minimum wage states more.
+
 ### 2026-11-18 — Salary grid of the law in force (brief SALARY-GRID-153; Sonnet; not deployed)
 
 **Done.** Each posting now gets its estimate from Legea 153/2017 as it applies in 2026. The draft estimate stays under `proiect`. Run Python with `.venv/bin/python` (there is no `python` on the PATH).

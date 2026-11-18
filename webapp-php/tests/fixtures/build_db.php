@@ -963,6 +963,7 @@ function fixture_insert_evidence(PDO $db): void {
  * Law: Consilier (central and territorial, grade superior and principal), Asistent medical (unit a.1 and a.4),
  * Director general (management), Referent. Draft: Consilier (two population bands), Asistent medical,
  * and Soldat (Anexa VI, no law row). The law Referent and Director general have no draft row.
+ * The wizard rows (L153-t6, t7, t8), `salary_title` and `salary_ins_context` come last.
  */
 const FIXTURE_SALARY_LAW = 'lege153-2026';
 const FIXTURE_SALARY_DRAFT = '2026-07-17';
@@ -998,6 +999,14 @@ SQL);
         [$L, 'L153-t3!2', 'II', 'Asistent medical', 'Asistent medical|Asistent medical generalist', '', 'execuție', '', '', 'principal', 'PL', 'a.4', 5460, 5460],
         [$L, 'L153-t4!1', 'III', 'Director general', 'Director general', '', 'conducere', '', '', '', 'S', '', 9000, 11000],
         [$L, 'L153-t5!1', 'VIII', 'Referent', 'Referent', 'funcționar public', 'execuție', 'central', '', 'superior', 'M', '', 4700, 4700],
+        // The wizard (UX-SALARY-WIZARD): a PL/M row, an M/G row, a row with no studies, a graded row, a second domain-II study level.
+        [$L, 'L153-t6!1', 'II', 'Registrator medical', 'Registrator medical', '', 'execuție', '', '', '', 'PL/M', '', 4500, 4500],
+        [$L, 'L153-t6!2', 'II', 'Îngrijitor', 'Îngrijitor', '', '', '', '', '', 'M/G', '', 4400, 4400],
+        [$L, 'L153-t6!3', 'II', 'Statistician', 'Statistician', '', 'execuție', '', '', '', '', '', 4600, 4600],
+        [$L, 'L153-t7!1', 'II', 'Medic specialist', 'Medic specialist', '', 'execuție', '', '', '', 'S', '', 9000, 9000],
+        [$L, 'L153-t8!1', 'VIII', 'Inspector de specialitate', 'Inspector de specialitate', 'funcționar public', 'execuție', 'central', '', 'gradul II', 'S', '', 6100, 6100],
+        [$L, 'L153-t8!2', 'VIII', 'Inspector de specialitate', 'Inspector de specialitate', 'funcționar public', 'execuție', 'central', '', 'gradul I', 'S', '', 6500, 6500],
+        [$L, 'L153-t9!1', 'VII', 'Director de instituție', 'Director de instituție', '', 'conducere', '', '', '', '', '', 8000, 8000],
         [$D, 'D1!1', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', '', 'sub 10.000', 'superior', 'S', '', null, null, 1.35, 1.35],
         [$D, 'D1!2', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', '', 'peste 200.000', 'superior', 'S', '', null, null, 1.85, 1.85],
         [$D, 'D2!1', 'II', 'Asistent medical', 'Asistent medical|Asistent medical generalist', '', 'execuție', '', '', 'principal', 'PL', '', null, null, 1.5, 1.5],
@@ -1022,6 +1031,23 @@ SQL);
     $link = $db->prepare('INSERT INTO salary_grid_link VALUES (?,?)');
     foreach ([['L153-t1!1', 'D1!1'], ['L153-t1!1', 'D1!2'], ['L153-t2!1', 'D1!1'], ['L153-t2!1', 'D1!2'],
               ['L153-t1!2', 'D1!1'], ['L153-t2!2', 'D1!1'], ['L153-t3!1', 'D2!1'], ['L153-t3!2', 'D2!1']] as $l) $link->execute($l);
+    // The title shortcut and the INS line (SALARY-INS-LINE): `salary_title` and `salary_ins_context`.
+    $db->exec(<<<'SQL'
+CREATE TABLE salary_title (titlu TEXT NOT NULL, cautare TEXT NOT NULL, ref TEXT NOT NULL, grad TEXT NOT NULL DEFAULT '', nr INTEGER NOT NULL);
+CREATE TABLE salary_ins_context (matrice TEXT NOT NULL, sectiune_caen TEXT NOT NULL, judet TEXT NOT NULL DEFAULT '', perioada TEXT NOT NULL,
+    masura TEXT NOT NULL, valoare REAL NOT NULL, unitate TEXT NOT NULL, extras_la TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (matrice, sectiune_caen, judet, perioada, masura)) WITHOUT ROWID;
+INSERT INTO salary_title VALUES
+    ('Asistent medical', 'asistent medical', 'L153-t3!1', 'principal', 12),
+    ('Asistent medical generalist', 'asistent medical generalist', 'L153-t3!1', 'principal', 5),
+    ('Inspector de specialitate', 'inspector de specialitate', 'L153-t8!1', 'gradul II', 7);
+INSERT INTO salary_ins_context VALUES
+    ('FOM106G', 'Q', '', '2026-05', 'castig_net_mediu_lunar', 5417, 'lei', '2026-11-19'),
+    ('FOM106E+FOM104F', 'Q', 'Cluj', '2024', 'castig_net_mediu_lunar', 5703, 'lei', '2026-11-19'),
+    ('FOM106E+FOM104F', 'Q', 'București', '2024', 'castig_net_mediu_lunar', 6231, 'lei', '2026-11-19'),
+    ('FOM106G', 'P', '', '2026-05', 'castig_net_mediu_lunar', 5817, 'lei', '2026-11-19'),
+    ('FOM106G', 'O', '', '2026-05', 'castig_net_mediu_lunar', 6900, 'lei', '2026-11-19');
+SQL);
     $db->exec("INSERT INTO salary_cap VALUES (1, 'capitală', NULL, NULL, 21735), (2, 'oraș', 10001, 20000, 13283),
         (3, 'comună', 3001, 5000, 9299), (4, 'comună', 0, 3000, 7970)");
     $param = $db->prepare('INSERT INTO salary_param VALUES (?,?)');

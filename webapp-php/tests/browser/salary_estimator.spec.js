@@ -19,7 +19,7 @@ test('search → pick → change the gradation: the figures change', async ({ pa
   await expect(page.locator('h1')).toHaveText('Estimator de salariu');
   await noOverflow(page, 'start');
   await page.fill('#se-q', 'consilier');
-  await page.getByRole('button', { name: 'Caută funcția' }).click();
+  await page.getByRole('button', { name: 'Caută' }).click();
   await expect(page).toHaveURL(/q=consilier/);
   await expect(page.locator('[data-salary-step="1"]')).toBeVisible();
   await noOverflow(page, 'step 1');
@@ -70,4 +70,66 @@ test('the tool is linked from the footer and the home page', async ({ page }) =>
   await expect(page.locator('footer a[href="/estimator-salariu/"]')).toBeVisible();
   await expect(page.locator('main a[href="/estimator-salariu/"]').first()).toBeVisible();
   await noOverflow(page, 'home');
+});
+
+// UX-SALARY-WIZARD: domain -> studies -> function -> variants -> result, one step per screen, at 375 and 1280.
+for (const [name, width, height] of [['375', 375, 800], ['1280', 1280, 900]]) {
+  test(`the wizard from domain to result at ${name} px: no overflow, large choices, a breadcrumb back`, async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.setViewportSize({ width, height });
+    await page.goto('/estimator-salariu/');
+    await expect(page.locator('[data-salary-wizard="domain"]')).toBeVisible();
+    await expect(page.locator('[data-salary-title-search]')).toBeVisible();
+    await noOverflow(page, 'domain');
+    // Every choice is one whole-row link at least 44 px high.
+    for (const box of await page.locator('[data-salary-domain]').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) {
+      expect(box).toBeGreaterThanOrEqual(44);
+    }
+    await page.locator('[data-salary-domain="II"]').click();
+    await expect(page.locator('[data-salary-wizard="studies"]')).toBeVisible();
+    await expect(page.locator('[data-salary-level]')).toHaveCount(4);   // S, PL, M, G: no SSD in this domain
+    await noOverflow(page, 'studies');
+    await page.locator('[data-salary-level="PL"]').click();
+    await expect(page.locator('[data-salary-wizard="function"]')).toBeVisible();
+    await expect(page.locator('[data-salary-fn]')).toHaveText([/Asistent medical/, /Registrator medical/, /Statistician/]);
+    await noOverflow(page, 'function');
+    await page.locator('[data-salary-fn]', { hasText: 'Registrator medical' }).click();
+    await expect(page.locator('[data-salary-step="2"]')).toBeVisible();
+    await expect(page.locator('[data-salary-law] [data-pay-gross]')).toContainText('4.500 lei');
+    await expect(page.locator('[data-salary-crumbs]')).toContainText('Sănătate și asistență socială');
+    await expect(page.locator('[data-salary-crumbs]')).toContainText('Postliceale');
+    await noOverflow(page, 'result');
+    // The breadcrumb goes back: studies, then domain.
+    await page.locator('[data-salary-crumbs] a', { hasText: 'Postliceale' }).click();
+    await expect(page.locator('[data-salary-wizard="function"]')).toBeVisible();
+    await page.locator('[data-salary-crumbs] a', { hasText: 'Sănătate și asistență socială' }).click();
+    await expect(page.locator('[data-salary-wizard="studies"]')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+}
+
+test('the title shortcut opens the variants with the grade of the title', async ({ page }) => {
+  await page.goto('/estimator-salariu/');
+  await page.fill('#se-q', 'inspector de specialitate');
+  await page.getByRole('button', { name: 'Caută' }).click();
+  await expect(page.locator('[data-salary-title-result]')).toHaveCount(1);
+  await noOverflow(page, 'title results');
+  await page.locator('[data-salary-title-result]').click();
+  await expect(page.locator('[data-salary-step="2"]')).toBeVisible();
+  await expect(page.locator('#se-grad')).toHaveValue('gradul II');
+  await expect(page.locator('[data-salary-law] [data-pay-gross]')).toContainText('6.100 lei');
+});
+
+test('the INS line shows the country, then the county; the estimate stays', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/estimator-salariu/?rand=L153-t3%211&g=0');
+  await expect(page.locator('[data-salary-ins]')).toContainText('România, mai 2026: 5.417 lei');
+  const before = await page.locator('[data-salary-law] [data-pay-gross]').textContent();
+  await page.selectOption('#se-jud', 'Cluj');
+  await page.getByRole('button', { name: 'Calculează' }).click();
+  await expect(page.locator('[data-salary-ins]')).toContainText('județul Cluj, anul 2024: 5.703 lei');
+  await expect(page.locator('[data-salary-ins] a[href*="FOM106E"]')).toBeVisible();
+  expect(await page.locator('[data-salary-law] [data-pay-gross]').textContent()).toBe(before);
+  await noOverflow(page, 'INS line');
 });

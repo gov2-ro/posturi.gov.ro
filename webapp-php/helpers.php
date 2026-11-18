@@ -3509,6 +3509,12 @@ function salary_est_compute(array $in): ?array {
     $row = salary_est_row($b, (string)$in['ref']);
     if (!$row) return null;
     $all = salary_est_function_rows($row);
+    // The wizard's studies step narrows the rows. A level that matches no row is ignored.
+    $st = (string)($in['st'] ?? '');
+    if (isset(SALARY_EST_LEVELS[$st])) {
+        $by_level = array_values(array_filter($all, fn($r) => salary_est_row_has_level($r, $st)));
+        if ($by_level) $all = $by_level;
+    }
     $g = max(0, min(5, (int)($in['g'] ?? 0)));
     $dims = salary_est_dims($all);
     // A value that is not an option of this function means "every value".
@@ -3519,7 +3525,7 @@ function salary_est_compute(array $in): ?array {
     }
     $local = ($chosen['nivel'] ?? '') === 'local';
     $rows = salary_est_filter($all, $chosen);
-    $res = ['b' => $b, 'ref' => $row['ref'], 'a' => $row['anexa'], 'f' => $row['functie'], 'g' => $g, 'dims' => $dims, 'chosen' => $chosen,
+    $res = ['b' => $b, 'ref' => $row['ref'], 'a' => $row['anexa'], 'f' => $row['functie'], 'g' => $g, 'st' => isset(SALARY_EST_LEVELS[$st]) ? $st : '', 'dims' => $dims, 'chosen' => $chosen,
             'local' => $local, 'n_all' => count($all), 'rows' => $rows, 'law' => null, 'draft' => null, 'cap' => null,
             'caps' => [], 'hints' => []];
 
@@ -3573,4 +3579,212 @@ function salary_est_compute(array $in): ?array {
 /** The estimator URL of one law row: the link of the detail page. `$local` keeps the range of a local post. */
 function salary_est_row_url(string $ref, int $g = 0, bool $local = false): string {
     return '/estimator-salariu/?rand=' . rawurlencode($ref) . '&g=' . $g . ($local ? '&nivel=local' : '');
+}
+
+
+// ---- Salary estimator wizard (UX-SALARY-WIZARD) and INS context line (SALARY-INS-LINE) ----
+//
+// The wizard: domain (annex) -> studies -> function -> variants -> result. Every state has a GET URL
+// (`?d=<annex>`, `?d=<annex>&st=<level>`, `?b=&fn=&st=…`). The domain and the studies only filter the
+// list: the page stores nothing about the reader (ADR 0008).
+
+/** The studies levels of the wizard, in the order of the page. */
+const SALARY_EST_LEVELS = [
+    'S' => 'Superioare', 'SSD' => 'Superioare de scurtă durată', 'PL' => 'Postliceale', 'M' => 'Medii', 'G' => 'Generale',
+];
+
+/**
+ * The domains: annex => [short label, CAEN Rev. 2 section of the INS line or null].
+ * The labels are short forms of the titles of the law annexes (Legea 153/2017, Anexele I-IX).
+ * The CAEN mapping is the one of ops/build-ins-context.py (DOMAIN_CAEN): Învățământ P, Sănătate Q,
+ * Cultură R, Administrație, Justiție, Diplomație, Apărare și autorități O. Anexa VII (own revenues) has no sector.
+ */
+const SALARY_EST_DOMAINS = [
+    'I'    => ['Învățământ', 'P'],
+    'II'   => ['Sănătate și asistență socială', 'Q'],
+    'III'  => ['Cultură', 'R'],
+    'IV'   => ['Diplomație', 'O'],
+    'V'    => ['Justiție', 'O'],
+    'VI'   => ['Apărare, ordine publică și securitate națională', 'O'],
+    'VII'  => ['Instituții finanțate din venituri proprii', null],
+    'VIII' => ['Administrație și alte funcții comune', 'O'],
+    'IX'   => ['Autorități publice și instituții autonome', 'O'],
+];
+
+/** The CAEN Rev. 2 section => the activity of the INS line. */
+const SALARY_EST_CAEN_LABELS = [
+    'O' => 'administrația publică și apărare', 'P' => 'învățământ', 'Q' => 'sănătate și asistență socială',
+    'R' => 'activități de spectacole, culturale și recreative',
+];
+
+/** True when the export has this table (an older export has no `salary_title` or `salary_ins_context`). */
+function salary_est_has_table(string $name): bool {
+    static $cache = [];
+    if (!isset($cache[$name])) {
+        try {
+            $st = db()->prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
+            $st->execute([$name]);
+            $cache[$name] = (int)$st->fetchColumn() > 0;
+        } catch (Throwable $e) {
+            $cache[$name] = false;
+        }
+    }
+    return $cache[$name];
+}
+
+/** The studies levels that a `studii` value of the grid names: `PL/M` => PL, M. A value with no level: []. */
+function salary_est_study_levels(string $studii): array {
+    preg_match_all('/(?<![A-Za-z])(SSD|PL|S|M|G)(?![A-Za-z])/', $studii, $m);
+    return array_values(array_unique($m[1]));
+}
+
+/** True when a row belongs under a level: it names the level, or it names no level at all. */
+function salary_est_row_has_level(array $row, string $level): bool {
+    $lv = salary_est_study_levels((string)$row['studii']);
+    return !$lv || in_array($level, $lv, true);
+}
+
+/** The domains of the wizard, in annex order: [annex, label, in_law (bool)]. Only annexes that the export has. */
+function salary_est_domains(): array {
+    $p = salary_est_params();
+    $in_law = [];
+    $have = [];
+    foreach (db()->query("SELECT DISTINCT version, anexa FROM salary_grid_rows") as $r) {
+        $have[$r['anexa']] = true;
+        if ($r['version'] === $p['law']['version']) $in_law[$r['anexa']] = true;
+    }
+    $out = [];
+    foreach (SALARY_EST_DOMAINS as $annex => [$label]) {
+        if (isset($have[$annex])) $out[] = ['a' => $annex, 'label' => $label, 'law' => isset($in_law[$annex])];
+    }
+    return $out;
+}
+
+/**
+ * The functions of one annex, one item for each (grid, function name): the law grid first; a draft
+ * function that has a law row is reached through the law, so only the other draft functions stay.
+ *
+ * @return list<array{b:string, ref:string, name:string, post:string, levels:list<string>, blank:bool}>
+ *         post: execuție | conducere | altele; levels: the studies levels that the rows name;
+ *         blank: some row names no level (the function then shows under every level)
+ */
+function salary_est_items(string $annex): array {
+    static $cache = [];
+    if (isset($cache[$annex])) return $cache[$annex];
+    $p = salary_est_params();
+    $items = [];
+    foreach ([['lege', $p['law']['version']], ['proiect', $p['draft']['version']]] as [$b, $version]) {
+        $st = db()->prepare("SELECT r.ref, r.functie, r.tip_post, r.studii,
+                                    EXISTS (SELECT 1 FROM salary_grid_link k WHERE k.draft_ref = r.ref) AS linked
+                             FROM salary_grid_rows r WHERE r.version = ? AND r.anexa = ? ORDER BY r.rowid");
+        $st->execute([$version, $annex]);
+        foreach ($st->fetchAll() as $r) {
+            $k = $b . '|' . $r['functie'];
+            $items[$k] ??= ['b' => $b, 'ref' => $r['ref'], 'name' => $r['functie'], 'posts' => [], 'levels' => [], 'blank' => false, 'linked' => 0];
+            $lv = salary_est_study_levels((string)$r['studii']);
+            if ($lv) $items[$k]['levels'] = array_values(array_unique(array_merge($items[$k]['levels'], $lv)));
+            else $items[$k]['blank'] = true;
+            $items[$k]['posts'][$r['tip_post']] = true;
+            $items[$k]['linked'] += (int)$r['linked'];
+        }
+    }
+    $out = [];
+    foreach ($items as $i) {
+        if ($i['b'] === 'proiect' && $i['linked'] > 0) continue;
+        $posts = array_keys($i['posts']);
+        $i['post'] = count($posts) === 1 && in_array($posts[0], ['execuție', 'conducere'], true) ? $posts[0] : 'altele';
+        unset($i['posts'], $i['linked']);
+        $out[] = $i;
+    }
+    usort($out, fn($x, $y) => salary_est_norm($x['name']) <=> salary_est_norm($y['name']));
+    return $cache[$annex] = $out;
+}
+
+/** The levels of one annex that some row names, with the number of functions under each: level => count. */
+function salary_est_level_counts(string $annex): array {
+    $items = salary_est_items($annex);
+    $named = [];
+    foreach ($items as $i) foreach ($i['levels'] as $l) $named[$l] = true;
+    $out = [];
+    foreach (SALARY_EST_LEVELS as $l => $_label) {
+        if (!isset($named[$l])) continue;
+        $out[$l] = count(array_filter($items, fn($i) => $i['blank'] || in_array($l, $i['levels'], true)));
+    }
+    return $out;
+}
+
+/** The functions of one annex under one level (step 3), optionally narrowed by a text filter. A blank level means all (an annex whose rows name no studies). */
+function salary_est_level_items(string $annex, string $level, string $filter = ''): array {
+    $tokens = salary_est_tokens($filter);
+    return array_values(array_filter(salary_est_items($annex), function ($i) use ($level, $tokens) {
+        if ($level !== '' && !$i['blank'] && !in_array($level, $i['levels'], true)) return false;
+        $n = salary_est_norm($i['name']);
+        foreach ($tokens as $t) if (!str_contains($n, $t)) return false;
+        return true;
+    }));
+}
+
+/**
+ * The title shortcut: the job titles of the postings (salary_title) that hold every word of the query.
+ * The grid row and the grade come with the title. Empty when the export has no `salary_title`.
+ *
+ * @return array{total:int, items:list<array>}  items: titlu, nr, ref, grad, functie, anexa
+ */
+function salary_est_title_search(string $q, int $limit = 30): array {
+    $out = ['total' => 0, 'items' => []];
+    $tokens = salary_est_tokens($q);
+    if (!$tokens || !salary_est_has_table('salary_title')) return $out;
+    $like = implode(' AND ', array_fill(0, count($tokens), 't.cautare LIKE ?'));
+    $par = array_map(fn($t) => '%' . $t . '%', $tokens);
+    $law = salary_est_params()['law']['version'];
+    $st = db()->prepare("SELECT COUNT(*) FROM salary_title t WHERE $like");
+    $st->execute($par);
+    $out['total'] = (int)$st->fetchColumn();
+    $st = db()->prepare("SELECT t.titlu, t.nr, t.ref, t.grad, r.functie, r.anexa FROM salary_title t
+                         JOIN salary_grid_rows r ON r.version = ? AND r.ref = t.ref
+                         WHERE $like ORDER BY t.nr DESC, t.titlu LIMIT " . (int)$limit);
+    $st->execute(array_merge([$law], $par));
+    $out['items'] = $st->fetchAll();
+    return $out;
+}
+
+/** The counties of the INS rows of one CAEN section (the select of step 4), in alphabetical order. */
+function salary_est_ins_counties(string $section): array {
+    if (!salary_est_has_table('salary_ins_context')) return [];
+    $st = db()->prepare("SELECT DISTINCT judet FROM salary_ins_context WHERE sectiune_caen = ? AND judet <> ''");
+    $st->execute([$section]);
+    $c = $st->fetchAll(PDO::FETCH_COLUMN);
+    usort($c, fn($a, $b) => salary_est_norm($a) <=> salary_est_norm($b));
+    return $c;
+}
+
+/**
+ * The INS context line of a result: the average net earnings of the domain of the annex, for the country
+ * or for one county. Context, never the estimate (ADR 0008 rules 5 and 8). Null when the annex has no
+ * sector, the export has no table, or no row fits (a county without a row gets no line).
+ *
+ * @return array{text:string, matrix_links:list<array{code:string,url:string}>, section:string, judet:string, period:string, value:int}|null
+ */
+function salary_est_ins_line(string $annex, string $judet = ''): ?array {
+    $section = SALARY_EST_DOMAINS[$annex][1] ?? null;
+    if ($section === null || !salary_est_has_table('salary_ins_context')) return null;
+    $st = db()->prepare("SELECT matrice, perioada, valoare FROM salary_ins_context
+                         WHERE sectiune_caen = ? AND judet = ? AND masura = 'castig_net_mediu_lunar'
+                         ORDER BY perioada DESC LIMIT 1");
+    $st->execute([$section, $judet]);
+    $r = $st->fetch();
+    if (!$r) return null;
+    $months = [1 => 'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie', 'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'];
+    $period = (string)$r['perioada'];
+    $period_label = preg_match('/^(\d{4})-(\d{2})$/', $period, $m) ? $months[(int)$m[2]] . ' ' . $m[1] : 'anul ' . $period;
+    $place = $judet === '' ? 'România' : ($judet === 'București' ? 'municipiul București' : 'județul ' . $judet);
+    $links = [];
+    foreach (explode('+', (string)$r['matrice']) as $code) {
+        $links[] = ['code' => $code, 'url' => 'https://ins.gov2.ro/dataset-v2.html?code=' . rawurlencode($code)];
+    }
+    return [
+        'text' => 'câștigul salarial mediu net lunar în ' . SALARY_EST_CAEN_LABELS[$section] . ', ' . $place . ', ' . $period_label
+                . ': ' . number_format((int)round((float)$r['valoare']), 0, ',', '.') . ' lei',
+        'matrix_links' => $links, 'section' => $section, 'judet' => $judet, 'period' => $period, 'value' => (int)round((float)$r['valoare']),
+    ];
 }

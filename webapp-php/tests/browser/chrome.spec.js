@@ -63,7 +63,7 @@ test('every FAQ link lands on an existing heading of /despre/', async ({ page })
     await expect(page.locator('#' + h.split('#')[1])).toHaveCount(1);
   }
   await expect(page.locator('#confidentialitate')).toBeVisible();
-  await expect(page.locator('#versiunea-datelor')).toHaveCount(1);
+  await expect(page.locator('#actualizarea-datelor')).toHaveCount(1);
 });
 
 test('welcome: first visit, not the next page, again after 90 days away; "Am înțeles" hides it', async ({ page }) => {

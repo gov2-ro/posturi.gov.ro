@@ -36,13 +36,13 @@ function al_notice(string $family, string $html): string {
          . ' px-3 py-2 text-sm leading-snug text-' . $family . '-ink">' . $html . '</div>';
 }
 
-/** The two-line consent text of the subscribe form (privacy text: /despre/#confidentialitate). */
+/** The two-line consent text of the subscribe form (privacy text: /despre/#alerte-email). */
 function al_consent_html(): string {
     return '<p class="mt-3 max-w-md text-xs leading-snug text-ink-muted">'
          . 'Prin abonare ești de acord să primești un rezumat la fiecare 3 zile, când apar anunțuri noi. '
          . 'Adresa se păstrează criptată, până o ștergi.<br>'
          . 'Brevo, furnizorul de email, numără anonim deschiderile și clicurile. '
-         . 'Detalii: <a href="/despre/#confidentialitate" class="text-gov underline">confidențialitate</a>.</p>';
+         . 'Detalii: <a href="/despre/#alerte-email" class="text-gov underline">confidențialitate</a>.</p>';
 }
 
 /** The list URL of a search key. */

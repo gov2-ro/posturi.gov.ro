@@ -736,9 +736,8 @@ const FEEDBACK_EMAIL = 'midas@gov2.ro';
 /** The [?!] panel's FAQ: [anchor on /despre/, question]. Each anchor must exist there. */
 const FEEDBACK_FAQ = [
     ['cum-functioneaza',  'De ce diferă unele informații de anunțul oficial?'],
-    ['termene',           'Termenul sau starea înscrierilor pare greșită'],
     ['salarii',           'Salariul afișat este cel real?'],
-    ['anunturi-inchise',  'Un anunț a dispărut din listă'],
+    ['anunturi-expirate', 'Un anunț a dispărut din listă'],
     ['aplicare',          'Cum aplic la un post?'],
     ['confidentialitate', 'Unde se păstrează anunțurile salvate?'],
 ];

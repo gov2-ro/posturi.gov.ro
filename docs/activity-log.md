@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-11-18 — /despre/ anchors renamed by the owner; project logo (Opus; not deployed)
+
+**Done**
+- The owner rewrote `/despre/` and renamed its anchors: `anunturi-inchise` → `anunturi-expirate`, `versiunea-datelor` → `actualizarea-datelor`, `vezi-si` → `statistici-angajatori`; new `alerte-email`; `termene` hidden. The links follow: the [?!] FAQ (`FEEDBACK_FAQ`; the „termene” question is gone with its section), the masthead stamp, and the consent link of the alert form (now `#alerte-email`, where the alert data is described). `toc.spec.js`, `chrome.spec.js` and `alerts.spec.js` check the new ids.
+- The hidden „termene” section was an HTML comment. PHP still ran `toc_h2($toc, 'termene')` inside it, on a missing key. It is now a PHP comment.
+- The Cloudflare paragraph and the note on contact data had moved under „Anunțuri expirate”. They are back under „Confidențialitate”.
+- Logo: the negative logo in the masthead (`.g2-logo`), the colour logo in the footer and floated right at the top of `/despre/`. The sources stay in `assets/` (`deploy-php.sh` skips that folder); the served copies are `static/logo-g2-*.png` (128 and 256 px from the 980 px source, 252 KB → 13 and 38 KB). The owner's gov2 signature at the bottom of `/despre/` pointed at `/assets/g2-0.png`, which never reaches the host; it uses the static copy now.
+
+**Hard**
+- `float-right` was not in the compiled CSS. `npm run css` fixed it; the committed `static/app.css` was already one class behind HEAD.
+
+**Decided**
+- The FAQ drops the „termene” question instead of pointing it elsewhere: no other section answers it.
+
 ### 2026-11-18 — Salary grid follow-up: local cap by population, review of 552 rows, „Salarii” on /despre/ (brief 2026-11-18-salary-grid-153-followup; Sonnet; not deployed)
 
 **Done.**

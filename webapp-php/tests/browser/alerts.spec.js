@@ -66,7 +66,7 @@ test('subscribe from /salvate/, confirm, manage, delete', async ({ page }, testI
   await expect(page.getByText('Cluj, medici')).toBeVisible();
   await expect(page.locator('[aria-hidden="true"] input[name="website"]')).toHaveAttribute('tabindex', '-1');
   await expect(page.getByText('Prin abonare ești de acord')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'confidențialitate' }).last()).toHaveAttribute('href', '/despre/#confidentialitate');
+  await expect(page.getByRole('link', { name: 'confidențialitate' }).last()).toHaveAttribute('href', '/despre/#alerte-email');
   await fits(page, 'form > :not(.sr-only), form > :not(.sr-only) *', 'subscribe form');
   await page.getByLabel('Adresa ta de email').fill(email);
   await page.getByRole('button', { name: 'Abonează-mă' }).click();

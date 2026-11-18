@@ -129,7 +129,7 @@ for (const path of ['/statistici/', '/despre/']) {
 
 test('/despre/: each anchor that other pages link to still exists', async ({ page }) => {
   await page.goto('/despre/');
-  for (const id of ['confidentialitate', 'confidentialitate-alerte', 'versiunea-datelor', 'cum-functioneaza', 'termene', 'salarii', 'contact']) {
+  for (const id of ['confidentialitate', 'alerte-email', 'actualizarea-datelor', 'cum-functioneaza', 'anunturi-expirate', 'salarii', 'contact']) {
     await expect(page.locator('#' + id), `#${id}`).toHaveCount(1);
   }
   await page.goto('/despre/#confidentialitate');

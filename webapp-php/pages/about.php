@@ -68,13 +68,13 @@ require __DIR__ . '/../inc/header.php';
     <?= toc_h2($toc, 'salarii') ?>
     <p>
       <strong>Ce arată site-ul.</strong> Foarte puține anunțuri spun salariul. Când anunțul îl spune,
-      site-ul îl afișează ca „salariu anunțat”. Când anunțul nu îl spune, site-ul afișează o
-      <strong>estimare</strong> a salariului de bază brut după Legea 153/2017, la gradația 0.
-      Site-ul calculează salariul net din această sumă, fără persoane în întreținere. Filtrul „Salariu” folosește
-      tot salariul net. Salariul brut este pe pagina fiecărui anunț.
+      site-ul îl afișează ca „salariu anunțat”. Când anunțul nu îl spune, site-ul afișează un
+      <strong>salariu net estimat</strong>. Site-ul îl calculează din salariul de bază brut după
+      Legea 153/2017, la gradația 0, fără persoane în întreținere. Filtrul „Salariu” folosește tot
+      salariul net. Salariul brut este pe pagina fiecărui anunț.
     </p>
     <p>
-      <strong>Estimarea nu este un calcul oficial.</strong> Ea nu include sporurile, gradațiile de
+      <strong><mark>Estimarea nu este un calcul oficial</mark>.</strong> Ea nu include sporurile, gradațiile de
       vechime și indemnizația de hrană. Angajatorul stabilește salariul real. Un anunț al cărui titlu nu
       corespunde unei funcții din lege nu are estimare. Filtrul „fără salariu estimat” îl arată.
     </p>
@@ -135,18 +135,18 @@ require __DIR__ . '/../inc/header.php';
     <?php /* UX-14 DRAFT for pax: approve the text and fill the two placeholders before the first deploy. */ ?>
     <h3 id="confidentialitate-alerte">Alerte pe email</h3>
     <p>
-      Dacă te abonezi la o alertă pe email, vom păstra datele de mai jos. Fără abonare, nu păstrăm nicio adresă de email.
+      Dacă te abonezi la o alertă pe email, vom salva niște informații, duh! Iată-le, după cum urmează:
     </p>
     <ul>
-      <li><strong>Contact:</strong> cancelarie@gov2.ro</li>
-      <li><strong>Ce păstrăm:</strong> adresa de email, căutarea abonată (filtrele ei și numele ei), data confirmării și data ultimului rezumat. Pentru limita de cereri păstrăm o amprentă a adresei IP, cel mult 2 ore.</li>
-      <li><strong>Unde:</strong> pe serverul de găzduire al site-ului (în SUA) păstrăm adresa criptată și căutarea. Cheia care deschide adresa și jurnalul trimiterilor sunt pe alt server, al nostru. Emailurile pleacă prin Brevo (Franța; datele rămân în UE, jurnalele se șterg după 1 lună).</li>
+      <li><strong>Contact:</strong> <a href="&#109;&#97;&#x69;&#108;&#x74;&#111;&#58;&#99;&#x61;&#x6e;&#99;&#x65;&#108;&#97;&#x72;&#105;&#101;&#x40;&#103;&#x6f;&#118;&#50;&#46;&#114;&#111;">&#99;&#x61;&#110;&#99;&#x65;&#x6c;&#97;&#x72;&#105;&#101;&#64;&#x67;&#111;&#118;&#50;&#x2e;&#x72;&#x6f;</a></li>
+      <li><strong><mark>Ce păstrăm</mark>:</strong> adresa de email, căutarea abonată (filtrele ei și numele ei), data confirmării și data ultimului rezumat. Pentru limita de cereri păstrăm o amprentă a adresei IP, cel mult 2 ore.</li>
+      <li><strong>Unde:</strong> pe serverul de găzduire al site-ului (momentan în SUA 🤷🏻‍♀️🙄) păstrăm adresa <strong>criptată</strong> și căutarea. Cheia care deschide adresa și jurnalul trimiterilor sunt pe alt server, al nostru. Emailurile pleacă prin Brevo (Franța; datele rămân în UE, jurnalele se șterg după 1 lună).</li>
       <li><strong>Ce primești:</strong> un email de confirmare, apoi cel mult un rezumat la 3 zile, doar când apar anunțuri noi pentru căutarea ta.</li>
-      <li><strong>Numărarea deschiderilor și a clicurilor:</strong> Brevo numără anonim deschiderile și clicurile din emailuri. Numărătoarea nu este legată de adresa ta. O folosim ca să știm dacă alertele sunt utile.</li>
+      <li><strong><mark>Numărarea deschiderilor și a click-urilor</mark>:</strong> Brevo numără anonim deschiderile și clicurile din emailuri. Numărătoarea nu este legată de adresa ta. O folosim ca să știm dacă alertele sunt utile.</li>
       <li><strong>Temeiul:</strong> consimțământul tău, dat prin abonare și confirmare. Îl poți retrage oricând.</li>
       <li><strong>Cât timp:</strong> până ștergi abonarea. O abonare neconfirmată se șterge după 48 de ore.</li>
-      <li><strong>Cum ștergi:</strong> apasă „Șterge această abonare” în orice email primit sau deschide <a href="/alerte/">Abonamentele mele</a> (primești un link pe email). Dacă folosești butonul de dezabonare al clientului de email, ștergem toate abonările adresei tale.</li>
-      <li><strong>Drepturile tale:</strong> acces, rectificare, ștergere, restrângere și portabilitate. Scrie-ne la adresa de contact. Ai dreptul să depui o plângere la ANSPDCP (<a href="https://www.dataprotection.ro" rel="noopener">dataprotection.ro</a>).</li>
+      <li><strong><mark>Cum ștergi</mark>:</strong> apasă „Șterge această abonare” în orice email primit sau deschide <a href="/alerte/">Abonamentele mele</a> (primești un link pe email). Dacă folosești butonul de dezabonare al clientului de email, ștergem toate abonările adresei tale.</li>
+      <li><strong>Drepturile tale:</strong> acces, rectificare, ștergere, restrângere și portabilitate. Scrie-ne la adresa de contact. Legea îți permite să depui o plângere la ANSPDCP (<a href="https://www.dataprotection.ro" rel="noopener">dataprotection.ro</a>). Da acum serios, de ce-ai face asta?</li>
     </ul>
   </div>
 

@@ -19,6 +19,8 @@ $_footer_groups = [
 ]; ?>
 <footer class="g2-footer mt-12">
   <div class="g2-footer-in g2-container">
+    <?php /* The project logo (assets/g2-0.png, scaled down in static/). */ ?>
+    <a href="/" class="shrink-0"><img src="/static/logo-g2-128.png" alt="posturi.gov2.ro, prima pagină" width="64" height="64" class="h-16 w-16"></a>
     <?php foreach ($_footer_groups as $_fg_title => $_fg_links): ?>
     <div>
       <h2 class="g2-label mb-1"><?= e($_fg_title) ?></h2>

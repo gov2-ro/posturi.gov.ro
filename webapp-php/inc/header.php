@@ -132,13 +132,13 @@ if (!isset($_build_stamp)) {
 <header class="g2-header">
   <span class="g2-ro-corner" aria-hidden="true"></span>
   <div class="g2-header-in g2-container">
-    <a href="/" class="g2-wordmark min-h-[44px]"><span>posturi<em>.gov2.ro</em></span></a>
+    <a href="/" class="g2-wordmark min-h-[44px]"><img src="/static/logo-g2-negative-64.png" alt="" width="46" height="28" class="g2-logo"><span>posturi<em>.gov2.ro</em></span></a>
     <span class="font-mono text-[11px] leading-none text-on-bar-muted"<?= $_code !== '' ? ' title="Versiunea codului: ' . e($_code) . '"' : '' ?>>beta<?php if ($_code !== ''): ?><span class="hidden sm:inline"> · <?= e($_code) ?></span><?php endif; ?></span>
 
     <?php /* Below sm there is no room beside the nav; the footer and /despre/ carry the stamp there. */ ?>
     <p class="hidden min-w-0 flex-1 truncate text-center text-xs leading-none sm:block">
       <?php if ($_stamp): ?>
-      <a href="/despre/#versiunea-datelor" class="g2-link-inverse inline-block py-4"<?= $_build_tooltip ? ' title="' . e($_build_tooltip) . '"' : '' ?>>
+      <a href="/despre/#actualizarea-datelor" class="g2-link-inverse inline-block py-4"<?= $_build_tooltip ? ' title="' . e($_build_tooltip) . '"' : '' ?>>
         Bază generată: <time datetime="<?= e($_stamp['iso']) ?>"><?= e($_stamp['long']) ?></time>
       </a>
       <?php endif; ?>

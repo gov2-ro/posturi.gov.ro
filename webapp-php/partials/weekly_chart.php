@@ -2,7 +2,7 @@
 /**
  * The weekly chart: the posts published in each of the last 12 complete ISO weeks (posts_sql() in helpers.php). It draws nothing
  * when fewer than 4 weeks have postings. Without `$wc['series']` (the landing page) it is a line and its area, on an axis from the
- * smallest to the largest week (owner, 2026-11-18: the line looks better). With `$wc['series']` (a themed page) it is 12 thin bars.
+ * smallest to the largest week (owner, 2026-11-18: the line looks better). With `$wc['series']` (a themed page) it is 12 bars.
  *
  * With `$wc['series']` (the occupation groups of a themed page) the chart has a row of buttons, "Toate" and one for each group, and
  * static/theme-panel.js draws the pressed button in the same chart. "Toate" is a stacked bar: one segment for each group, from the
@@ -27,7 +27,7 @@ if ($_wc_with_data >= 4):
     if (isset($wc['series'])) {
         foreach ($wc['series'] as $_wc_s) $_wc_hi = max($_wc_hi, ...array_map('intval', $_wc_s['values'] ?: [0]));
     }
-    // The geometry (the same in static/theme-panel.js): 12 slots in a 320 x 64 box; a bar is half of its slot; the baseline is at
+    // The geometry (the same in static/theme-panel.js): 12 slots in a 320 x 64 box; a bar is 80 % of its slot (owner, 2026-11-18: smaller gaps); the baseline is at
     // y = 63 and the top of the axis at y = 3, so the tallest bar is 60 high.
     $_wc_w = 320; $_wc_base = 63; $_wc_plot = 60;
     $_wc_series = $wc['series'] ?? [];
@@ -74,8 +74,8 @@ if ($_wc_with_data >= 4):
             <line x1="0" x2="320" y1="63.5" y2="63.5" class="pg-baseline" vector-effect="non-scaling-stroke"></line>
             <g<?= $_wc_js ? ' data-chart-bars' : '' ?>>
 <?php foreach ($_wc_weekly as $_wc_i => $_wc_wk):
-    $_wc_x = round($_wc_i * $_wc_slot + $_wc_slot / 4, 2);
-    $_wc_bw = round($_wc_slot / 2, 2);
+    $_wc_x = round($_wc_i * $_wc_slot + $_wc_slot * 0.1, 2);
+    $_wc_bw = round($_wc_slot * 0.8, 2);
     $_wc_wl = 'săpt. ' . home_short_date($_wc_wk['start']);
     // The segments of the week, bottom up: [class, name, value]. A single series is one segment with no name.
     $_wc_segs = [];

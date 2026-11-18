@@ -352,11 +352,11 @@ test('the chart: "Toate" is a stacked bar; a group shows its bars in its colour;
     const rects = await page.locator('[data-chart-bars] [data-bar]').nth(w).locator('rect').evaluateAll((rs) => rs.map((r) => [parseFloat(r.getAttribute('y')), parseFloat(r.getAttribute('height'))]));
     for (let k = 1; k < rects.length; k++) expect(rects[k][0] + rects[k][1], `week ${w}: segments touch`).toBeCloseTo(rects[k - 1][0], 1);
   }
-  // Plain: one baseline, no grid, no line chart; a bar is half of its slot wide.
+  // Plain: one baseline, no grid, no line chart; a bar is 80 % of its slot wide (owner, 2026-11-18).
   await expect(fig.locator('svg line')).toHaveCount(1);
   await expect(fig.locator('svg polyline, svg path')).toHaveCount(0);
   const geo = await fig.locator('svg[role="img"]').evaluate((svg) => { const w = svg.getBoundingClientRect().width, r = svg.querySelector('rect').getBoundingClientRect().width; return r / (w / 12); });
-  expect(geo, 'a bar is 50 % of its slot').toBeCloseTo(0.5, 1);
+  expect(geo, 'a bar is 80 % of its slot').toBeCloseTo(0.8, 1);
   await btns.nth(1).click();   // Medic: Medic specialist on 12 Aug and 2 Sep (fixture), 1 post each
   await expect(btns.nth(1)).toHaveAttribute('aria-pressed', 'true');
   await expect(btns.first()).toHaveAttribute('aria-pressed', 'false');

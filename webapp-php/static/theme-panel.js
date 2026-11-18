@@ -44,7 +44,7 @@
   var svg = fig && fig.querySelector('[data-chart-svg]');
   var live = fig && fig.querySelector('[data-chart-live]');
   var buttons = fig ? qsa('[data-chart-series]', fig) : [];
-  // The geometry of partials/weekly_chart.php: 12 slots in a 320 x 64 box, a bar is half of its slot, the baseline is at y = 63 and the
+  // The geometry of partials/weekly_chart.php: 12 slots in a 320 x 64 box, a bar is 80 % of its slot, the baseline is at y = 63 and the
   // top of the axis at y = 3.
   var W = 320, BASE = 63, PLOT = 60, NS = 'http://www.w3.org/2000/svg';
   var CLS = [0, 1, 2, 3];   // the colour class of group i: the local categorical palette, in order (assets/app.css, --c-cat-1 to -4)
@@ -95,7 +95,7 @@
       segs.forEach(function (sg, k) {
         var h = sg[2] * scale, y = BASE - (cum + sg[2]) * scale;
         cum += sg[2];
-        var r = svgEl('rect', { x: round2(w * slot + slot / 4), y: round2(y), width: round2(slot / 2), height: round2(h), 'class': sg[0] });
+        var r = svgEl('rect', { x: round2(w * slot + slot * 0.1), y: round2(y), width: round2(slot * 0.8), height: round2(h), 'class': sg[0] });
         var t = document.createElementNS(NS, 'title');
         t.textContent = 'săpt. ' + (data.weeks || [])[w] + (sg[1] ? ', ' + sg[1] : '') + ': ' + posts(sg[2]);
         r.appendChild(t);

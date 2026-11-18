@@ -2,6 +2,49 @@
 
 ## 2026
 
+### 2026-11-19 — Pay of project-hired posts (Sonnet, brief SALARY-EU-DETAIL + PIPELINE-PROJECT-PAY; not deployed)
+
+**Done**
+- `classify.project_hire(text, funding_kind)` and `classify.project_pay(text)`. `export-to-sqlite.py` fills six new `job_postings` columns where it computes `funding_kind`: `project_hire`, `proj_pay_amount`, `proj_pay_unit`, `proj_pay_basis`, `proj_hours_month`, `proj_pay_quote`. No existing column, prompt or schema changed.
+- `SALARY_EXPR` is now a `CASE` on `project_hire`: a project post counts by its stated month pay (`PROJECT_MONTH_EXPR`), never by the grid; with no month pay it is in `fara-estimare`. A net pay becomes gross through the one formula: `db.php` registers `gross_for_net()` as an SQLite function (`PDO::connect()` + `createFunction()` on PHP 8.4+, `sqliteCreateFunction()` before). The old-export shim fills the six columns with their empty values.
+- Detail page: the box „Post finanțat din fonduri europene: salariul depinde de bugetul proiectului.”, the stated pay („50 lei/oră net · 84 ore/lună ≈ 4.200 lei net/lună”, „brut sau net nespecificat”) and its source quote. No grid figure, no meter, no estimator link, no deduced „Salariu”. List row: the month figure, else the rate, else „salariu din bugetul proiectului”. The net-range line of the list skips the grid for these posts. Atom, RSS and iCal carry the same lines (they share `feed_details()`; only for a post with an extraction, as for every stated pay). `/despre/` has one new paragraph (two sentences). README: one paragraph.
+- Tests: Python `webapp/tests/test_classify.py` +13 cases (84 pass). PHP `tests/project_pay_test.php` (90 assertions; fixture `make.php <path> project`); `compat_test.php` gets an export without the six columns and two salary-bucket routes; all 22 PHP files pass. Playwright `project_pay.spec.js` (7 tests, 3 projects, all pass). Full Playwright: 891 passed, 60 skipped, 3 failed: only `alerts.spec.js:54` (known, TEST-ALERTS-PRIVACY-LINK, not touched). Python: 1,617 pass, 1 fails (`test_salary_facet_sql.py::test_every_salary_comparison_casts_its_bind[pages/list.php]`); it fails on the unchanged tree too (checked with `git stash`) and I left it. I changed one assertion in `webapp/tests/test_salary_facet_sql.py` (the literal old `SALARY_EXPR` text).
+
+**Measured** (export `tmp/261118/grid153/posturi-after2.sqlite`, copy; data to 2026-09-09; text = `body_markdown` + attachment text converted from `data/downloads/` with `pandoc`, `textutil`, `pdftotext`, as in the spike: 472 flagged postings, 392 with more than 200 characters of attachment text)
+- `project_hire = 1`: 447 of 472 flagged postings. The 25 not flagged (4409 8210 8447 8710 8972 9040 9041 9316 9785 9912 10001 10163 11423 11519 11777 11815 11924 11966 12023 12033 12143 12308 12337 12343 14133): I read 20 of them. 9 have only „avantaj … proiectul pilot” (8447 8710 8972 9316 10001 11519 11815 12337 14133), 5 a reading-list or requirement mention (9040 9041 10163 11423 12308), 6 are posts of a project department or of a new PNRR centre with no project wording on the post (4409 8210 11777 11924 12023 12343). I did not read 9912, 11966, 12033, 12143.
+- Pay found: 20 postings (all in the 447). Hour, net: 11 (10 with hours per month). Hour, basis not stated: 7 (6 with hours). Month, net: 1. Month, basis not stated: 1. 18 postings show a month figure. The spike counted about 34 with a stated pay: 14 more have several roles with several rates or several month figures (7595, 11735, 11737: net 3.360 to 6.720; 9032: 121 and 165; 13056, 13067, 13379, 12696) and the rule is no mixing, so `project_pay()` returns None for them. The export held 2.
+- `project_hire()` on the 60 sample (the `case` column; 59 are case 2, 1 is „neclar”): 59 true positives, 0 false positives, 0 false negatives, 1 true negative: precision 100 %, recall 100 %. **Caution:** I built the patterns on these 60 and the 472, so this is not a held-out test. First pass of the patterns missed 1 of 60 (12484, „beneficiar al proiectului”); I added the cue.
+- 334 of the 447 had a grid figure and lose it. 21 flagged postings that are not project hires keep theirs.
+- Bucket counts (`salary_bucket`; `fara-estimare` = no figure). Same export, same SQL (`salary_bucket_sql()`), before = code of commit 69a489d, after = this change.
+
+| scope | bucket | before | after |
+|---|---|---:|---:|
+| all 9,756 | net-sub-3000 | 5,056 | 4,868 |
+| | net-3000-4000 | 2,297 | 2,162 |
+| | net-4000-5000 | 228 | 228 |
+| | net-5000-7000 | 637 | 641 |
+| | net-peste-7000 | 158 | 161 |
+| | fara-estimare | 1,380 | 1,696 |
+| active on 2026-09-09 (1,882) | net-sub-3000 | 961 | 905 |
+| | net-3000-4000 | 442 | 410 |
+| | net-4000-5000 | 37 | 38 |
+| | net-5000-7000 | 113 | 115 |
+| | net-peste-7000 | 22 | 22 |
+| | fara-estimare | 307 | 392 |
+
+**Hard**
+- The attachment text is not in the SQLite file (the export reads it from Postgres). I rebuilt it from `data/downloads/` through `download_manifest.resolve_local_path()`; the real export path passes the same `text` variable to both functions.
+- Many ECI posts (school counsellor, school mediator) are flagged only by a „cod MySMIS” in an „avantaj” requirement. The rule „drop a cue that follows experiență, avantaj or vechime within 100 characters” removes them.
+- `project_pay()` works on a length-preserving fold (`_fold_keep_length()`), so the quote comes from the original text, with its diacritics, cut at word boundaries.
+
+**Decided**
+- Deterministic pass, no prompt change (brief decision 1). Cost of the alternative: a v5 prompt change re-extracts every active posting.
+- Several different rates in one text: None (no mixing). One rate with several hour values: keep the rate, no hours, so no month figure.
+- A stated pay with no basis counts as gross where a number must be computed (DATA-SALARY-GROSS-NET); the page says „brut sau net nespecificat”.
+- „maxim 84 ore/lună” is read as 84 hours. The month figure is then a ceiling (8071, 8904, 9330, 9483, 10538, 13816). Open: say „până la”?
+- Not changed (outside the file list): `pages/stats.php` counts `inf_salary_min` and `sal_min` directly (2 lines), and `pages/list.php` is untouched (it uses `SALARY_EXPR`).
+- **Diagram change needed** (`docs/img/salariu-estimare.svg` and `webapp-php/static/img/salariu-estimare.svg`, with the alt text on `/despre/`): add a first test before „salariu anunțat”: „Post angajat pentru un proiect european? Da: tariful orar din anunț (sau «salariul depinde de bugetul proiectului»), fără grilă. Nu: continuă.”
+
 ### 2026-11-19 — Estimator wizard and INS context line (Sonnet, brief UX-SALARY-WIZARD + SALARY-INS-LINE; not deployed)
 
 **Done**

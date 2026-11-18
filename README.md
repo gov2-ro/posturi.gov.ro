@@ -135,6 +135,16 @@ the law has no row (ADR 0008).
 draft grid as a fallback; gross to net last. Source: `docs/img/salariu-estimare.svg`; the site
 copy is `webapp-php/static/img/salariu-estimare.svg` — change both.*
 
+**Project-hired posts.** A post hired for an EU or PNRR project is paid at the hourly rate of the
+project, not by the grid (Art. 16 alin. (10^2) Legea 153/2017). The export sets `project_hire` with
+`classify.project_hire()`: `funding_kind` is set and the text says the post belongs to the project.
+It fills `proj_pay_amount`, `proj_pay_unit`, `proj_pay_basis`, `proj_hours_month` and `proj_pay_quote`
+with `classify.project_pay()`, from the body and the attachment text. For such a post the site shows no
+grid figure: it shows the stated pay with its unit, or „Post finanțat din fonduri europene: salariul
+depinde de bugetul proiectului”. `SALARY_EXPR` counts the stated month pay. For a net pay it calls
+`gross_for_net()`, an SQLite function that `db.php` registers on the connection. Evidence:
+`docs/audits/2026-11-18-salary-eu-projects.md`.
+
 The scripts behind the figure:
 
 ```

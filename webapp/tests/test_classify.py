@@ -151,3 +151,82 @@ def test_tags_are_rare_facts_and_at_most_four():
 def test_a_tag_on_most_postings_is_dropped():
     cands = {i: [("parttime", "Normă parțială")] for i in range(10)}
     assert all(v == [] for v in classify.rank_tags(cands).values())
+
+
+# ---- project_hire() and project_pay() (SALARY-EU-DETAIL, PIPELINE-PROJECT-PAY) ----
+# Texts are quotes from the spike sample (docs/audits/2026-11-18-salary-eu-sample.csv).
+
+@pytest.mark.parametrize("text,kind", [
+    ("Postul se află în afara organigramei, pe perioada determinată a contractului.", "fonduri_europene"),
+    ("pentru ocuparea pe perioadă determinată, pe perioada de implementare a proiectului „Furnizare de servicii”", "fonduri_europene"),
+    ("Consilier școlar în cadrul echipei comunitare integrate, cod SMIS 339395", "fonduri_europene"),
+    ("din cadrul structurii: proiect finanțat prin Planul Național de Redresare (PNRR)", "pnrr"),
+])
+def test_project_hire_reads_a_post_of_the_project(text, kind):
+    assert classify.project_hire(text, kind) is True
+
+
+@pytest.mark.parametrize("text,kind", [
+    # the false flags of the spike: the project is a requirement, a law in the reading list
+    ("constituie avantaj activitatea în proiectul pilot „Crearea serviciilor”, cod MySMIS 122607", "fonduri_europene"),
+    ("Constituie avantaj experiența în cadrul proiectelor educaționale", "fonduri_europene"),
+    ("cunoștințe privind managementul investițiilor finanțate din fonduri europene", "fonduri_europene"),
+    ("OUG 44/2023 privind implementarea proiectelor de infrastructură finanțate din fonduri externe nerambursabile", "fonduri_europene"),
+    # no funding flag: never a project hire
+    ("în afara organigramei, pe perioada implementării proiectului", ""),
+])
+def test_project_hire_ignores_a_project_that_is_only_named(text, kind):
+    assert classify.project_hire(text, kind) is False
+
+
+def test_project_pay_hour_with_hours_and_basis():
+    p = classify.project_pay("începând cu data angajării până la 30.11.2029, 84 ore/lună, 50 lei/oră net, timp de lucru inegal")
+    assert (p["amount"], p["unit"], p["basis"], p["hours_per_month"]) == (50.0, "ora", "net", 84.0)
+    assert "50 lei/oră net" in p["quote"]                 # the quote keeps the diacritics of the source
+
+
+def test_project_pay_hour_only_basis_not_stated():
+    p = classify.project_pay("Norma de lucru: inegală / Tarif orar: 100 lei/oră 4. Cerințele postului")
+    assert (p["amount"], p["unit"], p["basis"], p["hours_per_month"]) == (100.0, "ora", "", None)
+
+
+def test_project_pay_hour_with_hours_in_the_same_text():
+    p = classify.project_pay("Norma de lucru: inegală, maxim 84 ore/lună / Tarif orar: 150 lei/oră")
+    assert (p["amount"], p["hours_per_month"]) == (150.0, 84.0)
+
+
+def test_project_pay_month_net_and_gross():
+    net = classify.project_pay("având norma de lucru de 42 ore/lună, salariu net 2.100 lei, pentru perioada de 42 luni")
+    assert (net["amount"], net["unit"], net["basis"], net["hours_per_month"]) == (2100.0, "luna", "net", None)
+    gross = classify.project_pay("Salariu brut: 5.139 lei/lună, în limita bugetului")
+    assert (gross["amount"], gross["unit"], gross["basis"]) == (5139.0, "luna", "brut")
+
+
+def test_project_pay_month_without_basis():
+    p = classify.project_pay("| 4 ore/zi, 20 ore/săptămână | 2.767 lei/lună | Logoped |")
+    assert (p["amount"], p["unit"], p["basis"]) == (2767.0, "luna", "")
+
+
+def test_project_pay_one_rate_for_several_roles_keeps_the_rate_not_the_hours():
+    p = classify.project_pay("1. Manager proiect, 84 ore pe lună, 70 lei net /oră; 2. Responsabil financiar, 42 ore/lună, 70 lei net pe oră")
+    assert (p["amount"], p["basis"], p["hours_per_month"]) == (70.0, "net", None)
+
+
+@pytest.mark.parametrize("text", [
+    "Manager proiect 70 lei/oră net; Îngrijitor la domiciliu 29 lei/oră net",          # several rates: no mixing
+    "Expert 1: salariu net 6.720 lei; Expert 2: salariu net 3.360 lei",                 # several month figures
+    "Tarif orar: 5 lei/oră",                                                            # under 15 lei/oră
+    "Tarif orar: 900 lei/oră",                                                          # over 500 lei/oră
+    "Salariu brut 800 lei/lună",                                                        # month figure under 1.000 lei
+    "Salariul minim brut pe țară garantat în plată este de 4.325 lei",                  # the minimum wage, not the pay
+    "Postul este pe perioadă determinată, cu normă de 4 ore pe zi.",                    # no pay
+])
+def test_project_pay_returns_none_when_it_is_not_one_pay(text):
+    assert classify.project_pay(text) is None
+
+
+def test_project_pay_quote_is_cut_at_word_boundaries():
+    text = "x" * 200 + " cu contract de muncă, 84 ore/lună, 50 lei/oră net, timp de lucru inegal distribuit " + "y" * 200
+    q = classify.project_pay(text)["quote"]
+    assert "50 lei/oră net" in q and q.startswith("…") and q.endswith("…")
+    assert "x" not in q and "y" not in q                      # no cut word at either end

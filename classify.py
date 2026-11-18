@@ -104,6 +104,135 @@ def eu_funding(text) -> str:
     return "pnrr" if any(_PNRR.search(h) for h in hits) else "fonduri_europene"
 
 
+# ---- Project-hired posts and their pay (2026-11-19, SALARY-EU-DETAIL / PIPELINE-PROJECT-PAY) ----
+#
+# A post hired for an EU or PNRR project sits outside the organigramă and is paid at the
+# hourly rate of the funding request (Art. 16 alin. (10^2) Legea 153/2017). The salary grid
+# does not apply. docs/audits/2026-11-18-salary-eu-projects.md has the evidence: 59 of 60
+# sampled flagged posts are hired for the project; the others are false flags (a requirement
+# "experiență în proiecte europene", a law in the reading list).
+
+# The text says that THIS post belongs to the project. A programme named in a requirement
+# or a bibliography does not count: the match is dropped when "experiență", "avantaj" or
+# "vechime" comes just before it ("constituie avantaj activitatea în proiectul pilot …").
+_HIRE_CUES = re.compile(
+    r"in afara organigramei"
+    r"|(perioada|durata)\s+(de\s+)?(implementarii|implementare|derularii|desfasurarii|realizarii|valabilitatii|existentei)\s+(a\s+)?(proiectului|contractului\s+de\s+finantare|finantarii)"
+    r"|(perioada|durata)\s+proiectului"
+    r"|echip(a|ei)\s+(de\s+implementare|proiectului|de\s+proiect|de\s+management\s+al\s+proiectului|comunitar[ae]\s+integrat[ae])"
+    r"|(incadrat|angajat|recrutat|selectat|ocupat)\w*\s+(pe|in|prin)\s+(cadrul\s+)?proiect"
+    r"|(post|posturi|functie|functia|functii|expert\w*|manager\w*|membru|membri|personal\w*)\s[^.;:]{0,80}?\b(din|in)\s+cadrul\s+proiectului"
+    r"|\b(din|in)\s+cadrul\s+proiectului"
+    r"|\bimplementar\w+\s+(a\s+)?proiectului"
+    r"|\b(pentru|in)\s+(derularea\s+|implementarea\s+)?proiectul(ui)?\s+[„\"”“,]"
+    r"|\b(derularea|implementarea)\s+proiectului"
+    r"|\bproiectului\s+[„\"”“]"
+    r"|\bproiect\s*:\s*[„\"”“,]"
+    r"|\bproiect\s+finantat\s+(prin|din)"
+    r"|\bdin\s+cadrul\s+structurii\s*:"
+    r"|\bbeneficiar(ul)?\s+(al\s+)?proiectului"
+    r"|\b(aprobate|solicitate|prevazute)\s+in\s+proiect\b"
+    r"|\b(post|posturi|functie|functii)\w*\s+[^.;]{0,100}?proiect(ului)?\s+[^.;]{0,60}?(smis|pnrr|finantat)"
+    r"|(perioada|durata)\s+determinata[^.;]{0,150}proiect"
+    r"|proiect\w*[^.;]{0,100}(perioada|durata)\s+determinata"
+    r"|\bdocumentele\s+(specifice\s+)?proiectului"
+    r"|\b(bugetul\s+proiectului|tarifel\w+\s+orar\w+)")
+_HIRE_REQUIREMENT = re.compile(r"(experienta|avantaj|vechime|cunostinte)\w*[^.;]{0,100}$")
+
+
+def project_hire(text, funding_kind) -> bool:
+    """True when the post is flagged as project-funded AND the text says it is hired for the project."""
+    if not funding_kind:
+        return False
+    t = fold(text)
+    for m in _HIRE_CUES.finditer(t):
+        if not _HIRE_REQUIREMENT.search(t[max(0, m.start() - 100):m.start() + 20]):
+            return True
+    return False
+
+
+def _fold_keep_length(text) -> str:
+    """fold() without the whitespace collapse: one output character for each input character,
+    so that a match offset in the folded text is an offset in the original."""
+    out = []
+    for ch in str(text or ""):
+        base = "".join(c for c in unicodedata.normalize("NFD", ch) if unicodedata.category(c) != "Mn").lower()
+        out.append(base if len(base) == 1 else ch.lower()[:1] or " ")
+    return "".join(out)
+
+
+_NUM = r"(\d{1,3}(?:[.,]\d{3})+|\d+(?:[.,]\d+)?)"
+_BASIS = r"(brut|net)"
+# "70 lei net /oră", "50 lei/oră net", "70 lei/ ora", "tarif orar: 100 lei/oră".
+_PAY_HOUR = re.compile(
+    _NUM + r"\s*(?:lei|ron)\s*" + _BASIS + r"?\s*(?:/|pe)\s*ora\b(?:\s*" + _BASIS + r"\b)?"
+    r"|tarif(?:ul)?\s+orar\s*(?:de|este|:|-)?\s*" + _NUM + r"\s*(?:lei|ron)\b\s*(?:" + _BASIS + r"\b)?")
+# "salariu brut 5.000 lei", "3.000 lei brut/luna", "4.200 lei net pe luna".
+_PAY_MONTH = re.compile(
+    r"(?<!minim )salari\w+\s+(?:de\s+(?:baza|incadrare)\s+)?(?:lunar\s+)?" + _BASIS + r"?\s*(?:lunar\s+)?(?:este\s+de\s+|de\s+|:|-)?\s*" + _NUM + r"\s*(?:lei|ron)\b(?:\s*" + _BASIS + r"\b)?"
+    r"|" + _NUM + r"\s*(?:lei|ron)\s*" + _BASIS + r"?\s*(?:/|pe)\s*luna\b(?:\s*" + _BASIS + r"\b)?")
+_HOURS_MONTH = re.compile(r"(\d{1,3})\s*ore\s*(?:/|pe)\s*luna\b")
+
+
+def _amount(raw) -> float | None:
+    s = str(raw)
+    if re.fullmatch(r"\d{1,3}(?:[.,]\d{3})+", s):
+        return float(re.sub(r"[.,]", "", s))
+    try:
+        return float(s.replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _quote(text, start, end) -> str:
+    """The sentence around the pay, cut at word boundaries (… marks a cut), for display under the figure."""
+    lo, hi = max(0, start - 70), min(len(text), end + 70)
+    q = re.sub(r"\s+", " ", text[lo:hi]).strip(" |:-")
+    if lo > 0 and text[lo - 1].strip():
+        q = q.split(" ", 1)[1] if " " in q else q          # the first word is cut
+    if hi < len(text) and text[hi].strip():
+        q = q.rsplit(" ", 1)[0] if " " in q else q         # the last word is cut
+    q = q.strip(" |:-")
+    return (("… " if lo > 0 else "") + q + (" …" if hi < len(text) else ""))[:210]
+
+
+def project_pay(text) -> dict | None:
+    """The pay a project-hired post states: {amount, unit 'ora'|'luna', basis 'brut'|'net'|'',
+    hours_per_month, quote}, or None.
+
+    None when the text gives no pay, when it gives several different rates (several roles: no
+    mixing), or when the figure is not pay (under 15 or over 500 lei/oră; a month figure under
+    1.000 lei). The hours are set only when the text gives one value of hours per month.
+    """
+    t = _fold_keep_length(text)
+    found = []                                   # (amount, unit, basis, start, end)
+    for rx, unit in ((_PAY_HOUR, "ora"), (_PAY_MONTH, "luna")):
+        for m in rx.finditer(t):
+            g = [x for x in m.groups() if x]
+            nums = [x for x in g if x not in ("brut", "net")]
+            amount = _amount(nums[0]) if nums else None
+            if amount is None:
+                continue
+            ok = 15 <= amount <= 500 if unit == "ora" else amount >= 1000
+            if not ok:
+                continue
+            basis = next((x for x in g if x in ("brut", "net")), "")
+            found.append((amount, unit, basis, m.start(), m.end()))
+    if not found:
+        return None
+    if len({(a, u) for a, u, *_ in found}) > 1:
+        return None
+    amount, unit = found[0][0], found[0][1]
+    bases = {b for _, _, b, *_ in found if b}
+    hours = {int(h) for h in _HOURS_MONTH.findall(t)}
+    return {
+        "amount": amount, "unit": unit,
+        "basis": bases.pop() if len(bases) == 1 else "",
+        "hours_per_month": float(hours.pop()) if unit == "ora" and len(hours) == 1 else None,
+        "quote": _quote(str(text or ""), found[0][3], found[0][4]),
+    }
+
+
 # ---- Regime: funcție publică / contractuală / militară ----------------------
 
 # Grade words of a public servant: "consilier, clasa I, grad profesional superior".

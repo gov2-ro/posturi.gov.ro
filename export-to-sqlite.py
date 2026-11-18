@@ -287,7 +287,18 @@ CREATE TABLE job_postings (
     --   closed          the application date has passed
     --   unknown         no date anywhere
     -- Cancelled postings never reach this table (the export excludes them).
-    application_status      TEXT NOT NULL DEFAULT ''
+    application_status      TEXT NOT NULL DEFAULT '',
+    -- 2026-11-19 (SALARY-EU-DETAIL, PIPELINE-PROJECT-PAY): a post hired for an EU or PNRR project
+    -- is paid at the hourly rate of the project, not by the salary grid. project_hire is set by
+    -- classify.project_hire() (funding_kind set AND the text says the post belongs to the project);
+    -- the proj_* columns hold the pay the text states (classify.project_pay()): amount, unit
+    -- ('ora' | 'luna'), basis ('brut' | 'net' | ''), hours per month and the quoted source.
+    project_hire            INTEGER NOT NULL DEFAULT 0,
+    proj_pay_amount         REAL,
+    proj_pay_unit           TEXT NOT NULL DEFAULT '',
+    proj_pay_basis          TEXT NOT NULL DEFAULT '',
+    proj_hours_month        REAL,
+    proj_pay_quote          TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -603,6 +614,14 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         funding_kind = classify.eu_funding(text) or (
             v4["funding_source"] if v4["funding_source"] != "nespecificat" else "")
 
+        # SALARY-EU-DETAIL: the pay of a project-hired post is read from the same text.
+        hire = classify.project_hire(text, funding_kind)
+        pay = classify.project_pay(text) if hire else None
+        proj = (1 if hire else 0,
+                pay["amount"] if pay else None, pay["unit"] if pay else "",
+                pay["basis"] if pay else "", pay["hours_per_month"] if pay else None,
+                pay["quote"] if pay else "")
+
         anomaly_flags = inferred.get("anomaly_flags") or []
         requires_computer = inferred.get("requires_computer")
         if requires_computer is True:
@@ -721,6 +740,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             None if q is None else json.dumps(q["checks"]),
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
+            *proj,
         ))
         total += 1
         if len(batch) >= 500:
@@ -1677,7 +1697,8 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         v5_post_status, v5_end_date, v5_channels, v5_work_localities,
         work_mode, funding_kind, job_regime, employer_kind, occ_group, med_specialty,
         quality, quality_json,
-        apply_deadline, deadline_source, application_status"""
+        apply_deadline, deadline_source, application_status,
+        project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart
     # (they did twice while this was hand-maintained `?` strings).

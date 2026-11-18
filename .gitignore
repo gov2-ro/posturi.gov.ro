@@ -70,3 +70,6 @@ playwright-report/
 webapp-php/static/code-version.txt
 tmp/
 */tmp/*
+
+# Editor leftovers (vim swap files)
+*.sw[op]

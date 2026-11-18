@@ -257,6 +257,8 @@ if [[ $deploy_code -eq 1 ]]; then
     # the fixture tests spawn servers and must never be web-requestable.
     rsync "${rsync_common[@]}" --delete \
         --exclude='.DS_Store' \
+        --exclude='*.sw[op]' \
+        --exclude='*~' \
         --exclude='assets/' \
         --exclude='router.php' \
         --exclude='tests/' \

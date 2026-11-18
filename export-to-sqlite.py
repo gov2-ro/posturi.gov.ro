@@ -30,6 +30,8 @@ Output: posturi.sqlite with tables:
   salary_grid_rows, salary_grid_pay, salary_grid_link, salary_cap, salary_param — the
                     salary estimator page (/estimator-salariu/): both grids, the pay of each
                     row at gradation 0-5, the law-draft link, the local caps, the parameters
+  salary_title, salary_ins_context — the same page: the job titles of postings that have a law
+                    estimate (a shortcut into the grid) and the INS earnings line (SALARY-INS-LINE)
   build_meta      — one row: when this file was built, from which commit and host
 """
 
@@ -792,7 +794,9 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
 
     export_llm_costs(cur, con)
     export_publication_monthly(cur, con)
-    export_salary_estimator(con)
+    if export_salary_estimator(con):
+        export_salary_titles(con)
+        export_salary_ins_context(con)
     if active_only:
         export_archive(cur, con)
 
@@ -1202,6 +1206,127 @@ def export_salary_estimator(con: sqlite3.Connection, today=None) -> dict | None:
           f"(law {coverage['law_with_draft']}/{coverage['law_rows']}, "
           f"draft {coverage['draft_with_law']}/{coverage['draft_rows']}), {len(caps)} caps")
     return coverage
+
+
+SALARY_TITLE_DDL = """
+DROP TABLE IF EXISTS salary_title;
+-- The title shortcut of /estimator-salariu/: a job title of the postings in this file, the
+-- first law row of their estimate and the grade that the estimate read from the title
+-- (`grad_treapta` of its selector, empty when the title has none). `cautare` is the
+-- accent-free search text. Built from job_postings + posting_text.sal_json of this same file.
+CREATE TABLE salary_title (
+    titlu    TEXT NOT NULL,
+    cautare  TEXT NOT NULL,
+    ref      TEXT NOT NULL,
+    grad     TEXT NOT NULL DEFAULT '',
+    nr       INTEGER NOT NULL
+);
+CREATE INDEX idx_salary_title_ref ON salary_title(ref);
+"""
+
+SALARY_INS_DDL = """
+DROP TABLE IF EXISTS salary_ins_context;
+-- The INS earnings line of /estimator-salariu/: a copy of data/salarii/ins-context.csv
+-- (ops/build-ins-context.py). `judet` is empty for the national figure.
+CREATE TABLE salary_ins_context (
+    matrice       TEXT NOT NULL,
+    sectiune_caen TEXT NOT NULL,
+    judet         TEXT NOT NULL DEFAULT '',
+    perioada      TEXT NOT NULL,
+    masura        TEXT NOT NULL,
+    valoare       REAL NOT NULL,
+    unitate       TEXT NOT NULL,
+    extras_la     TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (matrice, sectiune_caen, judet, perioada, masura)
+) WITHOUT ROWID;
+"""
+
+SALARY_INS_CSV = Path(__file__).resolve().parent / "data" / "salarii" / "ins-context.csv"
+
+
+#: A title with one posting and more words than this is an announcement text, not a title.
+SALARY_TITLE_MAX_WORDS = 8
+
+
+def _title_display(raw: str) -> str:
+    """One spelling of a title: spaces collapsed; a SHOUTED title in sentence case."""
+    t = " ".join(raw.split()).strip(" ,;")
+    return t.capitalize() if t.isupper() else t
+
+
+def build_salary_titles(postings, valid_refs) -> list[tuple]:
+    """`(titlu, cautare, ref, grad, nr)` from `(title, sal_json)` pairs.
+
+    A posting counts when its estimate is the law one (`baza` lege_in_vigoare) and its first row
+    is in `valid_refs`. Postings with one normalised title make one entry; its ref and grade
+    are the commonest pair. A title with at least 2 postings stays. A title with 1 posting stays
+    unless it has more than SALARY_TITLE_MAX_WORDS words or is a near-duplicate of a kept title that has the same ref: its words contain the
+    words of that title, or the reverse, or the two share 80% of their words.
+    """
+    from collections import Counter
+    groups: dict[str, dict] = {}
+    for title, sal_json in postings:
+        try:
+            est = json.loads(sal_json) if sal_json else None
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(est, dict) or est.get("baza") != "lege_in_vigoare" or not est.get("randuri"):
+            continue
+        ref = est["randuri"][0]
+        key = salary_grid.norm(title)
+        if ref not in valid_refs or not key:
+            continue
+        g = groups.setdefault(key, {"raw": Counter(), "pair": Counter(), "n": 0})
+        g["raw"][_title_display(title)] += 1
+        g["pair"][(ref, str((est.get("selector") or {}).get("grad_treapta") or ""))] += 1
+        g["n"] += 1
+    kept: list[tuple] = []
+    kept_words: dict[str, list[frozenset]] = {}
+    for key, g in sorted(groups.items(), key=lambda kv: (-kv[1]["n"], kv[0])):
+        (ref, grad), _ = g["pair"].most_common(1)[0]
+        words = frozenset(key.split())
+        if g["n"] < 2:
+            if len(words) > SALARY_TITLE_MAX_WORDS:
+                continue
+            same = kept_words.get(ref, [])
+            if any(words >= w or w >= words or len(words & w) / len(words | w) >= 0.8 for w in same):
+                continue
+        kept_words.setdefault(ref, []).append(words)
+        kept.append((g["raw"].most_common(1)[0][0], key, ref, grad, g["n"]))
+    return kept
+
+
+def export_salary_titles(con: sqlite3.Connection) -> int | None:
+    """Write salary_title from the postings of this file. Needs the grid tables; None without them."""
+    try:
+        law_version = json.loads(con.execute("SELECT value FROM salary_param WHERE key = 'law'").fetchone()[0])["version"]
+        valid = {r[0] for r in con.execute("SELECT ref FROM salary_grid_rows WHERE version = ?", (law_version,))}
+        postings = con.execute("SELECT j.title, t.sal_json FROM job_postings j "
+                               "JOIN posting_text t ON t.posting_id = j.id WHERE t.sal_json IS NOT NULL").fetchall()
+    except sqlite3.Error as exc:
+        print(f"salary_title skipped ({exc})")
+        return None
+    con.executescript(SALARY_TITLE_DDL)
+    rows = build_salary_titles(postings, valid)
+    con.executemany("INSERT INTO salary_title VALUES (?,?,?,?,?)", rows)
+    print(f"salary_title: {len(rows)} titles from {len(postings)} postings")
+    return len(rows)
+
+
+def export_salary_ins_context(con: sqlite3.Connection, path: Path = SALARY_INS_CSV) -> int | None:
+    """Copy data/salarii/ins-context.csv into salary_ins_context. A checkout without the file skips it."""
+    import csv
+    try:
+        with open(path, encoding="utf-8", newline="") as fh:
+            rows = [(r["matrice"], r["sectiune_caen"], r["judet"], r["perioada"], r["masura"],
+                     float(r["valoare"]), r["unitate"], r["extras_la"]) for r in csv.DictReader(fh)]
+    except (OSError, KeyError, ValueError) as exc:
+        print(f"salary_ins_context skipped ({exc})")
+        return None
+    con.executescript(SALARY_INS_DDL)
+    con.executemany("INSERT OR REPLACE INTO salary_ins_context VALUES (?,?,?,?,?,?,?,?)", rows)
+    print(f"salary_ins_context: {len(rows)} rows")
+    return len(rows)
 
 
 def git_sha() -> str:

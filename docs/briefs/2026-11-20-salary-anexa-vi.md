@@ -43,6 +43,10 @@ No posting maps to Anexa VI today (local database, 2026-11-20: 0 postings). The 
    Stop after the report. Opus decides if the law-in-force rows get built.
 6. **Tests.** In `webapp/tests/test_salary_grid.py`: agent de poliție debutant, PL, gradation 0 = `ceil((1.49 + 0.52) × 4100)` = 8,241 lei; one officer row (for example "locotenent" with rank 0,65); one row with no rank (decision 2); the "debutant" label of step 3.
 
+## Where the data is
+
+The local Postgres is a copy of 9 Sep 2026; the live data is on the VPS. Build and test on the Mac. After the code deploy, the owner's VPS session (`posturi-vps`) runs `build-salary-grid.py` and `estimate-salaries.py` there, so that the VPS data gets the new figures. Report the VPS dry-run counts of step 3, not only the local ones.
+
 ## Done when
 
 - The tests of step 6 pass, and the whole test suite passes.

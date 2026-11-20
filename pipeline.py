@@ -20,7 +20,7 @@ Usage:
   python pipeline.py --force --no-llm
   python pipeline.py --steps infer --provider anthropic --limit 100
   python pipeline.py --steps export-sqlite    # rebuild SQLite only
-  python pipeline.py --steps occupations,salary,export-sqlite  # re-cost after a grid change
+  python pipeline.py --steps occupations,selectors,salary,export-sqlite  # re-cost after a grid change
 
   # Backfill the LLM extraction for everything currently live (~1,440 postings):
   python pipeline.py --steps schema --active-only --resume --workers 8 --prompt-version v3
@@ -75,7 +75,11 @@ ALL_STEPS = [
     # Occupations then pay. Both are cheap and re-runnable on their own: the
     # salary law is an unadopted draft, so when a new variant lands only
     # `occupations` and `salary` rerun, not the 9,600-posting extraction.
+    # `selectors` fills, with no model call, the grid function of an occupation that
+    # the model left empty (SALARY-UNMATCHED). It runs after every occupation pass so
+    # a new title is covered on the run that adds it.
     "occupations",
+    "selectors",
     "salary",
     # After every step that writes what it records (import: cancelled/expiry/hash;
     # schema: extraction; infer: the implicit role's requirements) and before the
@@ -92,6 +96,7 @@ _SCRAPER_STEPS = {
     "download":      ROOT / "download-attachments.py",
     "schema":        ROOT / "llm-schema.py",
     "occupations":   ROOT / "normalize-titles.py",
+    "selectors":     ROOT / "normalize-titles.py",
     "salary":        ROOT / "estimate-salaries.py",
     "export-sqlite": ROOT / "export-to-sqlite.py",
 }
@@ -215,6 +220,8 @@ def _build_cmd(
                     cmd.extend(["--workers", str(workers)])
                 if limit is not None:
                     cmd.extend(["--limit", str(limit)])
+        if step == "selectors":
+            cmd.append("--fill-selectors")
         if step == "salary" and force:
             # A new grid variant invalidates every stored estimate.
             cmd.append("--clear")

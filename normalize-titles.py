@@ -445,6 +445,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="skip the LLM; just re-point postings at existing occupation rows")
     ap.add_argument("--relabel-trades", action="store_true",
                     help="skip the LLM; give a generic canonical the trade its title names (honours --dry-run)")
+    ap.add_argument("--fill-selectors", action="store_true",
+                    help="no LLM: give an occupation with no grid function the grid row of its "
+                         "canonical name; never changes a filled one; --dry-run lists it")
     ap.add_argument("--merge-spellings", action="store_true",
                     help="skip the LLM; one label for the spellings of one occupation (honours --dry-run)")
     ap.add_argument("--run-log", default=str(ROOT / "data" / "pipeline-runs.jsonl"), metavar="PATH",
@@ -454,8 +457,95 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+# --- fill empty selectors without the model (SALARY-UNMATCHED, fix a) ---------
+
+#: Canonical names that the grids spell another way. One alias, one reason.
+SELECTOR_ALIASES = {
+    "femeie de serviciu": "Îngrijitor",      # owner, 2026-11-20: same job, same pay
+    "infirmier": "Infirmieră",               # the grids list the feminine form only
+}
+#: The grid function for a trade with no row of its own (owner, 2026-11-20).
+TRADE_FUNCTION = "Muncitor calificat"
+#: COR major groups of the trades: 7 craft workers, 8 plant and machine operators.
+TRADE_COR_GROUPS = {"7", "8"}
+
+
+def _is_trade(canonical: str) -> bool:
+    """True when `canonical` names a COR trade (group 7 or 8), by `ocupatii.trade_in()`.
+
+    A doctor or a counsellor also starts a COR name ("medic primar"), but their COR
+    group is 2 or 3, so they are not a trade. The first COR name that starts with the
+    words of `canonical` decides.
+    """
+    words = salary_grid.norm(canonical).split()
+    if not words or not ocupatii.trade_in(canonical):
+        return False
+    for _, entry in ocupatii.load_cor().candidates(canonical, k=10):
+        if entry.denumire_normalizata.split()[:len(words)] == words:
+            return entry.grupa_majora in TRADE_COR_GROUPS
+    return False
+
+
+def selector_fill(canonical: str, selector: dict, draft, law) -> dict | None:
+    """The selector with a grid function added, or None when nothing is to change.
+
+    Rules, in order. An occupation that already names a function (`functie_grila`,
+    `functie`) or a `cod` is never touched.
+      1. The canonical name (or its alias) is a function name in the law grid or the
+         draft grid: use that name.
+      2. The canonical name is a trade with no row: use `Muncitor calificat`.
+    `anexa` is set only when it is empty and every grid that has the name agrees.
+    Everything else in the selector stays.
+    """
+    if selector.get("functie_grila") or selector.get("functie") or selector.get("cod"):
+        return None
+    name = SELECTOR_ALIASES.get(salary_grid.norm(canonical), canonical)
+    rows = {"law": law.by_name.get(salary_grid.norm(name), []),
+            "draft": draft.by_name.get(salary_grid.norm(name), [])}
+    if not (rows["law"] or rows["draft"]):
+        if not _is_trade(canonical):
+            return None
+        name = TRADE_FUNCTION
+        rows = {"law": law.by_name.get(salary_grid.norm(name), []),
+                "draft": draft.by_name.get(salary_grid.norm(name), [])}
+    out = dict(selector, functie_grila=name)
+    annexes = {r.anexa for rs in rows.values() for r in rs}
+    if not out.get("anexa") and len(annexes) == 1:
+        out["anexa"] = annexes.pop()
+    return out
+
+
+def fill_selectors(conn, draft, law, dry_run: bool) -> int:
+    """Fill the empty selectors of the dictionary. Idempotent; no model call."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id, canonical, grid_selector FROM jobs_occupation")
+        rows = cur.fetchall()
+    todo = []
+    for r in rows:
+        new = selector_fill(r["canonical"], r["grid_selector"] or {}, draft, law)
+        if new is not None:
+            todo.append((json.dumps(new, ensure_ascii=False), r["id"], r["canonical"], new["functie_grila"]))
+    counts = Counter((canon, fn) for _s, _i, canon, fn in todo)
+    for (canon, fn), n in counts.most_common(15):
+        print(f"  {canon[:36]:38s} -> {fn:24s} x{n}")
+    if not dry_run and todo:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE jobs_occupation SET grid_selector = %s::jsonb, provider = 'rule-name-lookup', "
+                "model = '', updated_at = NOW() WHERE id = %s", [(s, i) for s, i, _c, _f in todo])
+        conn.commit()
+    print(f"{len(todo)} occupations {'would be ' if dry_run else ''}filled")
+    return len(todo)
+
+
 def main() -> int:
     args = build_parser().parse_args()
+
+    if args.fill_selectors:
+        with psycopg.connect(DATABASE_URL) as conn:
+            fill_selectors(conn, salary_grid.load_grid(args.grid_version),
+                           salary_grid.load_grid(salary_grid.LAW_VERSION), args.dry_run)
+        return 0
 
     provider = resolve_provider(args.provider)
     model = resolve_model(provider, args.model)
@@ -465,6 +555,7 @@ def main() -> int:
 
     cor = ocupatii.load_cor()
     grid = salary_grid.load_grid(args.grid_version)
+    law_grid = salary_grid.load_grid(salary_grid.LAW_VERSION)
     runner = _llm_schema_module()
 
     with psycopg.connect(DATABASE_URL) as conn:
@@ -504,6 +595,15 @@ def main() -> int:
             grid_cands = grid.candidates(
                 parsed.base, anexa=ctx["anexa"], regim=ctx["regim"],
                 nivel_administrativ=ctx["nivel_administrativ"], k=12)
+            # Names that only the law grid lists (Brancardier, Logoped, Psiholog) would
+            # never reach the model. Add them after the draft candidates.
+            have = {salary_grid.norm(m) for _s, _r, m in grid_cands}
+            grid_cands = grid_cands + [
+                c for c in law_grid.candidates(
+                    parsed.base, anexa=ctx["anexa"], regim=ctx["regim"],
+                    nivel_administrativ=ctx["nivel_administrativ"], k=12)
+                if salary_grid.norm(c[2]) not in have and not grid.by_name.get(salary_grid.norm(c[2]))
+            ][:4]
             return ctx, cor_cands, grid_cands
 
         if args.dry_run:

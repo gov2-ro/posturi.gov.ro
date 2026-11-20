@@ -2,6 +2,22 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-UNMATCHED: audit and the selector fill (Sonnet, brief SALARY-UNMATCHED; not deployed)
+
+**Done.** `ops/salary-unmatched.py` (`1e975fe`) classifies the postings with no figure. The audit is `docs/audits/2026-11-20-salary-unmatched.md` (`2c83ab8`). VPS (data to 19 Nov): 2,625 of 16,640 postings have no figure (`fara-selector` 2,396, `fara-rand-functie` 229). Local 9 Sep copy: 1,382 of 9,750. Every one has an empty `functie`. Code, owner decisions of 2026-11-20:
+- `normalize-titles.py --fill-selectors` (`--dry-run`, no LLM, idempotent). It fills an occupation with no `functie_grila`, `functie` and `cod` from its canonical name: the law grid, then the draft grid. Aliases: Femeie de serviciu → Îngrijitor, Infirmier → Infirmieră. A trade with no row (COR group 7 or 8, by `ocupatii.trade_in()`) takes „Muncitor calificat”; the canonical name stays, so the page shows the trade. It sets `provider = 'rule-name-lookup'`. A filled occupation is never changed.
+- `pipeline.py`: new step `selectors` between `occupations` and `salary`.
+- The LLM shortlist adds up to 4 names that only the law grid lists (Brancardier, Logoped, Psiholog). Old titles are not re-run.
+- Tests: `webapp/tests/test_selector_fill.py` (14).
+
+**Measured, local 9 Sep copy** (selector filled in memory; the database was not written). Postings with a figure 8,368 → 9,151 (+783); `lege_in_vigoare` 8,256 → 9,034, `proiect` 112 → 117; `exact` 3,298 → 3,603, `interval` 5,070 → 5,548. Lost: 0. Changed: 0. Still without a figure: 599. `--fill-selectors --dry-run`: 639 occupations. The audit estimated 731 gained; the measured 783 is higher because of the trade rule and the cleaner alias.
+
+**Hard.** The cause was not a skipped or failed pass. The model answered "none" and the dictionary never retries a title it has. Full test suite: 1,645 pass, 1 fails (`test_salary_facet_sql.py::…[pages/list.php]`, "no salary comparison found"; the PHP file is not touched here; not investigated).
+
+**Decided.** Fill in the dictionary, not as an estimator fallback: the mapping is visible and marked. Multi-role titles go to DATA-04. The match confidence of a filled occupation is left as it was.
+
+**Next.** VPS: `--fill-selectors --dry-run`, the real run, then `estimate-salaries.py --dry-run` and the real run; record the before/after counts. Then tick SALARY-UNMATCHED.
+
 ### 2026-11-20 — Salary decisions: the draft as a last resort, known limits, police pay, postings with no figure (Opus + owner)
 
 Started from a r/RoMunca question: "the gross pay of a new border police agent in 2026". A commenter answered „4000 × 1,49 + 4000 × 0,52 = 8040 lei brut” (August draft).

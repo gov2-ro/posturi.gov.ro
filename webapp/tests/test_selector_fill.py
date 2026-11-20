@@ -81,9 +81,13 @@ def test_school_counsellor_takes_the_psihopedagog_row(nt, grids):
     assert fill(nt, grids, "Consilier școlar")["functie_grila"] == "Psihopedagog"
 
 
-def test_social_technician_gets_no_university_row(nt, grids):
-    # Asistent social is an S row; the technician post is M (owner decides, 2026-11-20).
-    assert fill(nt, grids, "Tehnician asistență socială") is None
+def test_social_technician_takes_the_draft_m_row(nt, grids):
+    # Not "Asistent social" (an S row): the post is M, and only the draft has its row.
+    draft, law = grids
+    name = fill(nt, grids, "Tehnician asistență socială")["functie_grila"]
+    assert "tehnician asistență socială" in name and "principal" not in name
+    rows = draft.by_name[sg.norm(name)]
+    assert {r.studii for r in rows} == {"M"} and not law.by_name.get(sg.norm(name))
 
 
 def test_never_changes_a_filled_function(nt, grids):

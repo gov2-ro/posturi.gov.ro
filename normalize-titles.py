@@ -466,6 +466,12 @@ SELECTOR_ALIASES = {
     # Owner, 2026-11-20: the nearest row, same studies level (S). Most of these posts
     # are project hires (PIDS); the law grid has no row for the job itself.
     "consilier scolar": "Psihopedagog",
+    # Owner, 2026-11-20: the law grid has no M row; the draft row (Anexa II b), no grade)
+    # gives an "estimare aproximativă". Not "Asistent social": that row is S.
+    "tehnician asistenta sociala": (
+        "Educator, educator puericultor, asistent igiena, asistent BFT, optician protezare "
+        "ortopedică și auditivă, asistent medical, tehnician asistență socială 1*)"
+    ),
 }
 #: The grid function for a trade with no row of its own (owner, 2026-11-20).
 TRADE_FUNCTION = "Muncitor calificat"

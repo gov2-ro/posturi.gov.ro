@@ -2,6 +2,25 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-UNMATCHED applied on the VPS: 84% → 94% of postings have a figure (Opus review; VPS session `posturi-vps-261118`)
+
+**Done**
+- The VPS ran `normalize-titles.py --fill-selectors` (HEAD `c799d18`, 14:40–14:47 EET): 1,226 occupations filled. Then `estimate-salaries.py`.
+- A read-only check found that the fill put job names that exist in several annexes in an annex that ignores the employer (Psiholog → III, Infirmier → I). The owner kept the fill live for the 18:33 run, and Sonnet built the annex choice by employer type (`9857cb0`). The VPS re-ran `estimate-salaries.py` (HEAD `50842ba`, 15:57–15:59 EET).
+
+**Measured (VPS)**
+- Postings with a figure: 14,120 / 16,776 (84%) → 15,715 (94%). No figure: 2,656 → 1,061. No annex line lost postings with a figure. The annex fix kept the count at 15,715.
+- Before → after the annex fix (rule-name-lookup rows, median lei_min / max lei_max): Psiholog 4,543 / 5,246 (Anexa III) → 5,363 / 7,241 (Anexa II b.4); Infirmier 4,325 / 5,681 (Anexa I, 14 rows) → 4,485 / 5,681 (Anexa II c.1); Medic specialist max 14,543 → 11,187; Muzeograf Anexa I → III.
+- Council ranges now apply to filled Anexa VIII posts at town halls (Șofer, Referent, Administrator: 4,325–19,320). This is ADR 0008 rule 3, not a defect.
+- Still no figure: 1,061. Top: Consilier școlar 58, Tehnician asistență socială 44, Manager proiect 33, Medic rezident 25, Mediator sanitar 25.
+
+**Hard**
+- The pull of `50842ba` also brought the declared-pay step of the parallel SALARY-DECLARATII work: 13 postings take `baza = declaratii`, and 13 salary buckets move. That is not part of this item.
+
+**Decided**
+- *Publish the fill at 18:33, then fix the annex* (owner). Rationale: the postings had no figure before; most figures were close; Psiholog was about 20% low. Alternative not taken: clear the fills of names in several annexes before 18:33 (a few hundred postings back to „fără salariu estimat”).
+- *The annex comes from the employer, per posting, in `estimate-salaries.py`*, not from the occupation dictionary: one occupation serves many employers. When the employer type is unclear, the figure is the range over all annexes that have the name.
+
 ### 2026-11-20 — SALARY-DECLARATII: pages per institution, decided and briefed (Opus + owner)
 
 **Done**

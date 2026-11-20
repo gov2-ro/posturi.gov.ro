@@ -93,6 +93,8 @@ def estimate_dict(g: dict) -> dict:
 
     `lei_min` and `lei_max` stay gross (as for the other baselines): the gross that gives
     p25 x factor and p75 x factor net. The net values under `declaratii` are rounded to 50 lei.
+    `mediana_net_2023` (the group median before the factor) is an addition to the brief's key list:
+    step 1 of the explainer shows it.
     """
     factor = float(g["factor"])
     p25, med, p75 = (float(g[k]) * factor for k in ("p25_net_2023", "mediana_net_2023", "p75_net_2023"))
@@ -104,7 +106,8 @@ def estimate_dict(g: dict) -> dict:
         "randuri": [], "avertismente": [], "disclaimer": DISCLAIMER, "baza": "declaratii",
         "declaratii": {
             "n": int(g["n"]), "an_venit": int(g["an_venit"]), "factor": factor,
-            "factor_sursa": g["factor_sursa"], "mediana_net": round50(med), "p25_net": round50(p25),
+            "factor_sursa": g["factor_sursa"], "mediana_net": round50(med), "mediana_net_2023": round50(float(g["mediana_net_2023"])),
+            "p25_net": round50(p25),
             "p75_net": round50(p75), "institutie_id": g["institutie_id"], "functie": g["functie"],
             "familie": g["familie"], "eroare_tipica": float(g["eroare_tipica"]),
         },

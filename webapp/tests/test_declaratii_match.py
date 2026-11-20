@@ -67,7 +67,8 @@ def test_estimate_dict():
     x = est["declaratii"]
     assert (x["p25_net"], x["mediana_net"], x["p75_net"]) == (5750, 6900, 8050)
     assert x["n"] == 10 and x["an_venit"] == 2023 and x["factor"] == 1.15
-    assert set(x) == {"n", "an_venit", "factor", "factor_sursa", "mediana_net", "p25_net", "p75_net",
+    assert x["mediana_net_2023"] == 6000
+    assert set(x) == {"n", "an_venit", "factor", "factor_sursa", "mediana_net", "mediana_net_2023", "p25_net", "p75_net",
                       "institutie_id", "functie", "familie", "eroare_tipica"}
 
 

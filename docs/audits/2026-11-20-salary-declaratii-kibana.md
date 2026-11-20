@@ -355,6 +355,66 @@ The ratio is mean(gr. 0, gr. 5) of the list where both exist. Median 0.62, range
 
 Limits: 6 groups at 3 employers, all local or county administration. The within-group test above shows that one group declares one way. It does not prove that every group in the country declares net. The 2026 food allowance (347 lei a month for net pay up to 6,000) is in the 2026 pay but not in the 2023 base of the factor. INS net includes it.
 
+## Coverage spikes (2026-11-20, after the build)
+
+The build (brief `docs/briefs/2026-11-20-salary-declared-pay.md`) matched 5 of 9,750 postings on the 9 Sep copy, although 1,093 postings have an employer with a group. Two ideas to raise the coverage were tested. Script: `tmp/261120/coverage/spike_a.py` (spike code, not in git).
+
+### A. Wider groups (peer groups)
+
+Peer key: for local administration, the unit type (COMUNA, ORAS, MUNICIPIUL, JUDET, SECTOR) + county + title; for any other employer, the kind of institution (the name without county and place tokens, for example „INSPECTORATUL TERITORIAL DE MUNCA”) + title, national. A peer group needs n ≥ 5 at ≥ 3 employers.
+
+Accuracy, leave-one-out: for each employer group (n ≥ 5), the median of its peers at the other employers against its own median, same year:
+
+| Peer key | Family | Groups | Median abs. error | p90 abs. error | Within 10 % |
+|---|---|---|---|---|---|
+| Kind of institution (national) | all | 2,719 | 4.4 % | 21.6 % | 73 % |
+| | central administration | 718 | 2.0 % | 21.1 % | 77 % |
+| | county administration | 478 | 2.5 % | 15.2 % | 84 % |
+| | MAI / MApN | 1,469 | 5.7 % | 22.4 % | 69 % |
+| Unit type + county (councils) | all | 1,102 | 11.3 % | 27.5 % | 44 % |
+| | local administration | 963 | 11.0 % | 26.5 % | 45 % |
+| | local police | 139 | 14.5 % | 39.1 % | 34 % |
+
+- The kind of institution works: deconcentrated services pay on national scales.
+- Councils of the same type in the same county do not work: each council sets its own pay (rule 3), and an error of 11 % is about twice the error of the method.
+
+Coverage on the 9 Sep copy: 2,466 peer groups would add **77 postings** (70 council, 7 other). 2,364 postings (24 %) sit at a known unit, but their title matches no declared title.
+
+Why: council postings and council declarants hold different jobs.
+
+| Council postings (1,919), top titles | | Council declarants (47,139), top titles | |
+|---|---|---|---|
+| asistent medical comunitar | 181 | inspector | 6,384 |
+| consilier școlar | 130 | consilier | 6,236 |
+| mediator școlar | 85 | consilier superior | 5,201 |
+| asistent social | 67 | inspector superior | 4,509 |
+| șofer microbuz școlar | 57 | referent superior | 2,221 |
+| șofer | 56 | referent | 2,141 |
+| muncitor calificat | 40 | șef serviciu | 2,080 |
+
+Among the 47,139 council declarants: 85 workers, 53 drivers, 7 carers, 70 social workers. Contract staff seldom file an asset declaration. No title rule can match postings to declarants who do not exist.
+
+### B. The council's pay level, carried to contract staff
+
+Idea: the declarations show how far a council pays its civil servants above the law. If the council pays contract staff the same way, that premium narrows the range of rule 3 for every council posting. Data with both groups at one council: the S1 lists (`tmp/261118/s1/gap_table.md`), 5 councils with both groups:
+
+| Council | Civil servants ÷ law (median) | Workers ÷ law (median) | (workers − 1) ÷ (civil servants − 1) | Contract staff with a degree ÷ law |
+|---|---|---|---|---|
+| CJ Bacău | 2.31 | 1.48 | 0.37 | 1.67 |
+| Târgoviște | 1.81 | 1.20 | 0.25 | 1.79 |
+| Bușteni | 1.45 | 1.00 | 0.00 | 1.17 |
+| Vlădeni (DB) | 1.24 | 1.27 | 1.13 | — |
+| Tulca | 1.05 | 1.14 | 2.80 | 1.04 |
+
+The share of the civil-servant premium that reaches workers goes from 0 to 2.8. The rank order of the councils is not the same for the two groups. The minimum wage compresses worker pay. Carrying the civil-servant premium to workers would overstate worker pay by 25–55 % at the high-paying councils. With 5 councils we cannot fit a rule, and the data shows no simple rule.
+
+### Result
+
+- Rule 9 stays as built: one employer and one title. It covers civil-servant and management posts, which are few among the postings.
+- A national peer group by kind of institution is accurate (4.4 %), but adds 7 postings. Not worth a change to rule 9 now.
+- Council peer groups and the council premium for contract staff: dead ends, for the reasons above.
+- The declarations are strong for what they cover: 6,201 groups at 2,108 institutions, real net pay by employer and title. A page that shows them per institution would use them fully, and does not depend on the postings. That is a product decision.
+
 ## Open
 
 - How posturi uses the figure (ADR 0008 rule 3): a third baseline („salarii declarate”), or a check of the grid estimate. This needs a decision.

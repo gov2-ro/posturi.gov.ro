@@ -2,6 +2,30 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-DECLARATII: pages per institution, decided and briefed (Opus + owner)
+
+**Done**
+- The owner chose a section on the employer page, a page per institution and an index. ADR 0008 rule 9 has a new bullet „Pages per institution”. Brief: `docs/briefs/2026-11-20-salary-declared-institutions.md`; it includes the feed fix as step 0.
+
+**Decided**
+- Show the groups per institution, not per posting. Reason: the postings route uses 5 of 6,201 groups; this route uses all of them. Measured on the 9 Sep copy: 629 of 5,871 employers with postings match an institution; about 1,480 institutions have no employer page.
+- The first line under the heading says that contract staff are not included. Reason: spike B, a council's civil-servant pay does not predict its contract-staff pay.
+- No comparison with other employers for now (SALARY-DECLARATII-COMPARE).
+
+### 2026-11-20 — SALARY-DECLARATII: review of the build, and two coverage spikes (Opus)
+
+**Done**
+- Reviewed the Sonnet build (`fcbc00c`…`ff93ea2`) against the brief. On the combined code (another session's `9857cb0` landed in between): 189 salary tests and the PHP tests pass; the dry run reproduces 6,201 groups, 1,093 employer matches and 5 group matches. `alerts.spec.js:54` fails, but that is TEST-ALERTS-PRIVACY-LINK (anchor rename `9e59277`, 18 Nov), not this build.
+- Spike A (peer groups) and spike B (council premium for contract staff). Numbers in the audit note, „Coverage spikes”.
+
+**Hard**
+- Coverage is limited by who declares, not by the match rule. Council postings are community nurses, school counsellors, drivers and workers; council declarants are civil servants (85 workers and 53 drivers among 47,139).
+
+**Decided**
+- Council peer groups: dropped (error 11.0 %, +70 postings). The council premium for contract staff: dropped (0 to 2.8 times the premium on 5 councils). Both recorded as `[-]` in the backlog.
+- Rule 9 stays as built. A national peer group by kind of institution is accurate (4.4 %) but adds 7 postings: kept as a low-priority item.
+- Measured on the 9 Sep copy only. Assumed, not measured: the VPS data has the same mix of posts.
+
 ### 2026-11-20 — SALARY-DECLARATII: declared pay built (Sonnet, from the Opus brief)
 
 **Done**

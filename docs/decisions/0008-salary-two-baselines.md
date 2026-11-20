@@ -37,6 +37,7 @@ The owner also asked about salariile.ro/compara. It has no model to copy. Each o
    - **Privacy.** Only group figures leave the build: `institutie_id`, `functie`, `n`, p25, median, p75, the year and the factor. No names, no person key, no single declaration. The raw dump stays in `data/integritate/`, out of git and off the site.
    - **Label.** `baza: "declaratii"`, with `an_venit: 2023`, `factor`, `n` and `sursa`. The list row says „după declarații de avere”. The detail page has the explainer (`docs/specs/2026-11-20-salary-declared-explainer.md`).
    - **Data.** Like rule 8: a script derives one small table, `data/salarii/declaratii-grupuri.csv`, from the dump. The table is in git; the dump is not.
+   - **Pages per institution (owner, 2026-11-20).** The groups also show per employer, independent of the postings: a section on `/angajator/{slug}` when the employer matches an institution, a page per institution `/salarii-declarate/{slug}/`, and an index `/salarii-declarate/`. The page shows only declared groups, and says in its first line that contract staff are not included (spike B: a council's civil-servant pay does not predict its contract-staff pay). No comparison with other employers for now.
 
 ## Consequences
 

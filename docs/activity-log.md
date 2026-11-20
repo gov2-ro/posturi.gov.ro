@@ -2,6 +2,41 @@
 
 ## 2026
 
+### 2026-11-20 — Salary decisions: the draft as a last resort, known limits, police pay, postings with no figure (Opus + owner)
+
+Started from a r/RoMunca question: "the gross pay of a new border police agent in 2026". A commenter answered „4000 × 1,49 + 4000 × 0,52 = 8040 lei brut” (August draft).
+
+**Done**
+- ADR 0008, rules 2 and 4, changed (commit `b19954f`).
+- Briefs: `2026-11-20-salary-anexa-vi.md` (`ef88a6f`), `2026-11-20-salary-labels-limits.md` and `2026-11-20-salary-unmatched.md` (`b19954f`).
+- Backlog items: SALARY-ANEXA-VI, SALARY-LABELS-LIMITS, SALARY-UNMATCHED, SALARY-DECLARATII.
+- SALARY-UNMATCHED steps 1–2 (Sonnet): `ops/salary-unmatched.py` (`1e975fe`, read-only), audit `docs/audits/2026-11-20-salary-unmatched.md` (`2c83ab8`). The VPS session `posturi-vps-261118` ran the script; the owner approved the reads there.
+
+**Measured**
+- Police pay, July draft (VR 4,100): „agent de poliție debutant” has a post coefficient of 1.49 (PL) or 1.44 (M) → 6,109 / 5,904 lei. The rank coefficient (0,52, sheet `VI_Armata` rows 74–95) is in the workbook but not in our grid. With it: 8,241 lei. The law-in-force grid has no Anexa VI rows.
+- Draft vs law, on postings with both figures (**local copy of 9 Sep**, 8,256 postings): median draft/law 1.14; 10th percentile 1.04, 90th 1.37. Not yet measured on the VPS.
+- VPS (data to 2026-11-19 17:04 UTC): 16,663 postings, 16,640 with an occupation. **2,625 (15.8%) have no figure** from either grid: 2,396 with no annex and no function, 229 with an annex but no function. 0 in the other causes. 189 postings take the draft figure (rule 4(c)). 1,988 local ranges. Up to 86 postings flagged outside Legea 153 (rough regex).
+- Local copy (9 Sep), for comparison: 1,382 with no figure; 112 on the draft figure.
+- Cause (Sonnet, from the code): the occupation model answered „none”, and a title with a dictionary row is never asked again. The model's shortlist comes from the draft grid only, and long titles fall under the 0.35 similarity threshold. A fill from the canonical name gains 731 of 1,382 locally (53%); about 1,390 on the VPS (estimate, scaled).
+
+**Decided**
+1. *The draft figure stays as a last resort, labelled „estimare aproximativă”* (owner). It is shown when there is no stated pay and no law figure, and as a side note on the posting page. Rationale: the draft is the only grid that covers most postings, and the filter needs a figure; nothing guarantees the draft passes. Alternatives not taken: adjust it by −14% (a number no act publishes); drop it (189 postings leave the salary filter). Backtrack: ADR 0008 rules 2 and 4 hold the old wording in git (`b19954f^`).
+2. *`/despre/` lists what the estimate cannot know* (owner): bonuses, council-set pay, the pay of current staff, the person (seniority, dependants), military/police coefficients set per institution, employers outside Legea 153, the title match. Opus drafted the Romanian text; the owner reviews it before it ships.
+3. *Police and military pay = post pay + rank pay* (Opus). Build it for the draft; for the law in force, spike only. Not for the list: in the 9 Sep copy no posting maps to Anexa VI (not measured on the VPS).
+4. *Do not compute the August draft from VR 4,000 and the July coefficients* (unchanged rule, `parametri.json`).
+5. *Fix the postings with no figure in the occupation step, not in the estimator* (owner). New flag `normalize-titles.py --fill-selectors` (no LLM, fills only empty functions, provider `rule-name-lookup`), run by `pipeline.py` on every run before `salary`. The model's shortlist also gets the law-grid names. Alternative not taken: a fallback in `estimate-salaries.py` (simpler, but the dictionary stays wrong and the rule is hidden). Backtrack: the rows carry `provider='rule-name-lookup'`, so a script can clear exactly them.
+6. *Trades with no row of their own (Electrician, Fochist, Electromecanic) take „Muncitor calificat”* (owner). The page keeps the trade name. About 70 postings in the 9 Sep copy.
+7. *„Femeie de serviciu” takes the pay of „Îngrijitor”* (owner).
+8. *Multi-role titles wait for DATA-04* (Opus).
+9. *Measure and fix data gaps on the VPS data*, through committed, re-runnable scripts (owner). The local Postgres is a 9 Sep copy.
+10. *Asset declarations (monitorul.ai/integritate, Kibana)* as a source of real local pay: a separate session with the owner. Limits: no publication after 2025 (CCR), data to about 2022, yearly income from all sources.
+
+**Hard / wrong turns**
+- Opus first quoted the 9 Sep copy as current numbers (1,388, 112, +14%). The VPS gave 2,625 and 189. All briefs now have a "Where the data is" section.
+- The auto-mode classifier blocked `git push`; the owner pushed. The VPS `git pull` moved the cron checkout to `1e975fe`, which also brings the project-hired pay code (`19b0185`, `0aae975`) into the next cron run. The owner checks that the site code matches.
+- Sonnet first reported that the cron does not run the occupation and salary steps. Wrong: `ops/run-pipeline.sh` calls `pipeline.py`, which has the steps `occupations` and `salary`.
+- Bug seen, not fixed: the full grid label „…agent de poliţie/penitenciare debutant” matches no row (SALARY-ANEXA-VI, step 3).
+
 ### 2026-11-19 — Pay of project-hired posts (Sonnet, brief SALARY-EU-DETAIL + PIPELINE-PROJECT-PAY; not deployed)
 
 **Done**

@@ -1113,3 +1113,30 @@ function fixture_seed_project_posts(PDO $db): array {
     $upd->execute([null, '', '', null, '', 1003]);
     return [1001 => 'hour', 1002 => 'month', 1003 => 'none'];
 }
+
+/**
+ * One declared-pay estimate (ADR 0008 rule 9) on posting 1004 (Primăria Comunei Găiceana), in the format of
+ * estimate-salaries.py (`baza` declaratii). Group: 37 declarants, "Consilier superior", p25/median/p75 of 2023 =
+ * 5.200 / 5.950 / 6.600 net, factor 1,150. The gross figures are those of gross_for_net() (10.221, 11.697, 12.973).
+ * The explainer of the detail page and the list label read it (tests/declared_pay_test.php, browser/declared_pay.spec.js).
+ * Returns the posting id.
+ */
+function fixture_seed_declared_estimate(PDO $db): int {
+    $json = json_encode([
+        'lei_min' => 10221, 'lei_max' => 12973, 'coef_min' => null, 'coef_max' => null, 'gradatie' => 0,
+        'varianta' => 'declaratii-2023', 'valoare_referinta' => null, 'incredere' => 'interval',
+        'motiv' => 'Declarațiile de avere din 2023', 'randuri' => [], 'avertismente' => [],
+        'disclaimer' => 'Estimare după declarațiile de avere din 2023, aduse la nivelul din 2026 cu creșterea salariilor din administrația publică (INS). Nu este un calcul salarial oficial.',
+        'baza' => 'declaratii',
+        'declaratii' => ['n' => 37, 'an_venit' => 2023, 'factor' => 1.15, 'factor_sursa' => 'INS test',
+            'mediana_net' => 6850, 'mediana_net_2023' => 5950, 'p25_net' => 6000, 'p75_net' => 7600,
+            'institutie_id' => 'COMUNA GAICEANA|BACAU', 'functie' => 'Consilier superior', 'familie' => 'admin-local',
+            'eroare_tipica' => 5.2],
+        'selector' => ['functie' => 'Consilier', 'anexa' => 'VIII'],
+    ], JSON_UNESCAPED_UNICODE);
+    $db->exec("UPDATE job_postings SET title = 'Consilier, clasa I, grad profesional superior', sal_min = 10221, sal_max = 12973,
+        sal_variant = 'declaratii-2023', sal_confidence = 'interval' WHERE id = 1004");
+    $st = $db->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = 1004");
+    $st->execute([$json]);
+    return 1004;
+}

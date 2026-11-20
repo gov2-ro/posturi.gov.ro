@@ -21,6 +21,8 @@ const chipsFixture = path.join(os.tmpdir(), 'posturi-browser-chips.sqlite');
 const professionalFixture = path.join(os.tmpdir(), 'posturi-browser-professional.sqlite');
 // Net salary (salary.spec.js): the shared fixture with postings that have no salary figure, on its own port.
 const salaryFixture = path.join(os.tmpdir(), 'posturi-browser-salary.sqlite');
+// Declared pay (declared_pay.spec.js): one posting with `baza` declaratii (tests/fixtures/build_db.php), on its own port.
+const declaredFixture = path.join(os.tmpdir(), 'posturi-browser-declared.sqlite');
 // UX-14: the private directory of the email alerts (a test key pair and pepper).
 const alertsDir = path.join(os.tmpdir(), 'posturi-browser-alerts');
 
@@ -89,6 +91,17 @@ module.exports = defineConfig({
       timeout: 20_000,
       env: {
         POSTURI_DB: salaryFixture,
+        POSTURI_TODAY: '2026-10-03',
+      },
+    },
+    {
+      command: `php tests/fixtures/make.php ${declaredFixture} declared && php -S 127.0.0.1:8828 router.php`,
+      cwd: webappDir,
+      url: 'http://127.0.0.1:8828/',
+      reuseExistingServer: false,
+      timeout: 20_000,
+      env: {
+        POSTURI_DB: declaredFixture,
         POSTURI_TODAY: '2026-10-03',
       },
     },

@@ -204,7 +204,10 @@ function usd_label(float $v): string {
  * detail page). An estimate is always labelled as one. Null when there is no figure (or an old
  * export without the columns).
  *
- * @return array{label: string, text: string, gross: string, estimated: bool}|null
+ * An estimate from the asset declarations (ADR 0008 rule 9; `sal_variant` starts with "declaratii") says so in
+ * `kind`: "după declarații de avere"; any other estimate has no `kind` (the row says "estimat").
+ *
+ * @return array{label: string, text: string, gross: string, estimated: bool, kind?: string}|null
  */
 function list_salary(array $p): ?array {
     if (!empty($p['project_hire'])) {
@@ -224,7 +227,11 @@ function list_salary(array $p): ?array {
         $imax = $rawmax === null ? $imin : (int)round($rawmax);
         $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
         $gross = $imax > $imin ? $fmt($imin) . '–' . $fmt($imax) . ' lei' : $fmt($imin) . ' lei';
-        return ['label' => $label, 'text' => net_label((float)$min, $rawmax), 'gross' => $gross, 'estimated' => $estimated];
+        $declared = $estimated && str_starts_with((string)($p['sal_variant'] ?? ''), 'declaratii');
+        $row = ['label' => $declared ? 'Estimare după declarații de avere' : $label, 'text' => net_label((float)$min, $rawmax),
+                'gross' => $gross, 'estimated' => $estimated];
+        if ($declared) $row['kind'] = 'după declarații de avere';
+        return $row;
     }
     return null;
 }
@@ -366,6 +373,46 @@ function net_label(?float $min, ?float $max = null): string {
     $lo = net_from_gross($min);
     $hi = ($max !== null && $max > $min) ? net_from_gross($max) : $lo;
     return '≈ ' . ($hi > $lo ? $fmt($lo) . '–' . $fmt($hi) : $fmt($lo)) . ' lei net';
+}
+
+/**
+ * "37 de angajați", "5 angajați", "21 de angajați": Romanian puts "de" after a number whose last two
+ * digits are 00 or 20-99 (ADR 0008 rule 9, explainer 2026-11-20).
+ */
+function ro_count_de(int $n, string $noun): string {
+    $mod = $n % 100;
+    return $n . (($mod === 0 || $mod >= 20) ? ' de ' : ' ') . $noun;
+}
+
+/** True when the estimate of a posting comes from the asset declarations (ADR 0008 rule 9). */
+function sal_declared(?array $sal): bool {
+    return is_array($sal) && ($sal['baza'] ?? '') === 'declaratii' && is_array($sal['declaratii'] ?? null);
+}
+
+/**
+ * The figures of the declared-pay block, as text (explainer docs/specs/2026-11-20-salary-declared-explainer.md).
+ * `$sal` is the decoded `sal_json`; `$employer` the employer name of the posting (the reader knows that name),
+ * '' to use the name of the group. Null when the estimate is not a declared one. Every lei figure is rounded to
+ * 50 lei: the build already did it for the net values; the gross is rounded here.
+ *
+ * @return array{estimare: string, brut: string, p25: string, p75: string, mediana: string, n: string, n_raw: int,
+ *               functie: string, institutie: string, crestere: int, eroare: int, an_venit: int}|null
+ */
+function declared_view(?array $sal, string $employer = ''): ?array {
+    if (!sal_declared($sal)) return null;
+    $d = $sal['declaratii'];
+    $fmt = static fn($v): string => number_format((int)round((float)$v), 0, ',', '.');
+    $est = (int)$d['mediana_net'];
+    $name = trim($employer) !== '' ? trim($employer) : (string)($sal['motiv'] ?? '');
+    return [
+        'estimare' => $fmt($est),
+        'brut' => $fmt((int)(round(gross_for_net($est) / 50) * 50)),
+        'p25' => $fmt($d['p25_net']), 'p75' => $fmt($d['p75_net']), 'mediana' => $fmt($d['mediana_net_2023'] ?? ($est / (float)$d['factor'])),
+        'n' => ro_count_de((int)$d['n'], 'angajați'), 'n_raw' => (int)$d['n'],
+        'functie' => (string)$d['functie'], 'institutie' => $name,
+        'crestere' => (int)round(((float)$d['factor'] - 1) * 100),
+        'eroare' => (int)round((float)$d['eroare_tipica']), 'an_venit' => (int)$d['an_venit'],
+    ];
 }
 
 /** Romanian count of provider calls: 1 apel · 2–19 apeluri · 20+ de apeluri. */

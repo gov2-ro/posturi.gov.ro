@@ -379,5 +379,63 @@ $level_url = static fn(string $a, string $l): string => $se_url . '?d=' . rawurl
     </p>
   </section>
 <?php endif; ?>
+
+  <?php /* "Metoda pe larg" of ADR 0008 rule 9. Copy follows docs/specs/2026-11-20-salary-declared-explainer.md, section 4;
+     every number comes from docs/audits/2026-11-20-salary-declaratii-kibana.md. It moves to /salarii/ when that page exists. */ ?>
+  <section class="mt-12 max-w-3xl" id="metoda-declaratii" aria-labelledby="se-method" data-salary-method>
+    <h2 id="se-method" class="g2-heading-section">Metoda pe larg: salariul după declarațiile de avere</h2>
+    <p class="g2-text-meta mt-1">Pentru unele posturi, estimarea vine din declarațiile de avere, nu din grila legii.</p>
+
+    <h3 class="g2-heading-item mt-6">Ce sunt declarațiile</h3>
+    <p class="mt-1">Funcționarii publici trec în declarația de avere venitul din salariu. Noi citim venitul din 2023, din declarațiile depuse în 2024.
+      Sumele sunt nete. Am comparat câteva grupuri cu listele de salarii publicate de instituții. Raportul median a fost 0,62: valorile sunt nete, nu brute.
+      În interiorul unui grup, oamenii declară la fel: valorile au un singur vârf.</p>
+
+    <h3 class="g2-heading-item mt-6">Ce linie alegem dintr-o declarație</h3>
+    <p class="mt-1">O declarație poate avea mai multe linii de venit. Alegem cea mai mare linie care are ca sursă instituția angajatoare.
+      Lăsăm la o parte celelalte linii: vouchere de vacanță, diferențe salariale plătite retroactiv și al doilea loc de muncă.
+      Păstrăm o declarație pentru fiecare persoană, cea mai nouă. Lăsăm la o parte sumele sub 12.000 lei pe an.</p>
+
+    <h3 class="g2-heading-item mt-6">Grupul și minimul de 5</h3>
+    <p class="mt-1">Un grup înseamnă același angajator și aceeași funcție. Arătăm o cifră numai când grupul are cel puțin 5 declaranți.
+      Nu publicăm nume și nu publicăm nicio declarație singură. Din declarații păstrăm doar cifrele grupului.</p>
+
+    <h3 class="g2-heading-item mt-6">Creșterea din 2023 până în 2026</h3>
+    <p class="mt-1">Declarațiile arată salariile din 2023. Le aducem la nivelul din 2026 cu creșterea salariului mediu net din administrația publică, după INS.
+      Folosim creșterea măsurată de INS și nu legea singură, pentru că INS cuprinde și reducerile din 2025.</p>
+    <div class="g2-table-wrap mt-2" role="region" aria-label="Salariul mediu net în administrația publică, INS" tabindex="0">
+      <table class="g2-table">
+        <caption class="g2-text-meta">Salariul mediu net lunar, secțiunea O (administrație publică și apărare), lei. INS, seriile FOM106D și FOM106G.</caption>
+        <thead><tr><th scope="col">2022</th><th scope="col">2023</th><th scope="col">2024</th><th scope="col">2025 (ian.–aug.)</th><th scope="col">2026 (ian.–mai)</th><th scope="col">2026 față de 2023</th></tr></thead>
+        <tbody><tr><td class="g2-cell-num">5.310</td><td class="g2-cell-num">5.964</td><td class="g2-cell-num">6.905</td><td class="g2-cell-num">7.140</td><td class="g2-cell-num">6.860</td><td class="g2-cell-num">× 1,150</td></tr></tbody>
+      </table>
+    </div>
+
+    <h3 class="g2-heading-item mt-6">Cât de sigură este metoda</h3>
+    <p class="mt-1">Am verificat metoda pe anii trecuți: am estimat salariile din 2023 pornind de la cele din 2022, cu creșterea INS. Am comparat estimarea cu salariile declarate pentru 2023.
+      Eroarea tipică (mediana) este între 5 % și 7 %. La 1 grup din 10, eroarea trece de 15–20 %.</p>
+    <div class="g2-table-wrap mt-2" role="region" aria-label="Verificarea metodei pe anul 2023" tabindex="0">
+      <table class="g2-table">
+        <caption class="g2-text-meta">Verificarea pe 2023, pe familii de angajatori. Eroarea este diferența dintre estimare și valoarea declarată.</caption>
+        <thead><tr><th scope="col">Familie</th><th scope="col" class="g2-cell-num">Grupuri</th><th scope="col" class="g2-cell-num">Eroare tipică</th><th scope="col" class="g2-cell-num">1 grup din 10 are eroare peste</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Administrația locală</th><td class="g2-cell-num">1.537</td><td class="g2-cell-num">5,2 %</td><td class="g2-cell-num">15,0 %</td></tr>
+          <tr><th scope="row">Administrația centrală</th><td class="g2-cell-num">1.258</td><td class="g2-cell-num">4,8 %</td><td class="g2-cell-num">16,8 %</td></tr>
+          <tr><th scope="row">Administrația județeană</th><td class="g2-cell-num">582</td><td class="g2-cell-num">6,7 %</td><td class="g2-cell-num">19,7 %</td></tr>
+          <tr><th scope="row">Poliția locală</th><td class="g2-cell-num">275</td><td class="g2-cell-num">6,0 %</td><td class="g2-cell-num">17,3 %</td></tr>
+          <tr><th scope="row">MAI și MApN</th><td class="g2-cell-num">679</td><td class="g2-cell-num">6,1 %</td><td class="g2-cell-num">17,5 %</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="g2-heading-item mt-6">Ce posturi nu primesc această estimare</h3>
+    <ul class="mt-1 list-disc space-y-1 pl-5">
+      <li>Magistrații: legea și INS dau creșteri diferite, iar judecătorii nu sunt angajați prin anunțuri.</li>
+      <li>Personalul instanțelor: eroarea tipică în verificare a fost 11,8 %.</li>
+      <li>Sănătatea și învățământul: factorul INS depășește salariile declarate cu circa 4,5 %. Ele așteaptă un raport legal pe funcție.</li>
+      <li>Aleșii locali, care primesc indemnizații, și personalul din proiecte europene.</li>
+    </ul>
+    <p class="g2-text-meta mt-4">Surse: declarațiile de avere, prin monitorul.ai/integritate; INS, seriile FOM106D și FOM106G. Estimarea nu este un calcul salarial oficial.</p>
+  </section>
 </div>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

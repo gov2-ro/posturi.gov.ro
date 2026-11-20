@@ -507,6 +507,8 @@ require __DIR__ . '/../inc/header.php';
       // part of the claim, and "cum a fost calculat" is open to anyone who wants to check it.
       $sal = ($p['sal_json'] ?? null) ? (json_decode($p['sal_json'], true) ?: []) : [];
       $show_sal = !empty($sal['lei_min']);
+      // ADR 0008 rule 9: the figure comes from the asset declarations; the text follows docs/specs/2026-11-20-salary-declared-explainer.md.
+      $decl = declared_view($sal, (string)($p['employer_name'] ?? ''));
       // No figure at all (no stated pay, no estimate): the page says so, and why (UX salary-net).
       $no_sal = !$show_sal && list_salary($p) === null;
       $eu_funded = in_array((string)($p['funding_kind'] ?? ''), ['fonduri_europene', 'pnrr'], true);
@@ -554,7 +556,11 @@ require __DIR__ . '/../inc/header.php';
             <?php if ($show_sal):
                 $_lmin = (int)$sal['lei_min']; $_lmax = (int)($sal['lei_max'] ?? $_lmin);
                 $_g = number_format($_lmin, 0, ',', '.') . ($_lmax > $_lmin ? '–' . number_format($_lmax, 0, ',', '.') : ''); ?>
+            <?php if ($decl): ?>
+            <p class="mt-1 text-xs text-ink-muted" data-pay-law>După declarațiile de avere: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună.</p>
+            <?php else: ?>
             <p class="mt-1 text-xs text-ink-muted" data-pay-law>Conform legii salarizării (propunere): <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0.</p>
+            <?php endif; ?>
             <?php endif; ?>
           </div>
         </section>
@@ -566,6 +572,14 @@ require __DIR__ . '/../inc/header.php';
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
               <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu estimat</h2>
               <?php /* Net first: the main figure. The gross range is one smaller line below. */ ?>
+              <?php if ($decl): /* The median is the main figure; the band p25-p75 is the line below. No "la gradația 0". */ ?>
+              <p class="text-lg font-semibold text-ink" data-pay-net>≈ <?= e($decl['estimare']) ?> lei net
+                <span class="text-sm font-normal text-ink-muted">pe lună</span>
+              </p>
+            </div>
+            <p class="text-xs text-ink-muted" data-pay-gross>circa <?= e($decl['brut']) ?> lei brut</p>
+            <p class="text-xs text-ink-muted" data-pay-band>Cei mai mulți primesc între <?= e($decl['p25']) ?> și <?= e($decl['p75']) ?> lei net.</p>
+              <?php else: ?>
               <p class="text-lg font-semibold text-ink" data-pay-net>
                 <?= e(net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']))) ?>
                 <span class="text-sm font-normal text-ink-muted">/ lună, la gradația 0</span>
@@ -573,6 +587,7 @@ require __DIR__ . '/../inc/header.php';
             </div>
             <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= (int)$sal['lei_min'] === (int)$sal['lei_max']
                 ? number_format((int)$sal['lei_min'], 0, ',', '.') : number_format((int)$sal['lei_min'], 0, ',', '.') . '–' . number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei / lună, la gradația 0</p>
+              <?php endif; ?>
             <?php if ($pl = pay_level($p)): ?>
             <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
               <span><?= e($pl['text']) ?></span></p>
@@ -588,6 +603,25 @@ require __DIR__ . '/../inc/header.php';
                 <summary class="cursor-pointer list-none text-xs font-semibold uppercase tracking-widest text-note-ink marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                   Cum a fost calculat ▾
                 </summary>
+                <?php if ($decl): ?>
+                <div class="pt-2 text-sm text-ink" data-pay-explainer>
+                  <?php /* Copy: docs/specs/2026-11-20-salary-declared-explainer.md, section 3. */ ?>
+                  <p class="mb-1 font-semibold">Cum am estimat salariul</p>
+                  <ol class="mb-2 list-decimal space-y-1 pl-5">
+                    <li data-explainer-step="1"><strong>Ce au declarat.</strong> În <?= (int)$decl['an_venit'] ?>, <?= e($decl['n']) ?> cu funcția <?= e($decl['functie']) ?> la <?= e($decl['institutie']) ?> au trecut venitul din salariu în declarațiile de avere. Valoarea din mijloc a fost <?= e($decl['mediana']) ?> lei net pe lună.</li>
+                    <li data-explainer-step="2"><strong>Cât au crescut salariile.</strong> Din <?= (int)$decl['an_venit'] ?> până în 2026, salariul mediu net în administrația publică a crescut cu <?= (int)$decl['crestere'] ?>% (INS).</li>
+                    <li data-explainer-step="3"><strong>Estimarea pentru 2026.</strong> Aproximativ <?= e($decl['estimare']) ?> lei net pe lună. Cei mai mulți primesc între <?= e($decl['p25']) ?> și <?= e($decl['p75']) ?> lei net.</li>
+                    <li data-explainer-step="4"><strong>Cât de sigur este.</strong> Am verificat metoda pe anii trecuți. Am estimat salariile din <?= (int)$decl['an_venit'] ?> pornind de la cele din <?= (int)$decl['an_venit'] - 1 ?>. Eroarea tipică a fost de <?= (int)$decl['eroare'] ?>%.</li>
+                  </ol>
+                  <p class="mb-0.5 font-semibold">Ce nu știm</p>
+                  <ul class="mb-2 list-disc space-y-0.5 pl-5">
+                    <li>Salariul tău depinde de vechime și de sporuri. La angajare, primești de obicei mai puțin decât valoarea din mijloc.</li>
+                    <li>Declarația arată venitul pe tot anul, cu prime și vouchere. Datele cele mai noi sunt din <?= (int)$decl['an_venit'] ?>.</li>
+                  </ul>
+                  <p class="text-xs text-ink-muted"><strong>Surse:</strong> declarațiile de avere, prin monitorul.ai/integritate; INS, seriile FOM106D și FOM106G.
+                    <a href="/estimator-salariu/#metoda-declaratii" class="text-gov underline" data-pay-method-link>Metoda pe larg →</a></p>
+                </div>
+                <?php else: ?>
                 <div class="pt-2 text-sm text-ink">
                   <?php /* What used to be separate lines on the card: the net assumptions and the
                      caveats on the range. They open with the calculation. */ ?>
@@ -626,6 +660,7 @@ require __DIR__ . '/../inc/header.php';
                     <dd><?= e((string)$sal['varianta']) ?></dd>
                   </dl>
                 </div>
+                <?php endif; ?>
               </details>
             </div>
           </div>

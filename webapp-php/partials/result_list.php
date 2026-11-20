@@ -180,10 +180,11 @@ require __DIR__ . '/occupation_chips.php'; ?>
           <?php if ($sal || $labels || $meta): ?>
           <p class="pg-facts mt-1 text-xs leading-relaxed text-ink-muted">
             <?php if ($sal): ?>
-              <span class="pg-salary whitespace-nowrap" title="<?= isset($sal['title']) ? e($sal['title']) : e($sal['label']) . ' (net lunar) · brut: ' . e($sal['gross']) ?>">
+              <?php /* "(după declarații de avere)" is long: that row may wrap before the label, the figure never breaks. */ $_decl_row = ($sal['kind'] ?? 'estimat') !== 'estimat'; ?>
+              <span class="pg-salary<?= $_decl_row ? '' : ' whitespace-nowrap' ?>" title="<?= isset($sal['title']) ? e($sal['title']) : e($sal['label']) . ' (net lunar) · brut: ' . e($sal['gross']) ?>">
                 <span class="pg-salary-label" role="img" aria-label="<?= e($sal['label']) ?>">💰</span>
-                <span class="pg-salary-value font-medium text-ink"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
-                <span class="pg-salary-kind">(estimat)</span><?php endif; ?>
+                <span class="pg-salary-value font-medium text-ink<?= $_decl_row ? ' whitespace-nowrap' : '' ?>"><?= e($sal['text']) ?></span><?php if ($sal['estimated']): ?>
+                <span class="pg-salary-kind" data-pay-kind="<?= e($sal['kind'] ?? 'estimat') ?>">(<?= e($sal['kind'] ?? 'estimat') ?>)</span><?php endif; ?>
                 <?= pay_meter($p) ?>
               </span>
             <?php endif; ?>

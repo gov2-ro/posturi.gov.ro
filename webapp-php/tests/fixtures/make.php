@@ -7,6 +7,7 @@
  *   php tests/fixtures/make.php /tmp/posturi-chips.sqlite chips         # 28 postings of one COR group, for the occupation chips (tests/browser/chips.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-professional.sqlite professional   # administrație and financiar postings (tests/browser/theme.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-salary.sqlite salary       # postings with no salary figure (tests/browser/salary.spec.js)
+ *   php tests/fixtures/make.php /tmp/posturi-declared.sqlite declared   # a declared-pay estimate on 1004 (tests/declared_pay_test.php, browser/declared_pay.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-project.sqlite project     # three project-hired posts, 1001-1003 (tests/project_pay_test.php, browser/project_pay.spec.js)
  * Used by the request tests and by the Playwright global setup.
  */
@@ -28,6 +29,9 @@ if (($argv[2] ?? '') === 'salary') {
     $pdo->exec("UPDATE job_postings SET sal_min = NULL, sal_max = NULL, inf_salary_min = 0, inf_salary_max = 0 WHERE id IN (2021, 2022)");
     // Three postings with a law estimate, for the estimator page (tests/browser/salary_estimator.spec.js).
     fixture_seed_law_estimates($pdo);
+}
+if (($argv[2] ?? '') === 'declared') {
+    fixture_seed_declared_estimate(new PDO('sqlite:' . $path));
 }
 if (($argv[2] ?? '') === 'project') {
     $pdo = new PDO('sqlite:' . $path);

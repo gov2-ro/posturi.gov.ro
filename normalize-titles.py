@@ -494,25 +494,19 @@ def selector_fill(canonical: str, selector: dict, draft, law) -> dict | None:
       1. The canonical name (or its alias) is a function name in the law grid or the
          draft grid: use that name.
       2. The canonical name is a trade with no row: use `Muncitor calificat`.
-    `anexa` is set only when it is empty and every grid that has the name agrees.
-    Everything else in the selector stays.
+    The annex is not set here. Everything else in the selector stays.
     """
     if selector.get("functie_grila") or selector.get("functie") or selector.get("cod"):
         return None
     name = SELECTOR_ALIASES.get(salary_grid.norm(canonical), canonical)
-    rows = {"law": law.by_name.get(salary_grid.norm(name), []),
-            "draft": draft.by_name.get(salary_grid.norm(name), [])}
-    if not (rows["law"] or rows["draft"]):
+    key = salary_grid.norm(name)
+    if not (law.by_name.get(key) or draft.by_name.get(key)):
         if not _is_trade(canonical):
             return None
         name = TRADE_FUNCTION
-        rows = {"law": law.by_name.get(salary_grid.norm(name), []),
-                "draft": draft.by_name.get(salary_grid.norm(name), [])}
-    out = dict(selector, functie_grila=name)
-    annexes = {r.anexa for rs in rows.values() for r in rs}
-    if not out.get("anexa") and len(annexes) == 1:
-        out["anexa"] = annexes.pop()
-    return out
+    # No `anexa`: one occupation serves many employers, so `estimate-salaries.py` picks the
+    # annex per posting from the employer. An `anexa` already in the selector stays.
+    return dict(selector, functie_grila=name)
 
 
 def fill_selectors(conn, draft, law, dry_run: bool) -> int:

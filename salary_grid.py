@@ -95,6 +95,12 @@ STUDY_LEVEL_TO_GRID = {
 }
 
 
+#: Anexa II (health) and Anexa I (education) write the grade into the function name:
+#: "Psiholog principal", "Psiholog stagiar". The words that make such a name.
+GRADE_NAME_WORDS = ("debutant", "practicant", "stagiar", "specialist", "principal",
+                    "primar", "superior", "asistent")
+
+
 def norm(s) -> str:
     """Lowercase, strip diacritics and punctuation. The join key everywhere."""
     s = unicodedata.normalize("NFD", str(s or ""))
@@ -344,6 +350,12 @@ class Grid:
                             if r.sheet in sheets:
                                 widened[(r.sheet, r.source_row)] = r
                 rows = list(widened.values())
+        if selector.get("nume_cu_grad") and name and selector.get("anexa"):
+            # Opt-in (estimate-salaries.py picked the annex from the employer): when the
+            # name has no row in that annex, take the rows that write the grade into the
+            # name there. A selector without this key behaves as before.
+            rows += self._grade_named(name, selector["anexa"], norm(selector.get("grad_treapta") or ""),
+                                      exclude=rows)
         if not rows:
             return []
 
@@ -389,6 +401,37 @@ class Grid:
             exact = [r for r in rows if norm(r.grad_treapta) == grad]
             rows = exact or rows
         return rows
+
+    def _grade_named(self, name: str, anexa: str, grad: str = "",
+                     exclude: list[GridRow] | None = None) -> list[GridRow]:
+        """Rows of `anexa` named `name` + a grade word ("psiholog principal").
+
+        Returns nothing when `exclude` already has a row in `anexa` (the plain name wins).
+        With `grad`, only that grade's rows when there are any.
+        """
+        if any(r.anexa == anexa for r in exclude or []):
+            return []
+        found: dict[tuple[str, int], tuple[str, GridRow]] = {}
+        for word in GRADE_NAME_WORDS:
+            for r in self.by_name.get(f"{name} {word}", []):
+                if r.anexa == anexa:
+                    found[(r.sheet, r.source_row)] = (word, r)
+        if grad and any(w == grad for w, _ in found.values()):
+            return [r for w, r in found.values() if w == grad]
+        return [r for _w, r in found.values()]
+
+    def function_annexes(self, selector: dict) -> set[str]:
+        """The annexes that have a row for the selector's function (name, alternative
+        spellings, or the name + a grade word). Empty when the selector names no function."""
+        names = [norm(selector.get("functie") or "")] + [norm(a) for a in selector.get("functie_alt") or []]
+        out: set[str] = set()
+        for name in filter(None, names):
+            out |= {r.anexa for r in self.by_name.get(name, [])}
+            for word in GRADE_NAME_WORDS:
+                out |= {r.anexa for r in self.by_name.get(f"{name} {word}", [])}
+            if out:
+                break
+        return out
 
     # -- the calculator ----------------------------------------------------
     def minimum_wage(self, as_of: date | None = None) -> float:

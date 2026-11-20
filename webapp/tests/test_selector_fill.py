@@ -48,7 +48,7 @@ def fill(nt, grids, canonical, selector=None):
 def test_fill_uses_the_canonical_name(nt, grids):
     out = fill(nt, grids, "Medic specialist")
     assert out["functie_grila"] == "Medic specialist"
-    assert out["anexa"] == "II"
+    assert out["anexa"] is None                         # the annex comes from the employer, per posting
     assert out["regim"] == "personal_contractual"      # the rest stays
 
 
@@ -70,7 +70,6 @@ def test_infirmier_takes_the_feminine_row(nt, grids):
 def test_trade_without_a_row_takes_the_skilled_worker_row(nt, grids, trade):
     out = fill(nt, grids, trade)
     assert out["functie_grila"] == "Muncitor calificat"
-    assert out["anexa"] in (None, "VIII")
 
 
 def test_a_non_trade_without_a_row_stays_empty(nt, grids):

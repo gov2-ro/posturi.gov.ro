@@ -40,6 +40,7 @@ import json
 import os
 import re
 import sys
+from dataclasses import replace
 from collections import Counter
 from pathlib import Path
 
@@ -80,7 +81,7 @@ SELECT_POSTINGS = """
     SELECT p.id, p.title, p.job_level, p.employer_category, p.schema_json,
            COALESCE(e.name, '')      AS employer_name,
            COALESCE(j.name, '')      AS judet_name,
-           o.grid_selector, o.study_level, o.canonical, o.match_confidence
+           o.grid_selector, o.provider, o.study_level, o.canonical, o.match_confidence
       FROM jobs_jobposting p
       JOIN jobs_occupation o ON o.id = p.occupation_id
       LEFT JOIN jobs_employer e ON e.id = p.employer_id
@@ -189,6 +190,112 @@ def serialisable(selector: dict) -> dict:
     return {k: sorted(v) if isinstance(v, (set, frozenset)) else v for k, v in selector.items()}
 
 
+#: The annex of an employer, decided on its name and category (SALARY-UNMATCHED). The
+#: one place for the rule. Order matters: health, social care, education, culture,
+#: then public administration. A name that fits none of them gives "" (not sure: no guess).
+_HEALTH_NAME = re.compile(
+    r"\b(spital\w*|sanatoriu\w*|policlinic\w*|ambulator\w*|dispensar\w*|ambulanta|"
+    r"centrul medical|centrul de sanatate|centrul de diagnostic|directia de sanatate publica)\b")
+_SOCIAL_NAME = re.compile(
+    r"\b(asistenta sociala|protectia copilului|protectia persoanelor|"
+    r"centrul (de|pentru) (ingrijire|asistenta|plasament|zi|recuperare|primire|servicii sociale)|"
+    r"camin(ul)? (pentru|de) (persoane|batrani|varstnici))\b")
+_EDUCATION_NAME = re.compile(
+    r"\b(scoala|scolii|gradinita|liceul|colegiul|universitatea|academia|casa corpului didactic|"
+    r"inspectoratul scolar|palatul copiilor|clubul copiilor|clubul sportiv scolar|"
+    r"centrul (judetean )?de resurse|centrul scolar)\b")
+_CULTURE_NAME = re.compile(
+    r"\b(muzeul|muzeu|biblioteca|teatrul|filarmonica|opera|centrul cultural|casa de cultura|"
+    r"complexul muzeal|ansamblul)\b")
+_ADMIN_CATEGORY = {"Primării", "Consilii județene", "Prefecturi", "Guvern și ministere"}
+
+
+def employer_annex(posting: dict) -> str:
+    """The annex that pays this employer's staff, or "" when the type is not clear.
+
+    II health and social care (OUG 19/2024), I education, III culture, VIII public
+    administration (a council employer, a prefecture, a ministry). A military unit,
+    a generic "Instituții naționale" with no telling name, or an empty name give "".
+    """
+    name = salary_grid.norm(posting.get("employer_name") or "")
+    if _HEALTH_NAME.search(name) or _SOCIAL_NAME.search(name):
+        return "II"
+    if _EDUCATION_NAME.search(name):
+        return "I"
+    if _CULTURE_NAME.search(name):
+        return "III"
+    if council_employer(posting) or posting.get("employer_category") in _ADMIN_CATEGORY:
+        return "VIII"
+    return ""
+
+
+def estimate_in_annex(grid, selector: dict, posting: dict, finalize) -> tuple:
+    """Estimate one posting on one grid, choosing the annex when the selector has none.
+
+    `finalize` turns the selector into what the grid reads (identity for the draft,
+    `law_selector()` for the law). Returns `(estimate, selector_used, why)`.
+
+    - A selector with an `anexa` does not change, except an `anexa` that the name fill
+      (`provider` = `rule-name-lookup`) wrote: the employer's annex replaces it when the
+      employer type is clear and the function has rows there.
+    - With no `anexa`: a function in one annex only is paid under that annex. A function in
+      more than one annex: the employer's annex when the function has rows there; else the range over all the annexes that have it
+      (`incredere` = `interval`, with a warning).
+    - Anything that would give no figure falls back to the unchanged selector, so no
+      posting loses a figure.
+    """
+    plain = finalize(selector)
+    base = grid.estimate(plain, gradation=0)
+    stored = selector.get("anexa")
+    if stored and posting.get("provider") != "rule-name-lookup":
+        return base, plain, {}
+    annexes = grid.function_annexes(selector)
+    employer = employer_annex(posting)
+    if stored:
+        if not employer or employer == stored or employer not in annexes:
+            return base, plain, {}
+    elif not annexes:
+        return base, plain, {}
+
+    def in_annex(annex: str):
+        sel = finalize(dict(selector, anexa=annex, nume_cu_grad=True))
+        return grid.estimate(sel, gradation=0), sel
+
+    if len(annexes) == 1:
+        # One annex has the function: it is that annex whoever the employer is.
+        only = next(iter(annexes))
+        est, sel = in_annex(only)
+        if est.lei_min is not None:
+            return est, sel, {"anexa": "singura anexă a funcției"}
+        return base, plain, {}
+    if employer in annexes:
+        est, sel = in_annex(employer)
+        if est.lei_min is not None:
+            return est, sel, {"anexa": "din tipul angajatorului"}
+        return base, plain, {}
+    found = []
+    for annex in sorted(annexes):
+        e, sel = in_annex(annex)
+        if e.lei_min is not None:
+            found.append((annex, e, sel))
+    if not found:
+        return base, plain, {}
+    listed = ", ".join(a for a, _e, _s in found)
+    first = found[0][1]
+    merged = replace(
+        first,
+        lei_min=min(e.lei_min for _a, e, _s in found),
+        lei_max=max(e.lei_max for _a, e, _s in found),
+        coef_min=None, coef_max=None, incredere="interval",
+        motiv=f"Funcția există în anexele {listed}; angajatorul nu decide anexa. {first.motiv}",
+        randuri=[r for _a, e, _s in found for r in e.randuri][:12],
+        avertismente=list(first.avertismente) + [
+            f"Funcția există în mai multe anexe ({listed}), iar tipul angajatorului nu a putut fi "
+            "determinat; intervalul acoperă toate anexele."],
+    )
+    return merged, dict(plain, anexa=None), {"anexa": f"interval peste anexele {listed}"}
+
+
 def assemble(law, draft, law_sel: dict, draft_sel: dict, group: dict | None = None) -> dict:
     """The JSON of one posting (ADR 0008, rule 4): a declared figure, else the law in force.
 
@@ -208,7 +315,7 @@ def assemble(law, draft, law_sel: dict, draft_sel: dict, group: dict | None = No
     else:
         payload = primary.as_dict()
         payload["baza"] = "lege_in_vigoare" if use_law else "proiect"
-    payload["selector"] = serialisable({k: v for k, v in sel.items() if k != "functie_alt"})
+    payload["selector"] = serialisable({k: v for k, v in sel.items() if k not in ("functie_alt", "nume_cu_grad")})
     if (use_law or group is not None) and draft.lei_min is not None:
         payload["proiect"] = dict(draft.as_dict(), baza="proiect")
     return payload
@@ -278,9 +385,11 @@ def main() -> int:
         updates = []
         for posting in postings:
             selector, why = build_selector(posting)
-            draft = draft_grid.estimate(selector, gradation=0)
-            lsel = law_selector(selector, posting, draft_grid)
-            law = law_grid.estimate(lsel, gradation=0)
+            draft, dsel, why_d = estimate_in_annex(
+                draft_grid, selector, posting, lambda s: s)
+            law, lsel, why_l = estimate_in_annex(
+                law_grid, selector, posting, lambda s: law_selector(s, posting, draft_grid))
+            why.update(why_l or why_d)
             if lsel.get("tip_unitate"):
                 why["tip_unitate"] = "din numele angajatorului"
                 hospital_names[lsel["tip_unitate"]].add(posting["employer_name"])
@@ -307,7 +416,7 @@ def main() -> int:
 
             stats[f"baza:{payload['baza']}"] += 1
             stats[primary.incredere] += 1
-            annex = selector.get("anexa") or "-"
+            annex = (lsel if use_law else dsel).get("anexa") or "-"
             ac = by_annex.setdefault(annex, Counter())
             ac["posturi"] += 1
             ac["cu_proiect"] += draft.lei_min is not None

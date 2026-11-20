@@ -188,6 +188,13 @@ grade; no fuzzy match. `estimate-salaries.py` then gives the declared figure the
 (`baza: declaratii`, precedence step a2): `lei_min` and `lei_max` are the gross of p25 and p75 × factor,
 and the key `declaratii` holds the net figures. The law figure stays under `lege_in_vigoare`.
 
+Pages per institution (SALARY-DECLARATII-PAGE): `export-to-sqlite.py` copies the groups into the tables
+`declared_institutions` and `declared_groups` (net per month at the 2026 level, rounded to 50 lei) and links
+each institution to at most one employer (`Groups.employer()`; the employer with more postings wins a tie).
+`/salarii-declarate/` lists the institutions (search, county, 50 per page). `/salarii-declarate/{slug}/` shows
+one institution, and `/angajator/{slug}` shows the same table when the employer matches. The partial is
+`webapp-php/partials/declared_pay.php`. The pages show no comparison, no name and no single declaration.
+
 ```bash
 python ops/build-declaratii-grupuri.py                  # needs data/integritate/selected.csv.gz and ../tempo-ins-dump
 python estimate-salaries.py --dry-run --match-samples 30   # counts per baza, match rates, 30 samples, bucket changes

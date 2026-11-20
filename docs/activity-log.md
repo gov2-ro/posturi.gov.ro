@@ -2,6 +2,25 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-DECLARATII-PAGE: declared pay per institution built (Sonnet, from the Opus brief)
+
+**Done**
+- Step 0: `_feed.php` prints „≈ {median} lei net / lună, după declarațiile de avere” for `baza: declaratii`, no „la gradația 0”. Case in `feeds_test.php`.
+- Step 1: `export-to-sqlite.py` writes `declared_institutions` and `declared_groups` (`build_declared()`, pure; `export_declared_institutions()`). Measured on the local copy of 9 Sep: 2,108 institutions, 6,201 groups, 5,871 employers with postings, 629 employers match; 454 institutions get an employer, 175 employers lose the tie. 0 slug clashes; longest slug 120 characters; minimum group size 5.
+- Steps 2–6: partial `partials/declared_pay.php`; routes `/salarii-declarate/` and `/salarii-declarate/{slug}/`; section on `employer.php` (after the counts, before the postings); sitemap (2,109 URLs more); link from the method section. Old exports without the tables: no section, 404 for the page, the index says the data is missing.
+- Step 7: `tests/declared_institutions_test.php` (84 assertions), `browser/declared_institutions.spec.js` (320, 375, 1280 px), `webapp/tests/test_declared_export.py` (6 tests). `ds_test.php`, `declared_pay_test.php`, `salary_estimator_test.php`, `request_test.php` pass.
+
+**Hard**
+- The brief expected about 629 employers with a match. That is the count of employers, not of institutions: many employer ids name one body (for example 4 ids for „Direcția generală de asistență socială … Suceava”). One institution has one employer (the brief), so 175 employers show no section.
+
+**Decided**
+- Slug: `slugify(name)[:110] + "-" + county slug`, the county left out when the name already ends with it. Reason: stable for one `institutie_id`, with no counter. On a clash (none today) a 6-character hash of `institutie_id` follows. Cost of a counter: the slug would change when another institution appears.
+- County: `judete.normalize_judet()` gives the canonical name („Bacău”); the slug is its ASCII form, which equals the site's county slug.
+- The employer county is the one with most postings, counted on all postings in Postgres (not only the active ones), so a full and an `--active-only` export agree.
+- The index filters and sorts in PHP (2,108 short rows), so that a search without diacritics works; the names in the data have none.
+- Step 1 of the explainer for an institution: total declarants, grouping by function, and one example (the largest group) with its 2023 median. Steps 2 and 4 keep the wording of the explainer; step 3 refers to the table.
+- „Eroare tipică” in the note is the largest `eroare_tipica` of the institution, in whole percent.
+
 ### 2026-11-20 — SALARY-UNMATCHED applied on the VPS: 84% → 94% of postings have a figure (Opus review; VPS session `posturi-vps-261118`)
 
 **Done**

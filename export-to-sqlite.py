@@ -30,6 +30,8 @@ Output: posturi.sqlite with tables:
   salary_grid_rows, salary_grid_pay, salary_grid_link, salary_cap, salary_param — the
                     salary estimator page (/estimator-salariu/): both grids, the pay of each
                     row at gradation 0-5, the law-draft link, the local caps, the parameters
+  declared_institutions, declared_groups — the pay of the asset declarations per institution
+                    (/salarii-declarate/, the section of /angajator/{slug}/; ADR 0008 rule 9)
   salary_title, salary_ins_context — the same page: the job titles of postings that have a law
                     estimate (a shortcut into the grid) and the INS earnings line (SALARY-INS-LINE)
   build_meta      — one row: when this file was built, from which commit and host
@@ -56,6 +58,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import declaratii  # noqa: E402  (declared pay: Groups.employer(), estimate_dict())
 import salary_grid  # noqa: E402  (the one pay formula: Grid.row_pay(), ADR 0008)
 import classify  # noqa: E402  (deterministic labels from the posting's words, 261016)
 import evidence  # noqa: E402  (pure quote locator: where an extracted requirement comes from)
@@ -817,6 +820,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
     if export_salary_estimator(con):
         export_salary_titles(con)
         export_salary_ins_context(con)
+    export_declared_institutions(cur, con)
     if active_only:
         export_archive(cur, con)
 
@@ -1347,6 +1351,149 @@ def export_salary_ins_context(con: sqlite3.Connection, path: Path = SALARY_INS_C
     con.executemany("INSERT OR REPLACE INTO salary_ins_context VALUES (?,?,?,?,?,?,?,?)", rows)
     print(f"salary_ins_context: {len(rows)} rows")
     return len(rows)
+
+
+DECLARED_DDL = """
+DROP TABLE IF EXISTS declared_groups;
+DROP TABLE IF EXISTS declared_institutions;
+-- The pay of the asset declarations per institution (ADR 0008 rule 9), a copy of
+-- data/salarii/declaratii-grupuri.csv. Net per month at the 2026 level, rounded to 50 lei.
+-- `employer_id` is the one employer of the postings that matches the institution (or NULL).
+CREATE TABLE declared_institutions (
+    slug         TEXT PRIMARY KEY,
+    institutie_id TEXT NOT NULL UNIQUE,
+    name         TEXT NOT NULL,
+    judet        TEXT NOT NULL,
+    judet_slug   TEXT NOT NULL,
+    n_total      INTEGER NOT NULL,
+    groups       INTEGER NOT NULL,
+    employer_id  INTEGER REFERENCES employers(id)
+);
+CREATE INDEX idx_declared_institutions_employer ON declared_institutions(employer_id);
+CREATE INDEX idx_declared_institutions_judet ON declared_institutions(judet_slug);
+CREATE TABLE declared_groups (
+    institution_slug TEXT NOT NULL REFERENCES declared_institutions(slug),
+    functie          TEXT NOT NULL,
+    familie          TEXT NOT NULL,
+    n                INTEGER NOT NULL,
+    mediana_net      INTEGER NOT NULL,
+    p25_net          INTEGER NOT NULL,
+    p75_net          INTEGER NOT NULL,
+    mediana_net_2023 INTEGER NOT NULL,
+    factor           REAL NOT NULL,
+    factor_sursa     TEXT NOT NULL,
+    eroare_tipica    REAL NOT NULL
+);
+CREATE INDEX idx_declared_groups_inst ON declared_groups(institution_slug);
+"""
+
+
+def _load_judete():
+    """webapp/apps/jobs/judete.py is pure Python: load it by path, without Django."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("judete_for_export", ROOT / "webapp" / "apps" / "jobs" / "judete.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod        # NamedTuple and dataclass lookups need the module
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _slugify(text: str) -> str:
+    """Lower-case ASCII with hyphens."""
+    import re
+    import unicodedata
+    t = unicodedata.normalize("NFKD", text or "")
+    t = "".join(c for c in t if not unicodedata.combining(c)).lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")
+
+
+DECLARED_SLUG_MAX = 110
+
+
+def declared_slug(name: str, county_slug: str) -> str:
+    """The slug of an institution: its name and county. Same input, same slug (no counter)."""
+    base = _slugify(name)[:DECLARED_SLUG_MAX].strip("-")
+    return f"{base}-{county_slug}" if county_slug and not base.endswith("-" + county_slug) else base
+
+
+def build_declared(rows: list[dict], employers: dict, employer_counties: list[tuple], judete=None) -> dict:
+    """Build the rows of declared_institutions and declared_groups.
+
+    rows: the dicts of data/salarii/declaratii-grupuri.csv.
+    employers: {employer_id: name}.
+    employer_counties: (employer_id, county name, postings) per employer and county.
+    Returns {"institutions": [...], "groups": [...], "lost_ties": [...], "slug_clashes": int}.
+    """
+    judete = judete or _load_judete()
+    groups = declaratii.Groups(rows)
+    by_inst: dict[str, list[dict]] = {}
+    for r in rows:
+        by_inst.setdefault(r["institutie_id"], []).append(r)
+
+    # The employer match: the county of most of the postings, then Groups.employer().
+    per_emp: dict[int, dict[str, int]] = {}
+    for eid, county, n in employer_counties:
+        per_emp.setdefault(eid, {})[county] = per_emp.setdefault(eid, {}).get(county, 0) + n
+    matches: dict[str, list[tuple[int, int]]] = {}      # institutie_id -> [(postings, employer_id)]
+    for eid, counts in per_emp.items():
+        county = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+        inst = groups.employer(employers.get(eid, ""), county)
+        if inst:
+            matches.setdefault(inst, []).append((sum(counts.values()), eid))
+    employer_of: dict[str, int] = {}
+    lost_ties: list[tuple] = []
+    for inst, cands in matches.items():
+        cands.sort(key=lambda c: (-c[0], c[1]))         # more postings first; then the lower id
+        employer_of[inst] = cands[0][1]
+        lost_ties.extend((inst, eid, n, cands[0][1]) for n, eid in cands[1:])
+
+    institutions, out_groups, seen = [], [], {}
+    clashes = 0
+    for inst_id in sorted(by_inst):
+        g = by_inst[inst_id]
+        county_raw = g[0]["judet"]
+        parse = judete.normalize_judet(county_raw)
+        county = parse.judet or county_raw.title()
+        county_slug = _slugify(county)
+        slug = declared_slug(g[0]["institutie"], county_slug)
+        if slug in seen:                                # two ids with one slug: a short hash keeps it stable
+            import hashlib
+            clashes += 1
+            slug = f"{slug}-{hashlib.sha1(inst_id.encode('utf-8')).hexdigest()[:6]}"
+        seen[slug] = inst_id
+        institutions.append((slug, inst_id, g[0]["institutie"], county, county_slug,
+                             sum(int(r["n"]) for r in g), len(g), employer_of.get(inst_id)))
+        for r in sorted(g, key=lambda r: (-int(r["n"]), r["functie"])):
+            d = declaratii.estimate_dict(r)["declaratii"]
+            out_groups.append((slug, r["functie"], r["familie"], d["n"], d["mediana_net"], d["p25_net"], d["p75_net"],
+                               d["mediana_net_2023"], d["factor"], d["factor_sursa"], d["eroare_tipica"]))
+    return {"institutions": institutions, "groups": out_groups, "lost_ties": lost_ties, "slug_clashes": clashes}
+
+
+def export_declared_institutions(cur, con: sqlite3.Connection, path: Path = declaratii.GROUPS_CSV) -> dict | None:
+    """Write declared_institutions and declared_groups from the CSV. A checkout without the file skips them."""
+    groups = declaratii.Groups.load(path)
+    if not groups.rows:
+        print("declared_institutions skipped (no groups file)")
+        return None
+    cur.execute("SELECT jp.employer_id AS eid, j.name AS county, COUNT(*) AS n FROM jobs_jobposting jp "
+                "JOIN jobs_judet j ON j.id = jp.judet_id WHERE jp.employer_id IS NOT NULL GROUP BY jp.employer_id, j.name")
+    counties = [(r["eid"], r["county"], r["n"]) for r in cur.fetchall()]
+    employers = dict(con.execute("SELECT id, name FROM employers"))
+    built = build_declared(groups.rows, employers, counties)
+    con.executescript(DECLARED_DDL)
+    con.executemany("INSERT INTO declared_institutions VALUES (?,?,?,?,?,?,?,?)", built["institutions"])
+    con.executemany("INSERT INTO declared_groups VALUES (?,?,?,?,?,?,?,?,?,?,?)", built["groups"])
+    matched = sum(1 for i in built["institutions"] if i[7] is not None)
+    print(f"declared_institutions: {len(built['institutions'])} institutions, {len(built['groups'])} groups, "
+          f"{matched} with an employer; {built['slug_clashes']} slug clashes")
+    if built["lost_ties"]:
+        print(f"  WARNING: {len(built['lost_ties'])} employers match an institution that has a better employer (more postings, "
+              f"then the lower id); they get no section. First 10:")
+        for inst, eid, n, kept in built["lost_ties"][:10]:
+            print(f"    employer {eid} ({n} postings) also matches {inst}; kept employer {kept}")
+    return {"institutions": len(built["institutions"]), "groups": len(built["groups"]), "matched": matched,
+            "lost_ties": built["lost_ties"]}
 
 
 def git_sha() -> str:

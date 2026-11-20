@@ -329,3 +329,4 @@ Context: `/` on the VPS was 90% full. Already done 2026-11-16: `data/posturi.pre
 - [ ] **Prune `data/downloads` (2.8 GB, 12.6k files, 1.7 GB older than 30 days)** — find out whether the pipeline re-downloads or dedups against this directory (check `ops/run-pipeline.sh` and the fetch code). If old files are not needed, move them to the volume or delete them; if they are needed, move them and symlink. The pipeline runs twice a day, so pause the cron during the move.
 - [ ] **Set a retention rule for `data/downloads`** (for example a nightly job that moves files older than 60 days to the volume), so the folder stops growing at ~240 MB per week.
 - [ ] **`.venv` is 446 MB and `data/anunturi` 352 MB** — check `anunturi.csv` (123 MB, rewritten each run) for rotation.
+- [ ] data/downloads is 3.0 GB and grows about 1 GB per month (brief: docs/briefs/2026-11-20-celi-downloads-retention.md)

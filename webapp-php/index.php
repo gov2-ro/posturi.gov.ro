@@ -220,6 +220,8 @@ if ($is_root && !$hx_fragment && !$_GET) {
     require __DIR__ . '/pages/eligibility_tool.php';
 } elseif ($uri === '/estimator-salariu' || $uri === '/estimator-salariu/') {
     require __DIR__ . '/pages/salary_estimator.php';
+} elseif ($uri === '/salarii-declarate' || $uri === '/salarii-declarate/') {
+    require __DIR__ . '/pages/declared_index.php';
 } elseif (preg_match('#^/salarii-declarate/([^/]+)/?$#', $uri, $m)) {
     $_GET['slug'] = rawurldecode($m[1]);
     require __DIR__ . '/pages/declared_institution.php';

@@ -694,6 +694,24 @@ run_suite('item details: a stated salary comes first and wins over the estimate;
     assert_not_contains('Conform legii', $t, 'stated, no estimate: no law line');
 });
 
+run_suite('item details: a declared-pay estimate says so and has no "la gradația 0"', function () use ($det, $db_path3) {
+    $pdo = new PDO('sqlite:' . $db_path3);
+    fixture_seed_declared_estimate($pdo);
+    $declared = (string)$pdo->query("SELECT sal_json FROM posting_text WHERE posting_id = 1004")->fetchColumn();
+    $pdo->exec("UPDATE job_postings SET inf_salary_min = NULL, inf_salary_max = NULL WHERE id = 3903");
+    $st = $pdo->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = 3903");
+    $st->execute([$declared]);
+    [, $rss] = fetch($det, '/posturi.rss?status=all');
+    [, $ics] = fetch($det, '/posturi.ics?status=all');
+    $views = ['rss' => item_html(xml_doc($rss), 'description', 'https://posturi.gov.ro/anunt/detalii-curent'), 'ics' => ics_description($ics, 3903)];
+    foreach ($views as $fmt => $h) {
+        $t = html_entity_decode(strip_tags((string)$h));
+        assert_contains('Salariu estimat: ≈ 6.850 lei net / lună, după declarațiile de avere', $t, "$fmt: the net median, said as declared");
+        assert_contains('după declarațiile de avere', $t, "$fmt: the source");
+        assert_not_contains('la gradația 0', $t, "$fmt: no grid wording");
+    }
+});
+
 stop_fixture_server($srv3, $db_path3);
 stop_fixture_server($srv2, $db_path2);
 stop_fixture_server($srv, $db_path);

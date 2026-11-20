@@ -238,6 +238,14 @@ function feed_details(array $r, array $events): array {
         $est_net = net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']));
         $est_gross = ($lo === $hi ? $lo : $lo . '–' . $hi) . ' lei brut';
     }
+    // An estimate from the asset declarations (ADR 0008 rule 9) says so, as the list row does: the net median, then
+    // "după declarațiile de avere"; never "la gradația 0" (it is not a grid figure).
+    $dv = declared_view($sal);
+    if ($dv) {
+        $est_net = '≈ ' . $dv['estimare'] . ' lei net';
+        $est_gross = $dv['brut'] . ' lei brut';
+    }
+    $est_tail = $dv ? ', după declarațiile de avere' : ', la gradația 0';
     $stated = (float)($r['inf_salary_min'] ?? 0) > 0 ? list_salary($r) : null;
     $proj = !empty($r['project_hire']);
     if ($proj) {
@@ -251,10 +259,10 @@ function feed_details(array $r, array $events): array {
     } elseif ($stated) {
         feed_put($x, 'Salariu anunțat', $stated['text'] . ' / lună');
         feed_put($x, 'Brut anunțat', $stated['gross'] . ' brut / lună, din anunț');
-        if ($est_net !== '') feed_put($x, 'Conform legii salarizării (propunere)', $est_net . ' (' . $est_gross . ') / lună, la gradația 0');
+        if ($est_net !== '') feed_put($x, 'Conform legii salarizării (propunere)', $est_net . ' (' . $est_gross . ') / lună' . $est_tail);
     } elseif ($est_net !== '') {
-        feed_put($x, 'Salariu estimat', $est_net . ' / lună, la gradația 0');
-        feed_put($x, 'Brut estimat', $est_gross . ' / lună, la gradația 0');
+        feed_put($x, 'Salariu estimat', $est_net . ' / lună' . $est_tail);
+        feed_put($x, 'Brut estimat', $est_gross . ' / lună' . $est_tail);
         feed_put($x, 'Despre estimare', (string)($sal['disclaimer'] ?? ''));
     }
     $cond = posting_inferred_conditions($r);

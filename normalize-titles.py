@@ -463,6 +463,9 @@ def build_parser() -> argparse.ArgumentParser:
 SELECTOR_ALIASES = {
     "femeie de serviciu": "Îngrijitor",      # owner, 2026-11-20: same job, same pay
     "infirmier": "Infirmieră",               # the grids list the feminine form only
+    # Owner, 2026-11-20: the nearest row, same studies level (S). Most of these posts
+    # are project hires (PIDS); the law grid has no row for the job itself.
+    "consilier scolar": "Psihopedagog",
 }
 #: The grid function for a trade with no row of its own (owner, 2026-11-20).
 TRADE_FUNCTION = "Muncitor calificat"

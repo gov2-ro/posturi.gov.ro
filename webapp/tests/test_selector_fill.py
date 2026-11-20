@@ -75,7 +75,15 @@ def test_trade_without_a_row_takes_the_skilled_worker_row(nt, grids, trade):
 def test_a_non_trade_without_a_row_stays_empty(nt, grids):
     # COR group 2 ("expert medic") and a name that is nowhere: no alias.
     assert fill(nt, grids, "Medic fictiv de proba") is None
-    assert fill(nt, grids, "Consilier școlar") is None
+
+
+def test_school_counsellor_takes_the_psihopedagog_row(nt, grids):
+    assert fill(nt, grids, "Consilier școlar")["functie_grila"] == "Psihopedagog"
+
+
+def test_social_technician_gets_no_university_row(nt, grids):
+    # Asistent social is an S row; the technician post is M (owner decides, 2026-11-20).
+    assert fill(nt, grids, "Tehnician asistență socială") is None
 
 
 def test_never_changes_a_filled_function(nt, grids):

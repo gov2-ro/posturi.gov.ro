@@ -52,6 +52,8 @@
 **Decided**
 - *Publish the fill at 18:33, then fix the annex* (owner). Rationale: the postings had no figure before; most figures were close; Psiholog was about 20% low. Alternative not taken: clear the fills of names in several annexes before 18:33 (a few hundred postings back to „fără salariu estimat”).
 - *The annex comes from the employer, per posting, in `estimate-salaries.py`*, not from the occupation dictionary: one occupation serves many employers. When the employer type is unclear, the figure is the range over all annexes that have the name.
+- *Consilier școlar takes the „Psihopedagog” row* (owner; alias in `normalize-titles.py`). Both are university-level (S) posts. Backtrack: remove the alias, re-run `--fill-selectors` and `estimate-salaries.py`. Measured on the local copy: about 95% of these postings are project hires, most of them in the PIDS project („Furnizare de servicii integrate în comunitățile rurale”), and none states the pay.
+- *Tehnician asistență socială and Lucrător social do NOT take „Asistent social”* (Opus, after the owner's yes): „Asistent social” is an S row, and the technician post is M, so the figure would be too high. The law grid has no M row for the job. The draft has one (Anexa II, „Educator, … tehnician asistență socială”, M). Open: alias to that draft row (figure as „estimare aproximativă”) or no figure. Lucrător social has 6 local postings; no row is close.
 
 ### 2026-11-20 — SALARY-DECLARATII: pages per institution, decided and briefed (Opus + owner)
 

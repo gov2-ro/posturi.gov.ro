@@ -97,6 +97,15 @@ require __DIR__ . '/../inc/header.php';
     <a href="/posturi.json<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">JSON API</a>
   </div>
 
+  <?php /* SALARY-DECLARATII-PAGE: the pay of the asset declarations, when the employer matches an institution. */
+  $declared_inst = declared_institution_of_employer($eid);
+  if ($declared_inst): $declared_slug = $declared_inst['slug']; ?>
+  <div class="mb-8" data-employer-declared>
+    <?php require __DIR__ . '/../partials/declared_pay.php'; ?>
+    <p class="mt-3 max-w-3xl"><a href="/salarii-declarate/<?= e($declared_inst['slug']) ?>/" class="text-gov underline" data-declared-page-link>Pagina salariilor declarate la această instituție →</a></p>
+  </div>
+  <?php endif; ?>
+
   <div class="flex gap-8 items-start">
     <!-- Sidebar: by judet -->
     <?php if ($by_judet): ?>

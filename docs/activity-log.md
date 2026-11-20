@@ -2,6 +2,23 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-DECLARATII: the asset declarations in Kibana, and the first dump (Opus + owner)
+
+**Done**
+- Explored the monitorul.ai Kibana (`kibana.sicap.ai`, space `integritate`) in the owner's Chrome. The Dev Tools proxy is closed to the role; the internal search `POST /s/integritate/internal/search/es` works. Fields, queries and limits: `docs/audits/2026-11-20-salary-declaratii-kibana.md`.
+- Dumped every holder salary line: 1,384,279 declarations, 1,822,108 rows, 92 MB gzip, in 7.5 minutes. File: `data/integritate/integritate-salarii-raw-2026-11-20.csv.gz` (out of git).
+- Saved two dump scripts with the same query and CSV: `ops/integritate-dump.py` (API key, user and password, or cookie from the environment) and `ops/integritate-dump.js` (DevTools console).
+
+**Hard**
+- `extraction.venituri` is a plain object array, not `nested`. Elasticsearch cannot tie the category, the beneficiary and the amount of one line. So the dump reads the documents and filters the lines in the client.
+- `aid` repeats across `portal_vechi` and `portal_nou`. The first run sorted on `aid` only and skipped 15 of 1,402,281 declarations at page edges. The scripts now sort on (`aid`, `source.keyword`).
+- The internal search returns `hits.total` as a number, not as `{"value": n}`.
+
+**Decided**
+- The dump keeps all holder salary lines and does not choose one. A strict institution match in the browser kept only 48 % of the first 22,000 declarations, because `sursa` carries addresses and parent bodies. Choosing the line in a later Python step lets us change the rule without a new 8-minute dump. Cost: a file about 1.3 times larger.
+- No names in the dump (`nume`, `beneficiar_nume` are not read).
+- Measured: income exists only for filings 2021–2024, so pay of 2020–2023 (nearly all in 2022–2024). 79.2 % of declarations have exactly one holder salary line. Assumed, not measured: most declarants write the net amount.
+
 ### 2026-11-20 — SALARY-UNMATCHED: audit and the selector fill (Sonnet, brief SALARY-UNMATCHED; not deployed)
 
 **Done.** `ops/salary-unmatched.py` (`1e975fe`) classifies the postings with no figure. The audit is `docs/audits/2026-11-20-salary-unmatched.md` (`2c83ab8`). VPS (data to 19 Nov): 2,625 of 16,640 postings have no figure (`fara-selector` 2,396, `fara-rand-functie` 229). Local 9 Sep copy: 1,382 of 9,750. Every one has an empty `functie`. Code, owner decisions of 2026-11-20:

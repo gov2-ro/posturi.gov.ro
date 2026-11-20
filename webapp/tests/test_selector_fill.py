@@ -81,13 +81,13 @@ def test_school_counsellor_takes_the_psihopedagog_row(nt, grids):
     assert fill(nt, grids, "Consilier școlar")["functie_grila"] == "Psihopedagog"
 
 
-def test_social_technician_takes_the_draft_m_row(nt, grids):
-    # Not "Asistent social" (an S row): the post is M, and only the draft has its row.
+def test_social_technician_takes_the_law_m_row(nt, grids):
+    # Not "Asistent social" (an S row): the post is M. The law row is in Anexa II only.
     draft, law = grids
     name = fill(nt, grids, "Tehnician asistență socială")["functie_grila"]
-    assert "tehnician asistență socială" in name and "principal" not in name
-    rows = draft.by_name[sg.norm(name)]
-    assert {r.studii for r in rows} == {"M"} and not law.by_name.get(sg.norm(name))
+    rows = law.by_name[sg.norm(name)]
+    assert {r.anexa for r in rows} == {"II"} and {r.studii for r in rows} == {"M"}
+    assert "principal" not in name and "debutant" not in name
 
 
 def test_never_changes_a_filled_function(nt, grids):
@@ -151,10 +151,11 @@ def test_fill_selectors_dry_run_writes_nothing_and_run_is_idempotent(nt, grids):
     conn = _Conn(rows)
     assert nt.fill_selectors(conn, draft, law, dry_run=True) == 1 and conn.updates == []
     assert nt.fill_selectors(conn, draft, law, dry_run=False) == 1
-    (payload, row_id), = conn.updates
+    (payload, provider, row_id), = conn.updates
     assert row_id == 1 and json.loads(payload)["functie_grila"] == "Brancardier"
-    assert "rule-name-lookup" in conn.sql
+    assert provider == "rule-name-lookup"
     rows[0]["grid_selector"] = json.loads(payload)          # what the next run reads
+    rows[0]["provider"] = provider
     conn.updates.clear()
     assert nt.fill_selectors(conn, draft, law, dry_run=False) == 0 and conn.updates == []
 
@@ -165,3 +166,24 @@ def test_pipeline_runs_selectors_between_occupations_and_salary():
     assert steps.index("occupations") < steps.index("selectors") < steps.index("salary")
     cmd = pipeline._build_cmd("selectors", force=False, no_llm=True, provider="", limit=None, since=None)
     assert Path(cmd[1]).name == "normalize-titles.py" and cmd[-1] == "--fill-selectors"
+
+
+def test_refill_updates_a_row_that_the_fill_wrote(nt, grids):
+    draft, law = grids
+    old = dict(EMPTY, functie_grila="Some old alias target")
+    new = nt.refill("Tehnician asistență socială", old, nt.FILL_PROVIDER, draft, law)
+    assert new["functie_grila"].startswith("Educator, educator puericultor")
+    assert nt.refill("Tehnician asistență socială", new, nt.FILL_PROVIDER, draft, law) is None
+
+
+def test_refill_clears_a_fill_whose_rule_is_gone(nt, grids):
+    draft, law = grids
+    old = dict(EMPTY, functie_grila="Psihopedagog")
+    new = nt.refill("Medic fictiv de proba", old, nt.FILL_PROVIDER, draft, law)
+    assert new["functie_grila"] is None
+
+
+def test_refill_never_touches_a_model_row(nt, grids):
+    draft, law = grids
+    old = dict(EMPTY, functie_grila="Asistent medical")
+    assert nt.refill("Tehnician asistență socială", old, "deepseek", draft, law) is None

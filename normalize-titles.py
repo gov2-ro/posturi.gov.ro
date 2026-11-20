@@ -466,11 +466,12 @@ SELECTOR_ALIASES = {
     # Owner, 2026-11-20: the nearest row, same studies level (S). Most of these posts
     # are project hires (PIDS); the law grid has no row for the job itself.
     "consilier scolar": "Psihopedagog",
-    # Owner, 2026-11-20: the law grid has no M row; the draft row (Anexa II b), no grade)
-    # gives an "estimare aproximativă". Not "Asistent social": that row is S.
+    # Owner, 2026-11-20: the M row of social care, no grade (OUG 19/2024 Anexa 2). The
+    # law spells it without "tehnician asistență socială"; the draft spelling split into
+    # "Educator" and matched Anexa I. Not "Asistent social": that row is S.
     "tehnician asistenta sociala": (
-        "Educator, educator puericultor, asistent igiena, asistent BFT, optician protezare "
-        "ortopedică și auditivă, asistent medical, tehnician asistență socială 1*)"
+        "Educator, educator puericultor, asistent igienă, asistent BFT, optician protezare "
+        "ortopedică și auditivă, asistent medical 1"
     ),
 }
 #: The grid function for a trade with no row of its own (owner, 2026-11-20).
@@ -518,24 +519,45 @@ def selector_fill(canonical: str, selector: dict, draft, law) -> dict | None:
     return dict(selector, functie_grila=name)
 
 
+#: The provider mark of a selector that `fill_selectors()` wrote.
+FILL_PROVIDER = "rule-name-lookup"
+
+
+def refill(canonical: str, selector: dict, provider: str, draft, law) -> dict | None:
+    """The new selector of one dictionary row, or None when it does not change.
+
+    A row that the fill wrote before (`FILL_PROVIDER`) is derived again from the current
+    rules: a changed or removed alias then reaches the rows it filled.
+    """
+    if provider != FILL_PROVIDER:
+        return selector_fill(canonical, selector, draft, law)
+    base = dict(selector, functie_grila=None)
+    new = selector_fill(canonical, base, draft, law) or base
+    return None if new == selector else new
+
+
 def fill_selectors(conn, draft, law, dry_run: bool) -> int:
-    """Fill the empty selectors of the dictionary. Idempotent; no model call."""
+    """Fill the empty selectors of the dictionary, and re-derive the ones it filled.
+
+    Idempotent; no model call.
+    """
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute("SELECT id, canonical, grid_selector FROM jobs_occupation")
+        cur.execute("SELECT id, canonical, grid_selector, provider FROM jobs_occupation")
         rows = cur.fetchall()
     todo = []
     for r in rows:
-        new = selector_fill(r["canonical"], r["grid_selector"] or {}, draft, law)
+        new = refill(r["canonical"], r["grid_selector"] or {}, r.get("provider") or "", draft, law)
         if new is not None:
-            todo.append((json.dumps(new, ensure_ascii=False), r["id"], r["canonical"], new["functie_grila"]))
+            todo.append((json.dumps(new, ensure_ascii=False), r["id"], r["canonical"],
+                         new["functie_grila"] or "(none)"))
     counts = Counter((canon, fn) for _s, _i, canon, fn in todo)
     for (canon, fn), n in counts.most_common(15):
         print(f"  {canon[:36]:38s} -> {fn:24s} x{n}")
     if not dry_run and todo:
         with conn.cursor() as cur:
             cur.executemany(
-                "UPDATE jobs_occupation SET grid_selector = %s::jsonb, provider = 'rule-name-lookup', "
-                "model = '', updated_at = NOW() WHERE id = %s", [(s, i) for s, i, _c, _f in todo])
+                "UPDATE jobs_occupation SET grid_selector = %s::jsonb, provider = %s, "
+                "model = '', updated_at = NOW() WHERE id = %s", [(s, FILL_PROVIDER, i) for s, i, _c, _f in todo])
         conn.commit()
     print(f"{len(todo)} occupations {'would be ' if dry_run else ''}filled")
     return len(todo)

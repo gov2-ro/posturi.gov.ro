@@ -129,3 +129,12 @@ def test_no_figure_is_lost(est, grids):
 def test_employer_annex(est, name, annex):
     category = "Consilii județene" if "Consiliul" in name else "Instituții locale"
     assert est.employer_annex({"employer_name": name, "employer_category": category}) == annex
+
+
+def test_social_technician_at_a_town_hall_gets_the_social_care_row(est, grids):
+    # SALARY-UNMATCHED, 2026-11-20: the alias name must not split into "Educator" (Anexa I).
+    name = ("Educator, educator puericultor, asistent igienă, asistent BFT, optician protezare "
+            "ortopedică și auditivă, asistent medical 1")
+    e, used, why = run_law(est, grids, posting(name, "Primăria Comunei Balcani", "Primării",
+                                               studii="medii"))
+    assert e is not None and e.lei_min == e.lei_max == 4500, why

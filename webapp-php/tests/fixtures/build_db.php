@@ -1138,5 +1138,43 @@ function fixture_seed_declared_estimate(PDO $db): int {
         sal_variant = 'declaratii-2023', sal_confidence = 'interval' WHERE id = 1004");
     $st = $db->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = 1004");
     $st->execute([$json]);
+    fixture_seed_declared_institutions($db);
     return 1004;
+}
+
+/**
+ * The tables of the export of declared pay per institution (export-to-sqlite.py DECLARED_DDL), with 62 institutions:
+ * `comuna-gaiceana-bacau` (the employer 2, three groups), `primaria-test-sans-angajator-cluj` (no employer) and 60 filler
+ * comunes in Bacău and Cluj, so that the index has two pages at 50 per page (tests/declared_pay_test.php,
+ * browser/declared_institutions.spec.js). Every group has 5 declarants or more.
+ */
+function fixture_seed_declared_institutions(PDO $db): void {
+    $db->exec("
+DROP TABLE IF EXISTS declared_groups;
+DROP TABLE IF EXISTS declared_institutions;
+CREATE TABLE declared_institutions (slug TEXT PRIMARY KEY, institutie_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, judet TEXT NOT NULL,
+    judet_slug TEXT NOT NULL, n_total INTEGER NOT NULL, groups INTEGER NOT NULL, employer_id INTEGER);
+CREATE TABLE declared_groups (institution_slug TEXT NOT NULL, functie TEXT NOT NULL, familie TEXT NOT NULL, n INTEGER NOT NULL,
+    mediana_net INTEGER NOT NULL, p25_net INTEGER NOT NULL, p75_net INTEGER NOT NULL, mediana_net_2023 INTEGER NOT NULL,
+    factor REAL NOT NULL, factor_sursa TEXT NOT NULL, eroare_tipica REAL NOT NULL);");
+    $inst = $db->prepare("INSERT INTO declared_institutions VALUES (?,?,?,?,?,?,?,?)");
+    $grp = $db->prepare("INSERT INTO declared_groups VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+    $add = function (string $slug, string $name, string $county, string $cslug, ?int $employer, array $groups) use ($inst, $grp): void {
+        $inst->execute([$slug, strtoupper($name) . '|' . strtoupper($county), $name, $county, $cslug,
+            array_sum(array_column($groups, 1)), count($groups), $employer]);
+        foreach ($groups as [$functie, $n, $med, $p25, $p75, $med23, $err]) {
+            $grp->execute([$slug, $functie, 'admin-local', $n, $med, $p25, $p75, $med23, 1.15, 'INS test', $err]);
+        }
+    };
+    $add('comuna-gaiceana-bacau', 'Comuna Găiceana', 'Bacău', 'bacau', 2, [
+        ['Consilier superior', 37, 6850, 6000, 7600, 5950, 5.2],
+        ['Referent', 12, 4350, 3950, 4800, 3800, 6.7],
+        ['Inspector asistent', 5, 3900, 3600, 4200, 3400, 4.1]]);
+    $add('primaria-test-sans-angajator-cluj', 'Primăria Test fără angajator', 'Cluj', 'cluj', null, [
+        ['Consilier', 9, 5200, 4800, 5600, 4500, 5.9]]);
+    for ($i = 1; $i <= 60; $i++) {
+        $name = sprintf('Comuna Umplutură %02d', $i);
+        $c = $i % 2 ? ['Bacău', 'bacau'] : ['Cluj', 'cluj'];
+        $add(sprintf('comuna-umplutura-%02d-%s', $i, $c[1]), $name, $c[0], $c[1], null, [['Consilier', 5 + $i % 7, 5000 + 50 * $i, 4600, 5600, 4300, 5.2]]);
+    }
 }

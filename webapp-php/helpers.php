@@ -3891,3 +3891,38 @@ function salary_est_ins_line(string $annex, string $judet = ''): ?array {
         'matrix_links' => $links, 'section' => $section, 'judet' => $judet, 'period' => $period, 'value' => (int)round((float)$r['valoare']),
     ];
 }
+
+// ---- Declared pay per institution (SALARY-DECLARATII-PAGE, ADR 0008 rule 9) ----
+
+/** True when the export has the declared-pay tables (an older export does not). */
+function declared_available(): bool {
+    static $ok = null;
+    if ($ok === null) {
+        $n = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('declared_institutions', 'declared_groups')")->fetchColumn();
+        $ok = $n === 2;
+    }
+    return $ok;
+}
+
+/** One institution (the row of declared_institutions) by slug, or null. */
+function declared_institution(string $slug): ?array {
+    if ($slug === '' || !declared_available()) return null;
+    $st = db()->prepare("SELECT * FROM declared_institutions WHERE slug = ?");
+    $st->execute([$slug]);
+    return $st->fetch() ?: null;
+}
+
+/** The institution of an employer (at most one), or null. */
+function declared_institution_of_employer(int $employer_id): ?array {
+    if (!declared_available()) return null;
+    $st = db()->prepare("SELECT * FROM declared_institutions WHERE employer_id = ?");
+    $st->execute([$employer_id]);
+    return $st->fetch() ?: null;
+}
+
+/** The groups of an institution, the largest first. */
+function declared_groups_of(string $slug): array {
+    $st = db()->prepare("SELECT * FROM declared_groups WHERE institution_slug = ? ORDER BY n DESC, functie");
+    $st->execute([$slug]);
+    return $st->fetchAll();
+}

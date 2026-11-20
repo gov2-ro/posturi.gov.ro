@@ -11,6 +11,10 @@ the beneficiary is the holder ("titular"). The script does not choose the line
 that is the pay of the declared post; a later step does that. The output has no
 names. `an` is the filing year; the income is for the year `an - 1`.
 
+`person` is a scrambled key: SHA-256 of a random salt, the sorted name tokens
+and `institutie_id`. The salt is made at the start of each run and is never
+written, so a key links one person at one institution inside one dump only.
+
 ops/integritate-dump.js is the browser version, with the same query and the same
 CSV. See docs/audits/2026-11-20-salary-declaratii-kibana.md.
 
@@ -32,8 +36,10 @@ import argparse
 import base64
 import csv
 import gzip
+import hashlib
 import json
 import os
+import secrets
 import sys
 import time
 import urllib.error
@@ -46,7 +52,7 @@ PAGE = 2000
 
 # Keep in step with COLS in ops/integritate-dump.js.
 COLS = [
-    "aid", "an", "data_completare_iso", "source", "functie", "institutie_id",
+    "aid", "an", "data_completare_iso", "source", "person", "functie", "institutie_id",
     "institutie", "institutie_norm", "judet_norm", "localitate", "tip_institutie",
     "n_lines", "sursa", "serviciul_prestat", "suma", "valuta",
 ]
@@ -66,8 +72,19 @@ SOURCE = [
     "institutie_id", "institutie_norm", "judet_norm", "localitate", "tip_institutie",
     "extraction.venituri.categorie", "extraction.venituri.sursa",
     "extraction.venituri.serviciul_prestat", "extraction.venituri.beneficiar_tip",
-    "extraction.venituri.venit_anual",
+    "extraction.venituri.venit_anual", "nume_norm",
 ]
+
+SALT = secrets.token_hex(16)
+
+
+def person_key(src: dict) -> str:
+    """Scrambled key of one person at one institution, for this run only."""
+    name = " ".join(sorted((src.get("nume_norm") or "").split()))
+    if not name:
+        return ""
+    data = f"{SALT}|{name}|{src.get('institutie_id') or ''}".encode()
+    return hashlib.sha256(data).hexdigest()[:16]
 
 
 def auth_headers() -> dict[str, str]:
@@ -120,7 +137,7 @@ def holder_salary_rows(src: dict) -> list[dict]:
     for v in lines:
         va = v.get("venit_anual") or {}
         row = {c: src.get(c) for c in COLS}
-        row.update(n_lines=len(lines), sursa=v.get("sursa"),
+        row.update(person=person_key(src), n_lines=len(lines), sursa=v.get("sursa"),
                    serviciul_prestat=v.get("serviciul_prestat"),
                    suma=va.get("suma"), valuta=va.get("valuta"))
         rows.append(row)

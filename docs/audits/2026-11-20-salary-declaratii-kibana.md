@@ -177,7 +177,184 @@ Currency of the rows: `RON` 1,671,268, the text `"null"` 140,419 (the LLM wrote 
 
 This run sorted on `aid` only, so 15 declarations at page edges were skipped (0.001 %). The scripts now sort on (`aid`, `source.keyword`).
 
+## The second dump, with a person key (2026-11-20)
+
+The owner chose to add a scrambled person key (`person`). Each run makes a random salt, then `person` = the first 8 bytes of SHA-256(salt | sorted name tokens | `institutie_id`). The salt is never written. So `person` links one person at one institution inside one dump, and cannot be traced back to a name.
+
+File: `data/integritate/integritate-salarii-raw-20261120T1229.csv.gz`, 110 MB, 1,402,281 declarations (none skipped), 1,822,126 rows, 9.7 minutes. Chrome blocks a second automatic download from a site; the owner must allow „multiple downloads” for `kibana.sicap.ai` once. The first dump (`…-2026-11-20.csv.gz`, no `person`) is superseded.
+
+## Analysis (2026-11-20)
+
+Scripts: `ops/integritate-select.py` (one pay line per declaration) and `ops/integritate-panel.py` (panel, net/gross, backtest). Output of the first: `data/integritate/selected.csv.gz`.
+
+### One pay line per declaration
+
+`ops/integritate-select.py` keeps, for each declaration, the **largest line that names the declaring institution**. The match removes the address (after the first comma) and the generic words, compares 6-letter stems, and accepts the parent body for police, army, ISU, prosecutors and customs. A type word in `sursa` that the institution name lacks („Scoala”, „Spital”, „SRL”) means another employer. 10 hand-picked cases pass.
+
+| Result | Declarations | Share |
+|---|---|---|
+| `inst`: a line names the institution | 1,044,293 | 75.4 % |
+| `single`: one line, institution not named (kept, flagged; not used below) | 143,322 | 10.4 % |
+| No amount (the extractor found none; currency `"null"`, amount 0) | 148,618 | 10.7 % |
+| Several lines, none names the institution | 48,061 | 3.5 % |
+
+The largest line, not the sum: the other lines from the same employer are often holiday vouchers (1,450 lei) or back pay („diferențe salariale”).
+
+Then one declaration per (`person`, `an`), the latest filing: 814,216 kept, 124,806 repeats dropped. Values under 12,000 lei a year are dropped as part-year.
+
+### Panel: the same person, the same post, one year later
+
+Growth = pay of the year / pay of the year before, for the same `person` with the same `functie`.
+
+| Family | 2021→2022 median | ±5 % | 2022→2023 median | ±5 % | n (2022→2023) |
+|---|---|---|---|---|---|
+| All | 1.035 | 60 % | 1.124 | 29 % | 189,216 |
+| Local administration | 1.033 | 60 % | 1.151 | 24 % | 40,091 |
+| Central administration | 1.038 | 68 % | 1.111 | 26 % | 37,698 |
+| County administration | 1.028 | 71 % | 1.090 | 41 % | 13,012 |
+| MAI / MApN | 1.052 | 53 % | 1.180 | 19 % | 14,328 |
+| Local police | 1.066 | 50 % | 1.168 | 20 % | 8,665 |
+| Health | 1.000 | 66 % | 1.024 | 62 % | 8,032 |
+| Education | 1.027 | 61 % | 1.145 | 18 % | 6,548 |
+| Justice staff | 1.051 | 42 % | 1.159 | 20 % | 7,463 |
+| Magistrates | 1.083 | 36 % | 1.126 | 24 % | 3,584 |
+| Elected | 1.000 | 75 % | 1.193 | 28 % | 6,797 |
+
+The families come from keywords on `functie` and `institutie_norm` (`family()` in the script). They are rough.
+
+Against the chain of acts of S1 (§ 3.3):
+
+- **2022 was frozen.** The data agrees: median 1.035, 60 % within ±5 %, health and elected officials exactly 1.000. The rest is gradations and changes inside a title.
+- **2023: +10 % over Dec 2022, but not over the 2022 annex value** (OUG 168/2022). Central (1.111) and county (1.090) administration agree. Health (1.024) agrees with the cap: health pay already stood at the 2022 annex value.
+- **Local administration** (1.151) also has the Anexa VIII jump of June 2023 (OUG 45/2023).
+- **MAI, education, justice, elected:** the growth is larger than the S1 chain explains. Other acts apply that S1 did not read. Not checked.
+
+So the realised growth follows the law by family. This supports the plan: take the 2023 level from the declarations, and the 2023→2026 change from the acts.
+
+### Net or gross
+
+- Inside a group (filing year + institution + title, n ≥ 5; 535,368 values), the ratio of each value to the group median has **one peak** at 1.0. There is no bump at 0.585 (net/gross) or at 1.71 (gross/net).
+- In the panel, 0.2–1.2 % of the pairs sit near 0.585, and 1–5 % near 1.71. The bump near 1.71 is more likely promotions and back pay than a change of convention.
+
+So the people in one group declare the same way. The level does not tell which way. The consilier superior median for 2023 (about 6,300 lei a month) sits between the 2026 grid base (4,905 gross, territorial) and the INS net average of the sector (6,900 net, May 2026). **The method does not need to know**, because a growth factor gives the same result on net and on gross. Only the label of the result needs it. The S2 lists (exact pay at named institutions in 2026) can settle the label.
+
+### Backtest: how far an institution departs from its family
+
+Prediction: group median for 2023 = group median for 2022 × the median growth of its family. Groups = institution + title, n ≥ 5 in both years. The factor comes from the same data, so this measures only how far an institution departs from its family. That is the error that a family-wide legal factor carries forward to 2026.
+
+| Family | Factor | Groups | Median abs. error | p90 abs. error | Within 10 % | Bias |
+|---|---|---|---|---|---|---|
+| All | — | 7,384 | 6.0 % | 19.2 % | 69 % | +0.8 % |
+| Local administration | 1.151 | 1,537 | 5.6 % | 15.1 % | 74 % | +1.6 % |
+| Central administration | 1.111 | 1,258 | 4.5 % | 17.1 % | 75 % | +0.2 % |
+| County administration | 1.090 | 582 | 4.8 % | 20.0 % | 74 % | +1.2 % |
+| MAI / MApN | 1.180 | 679 | 6.1 % | 18.9 % | 68 % | +2.2 % |
+| Health | 1.024 | 432 | 5.3 % | 18.8 % | 73 % | +0.7 % |
+| Local police | 1.168 | 275 | 6.1 % | 17.2 % | 70 % | +0.7 % |
+| Education | 1.145 | 67 | 4.9 % | 26.1 % | 64 % | −0.1 % |
+| Justice staff | 1.159 | 320 | 11.4 % | 31.3 % | 43 % | −0.8 % |
+| Magistrates | 1.126 | 139 | 11.1 % | 31.0 % | 45 % | +4.1 % |
+| Projects (EU) | 1.165 | 154 | 10.2 % | 33.6 % | 49 % | +0.3 % |
+| Elected | 1.193 | 95 | 10.7 % | 20.7 % | 27 % | +10.6 % |
+
+For administration, health, police and MAI: a typical error of about 5–6 %, and 1 group in 10 off by more than 15–20 %. Justice, magistrates, projects and elected officials are about twice as noisy.
+
+### What the method needs next
+
+1. **The legal factor 2023→2026 per family.** For Anexa VIII and similar annexes it is ×1.15 from Dec 2023 (OUG 115/2023 and the 2024 raises; 2025 and 2026 frozen). For health and education it is the June 2024 table of OUG 19/2024 or OUG 128/2023 divided by the 2022 annex value, per title. MAI (Anexa VI) has no documented factor yet, so it gets no estimate.
+2. **The timing gap.** A yearly figure for 2023 is an average of the year. Local administration rose in June 2023, so its 2023 average is below its Dec 2023 level, and ×1.15 on the average underestimates. Not measured.
+3. **The label (net or gross),** from the S2 lists.
+4. **When to show a figure:** n ≥ 5 in the group and a family with a documented factor. The band comes from the backtest error of the family.
+5. **Leave out** elected officials (indemnities, not posts), and EU project staff (ADR 0008 has its own rule for them).
+
+## The factor from 2023 to 2026 (2026-11-20)
+
+A declared figure is the **average of 2023**. The pay of 2026 is frozen at the Dec 2025 level (Legea 141/2025). So the factor must take a 2023 yearly average to the 2026 level. Two sources give it.
+
+### Source 1: INS, net average pay by sector
+
+FOM106D (CAEN Rev.2, to 2025-08) and FOM106G (CAEN Rev.3, from 2025-01). In the 8 shared months the two series agree to 0.01 %. Lei net per month:
+
+| Section | 2022 | 2023 | 2024 | 2025 (Jan–Aug) | 2026 (Jan–May) | **2026 / 2023** | Jan–May 2023 / 2023 |
+|---|---|---|---|---|---|---|---|
+| O: public administration and defence | 5,310 | 5,964 | 6,905 | 7,140 | 6,860 | **1.150** | 0.971 |
+| P: education | 3,860 | 4,624 | 5,745 | 5,853 | 5,745 | **1.242** | 0.920 |
+| Q: health and social care | 4,212 | 4,480 | 5,137 | 5,393 | 5,406 | **1.207** | 0.984 |
+
+The 2026 months are flat (O: 6,816–6,900), so January–May stands for the year. The last column shows the raises inside 2023: January–May 2023 was 2.9 % under the 2023 average in section O, and 8 % in education.
+
+### Source 2: the law (from the grid build)
+
+`build-salary-grid.py` records the factor from the Dec 2023 level to 2026 for each annex:
+
+- Anexa VIII, III, IV, I cap. II, V cap. VI: ×1.15 (OUG 115/2023 +5 %, OUG 53/2024 +10 %).
+- Anexa V (magistrates) and V cap. VII: ×1.05 only.
+- Health and education: the June 2024 tables of OUG 19/2024 and OUG 128/2023. The grid does not keep the values from before.
+- Anexa VI (MAI, army): not in the grid (SALARY-ANEXA-VI). OUG 36/2025 capped the hazardous-conditions bonus of Anexa VI at 300 lei a month from 1 Jul 2025, which is a cut.
+
+### Do the two agree?
+
+For section O, yes:
+
+- The law gives ×1.15 from Dec 2023.
+- The 2023 average sits about 3 % under the Dec 2023 level. INS shows it (0.971 for January–May), and so does the panel (the June 2023 step of Anexa VIII).
+- So the law alone predicts about ×1.18 on the 2023 average. INS measures ×1.150.
+- The difference (about 3 %) is the size of the fall from 2025 to 2026 (−4 %). That fits the 2025 cuts (for example OUG 36/2025). Opus assumes this cause; it is not measured.
+
+### The INS factor, tested one year back
+
+The backtest above, rerun with the INS sector factor for 2022→2023 (O 1.123, P 1.198, Q 1.064) in place of a factor fitted on the panel. This is out of sample (`ops/integritate-panel.py --backtest`):
+
+| Family | INS factor | Groups | Median abs. error | p90 abs. error | Within 10 % | Bias |
+|---|---|---|---|---|---|---|
+| All | — | 5,636 | 6.1 % | 19.4 % | 69 % | +1.0 % |
+| Local administration | 1.123 | 1,537 | 5.2 % | 15.0 % | 76 % | −0.8 % |
+| Central administration | 1.123 | 1,258 | 4.8 % | 16.8 % | 74 % | +1.2 % |
+| MAI / MApN | 1.123 | 679 | 6.1 % | 17.5 % | 70 % | −2.7 % |
+| County administration | 1.123 | 582 | 6.7 % | 19.7 % | 66 % | +4.2 % |
+| Local police | 1.123 | 275 | 6.0 % | 17.3 % | 73 % | −3.2 % |
+| Health | 1.064 | 432 | 6.9 % | 20.7 % | 68 % | +4.6 % |
+| Education | 1.198 | 67 | 8.7 % | 24.7 % | 61 % | +4.5 % |
+| Universities | 1.198 | 252 | 9.8 % | 26.9 % | 52 % | +8.9 % |
+| Justice staff | 1.123 | 320 | 11.8 % | 30.2 % | 45 % | −3.9 % |
+| Magistrates | 1.123 | 139 | 11.0 % | 30.7 % | 46 % | +3.9 % |
+
+For section O, the INS factor is as good as a factor fitted on the declarations. For health and education it overshoots by about 4.5 %. Those INS sections include private units, and the people who declare are mostly managers (directors, inspectors, heads of section), not teachers or nurses.
+
+### Factor by family (accepted by the owner, 2026-11-20)
+
+| Family | Factor 2023 → 2026 | Source | Check | Status |
+|---|---|---|---|---|
+| Local, county, central administration | **1.150** | INS section O | law ×1.15 + 3 % gap − 2025 cuts | ready |
+| Local police | **1.150** | INS section O | law: Anexa VIII | ready |
+| MAI / MApN | **1.150** | INS section O | law: Anexa VI unknown; bonus cut in 2025 | ready, band from the backtest |
+| Justice staff (grefieri, etc.) | 1.150 | INS section O | law: Anexa V cap. VI ×1.15 | backtest error 11.8 %: wide band, or no figure |
+| Magistrates | — | — | law ×1.05 against INS ×1.15 | no figure: the sources disagree, and judges are not hired through postings |
+| Health | (1.207) | INS section Q | overshoots +4.6 % | not ready: needs the legal ratio per title |
+| Education, universities | (1.242) | INS section P | overshoots +4.5 % / +8.9 % | not ready: needs the legal ratio per title |
+| Elected officials, EU projects | — | — | — | out of scope |
+
+## Net or gross: checked against the published lists (2026-11-20)
+
+S1 collected the Art. 33 lists of March 2026 (gross base pay per function) for some section O employers (`tmp/261118/s1/lists/`, `gap_table.md`). For the same employer and post, compare: (declared median for 2023 ÷ 12) × 1.150 against the list value. If the declarations are gross, the ratio is about 1.0 or more (bonuses, vouchers). If they are net, it is about 0.585 or a little more.
+
+Posts: F1 = consilier/inspector superior, F2 = principal, F3 = referent superior. Filing year 2024. Groups with n ≥ 3.
+
+| Employer | Post | n | Declared 2023, per month | × 1.150 | List gr. 0 | List gr. 5 | Ratio |
+|---|---|---|---|---|---|---|---|
+| Municipiul Târgoviște | F1 | 5 | 6,118 | 7,036 | 9,620 | — | 0.73 |
+| CJ Timiș | F1 | 144 | 7,470 | 8,590 | — | 13,366 | 0.64 |
+| CJ Timiș | F2 | 9 | 4,870 | 5,600 | — | 9,479 | 0.59 |
+| CJ Bacău | F1 | 85 | 6,155 | 7,078 | 11,983 | 14,921 | 0.53 |
+| CJ Bacău | F2 | 4 | 5,544 | 6,376 | 10,994 | — | 0.58 |
+| CJ Bacău | F3 | 5 | 4,406 | 5,067 | 7,498 | — | 0.68 |
+
+The ratio is mean(gr. 0, gr. 5) of the list where both exist. Median 0.62, range 0.53–0.73, 6 groups. Bușteni, Vlădeni (Dâmbovița) and Tulca have fewer than 3 declarants per post.
+
+**Result: the declared amounts are net.** A gross figure 36 % under the base pay of the list (CJ Timiș, n = 144, against gradation 5) is not plausible. Back to gross (÷ 0.585): CJ Timiș F1 ≈ 14,700 against a base of 13,366 plus bonuses; CJ Bacău F1 ≈ 12,100 against 11,983–14,921. Both fit.
+
+Limits: 6 groups at 3 employers, all local or county administration. The within-group test above shows that one group declares one way. It does not prove that every group in the country declares net. The 2026 food allowance (347 lei a month for net pay up to 6,000) is in the 2026 pay but not in the 2023 base of the factor. INS net includes it.
+
 ## Open
 
-- The rule that chooses the pay line of the declared post (rule 4): a better institution match (drop the address, „PRIMARIA X” = „X”, ministry for its units), and what to do with several lines.
 - How posturi uses the figure (ADR 0008 rule 3): a third baseline („salarii declarate”), or a check of the grid estimate. This needs a decision.

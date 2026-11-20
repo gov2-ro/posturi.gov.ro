@@ -2,6 +2,67 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-DECLARATII: rule 9 accepted, build brief written (Opus + owner)
+
+**Done**
+- The owner accepted ADR 0008 rule 9 and its changes to rules 1, 3, 4 and 6.
+- Build brief for Sonnet: `docs/briefs/2026-11-20-salary-declared-pay.md` (net/gross in Python, the factor from INS, the group table, the posting match, the estimate, the pages).
+- Explainer spec: the copy goes in the existing disclosure „Cum a fost calculat” of the detail page; „Metoda pe larg” is a section of `/estimator-salariu/`, because `/salarii/` does not exist yet.
+
+**Hard**
+- Coverage is small. 6,201 groups pass n ≥ 5, at 2,108 institutions, but only about 10 % of postings (9 Sep copy) have an employer name that equals one of those institutions, before the title match. Measured with an exact name match only; county not checked.
+
+**Decided**
+- The match in the first build is exact after normalisation; no fuzzy match. Reason: a wrong employer gives a confident wrong figure. Cost: lower coverage. Wider groups (county + type + title) are a separate item with their own backtest.
+
+### 2026-11-20 — SALARY-DECLARATII: ADR 0008 rule 9 and the explainer, drafted (Opus)
+
+**Done**
+- ADR 0008: rule 9 (declared pay), precedence step (a2) in rule 4, the stop on the switch day in rule 6, a third `baza` value (`declaratii`), and the alternatives not taken. Status: proposed.
+- Explainer copy in Romanian: `docs/specs/2026-11-20-salary-declared-explainer.md` (list row, detail figure, four-step pop-up, method page outline).
+
+**Decided (proposed; the owner confirms)**
+- `sal_min` = p25 and `sal_max` = p75 of the group, × the factor. Reason: the filter keeps reading the lower figure (rule 7), and a new hire is usually under the median. Cost: the filter places these postings lower than the median that the page shows.
+- Only groups of one employer and one title, n ≥ 5. A wider group needs its own backtest first.
+- The aggregate table goes in git (`data/salarii/declaratii-grupuri.csv`); the dump does not.
+
+### 2026-11-20 — SALARY-DECLARATII: the declared amounts are net (Opus)
+
+**Done**
+- Compared the declared 2023 pay × 1.150 with the March 2026 Art. 33 lists of S1, same employer and post: 6 groups at Târgoviște, CJ Timiș and CJ Bacău. Ratio median 0.62 (0.53–0.73). Net pay is 0.585 of gross.
+
+**Decided**
+- The declarations are net. The estimator shows the figure as net, and gives gross as net ÷ 0.585 (or the converter that the site already uses). Reason: CJ Timiș, n = 144, ratio 0.64 against the highest gradation; a gross figure cannot sit 36 % under the base pay.
+- Measured on 6 groups of local and county administration only. Assumed, not measured: other families also declare net. The single peak inside each group supports it, but does not prove it.
+
+### 2026-11-20 — SALARY-DECLARATII: the factor from 2023 to 2026 (Opus)
+
+**Done**
+- Measured the INS net average pay by section (FOM106D + FOM106G): 2026 (Jan–May) / 2023 = O 1.150, P 1.242, Q 1.207. The two series agree to 0.01 % in their 8 shared months.
+- Reran the backtest with the INS factor for 2022→2023 (out of sample): median error 6.1 %, the same as a factor fitted on the panel. Proposed a factor per family in the audit note.
+
+**Hard**
+- The law and INS differ for section O: the law predicts about ×1.18 on the 2023 average (×1.15 from Dec 2023, plus a 3 % gap inside 2023). INS measures ×1.150. INS also shows 2026 4 % under 2025. OUG 36/2025 (Anexa VI bonus capped at 300 lei from Jul 2025) is one cut in that period. Assumed, not measured: the cuts of 2025 explain the difference.
+
+**Decided (the owner accepted the factors on 2026-11-20)**
+- Section O families use the INS factor 1.150. Reason: it is measured on yearly averages, as the declarations are, and it includes the 2025 cuts. The legal factor would need a gap correction and would miss the cuts. Cost: one factor for all of section O, while MAI and county administration have a −2.7 % and +4.2 % bias in the backtest.
+- No figure for magistrates (law ×1.05 against INS ×1.15). Health and education wait for a legal ratio per title, because the INS factor overshoots by about 4.5 % and the people who declare are mostly managers.
+
+### 2026-11-20 — SALARY-DECLARATII: person key, pay line, panel and backtest (Opus + owner)
+
+**Done**
+- Second dump with a scrambled `person` key: 1,402,281 declarations, 1,822,126 rows (`data/integritate/integritate-salarii-raw-20261120T1229.csv.gz`).
+- `ops/integritate-select.py`: one pay line per declaration; 75.4 % name the institution. `ops/integritate-panel.py`: panel, net/gross check, backtest. Results in the audit note.
+
+**Hard**
+- The first institution match gave false hits on place names (a school in the commune, a city company for a sector). A type word in `sursa` that the institution lacks now blocks the match.
+- Chrome blocked the second automatic download. The owner allowed multiple downloads for `kibana.sicap.ai`.
+
+**Decided**
+- The owner chose: a scrambled person key (salt per run, never written); estimate 2026 pay from the declarations, with transparency.
+- Method: the 2023 level comes from the declarations; the 2023→2026 change comes from the acts, per family. Reason: the realised 2022 and 2023 growth follows the law (2022 frozen: median 1.035; health 1.024 under the 2022 cap; central 1.111 for +10 %). A growth factor also works the same on net and on gross, which we cannot tell apart.
+- Measured: backtest median error 6.0 % (p90 19.2 %, 69 % within 10 %) for group median 2023 from 2022 × family factor; justice, magistrates, EU projects and elected officials about twice that. Within groups the values have one peak, so one group declares one way (net or gross). Assumed, not measured: the 2023 yearly average of local administration is below its Dec 2023 level (June 2023 raise).
+
 ### 2026-11-20 — SALARY-DECLARATII: the asset declarations in Kibana, and the first dump (Opus + owner)
 
 **Done**

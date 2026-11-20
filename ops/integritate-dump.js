@@ -10,6 +10,10 @@
 //   integritateDump.stop()     // stops after the current page
 //   integritateDump.download() // saves integritate-salarii-raw-<date>.csv.gz
 //
+// `person` is a scrambled key: SHA-256 of a random salt, the sorted name tokens
+// and `institutie_id`. The salt lives only in this page and dies with it, so a
+// key links one person at one institution inside one dump, and nothing else.
+//
 // See docs/audits/2026-11-20-salary-declaratii-kibana.md.
 (() => {
   const H = {
@@ -20,7 +24,7 @@
   };
   const PAGE = 2000;
   // Keep in step with COLS in ops/integritate-dump.py.
-  const COLS = ['aid', 'an', 'data_completare_iso', 'source', 'functie', 'institutie_id',
+  const COLS = ['aid', 'an', 'data_completare_iso', 'source', 'person', 'functie', 'institutie_id',
     'institutie', 'institutie_norm', 'judet_norm', 'localitate', 'tip_institutie',
     'n_lines', 'sursa', 'serviciul_prestat', 'suma', 'valuta'];
   const QUERY = {
@@ -36,7 +40,16 @@
     'institutie_id', 'institutie_norm', 'judet_norm', 'localitate', 'tip_institutie',
     'extraction.venituri.categorie', 'extraction.venituri.sursa',
     'extraction.venituri.serviciul_prestat', 'extraction.venituri.beneficiar_tip',
-    'extraction.venituri.venit_anual'];
+    'extraction.venituri.venit_anual', 'nume_norm'];
+  const SALT = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+
+  async function personKey(src) {
+    const name = (src.nume_norm || '').split(/\s+/).filter(Boolean).sort().join(' ');
+    if (!name) return '';
+    const data = new TextEncoder().encode(SALT + '|' + name + '|' + (src.institutie_id || ''));
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+    return Array.from(h.slice(0, 8), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
 
   const csv = (v) => {
     const s = v == null ? '' : String(v);
@@ -72,14 +85,14 @@
   }
 
   // One row per income line of category "salarii" whose beneficiary is the holder.
-  function rows(src) {
+  function rows(src, person) {
     const lines = ((src.extraction && src.extraction.venituri) || []).filter((v) =>
       v.categorie === 'salarii' && (v.beneficiar_tip || '').toLowerCase() === 'titular');
     if (!lines.length) { st.docs_without_holder_line++; return ''; }
     return lines.map((v) => {
       const va = v.venit_anual || {};
       const row = {
-        ...src, n_lines: lines.length, sursa: v.sursa,
+        ...src, person, n_lines: lines.length, sursa: v.sursa,
         serviciul_prestat: v.serviciul_prestat, suma: va.suma, valuta: va.valuta,
       };
       st.rows++;
@@ -92,10 +105,12 @@
     try {
       while (!st.stopped) {
         const res = await page();
-        if (st.total === null) st.total = res.hits.total.value;
+        // The internal search returns the total as a number, not {value: n}.
+        if (st.total === null) st.total = typeof res.hits.total === 'number' ? res.hits.total : res.hits.total.value;
         const hits = res.hits.hits;
         if (!hits.length) { st.done = true; break; }
-        chunks.push(hits.map((h) => rows(h._source)).join(''));
+        const keys = await Promise.all(hits.map((h) => personKey(h._source)));
+        chunks.push(hits.map((h, i) => rows(h._source, keys[i])).join(''));
         st.docs += hits.length; st.pages++;
         st.after = hits[hits.length - 1].sort;
         await sleep(150);
@@ -112,7 +127,7 @@
     const gz = await new Response(blob.stream().pipeThrough(new CompressionStream('gzip'))).blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(gz);
-    a.download = 'integritate-salarii-raw-' + new Date().toISOString().slice(0, 10) + '.csv.gz';
+    a.download = 'integritate-salarii-raw-' + new Date().toISOString().slice(0, 16).replace(/[-:]/g, '') + '.csv.gz';
     document.body.appendChild(a); a.click(); a.remove();
     return { name: a.download, rawBytes: blob.size, gzBytes: gz.size };
   }

@@ -109,6 +109,16 @@ run_suite('the employer page: the section between the counts and the postings, a
     assert_not_contains('data-employer-declared', $other, 'no section without a match');
 });
 
+run_suite('a second employer record of the same institution shows the section too', function () use ($base) {
+    [$code, $h] = di_get($base, '/angajator/administratia-de-salubrizare-tunari/');
+    assert_same(200, $code, 'status');
+    assert_contains('data-employer-declared', $h, 'the section');
+    assert_contains('href="/salarii-declarate/comuna-gaiceana-bacau/"', $h, 'the link to the page of the institution');
+    [, $p] = di_get($base, '/salarii-declarate/comuna-gaiceana-bacau/');
+    assert_contains('href="/angajator/primaria-comunei-gaiceana/"', $p, 'the institution links to its main employer');
+    assert_not_contains('href="/angajator/administratia-de-salubrizare-tunari/"', $p, 'not to the second record');
+});
+
 run_suite('the index: intro, form, 50 per page, paging', function () use ($base) {
     [$code, $h] = di_get($base, '/salarii-declarate/');
     assert_same(200, $code, 'status');

@@ -1144,19 +1144,24 @@ function fixture_seed_declared_estimate(PDO $db): int {
 
 /**
  * The tables of the export of declared pay per institution (export-to-sqlite.py DECLARED_DDL), with 62 institutions:
- * `comuna-gaiceana-bacau` (the employer 2, three groups), `primaria-test-sans-angajator-cluj` (no employer) and 60 filler
+ * `comuna-gaiceana-bacau` (the main employer 2, a second employer record 3, three groups), `primaria-test-sans-angajator-cluj` (no employer) and 60 filler
  * comunes in Bacău and Cluj, so that the index has two pages at 50 per page (tests/declared_pay_test.php,
  * browser/declared_institutions.spec.js). Every group has 5 declarants or more.
  */
 function fixture_seed_declared_institutions(PDO $db): void {
     $db->exec("
+DROP TABLE IF EXISTS declared_employers;
 DROP TABLE IF EXISTS declared_groups;
 DROP TABLE IF EXISTS declared_institutions;
 CREATE TABLE declared_institutions (slug TEXT PRIMARY KEY, institutie_id TEXT NOT NULL UNIQUE, name TEXT NOT NULL, judet TEXT NOT NULL,
     judet_slug TEXT NOT NULL, n_total INTEGER NOT NULL, groups INTEGER NOT NULL, employer_id INTEGER);
 CREATE TABLE declared_groups (institution_slug TEXT NOT NULL, functie TEXT NOT NULL, familie TEXT NOT NULL, n INTEGER NOT NULL,
     mediana_net INTEGER NOT NULL, p25_net INTEGER NOT NULL, p75_net INTEGER NOT NULL, mediana_net_2023 INTEGER NOT NULL,
-    factor REAL NOT NULL, factor_sursa TEXT NOT NULL, eroare_tipica REAL NOT NULL);");
+    factor REAL NOT NULL, factor_sursa TEXT NOT NULL, eroare_tipica REAL NOT NULL);
+CREATE TABLE declared_employers (employer_id INTEGER PRIMARY KEY, institution_slug TEXT NOT NULL);");
+    // Employer 2 is the main employer of Găiceana; employer 3 stands for a second record of the same body
+    // (the site has such duplicates): its page shows the section too, and the institution links to employer 2.
+    $db->exec("INSERT INTO declared_employers VALUES (2, 'comuna-gaiceana-bacau'), (3, 'comuna-gaiceana-bacau')");
     $inst = $db->prepare("INSERT INTO declared_institutions VALUES (?,?,?,?,?,?,?,?)");
     $grp = $db->prepare("INSERT INTO declared_groups VALUES (?,?,?,?,?,?,?,?,?,?,?)");
     $add = function (string $slug, string $name, string $county, string $cslug, ?int $employer, array $groups) use ($inst, $grp): void {

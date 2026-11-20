@@ -2,6 +2,19 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-DECLARATII-PAGE: review of the build; every matching employer shows the section (Opus)
+
+**Done**
+- Reviewed the Sonnet build (`50842ba`…`68453a2`) against the brief. On the combined code: all PHP test files pass; pytest 1,684 passed, 1 known failure (TEST-SALARY-FACET-LIST); Playwright 930 passed, 3 known failures (TEST-ALERTS-PRIVACY-LINK). Checked the screenshots at 320 and 1280 px.
+- Fixed the gap that the brief caused: one employer per institution left 175 employer pages without the section. The export now writes `declared_employers` (every matching employer record); `declared_institution_of_employer()` reads it, with a fallback for an older export. Scratch export of the 9 Sep copy: 629 employer pages linked (454 main + 175 extra records), 2,108 institutions, 6,201 groups.
+
+**Hard**
+- The 175 are duplicate employer records of one body, spelled differently. That is a data-quality problem of `jobs_employer` (EMPLOYER-DUPLICATES), not of the match.
+
+**Decided**
+- Link every record, do not merge employers here. Reason: a merge changes `/angajator/` URLs and counts, outside this feature. Cost: a duplicate body has two employer pages, each with the same section.
+- Known small issues left: on a phone the index is a long list (about 13,000 px for 50 institutions); the note writes „+15 %” and the explainer „15%”.
+
 ### 2026-11-20 — SALARY-DECLARATII-PAGE: declared pay per institution built (Sonnet, from the Opus brief)
 
 **Done**

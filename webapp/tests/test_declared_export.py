@@ -66,8 +66,10 @@ def test_employer_match_county_of_most_postings_and_ties(exp):
                 (3, "Bacău", 5),                          # 3: same count as 2, higher id -> loses
                 (4, "Iași", 9)]                           # 4: right name, wrong county -> no match
     b = exp.build_declared(ROWS, employers, counties)
-    assert b["institutions"][0][7] == 2
-    assert b["lost_ties"] == [("COMUNA GAICEANA|BACAU", 3, 5, 2), ("COMUNA GAICEANA|BACAU", 1, 4, 2)]
+    assert b["institutions"][0][7] == 2                     # the main employer: the most postings, then the lower id
+    slug = b["institutions"][0][0]
+    assert b["employers"] == [(1, slug), (2, slug), (3, slug)]      # every matching record is linked
+    assert b["extra_employers"] == [("COMUNA GAICEANA|BACAU", 3, 5, 2), ("COMUNA GAICEANA|BACAU", 1, 4, 2)]
     assert b["institutions"][1][7] is None
 
 

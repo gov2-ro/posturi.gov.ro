@@ -3915,7 +3915,15 @@ function declared_institution(string $slug): ?array {
 /** The institution of an employer (at most one), or null. */
 function declared_institution_of_employer(int $employer_id): ?array {
     if (!declared_available()) return null;
-    $st = db()->prepare("SELECT * FROM declared_institutions WHERE employer_id = ?");
+    // Every employer record that matches the institution (declared_employers), not only the main one:
+    // the site has several records for one body. An export from before that table uses the main employer.
+    static $links = null;
+    if ($links === null) {
+        $links = (int)db()->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'declared_employers'")->fetchColumn() === 1;
+    }
+    $st = db()->prepare($links
+        ? "SELECT di.* FROM declared_employers de JOIN declared_institutions di ON di.slug = de.institution_slug WHERE de.employer_id = ?"
+        : "SELECT * FROM declared_institutions WHERE employer_id = ?");
     $st->execute([$employer_id]);
     return $st->fetch() ?: null;
 }

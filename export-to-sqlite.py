@@ -1354,11 +1354,13 @@ def export_salary_ins_context(con: sqlite3.Connection, path: Path = SALARY_INS_C
 
 
 DECLARED_DDL = """
+DROP TABLE IF EXISTS declared_employers;
 DROP TABLE IF EXISTS declared_groups;
 DROP TABLE IF EXISTS declared_institutions;
 -- The pay of the asset declarations per institution (ADR 0008 rule 9), a copy of
 -- data/salarii/declaratii-grupuri.csv. Net per month at the 2026 level, rounded to 50 lei.
--- `employer_id` is the one employer of the postings that matches the institution (or NULL).
+-- `employer_id` is the main employer of the institution: of the employers that match it, the one
+-- with the most postings (or NULL). The institution page links to it.
 CREATE TABLE declared_institutions (
     slug         TEXT PRIMARY KEY,
     institutie_id TEXT NOT NULL UNIQUE,
@@ -1385,6 +1387,14 @@ CREATE TABLE declared_groups (
     eroare_tipica    REAL NOT NULL
 );
 CREATE INDEX idx_declared_groups_inst ON declared_groups(institution_slug);
+-- Every employer that matches an institution. The site has several employer records for one body
+-- ("Primăria Comunei Bascov" and "Primăria Comunei Bascov, județul Argeș"); each of their pages
+-- shows the section of the institution.
+CREATE TABLE declared_employers (
+    employer_id      INTEGER PRIMARY KEY REFERENCES employers(id),
+    institution_slug TEXT NOT NULL REFERENCES declared_institutions(slug)
+);
+CREATE INDEX idx_declared_employers_inst ON declared_employers(institution_slug);
 """
 
 
@@ -1422,7 +1432,9 @@ def build_declared(rows: list[dict], employers: dict, employer_counties: list[tu
     rows: the dicts of data/salarii/declaratii-grupuri.csv.
     employers: {employer_id: name}.
     employer_counties: (employer_id, county name, postings) per employer and county.
-    Returns {"institutions": [...], "groups": [...], "lost_ties": [...], "slug_clashes": int}.
+    Returns {"institutions": [...], "groups": [...], "employers": [(employer_id, slug)], "extra_employers": [...],
+    "slug_clashes": int}. `employers` links every matching employer; `extra_employers` lists those that are not
+    the main employer of their institution (institutie_id, employer_id, postings, main employer_id).
     """
     judete = judete or _load_judete()
     groups = declaratii.Groups(rows)
@@ -1441,13 +1453,13 @@ def build_declared(rows: list[dict], employers: dict, employer_counties: list[tu
         if inst:
             matches.setdefault(inst, []).append((sum(counts.values()), eid))
     employer_of: dict[str, int] = {}
-    lost_ties: list[tuple] = []
+    extra: list[tuple] = []
     for inst, cands in matches.items():
-        cands.sort(key=lambda c: (-c[0], c[1]))         # more postings first; then the lower id
+        cands.sort(key=lambda c: (-c[0], c[1]))         # the main employer: more postings first; then the lower id
         employer_of[inst] = cands[0][1]
-        lost_ties.extend((inst, eid, n, cands[0][1]) for n, eid in cands[1:])
+        extra.extend((inst, eid, n, cands[0][1]) for n, eid in cands[1:])
 
-    institutions, out_groups, seen = [], [], {}
+    institutions, out_groups, seen, slug_of = [], [], {}, {}
     clashes = 0
     for inst_id in sorted(by_inst):
         g = by_inst[inst_id]
@@ -1461,13 +1473,16 @@ def build_declared(rows: list[dict], employers: dict, employer_counties: list[tu
             clashes += 1
             slug = f"{slug}-{hashlib.sha1(inst_id.encode('utf-8')).hexdigest()[:6]}"
         seen[slug] = inst_id
+        slug_of[inst_id] = slug
         institutions.append((slug, inst_id, g[0]["institutie"], county, county_slug,
                              sum(int(r["n"]) for r in g), len(g), employer_of.get(inst_id)))
         for r in sorted(g, key=lambda r: (-int(r["n"]), r["functie"])):
             d = declaratii.estimate_dict(r)["declaratii"]
             out_groups.append((slug, r["functie"], r["familie"], d["n"], d["mediana_net"], d["p25_net"], d["p75_net"],
                                d["mediana_net_2023"], d["factor"], d["factor_sursa"], d["eroare_tipica"]))
-    return {"institutions": institutions, "groups": out_groups, "lost_ties": lost_ties, "slug_clashes": clashes}
+    links = sorted((eid, slug_of[inst]) for inst, cands in matches.items() for _, eid in cands)
+    return {"institutions": institutions, "groups": out_groups, "employers": links, "extra_employers": extra,
+            "slug_clashes": clashes}
 
 
 def export_declared_institutions(cur, con: sqlite3.Connection, path: Path = declaratii.GROUPS_CSV) -> dict | None:
@@ -1484,16 +1499,14 @@ def export_declared_institutions(cur, con: sqlite3.Connection, path: Path = decl
     con.executescript(DECLARED_DDL)
     con.executemany("INSERT INTO declared_institutions VALUES (?,?,?,?,?,?,?,?)", built["institutions"])
     con.executemany("INSERT INTO declared_groups VALUES (?,?,?,?,?,?,?,?,?,?,?)", built["groups"])
+    con.executemany("INSERT INTO declared_employers VALUES (?,?)", built["employers"])
     matched = sum(1 for i in built["institutions"] if i[7] is not None)
     print(f"declared_institutions: {len(built['institutions'])} institutions, {len(built['groups'])} groups, "
-          f"{matched} with an employer; {built['slug_clashes']} slug clashes")
-    if built["lost_ties"]:
-        print(f"  WARNING: {len(built['lost_ties'])} employers match an institution that has a better employer (more postings, "
-              f"then the lower id); they get no section. First 10:")
-        for inst, eid, n, kept in built["lost_ties"][:10]:
-            print(f"    employer {eid} ({n} postings) also matches {inst}; kept employer {kept}")
+          f"{matched} with an employer; {len(built['employers'])} employer pages linked "
+          f"({len(built['extra_employers'])} are extra records of an institution's employer); "
+          f"{built['slug_clashes']} slug clashes")
     return {"institutions": len(built["institutions"]), "groups": len(built["groups"]), "matched": matched,
-            "lost_ties": built["lost_ties"]}
+            "employers": len(built["employers"]), "extra_employers": built["extra_employers"]}
 
 
 def git_sha() -> str:

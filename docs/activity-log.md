@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-11-20 — SALARY-DECLARATII: declared pay built (Sonnet, from the Opus brief)
+
+**Done**
+- `salary_net.py`: `net_from_gross()` (port of the PHP function) and `gross_for_net()`. A test compares Python with PHP for 286 gross values from 3,000 to 30,000 lei. A brute-force test checks `gross_for_net()` against the first crossing for every net value.
+- Factor: mean of 2026-01..2026-05 of FOM106G section P (Rev.3) = 6,860.0; mean of the 12 months of 2023 of FOM106D section O (Rev.2) = 5,963.5; ratio 1.1503, shown as 1.150. The build stops when the rounded value is not 1.150.
+- `ops/build-declaratii-grupuri.py` writes `data/salarii/declaratii-grupuri.csv`: 6,201 groups at 2,108 institutions, 1,246,703 bytes (admin-central 1,463; admin-judetean 635; admin-local 1,688; mai-mapn 2,124; politie-locala 291). The spike count (6,201 and 2,108) is the same. `family()` moved to `ops/integritate_common.py`; the backtest output of `ops/integritate-panel.py` is unchanged.
+- `declaratii.py` matches a posting to one group (exact employer after normalisation, county equal, base word + grade). `estimate-salaries.py` step (a2): `baza: declaratii`, `lei_min` and `lei_max` = gross of p25 and p75 × factor, key `declaratii`, law figure under `lege_in_vigoare`, draft under `proiect`.
+- Pages: list label „(după declarații de avere)”, detail figure with the band and the gross line, the explainer in „Cum a fost calculat”, „Metoda pe larg” at `/estimator-salariu/#metoda-declaratii`. Playwright spec `declared_pay.spec.js`, PHP test `declared_pay_test.php`.
+- Measured on the local copy of 9 Sep 2026 (9,750 postings with an occupation): employer match 1,093 (11.2 %); group match 5 (0.05 %): admin-central 4, admin-local 1. `baza` before: lege_in_vigoare 8,256, proiect 1,494. After: declaratii 5, lege_in_vigoare 8,251, proiect 1,494. `salary_bucket` changes: 5 postings (net-4000-5000 → net-5000-7000: 2; net-3000-4000 → net-4000-5000: 1; net-3000-4000 → net-5000-7000: 1; net-4000-5000 → net-peste-7000: 1). The VPS numbers are not measured yet.
+
+**Hard**
+- The title match is the limit, not the employer match. Of the 1,093 postings with an employer match, 51 have a group with the same base word under another grade. Most postings write the grade „gradul IA”, „gr. II” or „debutant”. The declarations write „superior” or „principal” for the same post. When the grade is ignored and one group has the base word, 38 postings match. So even a fuzzy rule gives under 1 % of postings. Wider groups need their own backtest (out of scope in the brief).
+- `gross_for_net()` is not monotone between 4,325 and 6,325 gross (the deduction steps drop the net by 1–3 lei). A plain binary search gave a wrong first crossing for 25 net values; the build walks back 60 lei from the found crossing.
+- PHP `round()` rounds half away from zero; Python `round()` rounds half to even. The port uses its own rounding. With the Python `round()`, 62 of the 286 test values differ from PHP.
+
+**Decided**
+- p25 and p75 use the index `int(p × (n − 1))` of the sorted amounts, as `q()` of the backtest does. Reason: the same rule as the measured error. Cost: for a small group the p25 sits at the lower neighbour.
+- `declaratii` also holds `mediana_net_2023`: step 1 of the explainer shows the 2023 median, and median × factor ÷ factor does not give it back after the rounding to 50 lei. The brief did not list the key.
+- The list row shows the net range p25–p75, not the median: the export has no median column (backlog: SALARY-DECLARATII-LIST-MEDIAN).
+- A posting without an occupation gets no declared figure (6 postings on the 9 Sep copy): `SELECT_POSTINGS` joins the occupation. Cost: none seen.
+- `list-decimal` was missing from `webapp-php/static/app.css`; `npm run css` rebuilt it (+38 bytes).
+
 ### 2026-11-20 — SALARY-DECLARATII: rule 9 accepted, build brief written (Opus + owner)
 
 **Done**

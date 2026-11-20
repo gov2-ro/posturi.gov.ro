@@ -178,6 +178,21 @@ python build-salary-grid.py --source lege-153            # write grila-lege153-2
 python estimate-salaries.py --dry-run --hospital-names   # counts per baza, per anexă; hospital classes
 ```
 
+**Declared pay (ADR 0008 rule 9).** For administration, police and MAI posts, the figure can come
+from the asset declarations (ANI), not from the grid. `ops/build-declaratii-grupuri.py` reads the
+dump on the Mac (`data/integritate/`, out of git) and writes `data/salarii/declaratii-grupuri.csv`: one
+row per group (employer + job title) with at least 5 declarants, the p25, median and p75 of the net
+pay of 2023, and the INS factor 1.150 to 2026. Only group figures leave the dump. `declaratii.py`
+matches a posting to one group: the employer by exact name and county, the title by base word and
+grade; no fuzzy match. `estimate-salaries.py` then gives the declared figure the top level
+(`baza: declaratii`, precedence step a2): `lei_min` and `lei_max` are the gross of p25 and p75 × factor,
+and the key `declaratii` holds the net figures. The law figure stays under `lege_in_vigoare`.
+
+```bash
+python ops/build-declaratii-grupuri.py                  # needs data/integritate/selected.csv.gz and ../tempo-ins-dump
+python estimate-salaries.py --dry-run --match-samples 30   # counts per baza, match rates, 30 samples, bucket changes
+```
+
 The source is the consolidated HTML in `docs/salarii/lege-153/` (Legea 153/2017 id 298840,
 OUG 19/2024 id 279777, downloaded 2026-11-18). Each grid row names its table and row
 (`sheet`, `source_row`, `act_sursa`). The rule that turns a 2022 annex value into the pay of 2026

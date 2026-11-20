@@ -436,6 +436,9 @@ $level_url = static fn(string $a, string $l): string => $se_url . '?d=' . rawurl
       <li>Aleșii locali, care primesc indemnizații, și personalul din proiecte europene.</li>
     </ul>
     <p class="g2-text-meta mt-4">Surse: declarațiile de avere, prin monitorul.ai/integritate; INS, seriile FOM106D și FOM106G. Estimarea nu este un calcul salarial oficial.</p>
+    <?php if (declared_available()): ?>
+    <p class="mt-2"><a href="/salarii-declarate/" class="text-gov underline" data-declared-index-link>Salariile declarate, pe instituții →</a></p>
+    <?php endif; ?>
   </section>
 </div>
 <?php require __DIR__ . '/../inc/footer.php'; ?>

@@ -32,11 +32,12 @@ sm_url($origin . '/angajatori/', $last_update, 'weekly',  '0.6');
 sm_url($origin . '/statistici/', $last_update, 'weekly',  '0.5');
 sm_url($origin . '/despre/',     null,         'monthly', '0.3');
 sm_url($origin . '/estimator-salariu/', null,  'monthly', '0.5');
+if (declared_available()) sm_url($origin . '/salarii-declarate/', null, 'monthly', '0.5');
 foreach (array_keys(themes()) as $theme_slug) {
     sm_url($origin . '/' . $theme_slug . '/', $last_update, 'daily', '0.8');
 }
 
-$budget = SITEMAP_MAX_URLS - 6 - count(themes());
+$budget = SITEMAP_MAX_URLS - 7 - count(themes());
 
 // Job pages — freshest first, so a truncated sitemap keeps the useful half.
 $rows = db()->query(
@@ -72,6 +73,13 @@ if ($budget > 0) {
     )->fetchAll();
     foreach ($emps as $emp) {
         sm_url($origin . '/angajator/' . rawurlencode($emp['slug']) . '/', $last_update, 'weekly', '0.4');
+    }
+}
+
+// Declared pay per institution (SALARY-DECLARATII-PAGE): one page for each, about 2,100.
+if (declared_available()) {
+    foreach (db()->query("SELECT slug FROM declared_institutions ORDER BY slug")->fetchAll() as $d) {
+        sm_url($origin . '/salarii-declarate/' . rawurlencode($d['slug']) . '/', null, 'monthly', '0.4');
     }
 }
 

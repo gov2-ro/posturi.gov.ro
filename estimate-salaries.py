@@ -7,6 +7,10 @@ is the July 2026 draft law. The law in force is the figure at the top level of
 force has no row for a posting, the draft figure takes the top level (ADR 0008,
 rule 4). A row with no `baza` is an old row and counts as a draft figure.
 
+Step (a2) of rule 4: when the posting matches a group of the asset declarations
+(`declaratii.py`, `data/salarii/declaratii-grupuri.csv`), the declared figure takes the top
+level (`baza` = `declaratii`). The law figure then sits under `lege_in_vigoare`.
+
 Deterministic — no LLM. It joins what the other passes already worked out:
 
     posting title  --ocupatii.parse_title()-->  professional grade
@@ -45,8 +49,10 @@ from psycopg.rows import dict_row
 ROOT = Path(__file__).parent.resolve()
 sys.path.insert(0, str(ROOT))
 
+import declaratii  # noqa: E402
 import ocupatii  # noqa: E402
 import salary_grid  # noqa: E402
+import salary_net  # noqa: E402
 import uat  # noqa: E402
 
 try:
@@ -183,21 +189,45 @@ def serialisable(selector: dict) -> dict:
     return {k: sorted(v) if isinstance(v, (set, frozenset)) else v for k, v in selector.items()}
 
 
-def assemble(law, draft, law_sel: dict, draft_sel: dict) -> dict:
-    """The JSON of one posting (ADR 0008, rule 4): the law in force when it has a figure.
+def assemble(law, draft, law_sel: dict, draft_sel: dict, group: dict | None = None) -> dict:
+    """The JSON of one posting (ADR 0008, rule 4): a declared figure, else the law in force.
 
     The top level keeps the keys of the old format, so `sal_min`, `sal_max` and the
-    filter read it unchanged. The draft figure sits under `proiect`. When the law in
-    force has no row, the draft figure takes the top level, with `baza` = `proiect`.
+    filter read it unchanged. With a `group` (rule 4, step a2), the declared figure takes the
+    top level, with `baza` = `declaratii`; the law figure sits under `lege_in_vigoare`.
+    Else the law figure takes it when the law has a row. The draft figure sits under `proiect`.
+    When neither the group nor the law has a figure, the draft figure takes the top level,
+    with `baza` = `proiect`.
     """
     use_law = law.lei_min is not None
     primary, sel = (law, law_sel) if use_law else (draft, draft_sel)
-    payload = primary.as_dict()
-    payload["baza"] = "lege_in_vigoare" if use_law else "proiect"
+    if group is not None:
+        payload = declaratii.estimate_dict(group)
+        if use_law:
+            payload["lege_in_vigoare"] = dict(law.as_dict(), baza="lege_in_vigoare")
+    else:
+        payload = primary.as_dict()
+        payload["baza"] = "lege_in_vigoare" if use_law else "proiect"
     payload["selector"] = serialisable({k: v for k, v in sel.items() if k != "functie_alt"})
-    if use_law and draft.lei_min is not None:
+    if (use_law or group is not None) and draft.lei_min is not None:
         payload["proiect"] = dict(draft.as_dict(), baza="proiect")
     return payload
+
+
+#: The filter keys of `salary_bucket` (webapp-php/helpers.php, SALARY_NET_BUCKETS): net pay of the lower figure.
+_NET_BUCKETS = (("net-sub-3000", None, 3000), ("net-3000-4000", 3000, 4000), ("net-4000-5000", 4000, 5000),
+                ("net-5000-7000", 5000, 7000), ("net-peste-7000", 7000, None))
+
+
+def salary_bucket(lei_min) -> str:
+    """The filter value of a lower gross figure, as the site computes it."""
+    if not lei_min or lei_min <= 0:
+        return "fara-estimare"
+    net = salary_net.net_from_gross(lei_min)
+    for key, lo, hi in _NET_BUCKETS:
+        if (lo is None or net >= lo) and (hi is None or net < hi):
+            return key
+    return "fara-estimare"
 
 
 def main() -> int:
@@ -213,6 +243,10 @@ def main() -> int:
                     help="null every salary_estimate first (use when the grid changed)")
     ap.add_argument("--hospital-names", action="store_true",
                     help="print 20 employer names of each hospital class")
+    ap.add_argument("--match-samples", type=int, default=0, metavar="N",
+                    help="print N random postings that match a declared-pay group (for review)")
+    ap.add_argument("--groups", type=Path, default=declaratii.GROUPS_CSV,
+                    help="the group table of declared pay (ADR 0008 rule 9)")
     args = ap.parse_args()
 
     draft_grid = salary_grid.load_grid(args.grid_version)
@@ -221,6 +255,9 @@ def main() -> int:
     by_annex: dict[str, Counter] = {}
     hospital_names: dict[str, set] = {"a.1": set(), "a.4": set()}
     samples: list[str] = []
+    groups = declaratii.Groups.load(args.groups)
+    matches: list[tuple] = []
+    bucket_moves: Counter = Counter()
 
     with psycopg.connect(DATABASE_URL) as conn:
         if args.clear and not args.dry_run:
@@ -250,7 +287,20 @@ def main() -> int:
 
             use_law = law.lei_min is not None
             primary = law if use_law else draft
-            payload = assemble(law, draft, lsel, selector)
+            before = assemble(law, draft, lsel, selector)
+            inst = groups.employer(posting["employer_name"], posting["judet_name"])
+            group = groups.match(posting["employer_name"], posting["judet_name"], posting["title"]) if inst else None
+            payload = assemble(law, draft, lsel, selector, group)
+            stats["angajator_potrivit"] += bool(inst)
+            if group:
+                stats["grup_potrivit"] += 1
+                stats[f"familie:{group['familie']}"] += 1
+                matches.append((posting["title"], posting["employer_name"], group["institutie_id"], group["functie"], group["n"]))
+            stats[f"baza_inainte:{before['baza']}"] += 1
+            b0, b1 = salary_bucket(before["lei_min"]), salary_bucket(payload["lei_min"])
+            if b0 != b1:
+                bucket_moves[(b0, b1)] += 1
+            primary_min, primary_max, primary_label = payload["lei_min"], payload["lei_max"], payload["baza"]
             payload["selector_provenienta"] = why
             payload["ocupatie"] = posting["canonical"]
             payload["incredere_ocupatie"] = posting["match_confidence"]
@@ -264,12 +314,12 @@ def main() -> int:
             ac["cu_lege"] += use_law
             ac["numai_proiect"] += (draft.lei_min is not None and not use_law)
             ac["local_interval"] += bool(use_law and primary.motiv.startswith("Consiliul local"))
-            if primary.lei_min is not None:
+            if primary_min is not None:
                 stats["cu_estimare"] += 1
                 if len(samples) < 12:
                     samples.append(
                         f"  {posting['canonical'][:28]:30s} {posting['employer_name'][:30]:32s} "
-                        f"{primary.lei_min}-{primary.lei_max} lei ({payload['baza']})")
+                        f"{primary_min}-{primary_max} lei ({primary_label})")
             updates.append((json.dumps(payload, ensure_ascii=False), posting["id"]))
 
         if not args.dry_run:
@@ -281,7 +331,21 @@ def main() -> int:
 
     print(f"\nestimated {stats['cu_estimare']}/{len(postings)} "
           f"({stats['cu_estimare'] / max(len(postings), 1):.0%} of postings with an occupation)")
-    print("  baza: " + ", ".join(f"{k[5:]}={v}" for k, v in sorted(stats.items()) if k.startswith("baza:")))
+    print("  baza before the declared step: " + ", ".join(
+        f"{k[13:]}={v}" for k, v in sorted(stats.items()) if k.startswith("baza_inainte:")))
+    print("  baza after:                    " + ", ".join(
+        f"{k[5:]}={v}" for k, v in sorted(stats.items()) if k.startswith("baza:")))
+    print(f"  declared pay ({len(groups.rows)} groups): employer match {stats['angajator_potrivit']}/{len(postings)}, "
+          f"group match {stats['grup_potrivit']}/{len(postings)}; by family: "
+          + (", ".join(f"{k[8:]}={v}" for k, v in sorted(stats.items()) if k.startswith("familie:")) or "-"))
+    print(f"  salary_bucket changes: {sum(bucket_moves.values())} postings")
+    for (b0, b1), n in bucket_moves.most_common():
+        print(f"    {b0} -> {b1}: {n}")
+    if args.match_samples and matches:
+        import random
+        print(f"\n{min(args.match_samples, len(matches))} random matches (title | employer -> institutie_id | functie | n):")
+        for m in random.Random(1).sample(matches, min(args.match_samples, len(matches))):
+            print(f"  {m[0]} | {m[1]} -> {m[2]} | {m[3]} | {m[4]}")
     print("  confidence: " + ", ".join(
         f"{k}={stats[k]}" for k in ("exact", "interval", "necunoscut") if stats[k]))
     print("  per anexă (draft figure / law figure / draft only / local ranges):")

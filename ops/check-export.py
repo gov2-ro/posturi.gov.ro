@@ -365,10 +365,11 @@ def evaluate(
     hard("no_duplicate_urls", m["duplicate_urls"] == 0,
          f"{m['duplicate_urls']} url(s) appear more than once")
 
-    # ANOMALY-PUBLIC: both tables must exist. No count threshold (the limit is a later
-    # decision). A record from an older run lacks the key: treat it as present.
+    # ANOMALY-PUBLIC: both tables should exist. A soft check: a survey failure must not
+    # block a deploy, and the pages show "no signals" without the tables. No count
+    # threshold (the limit is a later decision). An older record lacks the key: present.
     anomaly_tables = m.get("anomaly_tables", 2)
-    hard("anomaly_tables", anomaly_tables == 2,
+    soft("anomaly_tables", anomaly_tables == 2,
          f"{anomaly_tables} of 2 anomaly tables (anomaly_signals, anomaly_checks) in the export"
          if anomaly_tables != 2 else "anomaly_signals and anomaly_checks exist")
 

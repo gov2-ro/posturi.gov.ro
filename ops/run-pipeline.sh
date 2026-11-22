@@ -169,11 +169,13 @@ fi
 
 # ANOMALY-PUBLIC: write the anomaly tables into the export. This runs here and not as a
 # pipeline.py step: a failed pipeline step aborts the deploy, and a survey failure must
-# not. On a failure the table may be missing or partial; the hard check below then
-# refuses the deploy only when a table is missing, and the site shows no new signals.
+# not. On a failure the table may be missing or partial; the check below only warns,
+# and the site shows no new signals. E04 needs the index CSV, when it exists.
 survey_status=0
+INDEX_CSV=""; [ -f data/posturi_gov_ro.csv ] && INDEX_CSV=data/posturi_gov_ro.csv
 "$PYTHON" ops/anomaly-survey.py webapp-php/posturi.sqlite --write-table \
-    --json data/anomaly-survey.json --csv data/anomaly-survey.csv || survey_status=$?
+    --json data/anomaly-survey.json --csv data/anomaly-survey.csv \
+    ${INDEX_CSV:+--index-csv "$INDEX_CSV"} || survey_status=$?
 if [ "$survey_status" -ne 0 ]; then
     echo "WARNING: the anomaly survey failed (exit ${survey_status}) — continuing; the"
     echo "         export has no new anomaly signals."

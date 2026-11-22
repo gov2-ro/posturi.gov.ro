@@ -2,6 +2,21 @@
 
 ## 2026
 
+### 2026-11-22 — SALARY-ANEXA-VI: rank table, matcher fix, law spike; stopped at the rank mapping (Sonnet, from the Opus brief)
+
+**Done**
+- `build-salary-grid.py` writes `data/salarii/solda-grad-2026-07-17.csv` (22 ranks). The post grid is byte-identical.
+- Matcher: the "/" split of the synonyms left no synonym equal to the full label. `Grid.by_label` fixes this as a last resort. Dry run on the 9 Sep copy: all counts identical before and after (9,750 postings, 8,368 estimated).
+- 4 tests in `TestAnexaVILabel`. Suite: 1,694 passed, 1 failed (the known `test_salary_facet_sql.py`), 13 skipped.
+- Spike on the law in force: `docs/audits/2026-11-20-salary-anexa-vi.md`.
+
+**Hard**
+- Stop condition hit: post rows 24–27 name a range of ranks, and rows 33–35 ("plutonier adjutant șef") have no name in the rank table. Steps 2, 4 and 6 (rank pay in `estimate()`, the page, the other tests) wait for the owner.
+- The law's rank pay is not the Art. 7 table (agent 250 lei, 2022) but the updated table of OUG 26/2024 art. XI (agent 1.980 lei).
+
+**Decided**
+- Nothing. The owner decides the range rule and whether the law-in-force rows get built (probably an ADR 0008 rule).
+
 ### 2026-11-20 — SALARY-DECLARATII-PAGE: review of the build; every matching employer shows the section (Opus)
 
 **Done**

@@ -34,13 +34,15 @@ The local Postgres is a copy of 9 Sep 2026. The numbers above come from that cop
 2. **Last-resort label.** When `sal_baza` is `proiect`, each place that shows the figure says „estimare aproximativă”: the list row, the grid card, the table, the detail page and the feeds. The tooltip, or the note on the detail page, says: „Legea în vigoare nu are un rând pentru această funcție. Cifra vine din proiectul noii legi a salarizării, care nu este adoptat.”
 3. **Side note on the detail page.** When `sal_baza` is `lege_in_vigoare` and a draft figure exists, add one muted line under the figure: „Dacă proiectul noii legi ar fi adoptat: ~X lei net (brut Y lei).” Link it to `/estimator-salariu/`.
 4. **Wrong texts.** Fix each text of DATA-SALARY-STALE-COPY, except the `/despre/` paragraph that it marks as owner text. Step 5 replaces that paragraph. The detail line `data-pay-law` says „Estimare după Legea 153/2017” for a law figure, and „estimare aproximativă, după proiectul de lege” for a draft figure.
-5. **`/despre/`.** Replace the paragraph „Proiectul de lege” with the text in § Proposed text. Add the anchor `#ce-nu-stim`. **The owner reviews the text before the deploy.** Use the text as it is. If a sentence does not fit the page, mark it in the report; do not rewrite it. The figure „14%” comes from the 9 Sep copy: ask the VPS session for the median on the live data, and put that figure in the text.
+5. **`/despre/`.** Replace the paragraph „Proiectul de lege” with the text in § Proposed text. Add the anchor `#ce-nu-stim`. **The owner reviews the text before the deploy.** Use the text as it is. If a sentence does not fit the page, mark it in the report; do not rewrite it. {X} is the median gap: ask the VPS session for it on the live data (14% on the 9 Sep copy).
 6. **Numbers.** The numbers in the text come from the export, at build time (`about.php` reads them, or the export writes them to a meta table). Do not type them into the page. If this is more than a small change, use the numbers as text, and add a backlog item.
 7. **Tests.** The Playwright specs that touch the detail page, the list and `/despre/` pass at 320, 375 and 1280 px. Add one check for each of steps 2 and 3.
 
 ## Proposed text (owner reviews)
 
-> **Proiectul de lege.** Un proiect de lege din iulie 2026 propune alte salarii. Proiectul nu este adoptat și poate să nu fie adoptat niciodată. Site-ul folosește cifra din proiect numai în două cazuri. Primul: când legea în vigoare nu are un rând pentru funcție. Atunci cifra din proiect ține anunțul în filtrul „Salariu” și apare ca „estimare aproximativă”. Al doilea: pe pagina anunțului, ca notă. Acolo unde există ambele cifre, cifra din proiect este în medie cu 14% mai mare.
+*Version 2, 2026-11-22: Opus edits after the declared-pay work. {X} is the median gap on the live VPS data (14% on the 9 Sep copy). {Dc} counts `baza = declaratii`. Changed: the project-hire sentence, the declared-pay count and its explanation.*
+
+> **Proiectul de lege.** Un proiect de lege din iulie 2026 propune alte salarii. Proiectul nu este adoptat și poate să nu fie adoptat niciodată. Site-ul folosește cifra din proiect numai în două cazuri. Primul: când legea în vigoare nu are un rând pentru funcție. Atunci cifra din proiect ține anunțul în filtrul „Salariu” și apare ca „estimare aproximativă”. Al doilea: pe pagina anunțului, ca notă. Acolo unde există ambele cifre, cifra din proiect este în medie cu {X}% mai mare.
 >
 > **Ce nu putem ști** {#ce-nu-stim}
 >
@@ -51,10 +53,10 @@ The local Postgres is a copy of 9 Sep 2026. The numbers above come from that cop
 > - **Salariul colegilor.** Un angajat nou poate primi salariul colegilor care au aceeași funcție. Unele instituții plătesc peste tabelul legii.
 > - **Persoana angajată.** Vechimea, persoanele în întreținere și scutirile de impozit schimbă salariul. Site-ul calculează la gradația 0, fără persoane în întreținere. Estimatorul de salariu are o opțiune pentru vechime.
 > - **Armata, poliția și serviciile de informații.** Instituția stabilește coeficientul fiecărei funcții, între limitele legii. Multe dintre aceste ordine nu sunt publice.
-> - **Angajatorii care nu aplică Legea 153/2017.** Companiile de stat, BNR, ASF și posturile plătite din bugetul unui proiect au alte reguli.
+> - **Angajatorii care nu aplică Legea 153/2017.** Companiile de stat, BNR și ASF au alte reguli. Pentru posturile dintr-un proiect, cifra este a funcției celei mai apropiate din grilă.
 > - **Potrivirea titlului.** Site-ul alege funcția din grilă după titlul anunțului. Un titlu general, de exemplu „Referent”, poate corespunde mai multor funcții.
 >
-> **Acoperirea.** Din {N} anunțuri, {A} au salariul anunțat, {L} au o estimare după legea în vigoare, {D} au o estimare aproximativă după proiect, iar {F} nu au nicio estimare.
+> **Acoperirea.** Din {N} anunțuri, {A} au salariul anunțat, {Dc} au salariul din declarațiile de avere ale colegilor, {L} au o estimare după legea în vigoare, {D} au o estimare aproximativă după proiect, iar {F} nu au nicio estimare. Cifra din declarații este salariul net declarat de colegii de la același angajator, pe aceeași funcție, adus la nivelul anului 2026.
 
 ## Done when
 

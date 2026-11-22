@@ -253,7 +253,7 @@ timing_mark('f-basic');
 // unfamiliar value keeps its raw spelling so it stays visible, not guessed at).
 foreach ($family_options    as &$o) { $o['label'] = family_label((string)$o['val']); } unset($o);
 foreach ($level_options     as &$o) { $o['label'] = job_level_label((string)$o['val']); } unset($o);
-foreach ($studies_options   as &$o) { $o['label'] = STUDIES_LABELS[$o['val']] ?? $o['val']; } unset($o);
+foreach ($studies_options   as &$o) { $o['label'] = STUDIES_LABELS[$o['val']] ?? $o['val']; $o['not_label'] = studies_not_label((string)$o['val']); } unset($o);
 
 // Status counts — one pass instead of three
 {

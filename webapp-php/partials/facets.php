@@ -61,9 +61,10 @@
                 <?php if ($negatable && !isset($item['param'])): ?>
                 <?php /* "Fără": excludes the value. A real checkbox (sr-only) inside
                    its own label, so it is one Tab stop and announces its state. */ ?>
-                <label class="facet-not" title="Exclude: <?= e($lbl) ?>">
+                <?php $not_lbl = (string)($item['not_label'] ?? ('Exclude: ' . $lbl)); ?>
+                <label class="facet-not" title="<?= e($not_lbl) ?>">
                   <input type="checkbox" name="<?= e($name) ?>_not[]" value="<?= e($val) ?>" class="sr-only"<?= checked_if($neg) ?><?= $dead ? ' disabled' : '' ?>>
-                  <span aria-hidden="true">fără</span><span class="sr-only">Exclude: <?= e($lbl) ?></span>
+                  <span aria-hidden="true">fără</span><span class="sr-only"><?= e($not_lbl) ?></span>
                 </label>
                 <?php endif; ?>
               </div>

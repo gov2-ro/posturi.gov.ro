@@ -992,9 +992,31 @@ const STUDIES_LABELS = [
     'master'      => 'Master / Magistru',
     'licenta'     => 'Licență',
     'postliceala' => 'Postliceală',
+    'profesionala' => 'Profesională',
     'liceala'     => 'Liceală',
     'generala'    => 'Generală',
 ];
+
+/** Study levels from the lowest to the highest (DATA-STUDIES-NOT). */
+const STUDIES_ORDER = ['generala', 'profesionala', 'liceala', 'postliceala', 'licenta', 'master', 'doctorat'];
+
+/**
+ * The levels that an exclusion of $level removes: the level and every level above it.
+ * An unknown value stays alone. A posting with no level is never in this list.
+ *
+ * @return list<string>
+ */
+function studies_levels_from(string $level): array {
+    $i = array_search($level, STUDIES_ORDER, true);
+    return $i === false ? [$level] : array_slice(STUDIES_ORDER, $i);
+}
+
+/** The words of an exclusion of a study level: „Fără licență și peste”, „Fără doctorat”. */
+function studies_not_label(string $level): string {
+    $name = mb_strtolower(STUDIES_LABELS[$level] ?? $level);
+    if ($level === 'master') $name = 'master';
+    return 'Fără ' . $name . ($level === 'doctorat' || !in_array($level, STUDIES_ORDER, true) ? '' : ' și peste');
+}
 
 /** Legacy source/inferred classification labels. The live source already sends
  *  Romanian phrases ("Funcții de execuție"); these cover the snake/ASCII spellings
@@ -1903,7 +1925,7 @@ const FILTER_CHIP_GROUPS = [
     'credential_not' => 'Fără',
     'domain_not'     => 'Fără',
     'cor_not'        => 'Fără',
-    'studies_level_not' => 'Fără studii',
+    'studies_level_not' => '',   // the label of the value says it all: studies_not_label()
     'exp_level_not'  => 'Fără experiență',
     'funding'        => 'Finanțare',
     'sector'         => 'Sector',
@@ -1993,6 +2015,7 @@ function employer_scope_label(string $key, string $value): string {
 }
 
 function filter_value_label(string $key, string $value): string {
+    if ($key === 'studies_level_not') return studies_not_label($value);
     if (str_ends_with($key, '_not') && isset(NEGATABLE_PARAMS[substr($key, 0, -4)])) {
         return filter_value_label(substr($key, 0, -4), $value);
     }
@@ -2660,6 +2683,11 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     foreach (NEGATABLE_PARAMS as $param => $excl_key) {
         $vals = array_values(array_filter(array_map('strval', (array)($p[$param . '_not'] ?? [])), fn($v) => trim($v) !== ''));
         if (!$vals || $excl === $excl_key) continue;
+        // DATA-STUDIES-NOT: for the ordered study level, "without licență" also removes every level
+        // above it. A posting with no level stays. Other groups are unchanged.
+        if ($param === 'studies_level') {
+            $vals = array_values(array_unique(array_merge(...array_map('studies_levels_from', $vals))));
+        }
         $sub = build_filters(['status' => 'all', $param => $vals, $param . '_mode' => 'any']);
         if (!$sub['where']) continue;
         $where[] = "j.id NOT IN (SELECT j.id FROM job_postings j WHERE " . implode(' AND ', $sub['where']) . ")";

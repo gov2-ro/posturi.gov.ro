@@ -424,3 +424,82 @@ def test_the_table_has_the_indexes_the_filters_use(exported):
     assert "idx_pr_posting" not in names
     pk = [r[2] for r in con.execute("PRAGMA index_info('sqlite_autoindex_posting_roles_1')")]
     assert pk == ["posting_id", "ordinal"]
+
+
+ROLE_NO_LEVEL = {"title": "Consilier", "count": 1, "education": {"fields_of_study": []}}
+
+
+class TestStudiesNot:
+    """DATA-STUDIES-NOT: the medical-title rule and the level inferred from the occupation."""
+
+    def doctor_role(self, title="Medic specialist", level="doctorat"):
+        return {"title": title, "count": 1, "education": {"minimum_level": level}}
+
+    @pytest.mark.parametrize("title", ["Medic specialist", "medic primar", "Doctor-medic", "doctor în medicină",
+                                        "Medic dentist", "MEDIC rezident", "2 posturi medici specialisti/primari", "1 post medic specialist ATI"])
+    def test_a_medical_degree_title_read_as_doctorat_becomes_licenta(self, title):
+        row = pr.role_rows(flat(title="x"), schema(self.doctor_role(title)))[0]
+        assert (row["study_level"], row["study_level_source"]) == ("licenta", "text")
+
+    def test_the_posting_title_serves_when_the_role_has_none(self):
+        role = {"count": 1, "education": {"minimum_level": "doctorat"}}
+        assert pr.role_rows(flat(title="Medic specialist"), schema(role))[0]["study_level"] == "licenta"
+        row = pr.role_rows(flat(inf_studies_required="doctorat", title="Medic primar"), None)[0]
+        assert row["study_level"] == "licenta"
+
+    def test_text_that_asks_for_a_doctorate_keeps_doctorat(self):
+        posting = flat(title="Medic specialist", doctorate_in_text=True)
+        assert pr.role_rows(posting, schema(self.doctor_role()))[0]["study_level"] == "doctorat"
+
+    def test_a_non_medical_title_keeps_doctorat(self):
+        for title in ("Cercetător științific", "Asistent medical", "Inspector medical", "Medicament"):
+            row = pr.role_rows(flat(title=title), schema(self.doctor_role(title)))[0]
+            assert row["study_level"] == "doctorat", title
+
+    def test_only_doctorat_is_changed(self):
+        row = pr.role_rows(flat(title="Medic"), schema(self.doctor_role(level="master")))[0]
+        assert row["study_level"] == "master"
+
+    def test_mentions_doctorate(self):
+        assert pr.mentions_doctorate("studii doctorale în medicină")
+        assert pr.mentions_doctorate("diplomă de doctorat")
+        assert not pr.mentions_doctorate(None, "doctor-medic", "")
+
+    def test_group_2_without_a_level_gets_an_inferred_licenta(self):
+        row = pr.role_rows(flat(occ_cor_code="221101"), None)[0]
+        assert (row["study_level"], row["study_level_source"]) == ("licenta", "inferat-ocupatie")
+        row = pr.role_rows(flat(occ_cor_code="242231"), schema(ROLE_NO_LEVEL))[0]
+        assert (row["study_level"], row["study_level_source"]) == ("licenta", "inferat-ocupatie")
+
+    def test_the_isco_group_serves_when_the_cor_code_is_empty(self):
+        row = pr.role_rows(flat(occ_cor_code="", occ_isco_group="2221"), None)[0]
+        assert row["study_level_source"] == "inferat-ocupatie"
+
+    @pytest.mark.parametrize("code", ["325301", "911201", "1", "", None])
+    def test_groups_3_to_9_and_unknown_get_no_inference(self, code):
+        row = pr.role_rows(flat(occ_cor_code=code), None)[0]
+        assert (row["study_level"], row["study_level_source"]) == (None, None)
+
+    def test_a_stated_level_wins_over_the_occupation(self):
+        for stated in ("liceala", "master", "doctorat"):
+            row = pr.role_rows(flat(inf_studies_required=stated, occ_cor_code="221101"), None)[0]
+            assert (row["study_level"], row["study_level_source"]) == (stated, "text")
+        role = {"title": "Referent", "education": {"minimum_level": "liceala"}}
+        row = pr.role_rows(flat(occ_cor_code="221101"), schema(role))[0]
+        assert (row["study_level"], row["study_level_source"]) == ("liceala", "text")
+
+
+def test_verify_warns_about_a_medical_title_with_the_level_generala(exp, exported, capsys):
+    path, con = exported
+    con.execute("UPDATE job_postings SET title = 'Medic specialist' WHERE id = 3")
+    con.execute("UPDATE posting_roles SET study_level = 'generala' WHERE posting_id = 3")
+    con.commit()
+    assert exp.verify(str(path), min_rows=0, previous=None, active_only=False) == 3
+    err = capsys.readouterr().err
+    assert "1 postings have a medical title and the level 'generala' (ids 3)" in err
+
+
+def test_verify_is_quiet_without_such_a_posting(exp, exported, capsys):
+    path, _ = exported
+    exp.verify(str(path), min_rows=0, previous=None, active_only=False)
+    assert "medical title" not in capsys.readouterr().err

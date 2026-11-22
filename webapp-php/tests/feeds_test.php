@@ -524,7 +524,7 @@ run_suite('iCal: escaping, 75-octet folding, UTF-8, CRLF, URI fidelity', functio
     assert_same('X-WR-CALNAME:posturi.gov2.ro', $calname(''), 'unfiltered calendar name');
     assert_same('X-WR-CALNAME:posturi.gov2.ro a\\, b\\; c Cluj', $calname('judet%5B%5D=cluj&q=' . urlencode('a, b; c') . '&title=Vechi'),
         'filtered calendar name: chip labels, TEXT escaped, title ignored');
-    assert_same('X-WR-CALNAME:posturi.gov2.ro Fără studii Licență', $calname('studies_level_not%5B%5D=licenta'), 'negated filter keeps its group word');
+    assert_same('X-WR-CALNAME:posturi.gov2.ro Fără licență și peste', $calname('studies_level_not%5B%5D=licenta'), 'negated study level says it removes the levels above');
 
     // The long Romanian title: unfolds to exactly the (escaped) text.
     $ev = ics_event($ics, 3902);

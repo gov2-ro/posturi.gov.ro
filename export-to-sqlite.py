@@ -1109,6 +1109,11 @@ CREATE TABLE salary_grid_pay (
     gradatie INTEGER NOT NULL,
     lei_min  INTEGER NOT NULL,
     lei_max  INTEGER NOT NULL,
+    -- Anexa VI only (post pay + rank pay, ADR 0008 rule 10); NULL for every other row.
+    lei_functie_min INTEGER,
+    lei_functie_max INTEGER,
+    lei_grad_min    INTEGER,
+    lei_grad_max    INTEGER,
     PRIMARY KEY (version, ref, gradatie)
 ) WITHOUT ROWID;
 CREATE TABLE salary_grid_link (
@@ -1193,9 +1198,12 @@ def export_salary_estimator(con: sqlite3.Connection, today=None) -> dict | None:
                          salary_grid.norm(" ".join((r.functie,) + r.sinonime))))
             for g in range(6):
                 lo, hi = grid.row_pay(r, g, today)
-                pay.append((grid.version, ref, g, lo, hi))
+                parts = grid.row_parts(r, g, today)
+                pay.append((grid.version, ref, g, lo, hi)
+                           + ((parts[0][0], parts[0][1], parts[1][0], parts[1][1]) if parts
+                              else (None, None, None, None)))
     con.executemany("INSERT INTO salary_grid_rows VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
-    con.executemany("INSERT INTO salary_grid_pay VALUES (?,?,?,?,?)", pay)
+    con.executemany("INSERT INTO salary_grid_pay VALUES (?,?,?,?,?,?,?,?,?)", pay)
 
     links = salary_links(law, draft)
     con.executemany("INSERT INTO salary_grid_link VALUES (?,?)", links)

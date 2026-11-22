@@ -3543,16 +3543,33 @@ function salary_est_filter(array $rows, array $chosen): array {
     return $rows;
 }
 
-/** The pay (lei_min, lei_max) of the given rows at one gradation, keyed by ref. */
+/** The pay of the given rows at one gradation, keyed by ref: [lei_min, lei_max, functie_min, functie_max, grad_min, grad_max].
+ *  The last four are Anexa VI only (post pay and rank pay, ADR 0008 rule 10); null elsewhere and in an older export. */
 function salary_est_pay(string $version, array $refs, int $g): array {
     $out = [];
     foreach (array_chunk(array_values(array_unique($refs)), 400) as $chunk) {
-        $st = db()->prepare("SELECT ref, lei_min, lei_max FROM salary_grid_pay WHERE version = ? AND gradatie = ? AND ref IN ("
+        $st = db()->prepare("SELECT * FROM salary_grid_pay WHERE version = ? AND gradatie = ? AND ref IN ("
             . implode(',', array_fill(0, count($chunk), '?')) . ")");
         $st->execute(array_merge([$version, $g], $chunk));
-        foreach ($st->fetchAll() as $r) $out[$r['ref']] = [(int)$r['lei_min'], (int)$r['lei_max']];
+        foreach ($st->fetchAll() as $r) {
+            $part = static fn($k) => isset($r[$k]) ? (int)$r[$k] : null;
+            $out[$r['ref']] = [(int)$r['lei_min'], (int)$r['lei_max'], $part('lei_functie_min'), $part('lei_functie_max'),
+                               $part('lei_grad_min'), $part('lei_grad_max')];
+        }
     }
     return $out;
+}
+
+/** Anexa VI: the post pay and the rank pay over all rows of a tile, as [[min, max], [min, max]]; null when a row has no parts. */
+function salary_est_parts(array $rows, array $pay): ?array {
+    $f = $g = [];
+    foreach ($rows as $r) {
+        $p = $pay[$r['ref']] ?? null;
+        if ($p === null || $p[2] === null) return null;
+        array_push($f, $p[2], $p[3]);
+        array_push($g, $p[4], $p[5]);
+    }
+    return $f ? [[min($f), max($f)], [min($g), max($g)]] : null;
 }
 
 /** The draft rows that the link table pairs with these law rows. */

@@ -2,6 +2,24 @@
 
 ## 2026
 
+### 2026-11-22 — SALARY-ANEXA-VI built after the owner decisions (Sonnet, from the Opus brief)
+
+**Done**
+- Rank pay in `estimate()` for the draft (post + rank coefficient × VR) and the law (post 2022 × 1.05 + OUG 26/2024 art. XI table). Range of ranks gives a range; "plutonier adjutant șef" takes "principal" with a warning; a head has post pay only with a warning.
+- Law grid: 40 Anexa VI rows added (0 removed); `solda-grad-lege153-2026.csv` (27 ranks).
+- Page `/estimator-salariu/`: parts, total and the bonus line; the export has four new nullable columns.
+- Figures: agent de poliție debutant PL: draft 8,241; law 5,918.
+- Tests: Python 1,704 passed, 1 failed (the known `test_salary_facet_sql.py`), 13 skipped. PHP `salary_estimator_test.php`: 176 assertions pass.
+- Dry run on the 9 Sep copy: counts identical before and after.
+
+**Hard**
+- The law HTML and the draft workbook are untracked (`docs/salarii/` is in `.gitignore`): the worktree needs a copy.
+- The minimum-wage floor on the post pay alone would give 6,305 for the agent. It applies to the total.
+- The law row of the debutant agent also names two other ranks, so the page shows a rank range for that row.
+
+**Decided**
+- Assumptions in the audit (gradation on the law rank pay; floor on the total). The owner confirms or changes them.
+
 ### 2026-11-22 — SALARY-ANEXA-VI: rank table, matcher fix, law spike; stopped at the rank mapping (Sonnet, from the Opus brief)
 
 **Done**

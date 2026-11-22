@@ -983,7 +983,8 @@ CREATE TABLE salary_grid_rows (version TEXT NOT NULL, ref TEXT NOT NULL, anexa T
     studii TEXT NOT NULL DEFAULT '', tip_unitate TEXT NOT NULL DEFAULT '', act_sursa TEXT NOT NULL DEFAULT '',
     needs_review INTEGER NOT NULL DEFAULT 0, cautare TEXT NOT NULL DEFAULT '', PRIMARY KEY (version, ref));
 CREATE TABLE salary_grid_pay (version TEXT NOT NULL, ref TEXT NOT NULL, gradatie INTEGER NOT NULL, lei_min INTEGER NOT NULL,
-    lei_max INTEGER NOT NULL, PRIMARY KEY (version, ref, gradatie)) WITHOUT ROWID;
+    lei_max INTEGER NOT NULL, lei_functie_min INTEGER, lei_functie_max INTEGER, lei_grad_min INTEGER, lei_grad_max INTEGER,
+    PRIMARY KEY (version, ref, gradatie)) WITHOUT ROWID;
 CREATE TABLE salary_grid_link (law_ref TEXT NOT NULL, draft_ref TEXT NOT NULL, PRIMARY KEY (law_ref, draft_ref)) WITHOUT ROWID;
 CREATE TABLE salary_cap (id INTEGER PRIMARY KEY, tip_unitate TEXT NOT NULL, populatie_min INTEGER, populatie_max INTEGER,
     plafon_maxim_lei INTEGER NOT NULL);
@@ -1016,10 +1017,10 @@ SQL);
         [$D, 'D1!1', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', '', 'sub 10.000', 'superior', 'S', '', null, null, 1.35, 1.35],
         [$D, 'D1!2', 'VIII', 'Consilier', 'Consilier|Consilier juridic', 'funcționar public', 'execuție', '', 'peste 200.000', 'superior', 'S', '', null, null, 1.85, 1.85],
         [$D, 'D2!1', 'II', 'Asistent medical', 'Asistent medical|Asistent medical generalist', '', 'execuție', '', '', 'principal', 'PL', '', null, null, 1.5, 1.5],
-        [$D, 'D3!1', 'VI', 'Soldat', 'Soldat voluntar', '', 'execuție', '', '', '', 'M', '', null, null, 1.1, 1.1],
+        [$D, 'D3!1', 'IX', 'Soldat', 'Soldat voluntar', '', 'execuție', '', '', '', 'M', '', null, null, 1.1, 1.1],
     ];
     $ins = $db->prepare('INSERT INTO salary_grid_rows VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-    $pay = $db->prepare('INSERT INTO salary_grid_pay VALUES (?,?,?,?,?)');
+    $pay = $db->prepare('INSERT INTO salary_grid_pay (version, ref, gradatie, lei_min, lei_max) VALUES (?,?,?,?,?)');
     foreach ($rows as $r) {
         [$ver, $ref, $anexa, $fn, $syn, $regim, $post, $nivel, $banda, $grad, $studii, $unit, $lmin, $lmax] = $r;
         $ins->execute([$ver, $ref, $anexa, 'Funcții de execuție', $fn, str_replace('|', ' | ', $syn), $regim, $post, $nivel, $banda, $grad, $studii, $unit,
@@ -1034,8 +1035,24 @@ SQL);
             }
         }
     }
+    // Anexa VI (SALARY-ANEXA-VI): post pay + rank pay. Law: 3,750 x 1.05 + 1,980 (OUG 26/2024 art. XI). Draft: (1.49 + 0.52) x 4,100.
+    foreach ([[$L, 'L153-t97!37', 'Agent de poliție debutant', 'Agent de poliție debutant'], [$D, 'D4!1', 'Agent de poliție debutant', 'Agent de poliție debutant']] as [$ver, $ref, $fn, $syn]) {
+        $ins->execute([$ver, $ref, 'VI', 'Apărare, ordine publică și securitate națională', $fn, $syn, '', '', '', '', '', 'PL', '',
+                       $ver === $L ? 'Legea 153/2017 Anexa VI Cap. I (2022) x 1,05 (OUG 115/2023 art. I (1))' : '', 0, $norm($fn)]);
+        $vi = $db->prepare('INSERT INTO salary_grid_pay VALUES (?,?,?,?,?,?,?,?,?)');
+        for ($g = 0; $g <= 5; $g++) {
+            $m = FIXTURE_SALARY_MULT[$g];
+            if ($ver === $L) {
+                $f = (int)ceil(round(3750 * 1.05 * $m, 6)); $gr = 1980;
+            } else {
+                $f = (int)ceil(round(1.49 * 4100 * $m, 6)); $gr = (int)ceil(round(0.52 * 4100 * $m, 6));
+            }
+            $tot = $ver === $L ? max($f + $gr, 4325) : (int)ceil(round(2.01 * 4100 * $m, 6));
+            $vi->execute([$ver, $ref, $g, $tot, $tot, $f, $f, $gr, $gr]);
+        }
+    }
     $link = $db->prepare('INSERT INTO salary_grid_link VALUES (?,?)');
-    foreach ([['L153-t1!1', 'D1!1'], ['L153-t1!1', 'D1!2'], ['L153-t2!1', 'D1!1'], ['L153-t2!1', 'D1!2'],
+    foreach ([['L153-t97!37', 'D4!1'], ['L153-t1!1', 'D1!1'], ['L153-t1!1', 'D1!2'], ['L153-t2!1', 'D1!1'], ['L153-t2!1', 'D1!2'],
               ['L153-t1!2', 'D1!1'], ['L153-t2!2', 'D1!1'], ['L153-t3!1', 'D2!1'], ['L153-t3!2', 'D2!1']] as $l) $link->execute($l);
     // The title shortcut and the INS line (SALARY-INS-LINE): `salary_title` and `salary_ins_context`.
     $db->exec(<<<'SQL'

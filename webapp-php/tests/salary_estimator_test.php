@@ -52,6 +52,25 @@ $srv = start_fixture_server($db_path);
 $base = $srv['base'];
 $P = '/estimator-salariu/';
 
+run_suite('Anexa VI: the two parts, the total and the line about bonuses (ADR 0008 rule 10)', function () use ($base, $P) {
+    [, $h] = se_get($base, $P . '?rand=' . rawurlencode('L153-t97!37'));
+    $law = se_block($h, 'law');
+    assert_contains('Soldă lunară brută: 5.918 lei', $law, 'law total: 3,938 + 1,980');
+    assert_contains('data-salary-parts', $law, 'the parts table');
+    assert_contains('Soldă de funcție</th><td class="g2-cell-num">3.938 lei', $law, 'post pay');
+    assert_contains('Soldă de grad</th><td class="g2-cell-num">1.980 lei', $law, 'rank pay');
+    assert_contains('Total brut</th><td class="g2-cell-num">5.918 lei', $law, 'total');
+    assert_contains('data-salary-bonus-note', $law, 'the line about bonuses');
+    $draft = se_block($h, 'draft');
+    assert_contains('Soldă de funcție</th><td class="g2-cell-num">6.109 lei', $draft, 'draft post pay');
+    assert_contains('Soldă de grad</th><td class="g2-cell-num">2.132 lei', $draft, 'draft rank pay');
+    assert_contains('Total brut</th><td class="g2-cell-num">8.241 lei', $draft, 'draft total');
+    assert_true(strpos($h, 'data-salary-law') < strpos($h, 'data-salary-draft'), 'law first');
+    // An annex that is not VI has no parts table.
+    [, $h] = se_get($base, $P . '?rand=' . rawurlencode('L153-t3!1'));
+    assert_not_contains('data-salary-parts', $h, 'no parts for Anexa II');
+});
+
 run_suite('step 1: the search finds a function, ignoring case and diacritics', function () use ($base, $P) {
     [$st, $h] = se_get($base, $P . '?q=Consilier');
     assert_same(200, $st, 'status');
@@ -181,8 +200,8 @@ run_suite('wizard step 1: the domains; draft-only annexes come last', function (
     assert_contains('data-salary-wizard="domain"', $h, 'step 1');
     foreach (['Sănătate și asistență socială', 'Cultură', 'Administrație și alte funcții comune'] as $label) assert_contains($label, $h, $label);
     $links = se_links($h, 'data-salary-domain');
-    assert_same(['/estimator-salariu/?d=II', '/estimator-salariu/?d=III', '/estimator-salariu/?d=VII', '/estimator-salariu/?d=VIII', '/estimator-salariu/?d=VI'], $links, 'annex order, VI last');
-    assert_true(strpos($h, 'Doar în proiect') < strpos($h, 'data-salary-domain="VI"'), 'the draft-only heading comes before Anexa VI');
+    assert_same(['/estimator-salariu/?d=II', '/estimator-salariu/?d=III', '/estimator-salariu/?d=VI', '/estimator-salariu/?d=VII', '/estimator-salariu/?d=VIII', '/estimator-salariu/?d=IX'], $links, 'annex order, IX (draft only) last');
+    assert_true(strpos($h, 'Doar în proiect') < strpos($h, 'data-salary-domain="IX"'), 'the draft-only heading comes before Anexa IX');
     assert_true(strpos($h, 'data-salary-domain="VIII"') < strpos($h, 'Doar în proiect'), 'law annexes come before it');
     assert_contains('Caută după titlul postului', $h, 'the title shortcut stays at the top');
 });
@@ -196,7 +215,7 @@ run_suite('wizard step 2: only the levels that the domain has, with counts', fun
     assert_not_contains('data-salary-level="SSD"', $h, 'no SSD in domain II');
     [, $h] = se_get($base, $P . '?d=III');
     assert_same(['Superioare 1 funcție'], se_link_texts($h, 'data-salary-level'), 'domain III has only S');
-    [, $h] = se_get($base, $P . '?d=VI');
+    [, $h] = se_get($base, $P . '?d=IX');
     assert_same(['Medii 1 funcție'], se_link_texts($h, 'data-salary-level'), 'a draft-only domain');
     // An annex whose rows name no studies skips step 2: its functions are listed at once, without `st`.
     [, $h] = se_get($base, $P . '?d=VII');
@@ -230,9 +249,9 @@ run_suite('wizard step 3: the functions of domain + studies; PL/M is under PL an
     [, $h] = se_get($base, $P . '?d=II&st=PL&fq=zzzz');
     assert_contains('data-salary-empty', $h, 'empty filter');
     // A draft-only domain lists the draft function and links to it.
-    $links = se_links(se_get($base, $P . '?d=VI&st=M')[1], 'data-salary-fn');
+    $links = se_links(se_get($base, $P . '?d=IX&st=M')[1], 'data-salary-fn');
     assert_true(isset($links[0]) && str_contains($links[0], 'b=proiect'), 'draft link');
-    assert_contains('doar în proiect', se_get($base, $P . '?d=VI&st=M')[1], 'marked as draft-only');
+    assert_contains('doar în proiect', se_get($base, $P . '?d=IX&st=M')[1], 'marked as draft-only');
     // The filter field shows only when the list has more than 40 items: this domain has fewer.
     assert_not_contains('id="se-fq"', se_get($base, $P . '?d=II&st=PL')[1], 'no filter field on a short list');
 });

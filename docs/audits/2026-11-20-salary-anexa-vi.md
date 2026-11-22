@@ -1,6 +1,6 @@
 # Audit — Anexa VI: rank pay, matcher bug and the law in force (SALARY-ANEXA-VI)
 
-Date: 2026-11-22. Author: Sonnet. Brief: `docs/briefs/2026-11-20-salary-anexa-vi.md`. The work stopped at the first stop condition (see "Stop condition"). Steps 1, 3 and 5 are done. Steps 2, 4 and 6 (except the label tests) wait for the owner.
+Date: 2026-11-22. Author: Sonnet. Brief: `docs/briefs/2026-11-20-salary-anexa-vi.md`. The first run stopped at the rank mapping (see "Stop condition"). The owner decided on 2026-11-22 (decisions 6–8, ADR 0008 rule 10). The second run built steps 2, 4, 6 and 7: see "Second run" at the end.
 
 ## Stop condition: the rank names do not map one to one
 
@@ -65,3 +65,25 @@ Source: `docs/salarii/lege-153/legea-153-2017-id298840-2026-11-18.html`, Anexa V
 - The "debutant" matcher fix may change other results where a label had no row before. The dry run shows no change on the local copy; the VPS run confirms.
 - The rank "agent de poliție" for the debutant in the law-in-force figure (above).
 - I read the Anexa VI table from the text of the HTML. The 2022 values agree with the draft Cap. I structure.
+
+## Second run (2026-11-22): the build
+
+**Rules built** (`salary_grid.py`): `post_names()` reads a label ("agent de poliţie/penitenciare debutant" gives "agent de poliţie debutant"; "principal/șef" gives both; "cls." is "clasa"). `RankTable.match()` finds the ranks: a range ("agent - agent șef principal") gives its two ranks; "plutonier adjutant șef" takes "principal" with a warning when the table has no "șef" (the law table has it, so no warning there); a head of institution has no rank (post pay only, warning). `Grid.row_parts()` gives the parts. The ranks come from the label of the selector when it has the prefix "Funcţii corespunzătoare gradului de", else from the label of the row.
+
+**Law rows.** `build-salary-grid.py --source lege-153` reads table 97 (Anexa VI Cap. I): 40 rows, stored as the 2022 lei value with `multiplicator_regula` 1.05, the convention of Anexa V. The pay is ceil(3,750 × 1.05) = 3,938. The synonyms of these rows come from `post_names()`, so the draft label finds its law row. `solda-grad-lege153-2026.csv` holds the 27 ranks of OUG 26/2024 art. XI, typed from the consolidated act (legislatie.just.ro, id 298840, file `legea-153-2017-id298840-2026-11-18.html`, downloaded 2026-11-18). The values were extracted from the text of that file by a script and checked by count (27) and by sample (agent 1,980; soldat 1,584).
+
+**Figures** (gradation 0): agent de poliție debutant, PL: draft 8,241 (6,109 + 2,132); law 5,918 (3,938 + 1,980). Locotenent: draft 10,086–11,480; law 6,927–7,199. A range of ranks: law grade part 1,980–2,277.
+
+**No other annex changes.**
+- `grila-lege153-2026.csv` before and after: 40 lines added, 0 removed, all 40 are Anexa VI. `grila-2026-07-17.csv` and `functii-2026-07-17.csv` are identical.
+- `estimate-salaries.py --dry-run` on the local copy (9 Sep, 9,750 postings), before and after the build: all counts identical (the first 21 lines, with the per-annex table). Only the sample lines can differ. The local copy has 0 Anexa VI postings.
+- `row_parts()` returns None for every row that is not Anexa VI; `as_dict()` adds the four new keys only when they exist, so the payload of other annexes is unchanged.
+
+**Page.** `/estimator-salariu/` shows, for Anexa VI, "Soldă de funcție", "Soldă de grad" and "Total brut" in each tile (law first, draft second, as ADR 0008 rule 2 says) and one line about bonuses. The export adds four nullable columns to `salary_grid_pay`. Screenshots at 375 px and 1280 px were taken from the PHP fixture server (README) with Chrome; no horizontal overflow. They are in the scratchpad of the run, not in git.
+
+**Assumed (second run).**
+- The gradation does not change the law rank pay (a fixed amount). The draft applies it to both parts (brief decision 3).
+- The minimum wage is the floor of the total for Anexa VI, not of the post pay: 3,938 < 4,325 would otherwise raise the post pay and give 6,305 for the agent. Soldat: 2,625 + 1,584 = 4,209, so the floor applies.
+- The law row for the debutant agent also names "maistru militar cls. a V-a" and "sergent". The page shows the range of ranks of the row (1,881–1,980); the estimate with the draft label gives the rank of the agent (1,980) exactly.
+- The known gap of rule 10 stays: 3,938 against the union figure of 4,075.
+- The test fixture of the PHP suite moved its draft-only row (Soldat) from Anexa VI to Anexa IX, because Anexa VI now has law rows. Four assertions of `salary_estimator_test.php` changed with it.

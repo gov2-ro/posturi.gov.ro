@@ -46,6 +46,8 @@ except ImportError:
     sys.exit("openpyxl is required: pip install openpyxl")
 
 ROOT = Path(__file__).parent.resolve()
+sys.path.insert(0, str(ROOT))
+import salary_grid  # noqa: E402  (post_names(): the one reader of Anexa VI labels)
 DEFAULT_XLSX = (
     ROOT / "docs" / "salarii" / "perplexity pachet_calculator_salarizare_bugetari"
     / "Proiect-COEFICIENTI-1-8-MMFTSS-16.07.2026-1000.xlsx"
@@ -398,6 +400,10 @@ LAW_SPECS = [
     (88, 91, "V", f"Legea 153/2017 Anexa V {_R05}", "y2022", FACTOR_115, "", "", ""),
     (92, 93, "V", f"Legea 153/2017 Anexa V Cap. VI {_R24}", "y2022", FACTOR_2024, "", "", ""),
     (94, 94, "V", f"Legea 153/2017 Anexa V Cap. VII {_R05}", "y2022", FACTOR_115, "", "", ""),
+    # Anexa VI Cap. I: post pay only. The rank pay is `solda-grad-lege153-2026.csv` (ADR 0008 rule 10).
+    # OUG 53/2024 does not name Anexa VI, so the factor is 1,05 (OUG 115/2023 art. I (1)).
+    (97, 97, "VI", "Legea 153/2017 Anexa VI Cap. I (2022) x 1,05 (OUG 115/2023 art. I (1))", "y2022",
+     FACTOR_115, "", "", ""),
     (107, 112, "VIII", f"{A_VIII} Cap. I lit. A pct. I (central) {_R24}", "y2022", FACTOR_2024,
      "funcționar public", "central", ""),
     (113, 115, "VIII", f"{A_VIII} Cap. I lit. A pct. II (teritorial) {_R24}", "y2022", FACTOR_2024,
@@ -667,6 +673,11 @@ def build_law_grid() -> tuple[list[dict], list[dict], dict]:
                     for r in rows:
                         # a.N, b.N and c.N are three staff groups of the same unit type N.
                         r["tip_unitate"] = "a." + _UNIT[tno].split(".")[1]
+                if spec[2] == "VI":
+                    # The names of an Anexa VI label, as `salary_grid.post_names()` reads them (the
+                    # slash split of `split_synonyms_law` would leave "penitenciare debutant" alone).
+                    for r in rows:
+                        r["sinonime"] = "|".join(salary_grid.post_names(r["functie"]))
                 if spec[8]:
                     for r in rows:
                         r["act_sursa"] += f" [needs_review: {spec[8]}]"

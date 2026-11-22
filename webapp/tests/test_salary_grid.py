@@ -644,10 +644,13 @@ class TestEstimatorExport:
             WHERE l.anexa <> d.anexa""", (sg.LAW_VERSION, sg.DEFAULT_VERSION)).fetchone()[0]
         assert bad == 0
         assert cov["law_with_draft"] > 1000 and cov["draft_with_law"] > 1500
-        # A draft-only annex (military, dignitaries) has no law row.
+        # Anexa IX (dignitaries) is draft only. Anexa VI has law rows since SALARY-ANEXA-VI.
         assert con.execute("""SELECT COUNT(*) FROM salary_grid_link k
             JOIN salary_grid_rows d ON d.version = ? AND d.ref = k.draft_ref
-            WHERE d.anexa IN ('VI', 'IX')""", (sg.DEFAULT_VERSION,)).fetchone()[0] == 0
+            WHERE d.anexa = 'IX'""", (sg.DEFAULT_VERSION,)).fetchone()[0] == 0
+        assert con.execute("""SELECT COUNT(*) FROM salary_grid_link k
+            JOIN salary_grid_rows d ON d.version = ? AND d.ref = k.draft_ref
+            WHERE d.anexa = 'VI'""", (sg.DEFAULT_VERSION,)).fetchone()[0] > 0
 
     def test_the_caps_and_the_parameters(self, tables, law):
         con, _ = tables
@@ -679,10 +682,81 @@ class TestAnexaVILabel:
 
     def test_the_post_pay_of_the_row(self, grid):
         est = grid.estimate({"functie": self.LABEL, "studii": "postliceala", "anexa": "VI"})
-        assert est.lei_min == est.lei_max == math.ceil(1.49 * 4100)
+        assert est.lei_functie_min == est.lei_functie_max == math.ceil(1.49 * 4100)
 
     def test_the_rank_pay_file_has_the_rank_table(self):
         path = sg.DATA_DIR / f"solda-grad-{sg.DEFAULT_VERSION}.csv"
         rows = list(csv.DictReader(path.open(encoding="utf-8")))
         assert len(rows) == 22
         assert {r["coeficient"] for r in rows if "Agent de poliţie" in r["grad"]} == {"0.52"}
+
+
+class TestAnexaVIRankPay:
+    """Post pay + rank pay, draft and law (ADR 0008 rule 10)."""
+
+    P = "Funcţii corespunzătoare gradului de "
+
+    @pytest.fixture(scope="class")
+    def law(self):
+        return sg.load_grid(sg.LAW_VERSION)
+
+    def _both(self, grid, law, label, studii=""):
+        sel = {"functie": self.P + label} | ({"studii": studii} if studii else {})
+        return grid.estimate(sel), law.estimate(sg.selector_for_law(sel, grid))
+
+    def test_agent_debutant_draft_is_post_plus_rank(self, grid, law):
+        draft, _ = self._both(grid, law, "agent de poliţie/penitenciare debutant", "postliceala")
+        assert draft.lei_min == draft.lei_max == math.ceil((1.49 + 0.52) * 4100) == 8241
+        assert (draft.lei_functie_min, draft.lei_grad_min) == (6109, 2132)
+
+    def test_agent_debutant_law_is_3938_plus_1980(self, grid, law):
+        _, est = self._both(grid, law, "agent de poliţie/penitenciare debutant", "postliceala")
+        assert est.lei_min == est.lei_max == 3938 + 1980 == 5918
+        assert (est.lei_functie_min, est.lei_grad_min) == (3938, 1980)
+        assert est.avertismente == []
+
+    def test_an_officer_row(self, grid, law):
+        draft, est = self._both(grid, law, "locotenent; inspector de poliţie/poliție penitenciară", "licenta")
+        assert draft.lei_grad_min == draft.lei_grad_max == math.ceil(0.65 * 4100)
+        assert draft.lei_min == math.ceil((1.81 + 0.65) * 4100)
+        assert est.lei_grad_min == est.lei_grad_max == 2409          # OUG 26/2024 art. XI
+        assert est.lei_functie_min == math.ceil(4302 * 1.05)
+
+    def test_a_range_of_ranks_gives_a_range(self, grid, law):
+        draft, est = self._both(grid, law, "agent - agent șef principal de poliţie/penitenciare", "liceala")
+        assert (draft.lei_grad_min, draft.lei_grad_max) == (math.ceil(0.52 * 4100), math.ceil(0.61 * 4100))
+        assert (est.lei_grad_min, est.lei_grad_max) == (1980, 2277)
+
+    def test_plutonier_adjutant_sef_takes_the_rank_principal_with_a_warning(self, grid, law):
+        draft, est = self._both(grid, law, "plutonier adjutant șef")
+        assert draft.lei_grad_min == math.ceil(0.61 * 4100)
+        assert any("plutonier adjutant principal" in w for w in draft.avertismente)
+        assert est.lei_grad_min == 2277          # the law names "principal/șef" in one rank
+
+    def test_a_head_of_institution_has_post_pay_only_and_a_warning(self, grid, law):
+        label = ("Prim-adjunctul şi adjuncţii directorului Serviciului de Telecomunicaţii Speciale; "
+                 "prim-adjunctul şi adjunctul directorului Serviciului de Protecţie şi Pază; "
+                 "subsecretarii de stat din Ministerul Afacerilor Interne")
+        draft = grid.estimate({"functie": label})
+        assert draft.lei_grad_min is None and draft.lei_min > 0
+        assert any("fără soldă de grad" in w or "nu are soldă de grad" in w for w in draft.avertismente)
+
+    def test_the_law_floor_applies_to_the_total(self, grid, law):
+        _, est = self._both(grid, law, "soldat")
+        assert est.lei_min == est.lei_max == max(math.ceil(2500 * 1.05) + 1584, law.minimum_wage())
+
+    def test_other_annexes_have_no_parts(self, grid):
+        est = grid.estimate({"functie": "Referent", "anexa": "VIII"})
+        assert est.lei_functie_min is None and "lei_functie_min" not in est.as_dict()
+
+    def test_the_law_rank_file_is_the_art_xi_table(self):
+        rows = list(csv.DictReader((sg.DATA_DIR / sg.RANK_UPDATE_ACT).open(encoding="utf-8")))
+        assert len(rows) == 27
+        lei = {r["grad"]: int(r["lei"]) for r in rows}
+        assert lei["Sergent major, agent de poliție/penitenciare"] == 1980 and lei["Soldat"] == 1584
+        assert all("OUG 26/2024 art. XI" in r["act_sursa"] for r in rows)
+
+    def test_the_law_post_rows_hold_the_2022_value_and_the_factor(self, law):
+        row = next(r for r in law.rows if r.anexa == "VI" and r.source_row == 37 and r.studii == "PL")
+        assert (row.lei_min, row.multiplicator_regula) == (3750, 1.05)
+        assert "OUG 115/2023" in row.act_sursa

@@ -27,7 +27,7 @@ $inferred_cnt = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inferr
 $unique_employers = (int)db()->query("SELECT COUNT(DISTINCT employer_id) FROM job_postings")->fetchColumn();
 $unique_judete    = (int)db()->query("SELECT COUNT(DISTINCT judet_id) FROM job_postings WHERE judet_id IS NOT NULL")->fetchColumn();
 $new_7days = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE published_at >= '$seven_ago'")->fetchColumn();
-// Pay: what the announcement states and what the draft salary grid estimates are different
+// Pay: what the announcement states and what the estimate gives are different
 // facts, so they are counted apart (an estimate is only counted where no pay is announced).
 $sal_announced = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE inf_salary_min > 0")->fetchColumn();
 $sal_estimated = (int)db()->query("SELECT COUNT(*) FROM job_postings WHERE COALESCE(inf_salary_min, 0) <= 0 AND sal_min > 0")->fetchColumn();
@@ -220,7 +220,7 @@ require __DIR__ . '/../inc/header.php';
     <div class="bg-surface border border-line rounded-lg p-5">
       <div class="text-2xl font-display font-semibold text-ink"><?= $sal_estimated ?></div>
       <div class="text-xs text-ink-muted font-mono mt-1 uppercase tracking-wide">Doar salariu estimat</div>
-      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $sal_estimated / $ttl) ?>% din export · calculat din proiectul grilei salariale, nu oferit de angajator</div>
+      <div class="text-xs text-ink-faint mt-0.5"><?= round(100 * $sal_estimated / $ttl) ?>% din export · estimat după legea în vigoare, după declarații de avere sau, la nevoie, după proiectul de lege; nu oferit de angajator</div>
     </div>
     <?php if ($avg_deadline): ?>
     <div class="bg-surface border border-line rounded-lg p-5 col-span-2 sm:col-span-1">

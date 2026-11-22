@@ -454,7 +454,7 @@ $exp_options = [];
 }
 
 timing_mark('f-exp');
-// Salary filter: net pay of the figure the row shows (stated, else the draft-grid estimate), as a gross
+// Salary filter: net pay of the figure the row shows (stated, else the estimate: law in force, declared pay or, last, the draft law), as a gross
 // threshold in SQL (gross_for_net()), and the option "fără salariu estimat". The facet hides itself
 // while no posting has a figure (before `estimate-salaries.py` has ever run).
 $salary_options = [];

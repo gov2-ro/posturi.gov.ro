@@ -331,8 +331,8 @@ run_suite('labels: Romanian for known values, unfamiliar values kept visible', f
 run_suite('result rows show pay: the stated salary first, else the labelled estimate', function () use ($base) {
     // Same precedence as SALARY_EXPR (the salary filter), so a row and a bucket never disagree.
     assert_same(['label' => 'Salariu estimat', 'text' => '≈ 2.485–3.090 lei net', 'gross' => '4.100–5.200 lei', 'estimated' => true],
-        list_salary(['sal_min' => 4100.0, 'sal_max' => 5200.0]), 'grid estimate, a range: net first, the gross range kept');
-    assert_same('≈ 2.017 lei net', list_salary(['sal_min' => 3300, 'sal_max' => 3300])['text'], 'one figure when min = max');
+        list_salary(['sal_min' => 4100.0, 'sal_max' => 5200.0, 'sal_baza' => 'lege_in_vigoare']), 'grid estimate, a range: net first, the gross range kept');
+    assert_same('≈ 2.017 lei net', list_salary(['sal_min' => 3300, 'sal_max' => 3300, 'sal_baza' => 'lege_in_vigoare'])['text'], 'one figure when min = max');
     assert_same('≈ 2.017 lei net', list_salary(['sal_min' => 3300, 'sal_max' => null])['text'], 'no max: the min alone');
     assert_same(['label' => 'Salariu anunțat', 'text' => '≈ 3.523 lei net', 'gross' => '6.000 lei', 'estimated' => false],
         list_salary(['inf_salary_min' => 6000, 'inf_salary_max' => 6000, 'sal_min' => 4100, 'sal_max' => 5200]), 'a stated salary wins');
@@ -723,7 +723,7 @@ run_suite('the detail page: net first with a gross line; with no figure one line
     assert_contains('data-pay-stated', $h, 'the stated box');
     assert_contains('Salariu anunțat', $h, 'its heading');
     assert_true(preg_match('/data-pay-gross>brut: 4\.700 lei \/ lună, din anunț</u', $h) === 1, 'the stated gross line');
-    assert_contains('Conform legii salarizării (propunere): ' . net_label(5036, 6000) . ' (brut 5.036–6.000 lei) / lună, la gradația 0.', $h, 'the estimate as a note');
+    assert_contains('Estimare după Legea 153/2017: ' . net_label(5036, 6000) . ' (brut 5.036–6.000 lei) / lună, la gradația 0.', $h, 'the estimate as a note');
     assert_not_contains('Salariu estimat', $h, 'no estimate box');
     assert_not_contains('Cum a fost calculat', $h, 'no estimate details');
     $sal_at = strpos($h, 'data-pay-stated');

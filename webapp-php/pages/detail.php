@@ -501,12 +501,14 @@ require __DIR__ . '/../inc/header.php';
       // BETA-V5: who can apply and how (temporary vacancy, norm, end date, channels…) is in the terms too.
       $terms = posting_contract_terms($v3c);
 
-      // Estimated pay from the 2026 draft salary grid. Derived, never scraped: 44 of 9,757
-      // postings state a salary in the text. The law is an unadopted draft, so the card never
-      // shows a bare number — the range, its legal status and the rows it came from are all
+      // Estimated pay: the law in force, the declared pay or, as a last resort, the draft law. Derived,
+      // never scraped: few postings state a salary in the text. A figure is never a bare number — the range, its legal status and the rows it came from are all
       // part of the claim, and "cum a fost calculat" is open to anyone who wants to check it.
       $sal = ($p['sal_json'] ?? null) ? (json_decode($p['sal_json'], true) ?: []) : [];
       $show_sal = !empty($sal['lei_min']);
+      // SALARY-LABELS-LIMITS: the figure of the draft law is a last resort; one under the law in force gets a side note.
+      $sbaza = sal_baza($p);
+      $draft_note = $sbaza === 'lege_in_vigoare' ? sal_draft_note($sal) : '';
       // ADR 0008 rule 9: the figure comes from the asset declarations; the text follows docs/specs/2026-11-20-salary-declared-explainer.md.
       $decl = declared_view($sal, (string)($p['employer_name'] ?? ''));
       // No figure at all (no stated pay, no estimate): the page says so, and why (UX salary-net).
@@ -558,8 +560,13 @@ require __DIR__ . '/../inc/header.php';
                 $_g = number_format($_lmin, 0, ',', '.') . ($_lmax > $_lmin ? '–' . number_format($_lmax, 0, ',', '.') : ''); ?>
             <?php if ($decl): ?>
             <p class="mt-1 text-xs text-ink-muted" data-pay-law>După declarațiile de avere: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună.</p>
+            <?php elseif ($sbaza === 'proiect'): ?>
+            <p class="mt-1 text-xs text-ink-muted" data-pay-law data-pay-project-figure>Estimare aproximativă, după proiectul de lege: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0. <?= e(SAL_PROJECT_NOTE) ?></p>
             <?php else: ?>
-            <p class="mt-1 text-xs text-ink-muted" data-pay-law>Conform legii salarizării (propunere): <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0.</p>
+            <p class="mt-1 text-xs text-ink-muted" data-pay-law>Estimare după Legea 153/2017: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0.</p>
+            <?php endif; ?>
+            <?php if ($draft_note !== ''): ?>
+            <p class="mt-0.5 text-xs text-ink-muted" data-pay-draft-note><a href="/estimator-salariu/" class="underline hover:text-gov"><?= e($draft_note) ?></a></p>
             <?php endif; ?>
             <?php endif; ?>
           </div>
@@ -570,7 +577,7 @@ require __DIR__ . '/../inc/header.php';
         <section class="py-2">
           <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
-              <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu estimat</h2>
+              <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink"><?= $sbaza === 'proiect' ? 'Estimare aproximativă' : 'Salariu estimat' ?></h2>
               <?php /* Net first: the main figure. The gross range is one smaller line below. */ ?>
               <?php if ($decl): /* The median is the main figure; the band p25-p75 is the line below. No "la gradația 0". */ ?>
               <p class="text-lg font-semibold text-ink" data-pay-net>≈ <?= e($decl['estimare']) ?> lei net
@@ -588,6 +595,12 @@ require __DIR__ . '/../inc/header.php';
             <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= (int)$sal['lei_min'] === (int)$sal['lei_max']
                 ? number_format((int)$sal['lei_min'], 0, ',', '.') : number_format((int)$sal['lei_min'], 0, ',', '.') . '–' . number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei / lună, la gradația 0</p>
               <?php endif; ?>
+            <?php if ($sbaza === 'proiect'): ?>
+            <p class="mt-0.5 text-xs text-ink-muted" data-pay-project-figure><?= e(SAL_PROJECT_NOTE) ?></p>
+            <?php endif; ?>
+            <?php if ($draft_note !== ''): ?>
+            <p class="mt-0.5 text-xs text-ink-muted" data-pay-draft-note><a href="/estimator-salariu/" class="underline hover:text-gov"><?= e($draft_note) ?></a></p>
+            <?php endif; ?>
             <?php if ($pl = pay_level($p)): ?>
             <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
               <span><?= e($pl['text']) ?></span></p>
@@ -633,6 +646,9 @@ require __DIR__ . '/../inc/header.php';
                     <?php endforeach; ?>
                   </ul>
                   <?php endif; ?>
+                  <?php if (($sal['coef_min'] ?? null) === null): /* Law figure: the pay comes from the table of the law, there is no coefficient. */ ?>
+                  <p class="mb-2 text-xs text-ink-muted" data-pay-law-basis>Salariul de bază din tabelul Legii 153/2017, la gradația <?= (int)$sal['gradatie'] ?>.</p>
+                  <?php else: ?>
                   <p class="mb-2 font-mono text-xs text-ink-muted">
                     coeficient
                     <?= e(rtrim(rtrim(number_format((float)$sal['coef_min'], 4, ',', '.'), '0'), ',')) ?><?php
@@ -640,6 +656,7 @@ require __DIR__ . '/../inc/header.php';
                     × valoare de referință <?= number_format((float)$sal['valoare_referinta'], 0, ',', '.') ?> lei
                     × gradația <?= (int)$sal['gradatie'] ?>
                   </p>
+                  <?php endif; ?>
                   <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                     <?php if (!empty($sal['ocupatie'])): ?>
                       <dt class="text-ink-muted">Ocupație</dt>

@@ -232,6 +232,12 @@ CREATE TABLE job_postings (
     sal_max                 REAL,
     sal_confidence          TEXT NOT NULL DEFAULT '',
     sal_variant             TEXT NOT NULL DEFAULT '',
+    -- SALARY-LABELS-LIMITS: the baseline of the top-level figure (lege_in_vigoare, proiect or
+    -- declaratii; '' for an old row, which counts as proiect) and the draft figure, kept
+    -- apart so that the pages can label a last-resort figure and show the draft as a note.
+    sal_baza                TEXT NOT NULL DEFAULT '',
+    sal_draft_min           REAL,
+    sal_draft_max           REAL,
     sal_json                TEXT,
     -- Prompt v4 scalars (empty until llm-schema.py --prompt-version v4 runs).
     v4_funding_source       TEXT NOT NULL DEFAULT '',
@@ -734,7 +740,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             inferred.get("studies_required"),
             *_stated_salary(inferred),
             r["occ_canonical"], r["occ_cor_code"], r["occ_isco_group"], r["occ_confidence"],
-            est["min"], est["max"], est["confidence"], est["variant"], r["salary_estimate"],
+            est["min"], est["max"], est["confidence"], est["variant"], est["baza"],
+            est["draft_min"], est["draft_max"], r["salary_estimate"],
             v4["funding_source"], v4["funding_programme"],
             v4["employer_sector"], v4["parent_institution"], v4["application_deadline"],
             v5["recruitment_kind"], v5["internal_only"], v5["vacancies_total"], v5["fte"],
@@ -827,6 +834,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         export_salary_titles(con)
         export_salary_ins_context(con)
     export_declared_institutions(cur, con)
+    export_salary_limits(con)
     if active_only:
         export_archive(cur, con)
 
@@ -1247,6 +1255,64 @@ def export_salary_estimator(con: sqlite3.Connection, today=None) -> dict | None:
     return coverage
 
 
+SALARY_LIMITS_DDL = """
+DROP TABLE IF EXISTS salary_limits;
+-- The numbers of /despre/#ce-nu-stim (SALARY-LABELS-LIMITS): the coverage of the estimate and the
+-- median gap between the draft figure and the law in force. Computed here, from this file, so the
+-- page never types a number. key -> JSON.
+CREATE TABLE salary_limits (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+) WITHOUT ROWID;
+"""
+
+
+def salary_limits(rows) -> dict:
+    """The coverage counts and the median gap, from `(baza, sal_min, sal_draft_min, stated, project_hire)` rows.
+
+    `stated` is 1 when the posting states a pay (a project-hired post states one only if its pay is
+    read). The groups follow the order of ADR 0008 rule 4 and do not overlap: stated pay, declared pay,
+    law in force, draft figure, none. An empty `baza` with a figure counts as the draft. A project-hired
+    post never takes a grid figure. `gap_pct` is the median of draft / law - 1, in whole percent, over
+    the postings that have a law figure and a draft figure; None when there are none.
+    """
+    out = {"N": 0, "A": 0, "Dc": 0, "L": 0, "D": 0, "F": 0}
+    gaps = []
+    for baza, lo, draft, stated, hire in rows:
+        out["N"] += 1
+        if stated:
+            out["A"] += 1
+        elif hire or not lo or lo <= 0:
+            out["F"] += 1
+        elif baza == "declaratii":
+            out["Dc"] += 1
+        elif baza == "lege_in_vigoare":
+            out["L"] += 1
+        else:
+            out["D"] += 1
+        if not hire and baza == "lege_in_vigoare" and lo and lo > 0 and draft and draft > 0:
+            gaps.append(draft / lo - 1)
+    gaps.sort()
+    mid = len(gaps) // 2
+    median = None if not gaps else (gaps[mid] if len(gaps) % 2 else (gaps[mid - 1] + gaps[mid]) / 2)
+    out["gap_pct"] = None if median is None else round(median * 100)
+    out["gap_n"] = len(gaps)
+    return out
+
+
+def export_salary_limits(con: sqlite3.Connection) -> None:
+    print("Exporting the salary limits...", end=" ", flush=True)
+    con.executescript(SALARY_LIMITS_DDL)
+    rows = con.execute("""SELECT sal_baza, sal_min, sal_draft_min,
+               CASE WHEN COALESCE(project_hire, 0) = 1 THEN COALESCE(proj_pay_amount, 0) > 0
+                    ELSE COALESCE(inf_salary_min, 0) > 0 END, COALESCE(project_hire, 0)
+        FROM job_postings""").fetchall()
+    numbers = salary_limits(rows)
+    con.executemany("INSERT INTO salary_limits VALUES (?,?)",
+                    [(k, json.dumps(v)) for k, v in numbers.items()])
+    print(f"N={numbers['N']}, gap {numbers['gap_pct']}% over {numbers['gap_n']}")
+
+
 SALARY_TITLE_DDL = """
 DROP TABLE IF EXISTS salary_title;
 -- The title shortcut of /estimator-salariu/: a job title of the postings in this file, the
@@ -1605,7 +1671,8 @@ def _salary_columns(salary_json_text) -> dict:
     Empty until `estimate-salaries.py` has run, so the salary facet simply stays
     hidden rather than half-populated.
     """
-    empty = {"min": None, "max": None, "confidence": "", "variant": ""}
+    empty = {"min": None, "max": None, "confidence": "", "variant": "",
+             "baza": "", "draft_min": None, "draft_max": None}
     if not salary_json_text:
         return empty
     try:
@@ -1614,9 +1681,13 @@ def _salary_columns(salary_json_text) -> dict:
         return empty
     if not isinstance(est, dict):
         return empty
+    baza = est.get("baza") or ""
+    # The draft figure: the `proiect` block, or the top level when the draft is the primary figure.
+    draft = est.get("proiect") if isinstance(est.get("proiect"), dict) else (est if baza in ("", "proiect") else {})
     return {
         "min": est.get("lei_min"), "max": est.get("lei_max"),
         "confidence": est.get("incredere") or "", "variant": est.get("varianta") or "",
+        "baza": baza, "draft_min": draft.get("lei_min"), "draft_max": draft.get("lei_max"),
     }
 
 
@@ -1884,7 +1955,8 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         inf_experience_years, inf_studies_required,
         inf_salary_min, inf_salary_max,
         occ_canonical, occ_cor_code, occ_isco_group, occ_confidence,
-        sal_min, sal_max, sal_confidence, sal_variant, sal_json,
+        sal_min, sal_max, sal_confidence, sal_variant,
+        sal_baza, sal_draft_min, sal_draft_max, sal_json,
         v4_funding_source, v4_funding_programme,
         v4_employer_sector, v4_parent_institution, v4_application_deadline,
         v5_recruitment_kind, v5_internal_only, v5_vacancies_total, v5_fte,

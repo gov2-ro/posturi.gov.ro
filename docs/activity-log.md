@@ -2,6 +2,24 @@
 
 ## 2026
 
+### 2026-11-22 — ANOMALY-SURVEY: VPS counts on the live export (VPS session, reviewed by Opus)
+
+**Done**
+- The VPS session ran `ops/anomaly-survey.py` at `f3a893d` with default thresholds and `--index-csv data/posturi_gov_ro.csv`. Export: `webapp-php/posturi.sqlite`, built 2026-11-22T17:13Z, code `e01d693`, 2,983 postings. No check reports `unavailable`. Files on the VPS: `/tmp/anomaly-survey.{json,csv,out}`.
+- Counts (count / denominator): R01 13/1712 · R02 0/1220 · R03 0/1220 · R04 0/36 · R05 3/1466 · R06 0/2898 · R07 11/2898 · R08 26/2983 · R09a 0/80 · R09b 1/70 · R09c 2/70 · R10 2/80 · R11 3/1220 · R12 33/78 · R13 3/819 · R14 2/1443 · R15 1/58 · R16 9/2881 · R17 4/2383 · R18 0/2131 (context) · R19 5/2982 · R20 45/4635 · E01 1216/2887 · E02 1/2887 · E03 63/2983 · E04 5/2983 · E05 8/3694 · E06 27/33 · E07 5/2043 · E08 5/1220.
+
+**Hard**
+- The live export holds 2,983 postings; the September copy holds 9,756 (it includes old postings). The counts are not directly comparable.
+- R06 (0-day deadline) is **0** on the live export, against 313 on the September copy. The 10-of-10 parser artifact on old pages does not occur in the current data. The cause of the change is not traced (assumed: a later parser or extraction change).
+- R07 (deadline before publication, 11): 4 sampled hits have an extracted `apply_deadline` that is stale or a year off, while the card `Termen` (`expires_at`) is plausible. The defect is in extraction, not in the posting.
+- R08 (`short_deadline`, 26): the 3 sampled hits have an extracted deadline 7-17 days out and `expires_at` 3-5 weeks later. The two dates disagree; not checked against the posting text.
+- E06 (declared pay against the grid, 27/33): the check fires on any declared range wider than the grid row (for example declared 4325-5939 with seniority, grid 4325-4428). This is a check design defect, not an anomaly.
+- E03 (repost chain, 63): mixed. Some pairs are two parallel posts published the same day, not a repost.
+- E05 (narrow requirements, 8): not opened; assumed weak (generic high-experience or many-skills roles).
+- E01 (under 10 working days, 1216/2887 = 42%): a distribution, not a list of breaches. The window runs from the posturi.gov.ro publication date, which can be later than the employer's own announcement (assumed, not measured).
+
+---
+
 ### 2026-11-22 — ANOMALY-SURVEY Step 1: survey script `ops/anomaly-survey.py` (Sonnet, from the Opus brief)
 
 **Done**

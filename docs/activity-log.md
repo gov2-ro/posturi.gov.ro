@@ -2,6 +2,29 @@
 
 ## 2026
 
+### 2026-11-22 — ANOMALY-SURVEY Step 1: survey script `ops/anomaly-survey.py` (Sonnet, from the Opus brief)
+
+**Done**
+- Wrote `ops/anomaly-survey.py` (read-only, standard library). It runs 29 checks: brief rows 1-20 (`R01`-`R20`, row 9 split in `R09a/b/c`, row 18 is context only) and the 8 added checks (`E01`-`E08`). Output: one JSON report (count, denominator, share, 5 sample URLs, notes, extra) and one CSV `posting_id, check, value, peer_value`. A check with a missing column or table reports `unavailable` and lists the gap.
+- `_norm_title` comes from `infer_postings.py` by parsing its source (no Django needed, no copy). Holidays come from `core-assets` `ro-holidays.csv` (2026, 2027 only); other years use fixed dates plus a computed Orthodox Easter (agrees with the CSV for 2026).
+- 32 tests in `webapp/tests/test_anomaly_survey.py`, one per check. All pass.
+- Run on `tmp/261118/grid153/posturi-after2.sqlite` (9,756 postings) in 1.6 s. Counts are in the brief report, not repeated here.
+- Row 6 verified on 10 pages: **10 of 10 are a parser artifact** (see Decided).
+- Legal minimum, contract staff: HG 1336/2022 art. 34 (consolidated text of 26.03.2025): 10 working days from the announcement for a vacant post, 5 for a temporary vacant post.
+
+**Hard**
+- Measured on the September copy, so the v5 columns are empty. `E04` (edit after publication) needs the `updates` column. The export does not hold it. The script takes `--index-csv data/posturi_gov_ro.csv` for that check. Result: 41 postings with a title change, 2,205 with an `expira_in` change. `expira_in` is the announcement expiry, so most of these are extensions, not edits of the apply deadline.
+- The export has no field for "vacant" against "temporary vacant" post. `E01` therefore flags contract postings under 10 working days, and reports the 5-day count in `extra`.
+- Brief rows 5, 6, 11, 16, 17 differ from the brief baseline by more than 20%. The brief gives no query for these. See the report to the owner for the cause of each.
+
+**Decided**
+- Row 6 verdict: the 0-day deadline is a parser artifact. In all 10 sampled pages (local `data/anunturi/`), the calendar row is a window, for example `depunerea dosarelor de concurs: 25.05.2026 – 08.06.2026`. `data_limita_depunere` holds the first day (the publication day), not the last day. The cause is in `parse-anunturi.py`: the window end is not taken for these row shapes. The fix belongs to Step 2 (class A, parser). Not changed here.
+- The civil-servant minimum stays a parameter (`--min-wd-civil-servant`, no default). Search results mention 20 days (HG 611/2008 art. 49, Cod administrativ art. 465); the legal text was not read. Unconfirmed.
+- The minimum wage for `E06` is a parameter (`--min-wage-gross`, default 4050, unconfirmed).
+- Rows 6-7 and the working-day checks use `apply_deadline` with `deadline_source` in `anunt`/`concurs` only. The `expirare` source is the competition end, not a deadline.
+
+---
+
 ### 2026-11-22 — SALARY-ANEXA-VI built after the owner decisions (Sonnet, from the Opus brief)
 
 **Done**

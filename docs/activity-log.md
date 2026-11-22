@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-11-23 — ANOMALY-PUBLIC phase 1 live: admin login on the shared host (Opus)
+
+**Done**
+- Code deploy of `407db39` from the Mac. `/admin/anomalii/` asks for a login and opens after it (owner, in the browser). The page says „Acest export nu conține încă semnale”: the live export (2026-11-22 23:34) predates the survey step. The next VPS export fills the tables.
+
+**Hard**
+- No login prompt at first: the PHP guard answered 403. On the host, Apache's own 401 error document goes through the rewrite to `index.php`, so the guard replaced the 401, and a browser prompts only on 401. Measured with curl: no login → 403 with a `WWW-Authenticate` header; a wrong login → 500. Fix: the guard answers 401 with `WWW-Authenticate`. A local Apache 2.4.71 did not show this, because it has no such error-document routing.
+- The 500 on a wrong login: Apache runs as another user and cannot read a `700` directory or a `600` file. The first instructions (Opus) gave those modes. The password file moved to `~/.htpasswds/posturi.gov2.ro/` (`711`/`644`). It does not go in `~/posturi-private`, which holds the alert subscriptions and stays `700`.
+
+**Decided**
+- Separate directory for the password file, not wider modes on `~/posturi-private`. Cost of the alternative: other accounts on the shared host could enter the directory with the subscriptions database.
+
+---
+
 ### 2026-11-23 — ANOMALY-PUBLIC phase 1: table, admin page, public page (Sonnet, from the Opus brief)
 
 **Done**

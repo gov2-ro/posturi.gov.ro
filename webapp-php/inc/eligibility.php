@@ -108,15 +108,20 @@ function eligibility_evidence_state(?array $row): array {
  * @return list<array<string,mixed>>
  */
 function eligibility_roles(PDO $pdo, int $posting_id, array $schema, array $evidence): array {
-    try {
-        $st = $pdo->prepare('SELECT ordinal, decomposed, title, study_level, isced_fields, exp_years,
-                                    exp_in_specialty, exp_none_required, role_format
-                             FROM posting_roles WHERE posting_id = ? ORDER BY ordinal');
-        $st->execute([$posting_id]);
-        $rows = $st->fetchAll();
-    } catch (PDOException $e) {
-        return [];
+    // `study_level_source` (DATA-STUDIES-NOT) is newer than the table: an older export lacks it.
+    $rows = null;
+    foreach (['study_level_source', 'NULL AS study_level_source'] as $src_col) {
+        try {
+            $st = $pdo->prepare("SELECT ordinal, decomposed, title, study_level, $src_col, isced_fields, exp_years,
+                                        exp_in_specialty, exp_none_required, role_format
+                                 FROM posting_roles WHERE posting_id = ? ORDER BY ordinal");
+            $st->execute([$posting_id]);
+            $rows = $st->fetchAll();
+            break;
+        } catch (PDOException $e) {
+        }
     }
+    if ($rows === null) return [];
     if (!$rows) return [];
     foreach ($rows as $r) {
         if ((int)($r['role_format'] ?? 0) < 1) return [];       // a stand-in, not a role
@@ -139,6 +144,8 @@ function eligibility_roles(PDO $pdo, int $posting_id, array $schema, array $evid
 
         $level = (string)($r['study_level'] ?? '');
         $level = isset(ELIGIBILITY_STUDY_LEVELS[$level]) ? $level : null;
+        // A level inferred from the occupation is not a requirement that the posting states.
+        if (($r['study_level_source'] ?? '') === 'inferat-ocupatie') $level = null;
 
         $edu_ev  = eligibility_evidence_state($by['education'][0] ?? null);
         $exp_ev  = eligibility_evidence_state($by['experience'][0] ?? null);

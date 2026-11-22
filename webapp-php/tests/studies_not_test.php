@@ -107,5 +107,17 @@ run_suite('page: the chip and the control', function () use ($base) {
     assert_contains('Fără doctorat', $html, 'the doctorat chip text');
 });
 
+run_suite('eligibility: a level inferred from the occupation is not a stated requirement', function () use ($pdo) {
+    require_once __DIR__ . '/../inc/eligibility.php';
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    // 1002 has an implicit role at licență; the schema holds nothing else comparable.
+    $stated = eligibility_roles($pdo, 1002, [], []);
+    assert_same('licenta', $stated[0]['study_level'] ?? null, 'a stated level is compared');
+    $pdo->exec("UPDATE posting_roles SET study_level_source = 'inferat-ocupatie' WHERE posting_id = 1002");
+    $inferred = eligibility_roles($pdo, 1002, [], []);
+    assert_same(null, $inferred[0]['study_level'], 'an inferred level is not compared');
+    $pdo->exec("UPDATE posting_roles SET study_level_source = NULL WHERE posting_id = 1002");
+});
+
 stop_fixture_server($srv, $db_path);
 finish();

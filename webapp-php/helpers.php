@@ -992,12 +992,13 @@ const STUDIES_LABELS = [
     'master'      => 'Master / Magistru',
     'licenta'     => 'Licență',
     'postliceala' => 'Postliceală',
+    'profesionala' => 'Profesională',
     'liceala'     => 'Liceală',
     'generala'    => 'Generală',
 ];
 
 /** Study levels from the lowest to the highest (DATA-STUDIES-NOT). */
-const STUDIES_ORDER = ['generala', 'liceala', 'postliceala', 'licenta', 'master', 'doctorat'];
+const STUDIES_ORDER = ['generala', 'profesionala', 'liceala', 'postliceala', 'licenta', 'master', 'doctorat'];
 
 /**
  * The levels that an exclusion of $level removes: the level and every level above it.

@@ -237,7 +237,8 @@ function shim_posting_roles(PDO $pdo, array $cols): void {
             NULL AS exp_in_specialty, NULL AS exp_none_required,
             {$c('v3_skills')} AS skills,
             {$c('v3_credentials')} AS credentials,
-            NULL AS seniority_hint, NULL AS source_revision, 0 AS role_format
+            NULL AS seniority_hint, NULL AS source_revision, 0 AS role_format,
+            NULL AS study_level_source
         FROM job_postings");
 }
 

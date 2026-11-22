@@ -175,6 +175,7 @@ CREATE TABLE posting_roles (
     seniority_hint    TEXT,
     source_revision   TEXT,
     role_format       INTEGER NOT NULL,
+    study_level_source TEXT,
     PRIMARY KEY (posting_id, ordinal)
 );
 CREATE INDEX idx_pr_eqf     ON posting_roles(eqf_level);

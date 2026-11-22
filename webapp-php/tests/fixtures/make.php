@@ -9,6 +9,7 @@
  *   php tests/fixtures/make.php /tmp/posturi-salary.sqlite salary       # postings with no salary figure (tests/browser/salary.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-declared.sqlite declared   # a declared-pay estimate on 1004 (tests/declared_pay_test.php, browser/declared_pay.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-project.sqlite project     # three project-hired posts, 1001-1003 (tests/project_pay_test.php, browser/project_pay.spec.js)
+ *   php tests/fixtures/make.php /tmp/posturi-limits.sqlite limits       # a draft note on 1001, a last-resort draft figure on 1003, the limits table (tests/salary_limits_test.php, browser/salary_limits.spec.js)
  * Used by the request tests and by the Playwright global setup.
  */
 require_once __DIR__ . '/build_db.php';
@@ -37,5 +38,10 @@ if (($argv[2] ?? '') === 'project') {
     $pdo = new PDO('sqlite:' . $path);
     fixture_seed_law_estimates($pdo);
     fixture_seed_project_posts($pdo);
+}
+if (($argv[2] ?? '') === 'limits') {
+    $pdo = new PDO('sqlite:' . $path);
+    fixture_seed_law_estimates($pdo);
+    fixture_seed_limits($pdo);
 }
 echo "$path\n";

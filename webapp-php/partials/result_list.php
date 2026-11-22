@@ -170,7 +170,7 @@ require __DIR__ . '/occupation_chips.php'; ?>
           </div>
 
           <?php /* One line of facts, no boxes (261016): pay first — 💰, the amount and,
-             for the draft-grid estimate, "(estimat)" (list_salary(): the stated
+             for an estimate, "(estimat)", "(după declarații de avere)" or "(estimare aproximativă)" (list_salary(): the stated
              salary wins) — then the distinctive tags (row_tags(): uncommon facts,
              rarest first; 2026-10-18), then the requirements behind the "auto" marker. In the table view the line dissolves
              (display: contents): pay becomes the Salariu column, the rest hides. */ ?>

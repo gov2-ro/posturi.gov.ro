@@ -97,10 +97,36 @@ require __DIR__ . '/../inc/header.php';
             Toate cifrele sunt estimări, nu calcule oficiale.
           </figcaption>
         </figure>
+        <?php $lim = salary_limits(); $nf = static fn(int $n): string => number_format($n, 0, ',', '.'); ?>
         <p>
-          <strong>Proiectul de lege.</strong> Un proiect de lege din iulie 2026 propune alte salarii. Legea
-          nu este adoptată. <a href="/estimator-salariu/" class="text-gov hover:underline">Estimatorul de salariu</a> arată și cifra după proiect.
+          <strong>Proiectul de lege.</strong> Un proiect de lege din iulie 2026 propune alte salarii. Proiectul nu
+          este adoptat și poate să nu fie adoptat niciodată. Site-ul folosește cifra din proiect numai în două cazuri.
+          Primul: când legea în vigoare nu are un rând pentru funcție. Atunci cifra din proiect ține anunțul în
+          filtrul „Salariu” și apare ca „estimare aproximativă”. Al doilea: pe pagina anunțului, ca notă.<?php if ($lim && $lim['gap_pct'] !== null): ?>
+          Acolo unde există ambele cifre, cifra din proiect este în medie cu <span data-limits-gap><?= (int)$lim['gap_pct'] ?></span>% mai mare.<?php endif; ?>
         </p>
+        <h3 id="ce-nu-stim" tabindex="-1" class="scroll-mt-4 focus:outline-none">Ce nu putem ști</h3>
+        <p>
+          Unele lucruri nu apar în nicio sursă publică pentru un anunț. De aceea estimarea nu le include:
+        </p>
+        <ul>
+          <li><strong>Sporurile.</strong> Angajatorul le acordă după regulamentul lui și după condițiile locului de muncă. Legea limitează totalul sporurilor la 30% pentru toată instituția, nu pentru o persoană.</li>
+          <li><strong>Salariul stabilit de consiliul local.</strong> În primării și în serviciile lor, consiliul stabilește salariul. Legea dă numai plafonul. De aceea site-ul arată un interval.</li>
+          <li><strong>Salariul colegilor.</strong> Un angajat nou poate primi salariul colegilor care au aceeași funcție. Unele instituții plătesc peste tabelul legii.</li>
+          <li><strong>Persoana angajată.</strong> Vechimea, persoanele în întreținere și scutirile de impozit schimbă salariul. Site-ul calculează la gradația 0, fără persoane în întreținere. <a href="/estimator-salariu/" class="text-gov hover:underline">Estimatorul de salariu</a> are o opțiune pentru vechime.</li>
+          <li><strong>Armata, poliția și serviciile de informații.</strong> Instituția stabilește coeficientul fiecărei funcții, între limitele legii. Multe dintre aceste ordine nu sunt publice.</li>
+          <li><strong>Angajatorii care nu aplică Legea 153/2017.</strong> Companiile de stat, BNR și ASF au alte reguli. Pentru posturile dintr-un proiect, cifra este a funcției celei mai apropiate din grilă.</li>
+          <li><strong>Potrivirea titlului.</strong> Site-ul alege funcția din grilă după titlul anunțului. Un titlu general, de exemplu „Referent”, poate corespunde mai multor funcții.</li>
+        </ul>
+        <?php if ($lim): ?>
+        <p data-limits-coverage>
+          <strong>Acoperirea.</strong> Din <?= $nf($lim['N']) ?> anunțuri, <?= $nf($lim['A']) ?> au salariul anunțat,
+          <?= $nf($lim['Dc']) ?> au salariul din declarațiile de avere ale colegilor, <?= $nf($lim['L']) ?> au o estimare
+          după legea în vigoare, <?= $nf($lim['D']) ?> au o estimare aproximativă după proiect, iar <?= $nf($lim['F']) ?>
+          nu au nicio estimare. Cifra din declarații este salariul net declarat de colegii de la același angajator, pe
+          aceeași funcție, adus la nivelul anului 2026.
+        </p>
+        <?php endif; ?>
         <p>
           <strong>Sursele.</strong> Site-ul a citit textul legii la 18 noiembrie 2026.
         </p>

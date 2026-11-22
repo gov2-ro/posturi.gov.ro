@@ -124,6 +124,9 @@ CREATE TABLE job_postings (
     sal_max                 REAL,
     sal_confidence          TEXT NOT NULL DEFAULT '',
     sal_variant             TEXT NOT NULL DEFAULT '',
+    sal_baza                TEXT NOT NULL DEFAULT '',
+    sal_draft_min           REAL,
+    sal_draft_max           REAL,
     sal_json                TEXT,
     v4_funding_source       TEXT NOT NULL DEFAULT '',
     v4_funding_programme    TEXT NOT NULL DEFAULT '',
@@ -284,7 +287,7 @@ SQL);
         'v3_contract_duration','v3_schedule','v3_hours_per_week','v3_shift_work','v3_remote_mode',
         'v3_seniority_hint','v3_bibliography','inf_salary_min','inf_salary_max',
         'occ_canonical','occ_cor_code','occ_isco_group','occ_confidence',
-        'sal_min','sal_max','sal_confidence','sal_variant','sal_json',
+        'sal_min','sal_max','sal_confidence','sal_variant','sal_baza','sal_draft_min','sal_draft_max','sal_json',
         'v4_funding_source','v4_funding_programme','v4_employer_sector','v4_parent_institution',
         'v4_application_deadline','apply_deadline','deadline_source','application_status'];
     $ph = implode(', ', array_fill(0, count($columns), '?'));
@@ -318,7 +321,7 @@ SQL);
         'inferred' => '{}', 'inf_anomaly_flags' => '[]', 'inf_remote_eligible' => 0,
         'v3_isced_fields' => '[]', 'v3_study_labels' => '[]', 'v3_skills' => '[]', 'v3_languages' => '[]',
         'v3_credentials' => '[]', 'v3_policy_domains' => '[]', 'v3_exam_stages' => '[]',
-        'v3_bibliography' => '[]', 'sal_confidence' => '', 'sal_variant' => '',
+        'v3_bibliography' => '[]', 'sal_confidence' => '', 'sal_variant' => '', 'sal_baza' => 'lege_in_vigoare',
         'v4_funding_source' => '', 'v4_funding_programme' => '', 'v4_employer_sector' => '',
         'v4_parent_institution' => '', 'v4_application_deadline' => null, 'deadline_source' => '',
         'application_status' => 'confirmed_open',
@@ -1133,6 +1136,34 @@ function fixture_seed_project_posts(PDO $db): array {
 }
 
 /**
+ * SALARY-LABELS-LIMITS: posting 1001 has a law estimate with a draft figure under `proiect` (14 % over the law:
+ * the side note of the detail page); posting 1003 has only a draft figure (`sal_baza` proiect: the last resort,
+ * labelled "estimare aproximativă"); the table `salary_limits` has fixed numbers for /despre/#ce-nu-stim.
+ * Call after fixture_seed_law_estimates(). Returns [law+note id, draft id].
+ */
+function fixture_seed_limits(PDO $db): array {
+    $get = $db->prepare("SELECT sal_json FROM posting_text WHERE posting_id = ?");
+    $set = $db->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = ?");
+    $get->execute([1001]);
+    $law = json_decode((string)$get->fetchColumn(), true);
+    $dlo = (int)round($law['lei_min'] * 1.14);
+    $dhi = (int)round($law['lei_max'] * 1.14);
+    $law['proiect'] = ['lei_min' => $dlo, 'lei_max' => $dhi, 'baza' => 'proiect', 'varianta' => '2026-07-17'];
+    $set->execute([json_encode($law, JSON_UNESCAPED_UNICODE), 1001]);
+    $db->exec("UPDATE job_postings SET sal_baza = 'lege_in_vigoare', sal_draft_min = $dlo, sal_draft_max = $dhi WHERE id = 1001");
+    $draft = ['lei_min' => 4100, 'lei_max' => 4100, 'coef_min' => 1.7, 'coef_max' => 1.7, 'gradatie' => 0, 'varianta' => '2026-07-17',
+        'valoare_referinta' => 2415, 'incredere' => 'exact', 'randuri' => [], 'avertismente' => [],
+        'disclaimer' => 'Estimare după proiectul de lege; nu este un calcul salarial oficial.', 'baza' => 'proiect', 'selector' => ['functie' => 'Consilier']];
+    $set->execute([json_encode($draft, JSON_UNESCAPED_UNICODE), 1003]);
+    $db->exec("UPDATE job_postings SET sal_min = 4100, sal_max = 4100, sal_variant = '2026-07-17', sal_baza = 'proiect',
+        sal_draft_min = 4100, sal_draft_max = 4100 WHERE id = 1003");
+    $db->exec("CREATE TABLE IF NOT EXISTS salary_limits (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID");
+    $ins = $db->prepare("INSERT OR REPLACE INTO salary_limits VALUES (?, ?)");
+    foreach (['N' => 1822, 'A' => 44, 'Dc' => 120, 'L' => 1200, 'D' => 112, 'F' => 346, 'gap_pct' => 14, 'gap_n' => 1000] as $k => $v) $ins->execute([$k, json_encode($v)]);
+    return [1001, 1003];
+}
+
+/**
  * One declared-pay estimate (ADR 0008 rule 9) on posting 1004 (Primăria Comunei Găiceana), in the format of
  * estimate-salaries.py (`baza` declaratii). Group: 37 declarants, "Consilier superior", p25/median/p75 of 2023 =
  * 5.200 / 5.950 / 6.600 net, factor 1,150. The gross figures are those of gross_for_net() (10.221, 11.697, 12.973).
@@ -1153,7 +1184,7 @@ function fixture_seed_declared_estimate(PDO $db): int {
         'selector' => ['functie' => 'Consilier', 'anexa' => 'VIII'],
     ], JSON_UNESCAPED_UNICODE);
     $db->exec("UPDATE job_postings SET title = 'Consilier, clasa I, grad profesional superior', sal_min = 10221, sal_max = 12973,
-        sal_variant = 'declaratii-2023', sal_confidence = 'interval' WHERE id = 1004");
+        sal_variant = 'declaratii-2023', sal_baza = 'declaratii', sal_confidence = 'interval' WHERE id = 1004");
     $st = $db->prepare("UPDATE posting_text SET sal_json = ? WHERE posting_id = 1004");
     $st->execute([$json]);
     fixture_seed_declared_institutions($db);

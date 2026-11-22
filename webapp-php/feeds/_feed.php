@@ -228,8 +228,9 @@ function feed_details(array $r, array $events): array {
     // 3. What the automatic extraction deduced.
     $x = [];
     // The salary first, as on the detail page: net, then gross. A salary stated in the posting (inf_salary_min > 0, as
-    // list_salary()) wins over the estimate; the estimate is then one line "Conform legii salarizării (propunere)",
-    // and the deduced conditions leave out "Salariu" (the stated lines have it).
+    // list_salary()) wins over the estimate; the estimate is then one line named by its baseline ("Estimare după Legea
+    // 153/2017", "Estimare după declarațiile de avere" or "Estimare aproximativă, după proiectul de lege"), and the
+    // deduced conditions leave out "Salariu" (the stated lines have it).
     $sal = ($r['sal_json'] ?? null) ? (json_decode((string)$r['sal_json'], true) ?: []) : [];
     $est_net = $est_gross = '';
     if (!empty($sal['lei_min'])) {
@@ -245,7 +246,11 @@ function feed_details(array $r, array $events): array {
         $est_net = '≈ ' . $dv['estimare'] . ' lei net';
         $est_gross = $dv['brut'] . ' lei brut';
     }
-    $est_tail = $dv ? ', după declarațiile de avere' : ', la gradația 0';
+    $sbaza = sal_baza($r);
+    $est_tail = $dv ? ', după declarațiile de avere' : ($sbaza === 'proiect' ? ', după proiectul de lege, la gradația 0' : ', la gradația 0');
+    $est_name = $dv ? 'Estimare după declarațiile de avere'
+        : ($sbaza === 'proiect' ? 'Estimare aproximativă, după proiectul de lege' : 'Estimare după Legea 153/2017');
+    $draft_note = $sbaza === 'lege_in_vigoare' ? sal_draft_note($sal) : '';
     $stated = (float)($r['inf_salary_min'] ?? 0) > 0 ? list_salary($r) : null;
     $proj = !empty($r['project_hire']);
     if ($proj) {
@@ -259,11 +264,14 @@ function feed_details(array $r, array $events): array {
     } elseif ($stated) {
         feed_put($x, 'Salariu anunțat', $stated['text'] . ' / lună');
         feed_put($x, 'Brut anunțat', $stated['gross'] . ' brut / lună, din anunț');
-        if ($est_net !== '') feed_put($x, 'Conform legii salarizării (propunere)', $est_net . ' (' . $est_gross . ') / lună' . $est_tail);
+        if ($est_net !== '') feed_put($x, $est_name, $est_net . ' (' . $est_gross . ') / lună' . $est_tail . ($sbaza === 'proiect' ? '. ' . SAL_PROJECT_NOTE : ''));
+        if ($draft_note !== '') feed_put($x, 'Proiectul noii legi', $draft_note);
     } elseif ($est_net !== '') {
-        feed_put($x, 'Salariu estimat', $est_net . ' / lună' . $est_tail);
-        feed_put($x, 'Brut estimat', $est_gross . ' / lună' . $est_tail);
-        feed_put($x, 'Despre estimare', (string)($sal['disclaimer'] ?? ''));
+        $proj_fig = $sbaza === 'proiect';
+        feed_put($x, $proj_fig ? 'Estimare aproximativă' : 'Salariu estimat', $est_net . ' / lună' . $est_tail);
+        feed_put($x, $proj_fig ? 'Brut, estimare aproximativă' : 'Brut estimat', $est_gross . ' / lună' . $est_tail);
+        feed_put($x, 'Despre estimare', trim((string)($sal['disclaimer'] ?? '') . ($proj_fig ? ' ' . SAL_PROJECT_NOTE : '')));
+        if ($draft_note !== '') feed_put($x, 'Proiectul noii legi', $draft_note);
     }
     $cond = posting_inferred_conditions($r);
     if ($stated || $proj) unset($cond['Salariu']);

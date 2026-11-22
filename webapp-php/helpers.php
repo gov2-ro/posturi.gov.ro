@@ -197,17 +197,56 @@ function usd_label(float $v): string {
 }
 
 /**
+ * The numbers of /despre/#ce-nu-stim: the coverage of the estimate and the median gap between the draft figure and
+ * the law in force. The export computes them (export-to-sqlite.py, `salary_limits`); null when the export has no
+ * such table or no postings, and the page then leaves the sentences that need them out.
+ *
+ * @return array{N: int, A: int, Dc: int, L: int, D: int, F: int, gap_pct: ?int}|null
+ */
+function salary_limits(): ?array {
+    try {
+        $rows = db()->query("SELECT key, value FROM salary_limits")->fetchAll(PDO::FETCH_KEY_PAIR);
+    } catch (Throwable $e) {
+        return null;
+    }
+    if (!$rows || (int)($rows['N'] ?? 0) <= 0) return null;
+    $out = [];
+    foreach (['N', 'A', 'Dc', 'L', 'D', 'F'] as $k) $out[$k] = (int)json_decode($rows[$k] ?? '0');
+    $gap = isset($rows['gap_pct']) ? json_decode($rows['gap_pct']) : null;
+    $out['gap_pct'] = is_numeric($gap) ? (int)$gap : null;
+    return $out;
+}
+
+/** The sentence of the tooltip and the note for a figure of the draft law (ADR 0008 rule 4(c)). */
+const SAL_PROJECT_NOTE = 'Legea în vigoare nu are un rând pentru această funcție. Cifra vine din proiectul noii legi a salarizării, care nu este adoptat.';
+
+/**
+ * The baseline of the estimate of a posting: `lege_in_vigoare`, `declaratii` or `proiect` (SALARY-LABELS-LIMITS).
+ * The export writes `sal_baza`. An export that predates the column, or an old row, has none: the variant tells
+ * (`declaratii-…`, `lege153-…`) and anything else is the draft figure (ADR 0008 rule 4(c)).
+ */
+function sal_baza(array $p): string {
+    $b = (string)($p['sal_baza'] ?? '');
+    if (in_array($b, ['lege_in_vigoare', 'declaratii', 'proiect'], true)) return $b;
+    $v = (string)($p['sal_variant'] ?? '');
+    if (str_starts_with($v, 'declaratii')) return 'declaratii';
+    if (str_starts_with($v, 'lege')) return 'lege_in_vigoare';
+    return 'proiect';
+}
+
+/**
  * The pay a result row shows (list, grid and table views): the salary the posting states
- * when it states one, else the estimate from the 2026 draft salary grid. The same
- * precedence as SALARY_EXPR, so a row and the salary filter never disagree. The text is the
- * net pay per month (net_label()); the gross range is in `gross` (the title of the figure, the
- * detail page). An estimate is always labelled as one. Null when there is no figure (or an old
- * export without the columns).
+ * when it states one, else the estimate. The same precedence as SALARY_EXPR, so a row and the
+ * salary filter never disagree. The text is the net pay per month (net_label()); the gross range
+ * is in `gross` (the title of the figure, the detail page). An estimate is always labelled as one.
+ * Null when there is no figure (or an old export without the columns).
  *
- * An estimate from the asset declarations (ADR 0008 rule 9; `sal_variant` starts with "declaratii") says so in
- * `kind`: "după declarații de avere"; any other estimate has no `kind` (the row says "estimat").
+ * An estimate from the asset declarations (ADR 0008 rule 9; sal_baza() = declaratii) says so in
+ * `kind`: "după declarații de avere". A figure of the draft law, the last resort (sal_baza() = proiect),
+ * has the `kind` "estimare aproximativă" and the tooltip SAL_PROJECT_NOTE; any other estimate has no `kind`
+ * (the row says "estimat").
  *
- * @return array{label: string, text: string, gross: string, estimated: bool, kind?: string}|null
+ * @return array{label: string, text: string, gross: string, estimated: bool, kind?: string, title?: string}|null
  */
 function list_salary(array $p): ?array {
     if (!empty($p['project_hire'])) {
@@ -227,10 +266,14 @@ function list_salary(array $p): ?array {
         $imax = $rawmax === null ? $imin : (int)round($rawmax);
         $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
         $gross = $imax > $imin ? $fmt($imin) . '–' . $fmt($imax) . ' lei' : $fmt($imin) . ' lei';
-        $declared = $estimated && str_starts_with((string)($p['sal_variant'] ?? ''), 'declaratii');
-        $row = ['label' => $declared ? 'Estimare după declarații de avere' : $label, 'text' => net_label((float)$min, $rawmax),
-                'gross' => $gross, 'estimated' => $estimated];
-        if ($declared) $row['kind'] = 'după declarații de avere';
+        $baza = $estimated ? sal_baza($p) : '';
+        $row = ['label' => $baza === 'declaratii' ? 'Estimare după declarații de avere' : ($baza === 'proiect' ? 'Estimare aproximativă' : $label),
+                'text' => net_label((float)$min, $rawmax), 'gross' => $gross, 'estimated' => $estimated];
+        if ($baza === 'declaratii') $row['kind'] = 'după declarații de avere';
+        if ($baza === 'proiect') {
+            $row['kind'] = 'estimare aproximativă';
+            $row['title'] = 'Estimare aproximativă (net lunar) · brut: ' . $gross . '. ' . SAL_PROJECT_NOTE;
+        }
         return $row;
     }
     return null;
@@ -365,6 +408,21 @@ const QUALITY_CHECKS = [
 
 /** Short regime word for a result row (261016: replaces the source's unreliable `categorie`). */
 const JOB_REGIME_SHORT = ['contractuala' => 'Contractual', 'publica' => 'Funcție publică', 'militara' => 'Funcție militară'];
+
+/**
+ * The side note of the detail page for a figure under the law in force (ADR 0008 rule 2): what the draft law
+ * would give. `$sal` is the decoded `sal_json`. '' when the figure is not under the law in force or there is no
+ * draft figure.
+ */
+function sal_draft_note(?array $sal): string {
+    $d = is_array($sal) ? ($sal['proiect'] ?? null) : null;
+    if (($sal['baza'] ?? '') !== 'lege_in_vigoare' || !is_array($d) || (float)($d['lei_min'] ?? 0) <= 0) return '';
+    $lo = (float)$d['lei_min'];
+    $hi = (float)($d['lei_max'] ?? $lo);
+    $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
+    $gross = $hi > $lo ? $fmt((int)round($lo)) . '–' . $fmt((int)round($hi)) : $fmt((int)round($lo));
+    return 'Dacă proiectul noii legi ar fi adoptat: ' . str_replace('≈ ', '~', net_label($lo, $hi)) . ' (brut ' . $gross . ' lei).';
+}
 
 /** "≈ 2.981 lei net" (or a range) for a gross min/max, '' when there is none. */
 function net_label(?float $min, ?float $max = null): string {
@@ -1235,7 +1293,8 @@ const PROJECT_MONTH_EXPR = "(CASE WHEN j.proj_pay_amount > 0
  * The pay figure the site filters and sorts on, in SQL.
  *
  * An announced salary wins where one exists, but only 44 of 9,757 postings
- * state one, so in practice this is the estimate from the 2026 draft grid.
+ * state one, so in practice this is the estimate: the law in force, else the declared pay,
+ * else the draft law (ADR 0008 rule 4).
  * Defined once because three call sites have to agree: build_filters(), the
  * facet counts in pages/list.php, and the landing shortcut.
  */

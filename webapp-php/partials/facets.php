@@ -221,7 +221,7 @@
         facet_group('Grupă ocupațională',  $cor_options,        'cor',        $cor_sel,     true,
                     'După Clasificarea Ocupațiilor din România (COR), dedusă din titlul postului. ▸ deschide subgrupele.');
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
-        // Estimated from the 2026 draft grid unless the posting states a salary.
+        // Estimated (law in force, declared pay or draft law) unless the posting states a salary.
         facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket, false,
                     'Salariul anunțat, altfel cel estimat după legea în vigoare (Legea 153/2017). Net lunar estimat, la gradația 0.');
         facet_group('Nivel de studii',     $studies_options,    'studies_level', $studies_lvls, false,

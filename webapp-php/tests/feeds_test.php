@@ -97,6 +97,7 @@ $insj->execute([3904, 'https://posturi.gov.ro/anunt/detalii-vechi', 'Promovare c
 $inst->execute([3904, json_encode($schema_v5, JSON_UNESCAPED_UNICODE), null]);
 $pdo->exec("INSERT INTO calendar_events (posting_id, eveniment, data, ora) VALUES
     (3904, 'Depunere dosare', '2026-12-01', NULL), (3904, 'Interviu', '2026-12-12', '09:00')");
+$pdo->exec("UPDATE job_postings SET sal_baza = 'lege_in_vigoare' WHERE id = 3903");   // SALARY-LABELS-LIMITS: the export writes it
 unset($pdo, $insj, $inst);
 
 $srv = start_fixture_server($db_path);
@@ -682,7 +683,7 @@ run_suite('item details: a stated salary comes first and wins over the estimate;
         $t = html_entity_decode(strip_tags((string)$h));
         assert_contains('Salariu anunțat: ≈ 2.819 lei net / lună', $t, "$fmt: stated, net first");
         assert_contains('Brut anunțat: 4.700 lei brut / lună, din anunț', $t, "$fmt: stated, the gross line");
-        assert_contains('Conform legii salarizării (propunere): ≈ 2.981–3.523 lei net (5.000–6.000 lei brut) / lună, la gradația 0', $t, "$fmt: the estimate as one line");
+        assert_contains('Estimare după Legea 153/2017: ≈ 2.981–3.523 lei net (5.000–6.000 lei brut) / lună, la gradația 0', $t, "$fmt: the estimate as one line");
         assert_true(strpos($t, 'Salariu anunțat') < strpos($t, 'Program'), "$fmt: the salary before the deduced conditions");
         foreach (['Salariu estimat', 'Brut estimat', 'Estimare orientativă', 'Salariu: 4700'] as $gone) assert_not_contains($gone, $t, "$fmt: no \"$gone\"");
     }

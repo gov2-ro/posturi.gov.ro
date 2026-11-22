@@ -611,7 +611,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         v5 = _v5_columns(r["schema_json"])
         est = _salary_columns(r["salary_estimate"])
         deadline = _apply_deadline(v4["application_deadline"],
-                                   r["data_limita_depunere"], r["expires_at"])
+                                   r["data_limita_depunere"], r["expires_at"], r["published_at"])
         text = (r["body_markdown"] or "") + "\n" + (r.get("attachment_text") or "")
         work_mode = classify.work_mode(text)
         funding_kind = classify.eu_funding(text) or (
@@ -925,7 +925,8 @@ def export_archive(cur, con: sqlite3.Connection) -> None:
             inferred = {}
         v4 = _v4_columns(r["schema_json"])
         est = _salary_columns(r["salary_estimate"])
-        deadline = _apply_deadline(v4["application_deadline"], r["data_limita_depunere"], r["expires_at"])
+        deadline = _apply_deadline(v4["application_deadline"], r["data_limita_depunere"], r["expires_at"],
+                                   r["published_at"])
         rows.append((
             r["id"], r["url"], r["title"] or "", r["employer_id"], r["employer_name"] or "",
             r["judet_name"], r["judet_slug"], r["locality"] or "",
@@ -1634,7 +1635,7 @@ def _local_date(value) -> str | None:
     return str(value)[:10]
 
 
-def _apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
+def _apply_deadline(v4_deadline, data_limita_depunere, expires_at, published_at=None) -> dict:
     """The last day anyone can apply, and where that date came from.
 
     Three sources, best first:
@@ -1643,18 +1644,37 @@ def _apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
       `anunt`     the deadline the scraper lifted off the posting card;
       `expirare`  no deadline known, so fall back to `expires_at`.
 
+    A candidate dated before the publication day (Bucharest date) is impossible
+    (DATA-DEADLINE-SANITY): the model read a stale or wrong-year date. The function
+    skips it and takes the next source. When every candidate is impossible it
+    returns no date. A skipped source is named in `rejected`; the key exists only
+    when a source was skipped. Without `published_at` nothing is checked.
+
     The fallback matters: v4 has not run over the corpus, and only 81 of 1,621
     active postings carry a scraped deadline. Falling back keeps the site no
     worse than it was, and every posting v4 reaches gets quietly more accurate.
     """
-    if v4_deadline:
-        # Already a plain ISO date string from the model, never an instant.
-        return {"date": str(v4_deadline)[:10], "source": "concurs"}
-    if data_limita_depunere:
-        return {"date": _local_date(data_limita_depunere), "source": "anunt"}
-    if expires_at:
-        return {"date": _local_date(expires_at), "source": "expirare"}
-    return {"date": None, "source": ""}
+    published = _local_date(published_at) if published_at else None
+    candidates = (
+        ("concurs", str(v4_deadline)[:10] if v4_deadline else None),
+        ("anunt", _local_date(data_limita_depunere) if data_limita_depunere else None),
+        ("expirare", _local_date(expires_at) if expires_at else None),
+    )
+    rejected = []
+    for source, day in candidates:
+        if not day:
+            continue
+        if published and day < published:
+            rejected.append(source)
+            continue
+        out = {"date": day, "source": source}
+        if rejected:
+            out["rejected"] = rejected
+        return out
+    out = {"date": None, "source": ""}
+    if rejected:
+        out["rejected"] = rejected
+    return out
 
 
 def _application_status(deadline: dict, today: str) -> str:

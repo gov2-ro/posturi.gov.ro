@@ -96,15 +96,33 @@ def local_date(value) -> str | None:
     return str(value)[:10]
 
 
-def apply_deadline(v4_deadline, data_limita_depunere, expires_at) -> dict:
-    """`{"date", "source"}` — best source first: `concurs`, `anunt`, `expirare`."""
-    if v4_deadline:
-        return {"date": str(v4_deadline)[:10], "source": "concurs"}
-    if data_limita_depunere:
-        return {"date": local_date(data_limita_depunere), "source": "anunt"}
-    if expires_at:
-        return {"date": local_date(expires_at), "source": "expirare"}
-    return {"date": None, "source": ""}
+def apply_deadline(v4_deadline, data_limita_depunere, expires_at, published_at=None) -> dict:
+    """`{"date", "source"}` — best source first: `concurs`, `anunt`, `expirare`.
+
+    A candidate dated before `published_at` (Bucharest date) is skipped; a skipped
+    source is listed in `rejected` (the key exists only then). See the export.
+    """
+    published = local_date(published_at) if published_at else None
+    candidates = (
+        ("concurs", str(v4_deadline)[:10] if v4_deadline else None),
+        ("anunt", local_date(data_limita_depunere) if data_limita_depunere else None),
+        ("expirare", local_date(expires_at) if expires_at else None),
+    )
+    rejected = []
+    for source, day in candidates:
+        if not day:
+            continue
+        if published and day < published:
+            rejected.append(source)
+            continue
+        out = {"date": day, "source": source}
+        if rejected:
+            out["rejected"] = rejected
+        return out
+    out = {"date": None, "source": ""}
+    if rejected:
+        out["rejected"] = rejected
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -255,7 +273,7 @@ def _deadline_evidence(calendar: dict, deadline: dict) -> str | None:
 def tracked_facts(posting: Mapping, schema: dict | None) -> dict:
     """The normalized, JSON-serializable facts one observation records.
 
-    `posting` carries `data_limita_depunere`, `expires_at`, `cancelled`,
+    `posting` carries `data_limita_depunere`, `expires_at`, `published_at`, `cancelled`,
     `detail_content_hash`, `schema_source_revision` and `inferred` (a dict; its
     `studies_required` / `experience_years` feed an undecomposed posting's single
     implicit role exactly as the export does). `schema` is the parsed `schema_json`.
@@ -266,7 +284,8 @@ def tracked_facts(posting: Mapping, schema: dict | None) -> dict:
     calendar = _calendar(schema) if valid else {}
 
     deadline = apply_deadline(calendar.get("application_deadline"),
-                              posting.get("data_limita_depunere"), posting.get("expires_at"))
+                              posting.get("data_limita_depunere"), posting.get("expires_at"),
+                              posting.get("published_at"))
     deadline_time = None
     if deadline["source"] == "concurs":
         t = calendar.get("application_deadline_time")

@@ -57,7 +57,7 @@ BATCH = 500
 _ADVISORY_LOCK_KEY = 20261010
 
 _POSTING_FIELDS = (
-    "id", "url", "expires_at", "cancelled", "detail_fetched_at", "detail_content_hash",
+    "id", "url", "published_at", "expires_at", "cancelled", "detail_fetched_at", "detail_content_hash",
     "data_limita_depunere", "inferred", "schema_json",
     "schema_provider", "schema_model", "schema_prompt_version",
     "schema_source_revision", "schema_extracted_at",

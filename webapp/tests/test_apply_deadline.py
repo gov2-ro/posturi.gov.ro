@@ -53,6 +53,38 @@ class TestSourcePrecedence:
         assert got["date"] == "2026-09-20"
 
 
+class TestImpossibleDeadline:
+    """DATA-DEADLINE-SANITY: a deadline before the publication day is a stale or
+    wrong-year date. Skip it and take the next source."""
+
+    PUB = date(2026, 10, 22)
+
+    def test_a_model_date_before_publication_falls_back_to_the_card(self, exp):
+        got = exp._apply_deadline("2025-11-13", "2026-11-01", "2026-11-23", self.PUB)
+        assert got == {"date": "2026-11-01", "source": "anunt", "rejected": ["concurs"]}
+
+    def test_both_before_publication_fall_back_to_expiry(self, exp):
+        got = exp._apply_deadline("2025-11-13", "2026-10-01", "2026-11-23", self.PUB)
+        assert got == {"date": "2026-11-23", "source": "expirare", "rejected": ["concurs", "anunt"]}
+
+    def test_all_before_publication_give_no_date(self, exp):
+        got = exp._apply_deadline("2025-11-13", "2026-10-01", "2026-10-10", self.PUB)
+        assert got == {"date": None, "source": "", "rejected": ["concurs", "anunt", "expirare"]}
+
+    def test_a_date_on_the_publication_day_is_kept(self, exp):
+        got = exp._apply_deadline("2026-10-22", None, None, self.PUB)
+        assert got == {"date": "2026-10-22", "source": "concurs"}
+
+    def test_the_publication_day_is_compared_as_a_date(self, exp):
+        """A card deadline at local midnight (21:00 UTC the day before) is that local day."""
+        stored = datetime(2026, 10, 21, 21, 0, tzinfo=timezone.utc)  # 2026-10-22 in Bucharest
+        got = exp._apply_deadline(None, stored, None, self.PUB)
+        assert got == {"date": "2026-10-22", "source": "anunt"}
+
+    def test_no_publication_date_means_no_check(self, exp):
+        assert exp._apply_deadline("2025-11-13", None, None, None)["source"] == "concurs"
+
+
 class TestTimezone:
     """`data_limita_depunere` is a timestamptz stored at local midnight, which
     is 21:00 UTC the previous day in summer. Any date derived from it depends on

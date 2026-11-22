@@ -120,9 +120,10 @@ class TestExportParity:
     CARD = [None, datetime(2026, 9, 23, 21, 0, tzinfo=timezone.utc),
             datetime(2026, 1, 15, 22, 0, tzinfo=timezone.utc), "2026-09-20 14:00:00+03", date(2026, 9, 20)]
     EXPIRY = [None, date(2026, 9, 28), date(2026, 10, 9)]
+    PUBLISHED = [None, date(2026, 9, 1), date(2026, 9, 20), date(2026, 9, 28), date(2026, 10, 5)]
 
     def test_apply_deadline_matches_the_export_on_every_combination(self, exp):
-        for args in itertools.product(self.V4, self.CARD, self.EXPIRY):
+        for args in itertools.product(self.V4, self.CARD, self.EXPIRY, self.PUBLISHED):
             assert pf.apply_deadline(*args) == exp._apply_deadline(*args), args
 
     def test_local_date_matches_the_export(self, exp):
@@ -131,14 +132,20 @@ class TestExportParity:
 
     def test_tracked_facts_deadline_matches_apply_deadline_fed_by_v4_columns(self, exp):
         schemas = [v4(), v4(calendar=None), v4(calendar={"application_deadline": None, "events": []}), None, {}]
-        for schema, card, expiry in itertools.product(schemas, self.CARD, self.EXPIRY):
-            p = posting(data_limita_depunere=card, expires_at=expiry)
+        for schema, card, expiry, pub in itertools.product(schemas, self.CARD, self.EXPIRY, self.PUBLISHED):
+            p = posting(data_limita_depunere=card, expires_at=expiry, published_at=pub)
             v4col = exp._v4_columns(json.dumps(schema) if schema is not None else None)
-            want = exp._apply_deadline(v4col["application_deadline"], card, expiry)
+            want = exp._apply_deadline(v4col["application_deadline"], card, expiry, pub)
             got = pf.tracked_facts(p, schema)
             # A schema that is empty is not an extraction: the v4 date is unavailable
             # (the export would have used it only if it existed, and {} has none).
-            assert (got["deadline"], got["deadline_source"]) == (want["date"], want["source"]), (schema, card, expiry)
+            assert (got["deadline"], got["deadline_source"]) == (want["date"], want["source"]), (schema, card, expiry, pub)
+
+    def test_tracked_facts_skips_a_deadline_before_publication(self):
+        p = posting(published_at=date(2026, 10, 22), data_limita_depunere=None, expires_at=date(2026, 11, 23))
+        cal = dict(CALENDAR, application_deadline="2025-11-13")
+        f = pf.tracked_facts(p, v4(calendar=cal))
+        assert (f["deadline"], f["deadline_source"]) == ("2026-11-23", "expirare")
 
     @pytest.mark.parametrize("schema", [
         None, {}, {"educationRequirements": "Studii superioare."},

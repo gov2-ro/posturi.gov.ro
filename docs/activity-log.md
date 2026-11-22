@@ -2,6 +2,23 @@
 
 ## 2026
 
+### 2026-11-22 — DATA-DEADLINE-SANITY: reject an apply deadline before the publication day (Sonnet, from the Opus brief)
+
+**Done**
+- `export-to-sqlite._apply_deadline` and `posting_facts.apply_deadline` take a fourth argument, `published_at`. A candidate dated before the publication day (Bucharest date) is skipped. The next source is taken: `concurs`, `anunt`, `expirare`. When every candidate is impossible, the date is `None`.
+- A skipped source is named in the returned dict (`rejected: ["concurs"]`). The key exists only when a source was skipped, so every old exact-dict test and the export schema stay unchanged.
+- Callers changed: `export-to-sqlite.py` (both calls, in `export()` and in the deadline-table export), `posting_facts.tracked_facts`, and `observe_postings._POSTING_FIELDS` (adds `published_at`, so `tracked_facts` can check it).
+- Tests: four brief cases and two more in `test_apply_deadline.py`; the equality test and the `tracked_facts` test in `test_posting_facts.py` now cover `published_at` (4 x 3 x 3 x 5 combinations); one `tracked_facts` case.
+- `short_deadline` (`infer_postings._infer_anomaly_flags`, not changed): it uses `data_limita_depunere` minus `published_at` in days and flags `delta < 7`. A negative delta is below 7, so a card deadline before the publication day is flagged `short_deadline`, not skipped. The flag does not read `apply_deadline`, so this change does not touch it.
+
+**Hard**
+- Full suite: 1720 passed, 2 failed. `test_e06_seniority_spread_not_a_hit` belongs to the parallel anomaly-survey work. `test_salary_facet_sql ... [pages/list.php]` finds no salary comparison in `list.php`; this change does not touch that file.
+
+**Decided**
+- `published_at` is optional (default `None` means no check), so a caller without it keeps the old behaviour. All production callers pass it.
+- Assumed: the effect on the 11 live postings (survey `R07`) is not measured locally. The local Postgres is a September copy; the VPS export measures it. After the next VPS export, run `ops/anomaly-survey.py --only R07,R08`; expect R07 = 0 for sources that have a later candidate.
+- A new observation is written by `observe_postings` for postings whose deadline changes. This is intended.
+
 ### 2026-11-22 — ANOMALY-SURVEY Step 1b: E03 and E06 fixed (Sonnet, from the Opus brief)
 
 **Done:** E06 now compares the declared minimum only: a hit is a minimum more than 20% below the grid minimum or more than 20% above the grid maximum. Ranges wider than the grid go to `extra.range_wider_than_grid_not_counted`. E03 counts a pair as a repost only when the gap is 14 to 90 days (new parameter `repost_min_days`). Closer pairs go to `extra.parallel_pairs_not_counted`. Tests: one fixture per rule; 34 pass.

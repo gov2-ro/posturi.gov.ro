@@ -225,7 +225,7 @@
         facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket, false,
                     'Salariul anunțat, altfel cel estimat după legea în vigoare (Legea 153/2017). Net lunar estimat, la gradația 0.');
         facet_group('Nivel de studii',     $studies_options,    'studies_level', $studies_lvls, false,
-                    'Nivelul cerut de anunț; nu stabilește dacă vă calificați.');
+                    'Nivelul cerut de anunț sau dedus din ocupație; nu stabilește dacă vă calificați.');
         facet_group('Domeniu de studii',   $isced_options,      'isced',      $isced_sel);
         facet_group('Experiență minimă',   $exp_options,        'exp_level',  $exp_levels, false,
                     $auto_help . ' Unele intervale includ anunțuri fără experiență precizată.');

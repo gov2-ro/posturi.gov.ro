@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-11-22 — SALARY-PIDS: no document fixes the pay per role (Sonnet, spike)
+
+**Done:** Read the PIDS/586/PO4/339395 selection procedure (Feb 2025), the project fact sheet, the launch press release and the general conditions guide (Mar 2023). Counted the PIDS postings on the local 9 Sep copy. Wrote [the audit](audits/2026-11-20-salary-pids.md), with the VPS SQL. Files stay in `tmp/261120/pids/` (not in git).
+
+**Measured (local):** 414 of 597 postings of the five occupations match `PIDS|servicii integrate`. 350 of the 414 already have a `lege_in_vigoare` figure. 64 have none (Manager proiect 18, Consilier școlar 28, Tehnician asistență socială 13, Asistent medical comunitar 4, Mediator sanitar 1). 7 postings name the project only in other words. The documents give one ceiling, 914,123.84 lei for each commune, for all salary packages.
+
+**Hard:** The Condiții specifice guide (AP4) is behind a Cloudflare block on adrcentru.ro. mfe.gov.ro did not come up in search. The VPS was not reachable from this session.
+
+**Decided (proposal, for Opus and the owner):** No PIDS `baza`: no public source gives a pay for a role. Organigram staff follow Legea 153/2017 (general guide, section 3.4). The alternative, a figure from the 70/80/90 lei net-per-hour ceiling, applies to project experts and would have no source for the team roles. **Assumed:** the local "no figure" count is an upper bound, because the local estimates predate the fixes of 20–22 Nov. The VPS count is pending.
+
 ### 2026-11-20 — SALARY-DECLARATII-PAGE: review of the build; every matching employer shows the section (Opus)
 
 **Done**

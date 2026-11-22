@@ -109,6 +109,84 @@ def norm(s) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", s)).strip()
 
 
+#: Anexa VI: military and police pay = post pay + rank pay (ADR 0008 rule 10). A post row is
+#: named "Funcţii corespunzătoare gradului de X"; X is the rank. These helpers read X.
+POST_PREFIX = re.compile(r"^\s*func[țţt]ii\s+corespunz[ăa]toare\s+gradului\s+de\s+", re.I)
+_PENITENCIARE = re.compile(r"(?:politie )?penitenciar\w*( debutant)?")
+#: A label that names a range of ranks: "agent - agent șef principal de poliție".
+RANK_RANGES = {"agent agent sef principal de politie": ("agent de politie", "agent sef principal de politie")}
+#: A draft label that has no name in the draft rank table. Each use carries a warning.
+RANK_ALIASES = {"plutonier adjutant sef": "plutonier adjutant principal"}
+RANK_UPDATE_ACT = "solda-grad-lege153-2026.csv"
+
+
+def post_names(label: str) -> list[str]:
+    """The names inside an Anexa VI label: prefix and bracket notes removed, "/" and ";" split.
+
+    "agent de poliţie/penitenciare debutant" gives "agent de poliţie debutant": the slash
+    alternative "penitenciare" is the same rank, and "debutant" belongs to both.
+    """
+    s = POST_PREFIX.sub("", re.sub(r"\([^)]*\)", " ", label or ""))
+    out: list[str] = []
+    for part in re.split(r"[;,]", s):
+        head, *alts = [x.strip() for x in part.split("/")]
+        names = [head]
+        for a in alts:
+            m = _PENITENCIARE.fullmatch(norm(a))
+            if m:
+                if m.group(1):
+                    names[-1] += " debutant"
+            elif norm(a) == "sef" and len(names[-1].split()) > 1:
+                names.append(names[-1].rsplit(None, 1)[0] + " " + a)   # "principal/șef"
+            elif a:
+                names.append(a)
+        out += names
+    fixed = []
+    for n in out:
+        n = re.sub(r"\bcls\.?(?=\s)", "clasa", n)               # "cls. I" is "clasa I"
+        n = re.sub(r"\bdc\b", "de", n)                           # a typo of the law text
+        if n.strip(" .-") and n not in fixed:
+            fixed.append(n.strip())
+    return fixed
+
+
+def _rank_key(name: str) -> str:
+    return re.sub(r" debutant$", "", norm(name))
+
+
+@dataclass(frozen=True)
+class Rank:
+    label: str
+    names: frozenset
+    value: float          # a coefficient (draft) or lei (law)
+
+
+class RankTable:
+    """The rank pay (soldă de grad) of one baseline, read from its CSV."""
+
+    def __init__(self, rows: list[Rank]):
+        self.rows = rows
+
+    def match(self, label: str) -> tuple[list[Rank], list[str]]:
+        """The ranks that a post label names, and the warnings. No prefix: no ranks."""
+        if not POST_PREFIX.match(label or ""):
+            return [], []
+        known = {k for r in self.rows for k in r.names}
+        keys, warns = [], []
+        for n in post_names(label):
+            k = _rank_key(n)
+            if k in RANK_RANGES:
+                keys += RANK_RANGES[k]
+            elif k not in known and k in RANK_ALIASES:
+                keys.append(RANK_ALIASES[k])
+                warns.append(f"Gradul „{n}” nu este în tabelul soldelor de grad; "
+                             f"am folosit „{RANK_ALIASES[k]}”.")
+            else:
+                keys.append(k)
+        found = [r for r in self.rows if r.names & set(keys)]
+        return found, (warns if found else [])
+
+
 @dataclass(frozen=True)
 class GridRow:
     version_id: str
@@ -175,9 +253,18 @@ class SalaryEstimate:
     randuri: list[str] = field(default_factory=list)
     avertismente: list[str] = field(default_factory=list)
     disclaimer: str = DISCLAIMER
+    #: Anexa VI only: the two parts of the pay (soldă de funcție, soldă de grad), lei.
+    lei_functie_min: int | None = None
+    lei_functie_max: int | None = None
+    lei_grad_min: int | None = None
+    lei_grad_max: int | None = None
 
     def as_dict(self) -> dict:
-        return {
+        extra = {}
+        if self.lei_functie_min is not None:
+            extra = {"lei_functie_min": self.lei_functie_min, "lei_functie_max": self.lei_functie_max,
+                     "lei_grad_min": self.lei_grad_min, "lei_grad_max": self.lei_grad_max}
+        return extra | {
             "lei_min": self.lei_min, "lei_max": self.lei_max,
             "coef_min": self.coef_min, "coef_max": self.coef_max,
             "gradatie": self.gradatie, "varianta": self.varianta,
@@ -192,8 +279,10 @@ class Grid:
     """The coefficient registry for one dataset version."""
 
     def __init__(self, version: str, rows: list[GridRow], params: dict,
-                 plafon: list[dict] | None = None):
+                 plafon: list[dict] | None = None, ranks: RankTable | None = None):
         self.version = version
+        #: Anexa VI rank pay (`solda-grad-*.csv`); None when the file is missing.
+        self.rank_table = ranks
         self.rows = rows
         self.params = params
         #: Local cap per type of unit and population (`plafon-local.csv`); law grid only.
@@ -210,6 +299,14 @@ class Grid:
                 self.by_name.setdefault(key, []).append(r)
                 self.display_name.setdefault(key, name)
         self._name_tokens = {n: set(n.split()) for n in self.by_name}
+        #: The full label of a row whose synonyms were split on "/" ("agent de poliţie/penitenciare
+        #: debutant" becomes "...agent de poliţie" and "penitenciare debutant"): no synonym equals
+        #: the label, so `select()` finds it here, as a last resort.
+        self.by_label: dict[str, list[GridRow]] = {}
+        for r in rows:
+            key = norm(r.functie)
+            if key and key not in self.by_name:
+                self.by_label.setdefault(key, []).append(r)
 
     # -- variants and gradations ------------------------------------------
     @property
@@ -337,6 +434,8 @@ class Grid:
                             if key.startswith(n + " ") for r in rs]
                     if rows:
                         break
+        if not rows and name:
+            rows = list(self.by_label.get(name, []))
         if not rows and cod:
             rows = list(self.by_cod.get(cod, []))
             # Reached only when the name is missing: widen along the grade axis
@@ -479,6 +578,9 @@ class Grid:
           A management row already holds the top gradation (Art. 19 alin. (2)).
         - Draft grid: `ceil(coeficient x valoare_referinta x gradation)`.
         """
+        parts = self.row_parts(row, gradation, as_of)
+        if parts:
+            return parts[2]
         mult = self.multiplier(gradation)
         if self.version == LAW_VERSION:
             floor = self.minimum_wage(as_of)
@@ -490,6 +592,68 @@ class Grid:
             return pay(row.lei_min), pay(row.lei_max)
         vr = self.variant.valoare_referinta_lei
         return math.ceil(row.coef_min * vr * mult), math.ceil(row.coef_max * vr * mult)
+
+    def row_parts(self, row: GridRow, gradation: int = 0, as_of: date | None = None,
+                  ranks: list[Rank] | None = None):
+        """Anexa VI: `((functie_lo, functie_hi), (grad_lo, grad_hi), (total_lo, total_hi))`, or None.
+
+        None for any other annex, and for a row with no rank (heads of institutions): their pay
+        is the post pay alone (`row_pay()` then uses the plain formula). `ranks` are the ranks
+        that the caller read from the selector; with None the row's own label names them.
+
+        - Draft: total = `ceil((coef_functie + coef_grad) x VR x gradation)`. Both parts take
+          the gradation (brief SALARY-ANEXA-VI, decision 3).
+        - Law: post pay = `ceil(lei x 1.05 x gradation)`; rank pay = the lei of the table of
+          OUG 26/2024 art. XI, which the gradation does not change (assumption: a rank pay is
+          a fixed amount). The minimum wage is the floor of the total, not of the post pay.
+        """
+        if row.anexa != "VI" or self.rank_table is None:
+            return None
+        if ranks is None:
+            ranks = self.rank_table.match(row.functie)[0]
+        if not ranks:
+            return None
+        mult = self.multiplier(gradation)
+        lo_r = min(r.value for r in ranks)
+        hi_r = max(r.value for r in ranks)
+        if self.version == LAW_VERSION:
+            f = tuple(math.ceil(round(v * row.multiplicator_regula * mult, 6))
+                      for v in (row.lei_min, row.lei_max))
+            g = (math.ceil(lo_r), math.ceil(hi_r))
+            floor = self.minimum_wage(as_of)
+            return ((f[0], f[1]), g, (int(max(f[0] + g[0], floor)), int(max(f[1] + g[1], floor))))
+        vr = self.variant.valoare_referinta_lei
+
+        def up(x: float) -> int:
+            return math.ceil(round(x * vr * mult, 6))
+
+        return ((up(row.coef_min), up(row.coef_max)), (up(lo_r), up(hi_r)),
+                (up(row.coef_min + lo_r), up(row.coef_max + hi_r)))
+
+    def _pays(self, rows: list[GridRow], selector: dict, gradation: int, as_of: date | None):
+        """The pay of each row, the parts of Anexa VI (when every row has them) and the warnings.
+
+        The ranks come from the selector's label when it has one ("Funcţii corespunzătoare
+        gradului de agent de poliţie/penitenciare debutant"), else from the label of the row.
+        """
+        pays, parts, warns = [], [], []
+        for r in rows:
+            p = None
+            if r.anexa == "VI" and self.rank_table is not None:
+                ranks, w = self.rank_table.match(selector.get("functie") or "")
+                if not ranks:
+                    ranks, w = self.rank_table.match(r.functie)
+                p = self.row_parts(r, gradation, as_of, ranks)
+                warns += w
+                if p is None:
+                    warns.append("Funcția nu are soldă de grad în tabel: "
+                                 "cifra conține numai solda de funcție.")
+            parts.append(p)
+            pays.append(p[2] if p else self.row_pay(r, gradation, as_of))
+        agg = None
+        if rows and all(parts):
+            agg = tuple((min(p[i][0] for p in parts), max(p[i][1] for p in parts)) for i in (0, 1))
+        return pays, agg, list(dict.fromkeys(warns))
 
     def estimate(self, selector: dict, *, gradation: int = 0,
                  as_of: date | None = None) -> SalaryEstimate:
@@ -531,9 +695,13 @@ class Grid:
             confidence = "interval"
             warnings.append(f"Selectorul corespunde la {len(rows)} poziții din grilă.")
 
+        pays, parts, vi_warnings = self._pays(rows, selector, gradation, as_of)
+        warnings += vi_warnings
         return SalaryEstimate(
-            lei_min=min(self.row_pay(r, gradation, as_of)[0] for r in rows),
-            lei_max=max(self.row_pay(r, gradation, as_of)[1] for r in rows),
+            lei_min=min(p[0] for p in pays),
+            lei_max=max(p[1] for p in pays),
+            lei_functie_min=parts[0][0] if parts else None, lei_functie_max=parts[0][1] if parts else None,
+            lei_grad_min=parts[1][0] if parts else None, lei_grad_max=parts[1][1] if parts else None,
             coef_min=round(coef_min, 6),
             coef_max=round(coef_max, 6),
             gradatie=gradation,
@@ -564,11 +732,11 @@ class Grid:
                 disclaimer=DISCLAIMER_LAW,
             )
         local = local and all(r.anexa == "VIII" for r in rows)
-        pays = [self.row_pay(r, gradation, as_of) for r in rows]
+        pays, parts, vi_warnings = self._pays(rows, selector, gradation, as_of)
         lo = min(p[0] for p in pays)
         hi = max(p[1] for p in pays)
 
-        warnings: list[str] = []
+        warnings: list[str] = list(vi_warnings)
         if any(r.needs_review for r in rows):
             warnings.append("Cel puțin un rând din grilă este marcat pentru verificare manuală.")
         if not selector.get("studii") and len({r.studii for r in rows}) > 1:
@@ -597,6 +765,8 @@ class Grid:
 
         return SalaryEstimate(
             lei_min=lo, lei_max=hi, coef_min=None, coef_max=None,
+            lei_functie_min=parts[0][0] if parts else None, lei_functie_max=parts[0][1] if parts else None,
+            lei_grad_min=parts[1][0] if parts else None, lei_grad_max=parts[1][1] if parts else None,
             gradatie=gradation, varianta=self.version,
             valoare_referinta=variant.valoare_referinta_lei,
             incredere=confidence, motiv=motiv,
@@ -642,7 +812,15 @@ def load_grid(version: str = DEFAULT_VERSION, data_dir: str | None = None) -> Gr
     if version == LAW_VERSION and plafon_csv.exists():
         with plafon_csv.open(encoding="utf-8") as fh:
             plafon = list(csv.DictReader(fh))
-    return Grid(version, rows, params, plafon)
+    ranks = None
+    rank_csv = base / (RANK_UPDATE_ACT if version == LAW_VERSION else f"solda-grad-{version}.csv")
+    if rank_csv.exists():
+        with rank_csv.open(encoding="utf-8") as fh:
+            ranks = RankTable([
+                Rank(d["grad"], frozenset(_rank_key(n) for n in post_names(d["grad"])),
+                     float(d.get("lei") or d.get("coeficient")))
+                for d in csv.DictReader(fh)])
+    return Grid(version, rows, params, plafon, ranks)
 
 
 _TRAIL_RANK = re.compile(r"\s+[-–]?\s*(debutant|principal|specialist)\s*$", re.I)
@@ -680,6 +858,10 @@ def selector_for_law(selector: dict, draft: Grid) -> dict:
             add(piece[:m.start()])
             if not out.get("grad_treapta"):
                 out["grad_treapta"] = m.group(1).lower()
+    if POST_PREFIX.match(raw):
+        # Anexa VI: the law writes the same posts without the prefix and with its own spelling.
+        for n in post_names(raw):
+            add(n)
     if alts:
         out["functie_alt"] = alts
     return out

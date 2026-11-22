@@ -131,6 +131,16 @@ $level_url = static fn(string $a, string $l): string => $se_url . '?d=' . rawurl
         if (count($rows) > 12) $out .= '<p class="g2-text-meta mt-1">Și încă ' . (count($rows) - 12) . ' rânduri.</p>';
         return $out . '</details>';
     };
+    // Anexa VI (military, police): the two parts of the pay, the total and the line about bonuses (ADR 0008 rule 10).
+    $parts_table = static function (array $rows, array $pay, int $lo, int $hi) use ($fmt, $range): string {
+        $parts = salary_est_parts($rows, $pay);
+        if ($parts === null) return '';
+        return '<div class="g2-table-wrap" role="region" aria-label="Părțile soldei" tabindex="0" data-salary-parts><table class="g2-table">'
+             . '<tbody><tr><th scope="row">Soldă de funcție</th><td class="g2-cell-num">' . e($range($parts[0][0], $parts[0][1])) . ' lei</td></tr>'
+             . '<tr><th scope="row">Soldă de grad</th><td class="g2-cell-num">' . e($range($parts[1][0], $parts[1][1])) . ' lei</td></tr>'
+             . '<tr><th scope="row">Total brut</th><td class="g2-cell-num">' . e($range($lo, $hi)) . ' lei</td></tr></tbody></table></div>'
+             . '<p class="g2-text-meta" data-salary-bonus-note>Fără sporuri, compensații, indemnizații și drepturi în natură (hrană, echipament, chirie).</p>';
+    };
     $source_of = static function (array $rows): array {
         $s = [];
         foreach ($rows as $r) { $act = trim(explode(';', (string)$r['act_sursa'])[0]); if ($act !== '') $s[$act] = true; }
@@ -207,7 +217,8 @@ $level_url = static fn(string $a, string $l): string => $se_url . '?d=' . rawurl
         <h3 id="se-law" class="g2-heading-item">Legea 153/2017 (în vigoare)</h3>
         <?php if ($law && $law['lo'] !== null): $lo = (int)$law['lo']; $hi = (int)$law['hi']; ?>
         <p class="text-2xl font-semibold text-ink" data-pay-net><?= e(net_label((float)$lo, (float)$hi)) ?> <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
-        <p class="text-sm text-ink-muted" data-pay-gross>Salariu de bază brut: <?= e($range($lo, $hi)) ?> lei / lună, la gradația <?= (int)$result['g'] ?></p>
+        <p class="text-sm text-ink-muted" data-pay-gross><?= ($law_parts = salary_est_parts($law['rows'], $law['pay'])) ? 'Soldă lunară brută' : 'Salariu de bază brut' ?>: <?= e($range($lo, $hi)) ?> lei / lună, la gradația <?= (int)$result['g'] ?></p>
+        <?= $law_parts ? $parts_table($law['rows'], $law['pay'], $lo, $hi) : '' ?>
         <?php if ($law['local']): ?>
         <p class="text-sm" data-pay-local>Consiliul local sau județean stabilește salariul, până la un plafon legal.
           Limita de jos este valoarea din tabelul legii. Limita de sus este plafonul de <?= e($fmt((int)$result['cap']['plafon_maxim_lei'])) ?> lei brut
@@ -229,7 +240,8 @@ $level_url = static fn(string $a, string $l): string => $se_url . '?d=' . rawurl
         <h3 id="se-draft" class="g2-heading-item">După noua lege (proiect, neadoptat)</h3>
         <?php if ($draft): $lo = (int)$draft['lo']; $hi = (int)$draft['hi']; ?>
         <p class="text-2xl font-semibold text-ink" data-pay-net><?= e(net_label((float)$lo, (float)$hi)) ?> <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
-        <p class="text-sm text-ink-muted" data-pay-gross>Salariu de bază brut: <?= e($range($lo, $hi)) ?> lei / lună, la gradația <?= (int)$result['g'] ?></p>
+        <p class="text-sm text-ink-muted" data-pay-gross><?= ($draft_parts = salary_est_parts($draft['rows'], $draft['pay'])) ? 'Soldă lunară brută' : 'Salariu de bază brut' ?>: <?= e($range($lo, $hi)) ?> lei / lună, la gradația <?= (int)$result['g'] ?></p>
+        <?= $draft_parts ? $parts_table($draft['rows'], $draft['pay'], $lo, $hi) : '' ?>
         <p class="text-sm">Proiectul nu este adoptat. Cifra arată ce ar plăti funcția după proiect.
           <?= $draft['bands'] > 1 ? 'Proiectul are coeficienți pe banda de populație a localității: intervalul acoperă toate benzile.' : '' ?></p>
         <p class="g2-text-meta"><?= e($params['draft']['eticheta']) ?>, valoarea de referință <?= e($fmt((int)$params['draft']['valoare_referinta_lei'])) ?> lei.</p>

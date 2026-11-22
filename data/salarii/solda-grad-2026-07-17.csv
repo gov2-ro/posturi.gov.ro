@@ -1,0 +1,23 @@
+nr_crt,grad,grade,coeficient
+35,Mareșal,Mareșal,1.1
+36,General; amiral; Chestor general de poliţie; chestor șef de poliție penitenciară,General|amiral|Chestor general de poliţie|chestor șef de poliție penitenciară,1.05
+37,General-locotenent; viceamiral; Chestor-şef de poliţie; chestor șef adjunct de poliție penitenciară,General-locotenent|viceamiral|Chestor-şef de poliţie|chestor șef adjunct de poliție penitenciară,0.96
+38,General-maior; contraamiral; Chestor principal de poliţie; chestor principal de poliție penitenciară,General-maior|contraamiral|Chestor principal de poliţie|chestor principal de poliție penitenciară,0.88
+39,General de brigadă/de flotilă aeriană; contraamiral de flotilă; Chestor de poliţie; chestor de poliție penitenciară,General de brigadă/de flotilă aeriană|contraamiral de flotilă|Chestor de poliţie|chestor de poliție penitenciară,0.81
+40,Colonel; comandor; Comisar-şef de poliţie; comisar-șef de poliție penitenciară,Colonel|comandor|Comisar-şef de poliţie|comisar-șef de poliție penitenciară,0.75
+41,Locotenent-colonel; căpitan-comandor; Comisar de poliţie; comisar de poliție penitenciară,Locotenent-colonel|căpitan-comandor|Comisar de poliţie|comisar de poliție penitenciară,0.72
+42,Maior; locotenent-comandor; Subcomisar de poliţie; subcomisar de poliție penitenciară,Maior|locotenent-comandor|Subcomisar de poliţie|subcomisar de poliție penitenciară,0.69
+43,Căpitan; Inspector principal de poliţie; inspector principal de poliție penitenciară,Căpitan|Inspector principal de poliţie|inspector principal de poliție penitenciară,0.67
+44,Locotenent; Inspector de poliţie; inspector de poliție penitenciară,Locotenent|Inspector de poliţie|inspector de poliție penitenciară,0.65
+45,Sublocotenent; aspirant; Subinspector de poliţie; subinspector de poliție penitenciară,Sublocotenent|aspirant|Subinspector de poliţie|subinspector de poliție penitenciară,0.63
+46,Maistru militar principal; Plutonier adjutant principal; Agent-şef principal de poliţie; agent-şef principal de poliție penitenciară,Maistru militar principal|Plutonier adjutant principal|Agent-şef principal de poliţie|agent-şef principal de poliție penitenciară,0.61
+47,Maistru militar clasa I; Plutonier adjutant; Agent-şef de poliţie; agent șef de poliție penitenciară,Maistru militar clasa I|Plutonier adjutant|Agent-şef de poliţie|agent șef de poliție penitenciară,0.58
+48,Maistru militar clasa a II-a; Plutonier major; Agent-şef adjunct de poliţie; agent-şef adjunct de poliție penitenciară,Maistru militar clasa a II-a|Plutonier major|Agent-şef adjunct de poliţie|agent-şef adjunct de poliție penitenciară,0.56
+49,Maistru militar clasa a III-a; Plutonier; Agent principal de poliţie; agent principal de poliție penitenciară,Maistru militar clasa a III-a|Plutonier|Agent principal de poliţie|agent principal de poliție penitenciară,0.54
+50,Maistru militar clasa a IV-a; Sergent-major; Agent de poliţie; agent de poliție penitenciară,Maistru militar clasa a IV-a|Sergent-major|Agent de poliţie|agent de poliție penitenciară,0.52
+51,Maistru militar clasa a V-a; Sergent,Maistru militar clasa a V-a|Sergent,0.5
+52,Caporal clasa I,Caporal clasa I,0.48
+53,Caporal clasa a II-a,Caporal clasa a II-a,0.46
+54,Caporal clasa a III-a,Caporal clasa a III-a,0.44
+55,Fruntaş,Fruntaş,0.42
+56,Soldat,Soldat,0.4

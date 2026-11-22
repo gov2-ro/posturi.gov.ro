@@ -2,6 +2,39 @@
 
 ## 2026
 
+### 2026-11-22 — SALARY-ANEXA-VI built after the owner decisions (Sonnet, from the Opus brief)
+
+**Done**
+- Rank pay in `estimate()` for the draft (post + rank coefficient × VR) and the law (post 2022 × 1.05 + OUG 26/2024 art. XI table). Range of ranks gives a range; "plutonier adjutant șef" takes "principal" with a warning; a head has post pay only with a warning.
+- Law grid: 40 Anexa VI rows added (0 removed); `solda-grad-lege153-2026.csv` (27 ranks).
+- Page `/estimator-salariu/`: parts, total and the bonus line; the export has four new nullable columns.
+- Figures: agent de poliție debutant PL: draft 8,241; law 5,918.
+- Tests: Python 1,704 passed, 1 failed (the known `test_salary_facet_sql.py`), 13 skipped. PHP `salary_estimator_test.php`: 176 assertions pass.
+- Dry run on the 9 Sep copy: counts identical before and after.
+
+**Hard**
+- The law HTML and the draft workbook are untracked (`docs/salarii/` is in `.gitignore`): the worktree needs a copy.
+- The minimum-wage floor on the post pay alone would give 6,305 for the agent. It applies to the total.
+- The law row of the debutant agent also names two other ranks, so the page shows a rank range for that row.
+
+**Decided**
+- Assumptions in the audit (gradation on the law rank pay; floor on the total). The owner confirms or changes them.
+
+### 2026-11-22 — SALARY-ANEXA-VI: rank table, matcher fix, law spike; stopped at the rank mapping (Sonnet, from the Opus brief)
+
+**Done**
+- `build-salary-grid.py` writes `data/salarii/solda-grad-2026-07-17.csv` (22 ranks). The post grid is byte-identical.
+- Matcher: the "/" split of the synonyms left no synonym equal to the full label. `Grid.by_label` fixes this as a last resort. Dry run on the 9 Sep copy: all counts identical before and after (9,750 postings, 8,368 estimated).
+- 4 tests in `TestAnexaVILabel`. Suite: 1,694 passed, 1 failed (the known `test_salary_facet_sql.py`), 13 skipped.
+- Spike on the law in force: `docs/audits/2026-11-20-salary-anexa-vi.md`.
+
+**Hard**
+- Stop condition hit: post rows 24–27 name a range of ranks, and rows 33–35 ("plutonier adjutant șef") have no name in the rank table. Steps 2, 4 and 6 (rank pay in `estimate()`, the page, the other tests) wait for the owner.
+- The law's rank pay is not the Art. 7 table (agent 250 lei, 2022) but the updated table of OUG 26/2024 art. XI (agent 1.980 lei).
+
+**Decided**
+- Nothing. The owner decides the range rule and whether the law-in-force rows get built (probably an ADR 0008 rule).
+
 ### 2026-11-22 — SALARY-PIDS: no document fixes the pay per role (Sonnet, spike)
 
 **Done:** Read the PIDS/586/PO4/339395 selection procedure (Feb 2025), the project fact sheet, the launch press release and the general conditions guide (Mar 2023). Counted the PIDS postings on the local 9 Sep copy. Wrote [the audit](audits/2026-11-20-salary-pids.md), with the VPS SQL. Files stay in `tmp/261120/pids/` (not in git).

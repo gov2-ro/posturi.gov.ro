@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any, Iterable
 
 import classify  # stdlib-only, beside this module
@@ -49,7 +50,57 @@ ROLE_COLUMNS = (
     "ordinal", "role_key", "decomposed", "title", "vacancy_count", "study_level",
     "eqf_level", "isced_fields", "exp_years", "exp_in_specialty", "exp_none_required",
     "skills", "credentials", "seniority_hint", "source_revision", "role_format",
+    "study_level_source",
 )
+
+#: `study_level_source` values. NULL = the level is unknown (or an old export).
+SOURCE_TEXT = "text"                  # read from the posting (a stated level)
+SOURCE_OCCUPATION = "inferat-ocupatie"  # no level stated; the occupation implies it
+
+#: DATA-STUDIES-NOT: a title that names a medical doctor („medic”, „medici”, „medic dentist”, „doctor-medic”). "doctor-medic" is the title of the
+#: medical degree (a diploma de licență), not a doctorate. The extraction reads it as `doctorat`.
+_MEDICAL_TITLE = re.compile(
+    r"\bdoctor[\s-]+(?:medic|[iî]n[\s-]+medicin)|\bmedici?\b",
+    re.IGNORECASE,
+)
+_DOCTORATE_TEXT = re.compile(r"doctorat|studii\s+doctorale", re.IGNORECASE)
+
+
+def is_medical_title(title: Any) -> bool:
+    return isinstance(title, str) and bool(_MEDICAL_TITLE.search(title))
+
+
+def mentions_doctorate(*texts: Any) -> bool:
+    """True when any text says „doctorat” or „studii doctorale”."""
+    return any(isinstance(t, str) and _DOCTORATE_TEXT.search(t) for t in texts)
+
+
+def _level(level: Any, title: Any, doctorate_in_text: bool) -> str | None:
+    """The stored level. A medical title read as `doctorat` becomes `licenta` unless the text
+    asks for a doctorate. Any other value is kept as the extraction wrote it."""
+    level = level or None
+    if level == "doctorat" and not doctorate_in_text and is_medical_title(title):
+        return "licenta"
+    return level
+
+
+def _inferred_level(posting: dict) -> str | None:
+    """DATA-STUDIES-NOT: COR major group 2 (ISCO skill level 4) needs at least a degree.
+    Groups 3-9 and an unknown code: no inference."""
+    code = str(posting.get("occ_cor_code") or posting.get("occ_isco_group") or "").strip()
+    return "licenta" if code[:1] == "2" else None
+
+
+def _with_source(row: dict, posting: dict) -> dict:
+    """Set `study_level_source`; fill an empty level from the occupation (never replace a stated one)."""
+    if row["study_level"]:
+        row["study_level_source"] = SOURCE_TEXT
+    elif (inferred := _inferred_level(posting)):
+        row["study_level"] = inferred
+        row["study_level_source"] = SOURCE_OCCUPATION
+    else:
+        row["study_level_source"] = None
+    return row
 
 
 def _dumps(seq: Iterable[Any]) -> str:
@@ -114,7 +165,8 @@ def role_key(basis: str, rev12: str, ordinal: int) -> str:
     return f"{basis}:{rev12 or '-'}:{ordinal}"
 
 
-def _decomposed_row(entry: dict, ordinal: int, key: str, source_revision: str | None) -> dict:
+def _decomposed_row(entry: dict, ordinal: int, key: str, source_revision: str | None,
+                    posting: dict) -> dict:
     """One role from one `positions[]` entry. Missing facts stay None."""
     edu = entry.get("education")
     exp = entry.get("experience")
@@ -147,13 +199,14 @@ def _decomposed_row(entry: dict, ordinal: int, key: str, source_revision: str | 
     title = entry.get("title")
     title = title.strip() or None if isinstance(title, str) else None
     count = _int(entry.get("count"))
-    return {
+    row = {
         "ordinal": ordinal,
         "role_key": key,
         "decomposed": 1,
         "title": title,
         "vacancy_count": count if count is not None and count >= 1 else None,
-        "study_level": edu_d.get("minimum_level") or None,
+        "study_level": _level(edu_d.get("minimum_level"), title or posting.get("title"),
+                              bool(posting.get("doctorate_in_text"))),
         "eqf_level": _int(edu_d.get("eqf_level")),
         "isced_fields": isced,
         "exp_years": years,
@@ -165,6 +218,7 @@ def _decomposed_row(entry: dict, ordinal: int, key: str, source_revision: str | 
         "source_revision": source_revision,
         "role_format": ROLE_FORMAT,
     }
+    return _with_source(row, posting)
 
 
 def _implicit_row(posting: dict, schema: dict | None, key: str,
@@ -178,13 +232,14 @@ def _implicit_row(posting: dict, schema: dict | None, key: str,
     the posting, like everything else on this row).
     """
     exp_d = _dict(_dict(schema).get("experience"))
-    return {
+    row = {
         "ordinal": 0,
         "role_key": key,
         "decomposed": 0,
         "title": None,
         "vacancy_count": None,
-        "study_level": posting.get("inf_studies_required") or None,
+        "study_level": _level(posting.get("inf_studies_required"), posting.get("title"),
+                              bool(posting.get("doctorate_in_text"))),
         "eqf_level": posting.get("v3_eqf_level"),
         "isced_fields": posting.get("v3_isced_fields") or "[]",
         "exp_years": posting.get("inf_experience_years"),
@@ -196,13 +251,14 @@ def _implicit_row(posting: dict, schema: dict | None, key: str,
         "source_revision": source_revision,
         "role_format": ROLE_FORMAT,
     }
+    return _with_source(row, posting)
 
 
 def role_rows(posting: dict, schema: dict | None) -> list[dict]:
     """The `posting_roles` rows (without `posting_id`) for one posting.
 
     `posting` carries the posting-level columns the implicit row copies
-    (`inf_studies_required`, `v3_eqf_level`, `v3_isced_fields`,
+    (`inf_studies_required`, `title`, `doctorate_in_text`, `occ_cor_code`, `v3_eqf_level`, `v3_isced_fields`,
     `inf_experience_years`, `v3_skills`, `v3_credentials`, `v3_seniority_hint`)
     and the provenance (`schema_source_revision`). `schema` is the parsed
     `schema_json`, or None. Always returns at least one row.
@@ -214,7 +270,7 @@ def role_rows(posting: dict, schema: dict | None) -> list[dict]:
 
     entries = _list((schema or {}).get("positions"))
     rows = [
-        _decomposed_row(entry, i, role_key(basis, rev12, i), source_revision)
+        _decomposed_row(entry, i, role_key(basis, rev12, i), source_revision, posting)
         for i, entry in enumerate(entries, start=1)
         if isinstance(entry, dict)
     ]

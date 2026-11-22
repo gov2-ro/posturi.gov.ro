@@ -358,6 +358,9 @@ CREATE TABLE posting_roles (
     seniority_hint    TEXT,
     source_revision   TEXT,
     role_format       INTEGER NOT NULL,
+    -- DATA-STUDIES-NOT: 'text' = the level is stated; 'inferat-ocupatie' = no level
+    -- stated, the occupation (COR major group 2) implies it. NULL = unknown or an old export.
+    study_level_source TEXT,
     PRIMARY KEY (posting_id, ordinal)
 );
 CREATE INDEX idx_pr_eqf     ON posting_roles(eqf_level);
@@ -644,6 +647,9 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         roles = posting_roles.role_rows({
             "schema_source_revision": r["schema_source_revision"],
             "inf_studies_required": inferred.get("studies_required"),
+            "title": r["title"],
+            "doctorate_in_text": posting_roles.mentions_doctorate(r["body_markdown"], r.get("attachment_text")),
+            "occ_cor_code": r["occ_cor_code"] or r["occ_isco_group"],
             "inf_experience_years": inferred.get("experience_years"),
             "v3_eqf_level": v3["eqf_level"],
             "v3_isced_fields": v3["isced_fields"],
@@ -1977,6 +1983,24 @@ def verify(path: str, *, min_rows: int, previous: dict | None, active_only: bool
             print(
                 f"  WARNING: FTS index has {fts} rows against {rows} postings — "
                 f"search will be incomplete.",
+                file=sys.stderr,
+            )
+
+        # DATA-STUDIES-NOT: a medical title with the level `generala` is probably a wrong
+        # extraction. The export does not change it: it lists the postings.
+        try:
+            generala = con.execute(
+                "SELECT DISTINCT j.id, COALESCE(r.title, j.title) FROM posting_roles r "
+                "JOIN job_postings j ON j.id = r.posting_id WHERE r.study_level = 'generala'"
+            ).fetchall()
+        except sqlite3.Error:
+            generala = []
+        medical = [(i, t) for i, t in generala if posting_roles.is_medical_title(t)]
+        if medical:
+            print(
+                f"  WARNING: {len(medical)} postings have a medical title and the level "
+                f"'generala' (ids {', '.join(str(i) for i, _ in medical[:20])}"
+                f"{', ...' if len(medical) > 20 else ''}). Check the extraction.",
                 file=sys.stderr,
             )
 

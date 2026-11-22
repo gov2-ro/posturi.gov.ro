@@ -167,6 +167,18 @@ if [ "$pipeline_status" -ne 0 ]; then
     echo "         the deployment will be recorded as degraded."
 fi
 
+# ANOMALY-PUBLIC: write the anomaly tables into the export. This runs here and not as a
+# pipeline.py step: a failed pipeline step aborts the deploy, and a survey failure must
+# not. On a failure the table may be missing or partial; the hard check below then
+# refuses the deploy only when a table is missing, and the site shows no new signals.
+survey_status=0
+"$PYTHON" ops/anomaly-survey.py webapp-php/posturi.sqlite --write-table \
+    --json data/anomaly-survey.json --csv data/anomaly-survey.csv || survey_status=$?
+if [ "$survey_status" -ne 0 ]; then
+    echo "WARNING: the anomaly survey failed (exit ${survey_status}) — continuing; the"
+    echo "         export has no new anomaly signals."
+fi
+
 # The gate. Hard checks are corruption-shaped -- 43 counties, a short FTS index, a
 # build_meta that says the export never ran -- and none of them can be a bad day's
 # data. Soft warnings print and are recorded but do not block; add --strict once the

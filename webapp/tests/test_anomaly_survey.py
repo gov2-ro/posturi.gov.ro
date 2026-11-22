@@ -357,3 +357,75 @@ def test_cli_writes_json_and_csv(sv, tmp_path):
     assert sv.main([db, "--json", str(out_j), "--csv", str(out_c), "--only", "R01"]) == 0
     assert json.loads(out_j.read_text())["checks"]["R01"]["count"] == 1
     assert out_c.read_text().splitlines()[0] == "posting_id,check,value,peer_value"
+
+
+# ---- Table mode (ANOMALY-PUBLIC) -------------------------------------------
+
+def table_run(sv, db_path, tmp_path, reviews=None, register=None):
+    ctx = sv.Ctx(db_path, sv.DEFAULTS, sv.Holidays(None), None)
+    report, rows = sv.run(ctx)
+    ctx.db.close()
+    reg_path = tmp_path / "reg.json"
+    reg_path.write_text(json.dumps({"checks": register or {}}), encoding="utf-8")
+    rev = sv.load_reviews(reviews or tmp_path / "missing.csv")
+    return sv.write_tables(db_path, report, rows, sv.load_register(reg_path), rev)
+
+
+def test_table_mode_writes_rows_and_replaces(sv, tmp_path):
+    db_path = make_db(tmp_path, [{"nr_posturi": 339395}, {"nr_posturi": 3}, {"nr_posturi": 21}])
+    reg = {"R01": {"kind": "error_ours", "label_ro": "L", "explain_ro": "X", "state": "listed"}}
+    n = table_run(sv, db_path, tmp_path, register=reg)
+    assert n["anomaly_signals"] >= 2
+    db = sqlite3.connect(db_path)
+    r01 = db.execute("SELECT posting_id, value, peer_value FROM anomaly_signals WHERE check_id='R01' "
+                     "ORDER BY posting_id").fetchall()
+    assert r01 == [(1, "339395", "20"), (3, "21", "20")]
+    row = db.execute("SELECT kind, label_ro, state, count, denominator, reviewed FROM anomaly_checks "
+                     "WHERE check_id='R01'").fetchone()
+    assert row == ("error_ours", "L", "listed", 2, 3, 0)
+    # a check with no register entry still gets a row, state listed
+    assert db.execute("SELECT state FROM anomaly_checks WHERE check_id='R02'").fetchone() == ("listed",)
+    idx = {r[1] for r in db.execute("PRAGMA index_list(anomaly_signals)")}
+    assert len(idx) == 2
+    db.execute("INSERT INTO anomaly_signals VALUES (99,'ZZ','','','{}')")
+    db.commit()
+    db.close()
+    table_run(sv, db_path, tmp_path, register=reg)  # second run replaces both tables
+    db = sqlite3.connect(db_path)
+    assert db.execute("SELECT COUNT(*) FROM anomaly_signals WHERE check_id='ZZ'").fetchone() == (0,)
+    assert db.execute("SELECT COUNT(*) FROM anomaly_checks WHERE check_id='R01'").fetchone() == (1,)
+
+
+def test_table_mode_reviews_and_missing_file(sv, tmp_path):
+    db_path = make_db(tmp_path, [{"nr_posturi": 339395}, {"nr_posturi": 30}])
+    rev = tmp_path / "rev.csv"
+    rev.write_text("check,posting_id,verdict,reviewer,date,note\n"
+                   "R01,1,real,pax,2026-11-23,\nR01,2,false_positive,pax,2026-11-23,x\n"
+                   "R01,2,bogus,pax,2026-11-23,\n", encoding="utf-8")
+    table_run(sv, db_path, tmp_path, reviews=rev)
+    db = sqlite3.connect(db_path)
+    assert db.execute("SELECT reviewed, real, false_positive FROM anomaly_checks WHERE check_id='R01'"
+                      ).fetchone() == (2, 1, 1)
+    d = dict(db.execute("SELECT posting_id, detail_json FROM anomaly_signals WHERE check_id='R01'").fetchall())
+    assert json.loads(d[2]) == {"verdict": "false_positive"}
+    db.close()
+    # a missing reviews file is not an error
+    table_run(sv, db_path, tmp_path)
+    db = sqlite3.connect(db_path)
+    assert db.execute("SELECT reviewed FROM anomaly_checks WHERE check_id='R01'").fetchone() == (0,)
+
+
+def test_table_mode_unavailable_check_has_null_counts(sv, tmp_path):
+    db_path = make_db(tmp_path, [{}], drop_cols=("nr_posturi",))
+    table_run(sv, db_path, tmp_path)
+    db = sqlite3.connect(db_path)
+    assert db.execute("SELECT count, denominator FROM anomaly_checks WHERE check_id='R01'"
+                      ).fetchone() == (None, None)
+
+
+def test_register_file_is_complete_and_unpublished(sv):
+    reg = sv.load_register(sv.DEFAULT_CHECKS)
+    assert {c["id"] for c in sv.CHECKS} == set(reg)
+    assert all(v["state"] in ("hidden", "listed") for v in reg.values())
+    assert all(v["kind"] in ("error_ours", "error_posting", "unusual", "unusual_employer", "context")
+               for v in reg.values())

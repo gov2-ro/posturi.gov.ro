@@ -214,6 +214,10 @@ if ($is_root && !$hx_fragment && !$_GET) {
     require __DIR__ . '/pages/employer.php';
 } elseif ($uri === '/statistici' || $uri === '/statistici/') {
     require __DIR__ . '/pages/stats.php';
+} elseif ($uri === '/statistici/anomalii' || $uri === '/statistici/anomalii/') {
+    require __DIR__ . '/pages/anomalies_public.php';
+} elseif ($uri === '/admin/anomalii' || $uri === '/admin/anomalii/') {
+    require __DIR__ . '/pages/anomalies_admin.php';
 } elseif ($uri === '/salvate' || $uri === '/salvate/') {
     require __DIR__ . '/pages/saved.php';
 } elseif ($uri === '/pot-aplica' || $uri === '/pot-aplica/') {

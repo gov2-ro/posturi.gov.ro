@@ -16,6 +16,7 @@ A check that needs a column or table that the export does not hold is reported a
 Usage:
     ops/anomaly-survey.py EXPORT.sqlite --json out.json --csv out.csv
     ops/anomaly-survey.py EXPORT.sqlite --index-csv data/posturi_gov_ro.csv   # enables E1
+    ops/anomaly-survey.py EXPORT.sqlite --write-table   # ANOMALY-PUBLIC: write the export tables
     ops/anomaly-survey.py --help
 
 Standard library only. `_norm_title` is read from the Django management command by
@@ -792,6 +793,92 @@ def e08(c: Ctx):
 
 
 # --------------------------------------------------------------------------
+# Table mode (ANOMALY-PUBLIC): write the findings into the export
+# --------------------------------------------------------------------------
+
+DEFAULT_CHECKS = ROOT / "ops" / "anomaly-checks.json"
+DEFAULT_REVIEWS = ROOT / "data" / "anomaly-reviews.csv"
+VERDICTS = ("real", "false_positive", "unclear")
+
+
+def load_register(path) -> dict:
+    """The register: check id -> {kind, label_ro, explain_ro, state}. Missing file: empty."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8")).get("checks", {})
+
+
+def load_reviews(path) -> dict:
+    """(check, posting_id) -> verdict. The last row of a pair wins. Missing file: empty."""
+    out: dict[tuple, str] = {}
+    p = Path(path)
+    if not p.exists():
+        return out
+    with open(p, encoding="utf-8", newline="") as fh:
+        for r in csv.DictReader(fh):
+            v = (r.get("verdict") or "").strip()
+            pid = (r.get("posting_id") or "").strip()
+            if v in VERDICTS and pid.isdigit():
+                out[((r.get("check") or "").strip(), int(pid))] = v
+    return out
+
+
+def write_tables(db_path, report: dict, rows: list[tuple], register: dict, reviews: dict) -> dict:
+    """Replace `anomaly_signals` and `anomaly_checks` in the export. Return rows per table.
+
+    Handling of checks without a posting of their own:
+      * employer-level checks (R15, R16, R17): one row per employer or group, on the first
+        posting; `detail_json` carries {"level": "employer"} when the register kind is
+        `unusual_employer`;
+      * R05 (name variants): one row per employer key, on the first posting;
+      * E01 (a distribution): the contract-staff findings are written as rows; the
+        distribution stays in the JSON report only;
+      * an unavailable check (a missing column, or E04 without the index CSV): no rows;
+        `count` and `denominator` are NULL.
+    A review verdict goes into `detail_json` as {"verdict": ...}. The row stays in the table:
+    the admin page shows it; the public page skips `false_positive`.
+    """
+    db = sqlite3.connect(db_path)
+    try:
+        db.execute("DROP TABLE IF EXISTS anomaly_signals")
+        db.execute("DROP TABLE IF EXISTS anomaly_checks")
+        db.execute("CREATE TABLE anomaly_signals (posting_id INTEGER, check_id TEXT, value TEXT, "
+                   "peer_value TEXT, detail_json TEXT)")
+        db.execute("CREATE TABLE anomaly_checks (check_id TEXT PRIMARY KEY, kind TEXT, label_ro TEXT, "
+                   "explain_ro TEXT, state TEXT, count INTEGER, denominator INTEGER, "
+                   "reviewed INTEGER, real INTEGER, false_positive INTEGER)")
+        sig = []
+        for pid, cid, value, peer in rows:
+            detail = {}
+            if register.get(cid, {}).get("kind") == "unusual_employer":
+                detail["level"] = "employer"
+            verdict = reviews.get((cid, int(pid)))
+            if verdict:
+                detail["verdict"] = verdict
+            sig.append((int(pid), cid, "" if value is None else str(value),
+                        "" if peer is None else str(peer),
+                        json.dumps(detail, ensure_ascii=False)))
+        db.executemany("INSERT INTO anomaly_signals VALUES (?,?,?,?,?)", sig)
+        db.execute("CREATE INDEX idx_anomaly_signals_check ON anomaly_signals(check_id)")
+        db.execute("CREATE INDEX idx_anomaly_signals_posting ON anomaly_signals(posting_id)")
+        chk = []
+        for cid, e in report.items():
+            reg = register.get(cid, {})
+            rv = [v for (c, _), v in reviews.items() if c == cid]
+            ok = e["status"] == "ok"
+            chk.append((cid, reg.get("kind", "unusual"), reg.get("label_ro", e["title"]),
+                        reg.get("explain_ro", ""), reg.get("state", "listed"),
+                        e["count"] if ok else None, e["denominator"] if ok else None,
+                        len(rv), rv.count("real"), rv.count("false_positive")))
+        db.executemany("INSERT INTO anomaly_checks VALUES (?,?,?,?,?,?,?,?,?,?)", chk)
+        db.commit()
+        return {"anomaly_signals": len(sig), "anomaly_checks": len(chk)}
+    finally:
+        db.close()
+
+
+# --------------------------------------------------------------------------
 # Runner
 # --------------------------------------------------------------------------
 
@@ -839,6 +926,10 @@ def main(argv=None) -> int:
     ap.add_argument("--holidays", default=str(DEFAULT_HOLIDAYS),
                     help="core-assets ro-holidays.csv (years it lacks are computed)")
     ap.add_argument("--only", help="comma-separated check ids, for example R06,E01")
+    ap.add_argument("--write-table", action="store_true",
+                    help="write anomaly_signals and anomaly_checks into the export (it replaces both)")
+    ap.add_argument("--checks", default=str(DEFAULT_CHECKS), help="register of checks (JSON)")
+    ap.add_argument("--reviews", default=str(DEFAULT_REVIEWS), help="review verdicts (CSV)")
     for k, v in DEFAULTS.items():
         if v is not None:
             ap.add_argument(f"--{k.replace('_', '-')}", type=type(v), default=v,
@@ -852,6 +943,7 @@ def main(argv=None) -> int:
     only = set(args.only.split(",")) if args.only else None
     report, rows = run(ctx, only)
 
+    ctx.db.close()  # the survey connection is read-only; table mode opens its own
     dates = [p["_pub"] for p in ctx.postings if p["_pub"]]
     out = {
         "meta": {
@@ -872,6 +964,9 @@ def main(argv=None) -> int:
             print(f"{cid:5} {e['count']:>6} / {e['denominator']:<7} {e['title']}")
         else:
             print(f"{cid:5} unavailable: {', '.join(e['missing'])}")
+    if args.write_table:
+        n = write_tables(args.db, report, rows, load_register(args.checks), load_reviews(args.reviews))
+        print(f"wrote anomaly_signals: {n['anomaly_signals']} rows; anomaly_checks: {n['anomaly_checks']} rows")
     return 0
 
 

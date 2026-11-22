@@ -26,6 +26,7 @@ case "$1" in
   webapp/manage.py) exit "${STUB_MIGRATE:-0}" ;;
   ops/check-llm-balance.py) exit "${STUB_BALANCE:-0}" ;;
   pipeline.py)      exit "${STUB_PIPELINE:-0}" ;;
+  ops/anomaly-survey.py) exit "${STUB_SURVEY:-0}" ;;
   ops/check-export.py) exit "${STUB_CHECK:-0}" ;;
   ops/record-deploy.py) exit 0 ;;
   ops/ntfy.py)      exit "${STUB_NTFY:-0}" ;;
@@ -90,6 +91,15 @@ def test_degraded_opt_in_is_reachable(root):
     assert deployed(calls), "degraded publication is reachable when opted into"
     assert "ops/record-deploy.py --degraded" in calls
     assert code == 1, "the run still reports its step failure"
+
+
+def test_survey_runs_before_the_check_and_its_failure_does_not_block(root):
+    code, out, calls = run(root, STUB_SURVEY=3)
+    survey = next(i for i, c in enumerate(calls) if c.startswith("ops/anomaly-survey.py"))
+    check = next(i for i, c in enumerate(calls) if c.startswith("ops/check-export.py"))
+    assert survey < check
+    assert "WARNING: the anomaly survey failed (exit 3)" in out
+    assert code == 0 and deployed(calls)
 
 
 def test_failed_export_check_exits_65_without_deploying(root):

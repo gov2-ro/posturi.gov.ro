@@ -163,6 +163,9 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
 
     m["active"] = one(
         "SELECT COUNT(*) FROM job_postings WHERE expires_at >= ?", today_s)
+    m["anomaly_tables"] = one(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' "
+        "AND name IN ('anomaly_signals', 'anomaly_checks')")
     m["duplicate_urls"] = one(
         "SELECT COUNT(*) FROM (SELECT url FROM job_postings "
         "GROUP BY url HAVING COUNT(*) > 1)")
@@ -361,6 +364,13 @@ def evaluate(
 
     hard("no_duplicate_urls", m["duplicate_urls"] == 0,
          f"{m['duplicate_urls']} url(s) appear more than once")
+
+    # ANOMALY-PUBLIC: both tables must exist. No count threshold (the limit is a later
+    # decision). A record from an older run lacks the key: treat it as present.
+    anomaly_tables = m.get("anomaly_tables", 2)
+    hard("anomaly_tables", anomaly_tables == 2,
+         f"{anomaly_tables} of 2 anomaly tables (anomaly_signals, anomaly_checks) in the export"
+         if anomaly_tables != 2 else "anomaly_signals and anomaly_checks exist")
 
     hard("fts_complete", m["fts_rows"] == m["job_postings"],
          f"FTS index has {m['fts_rows']} rows against {m['job_postings']} postings"

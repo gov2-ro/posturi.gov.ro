@@ -327,6 +327,24 @@ def metrics(**kw):
     return m
 
 
+class TestAnomalyTables:
+    """ANOMALY-PUBLIC: both anomaly tables must exist; no count threshold."""
+
+    def test_both_tables_present_passes(self, check):
+        m = check_map(run_evaluate(check, metrics(anomaly_tables=2), prompt_version="v3",
+                                   max_age_hours=6.0))
+        assert m["anomaly_tables"][:2] == ("hard", True)
+
+    def test_a_missing_table_is_a_hard_failure(self, check):
+        m = check_map(run_evaluate(check, metrics(anomaly_tables=1), prompt_version="v3",
+                                   max_age_hours=6.0))
+        assert m["anomaly_tables"][:2] == ("hard", False)
+
+    def test_an_old_record_without_the_key_passes(self, check):
+        m = check_map(run_evaluate(check, metrics(), prompt_version="v3", max_age_hours=6.0))
+        assert m["anomaly_tables"][:2] == ("hard", True)
+
+
 class TestSustainedDecline:
     def test_a_1_5_point_loss_each_run_triggers_the_window_check(self, check):
         """No single run drops 5 points, yet the decline accumulates against

@@ -770,6 +770,31 @@ php -S localhost:8000 -t webapp-php webapp-php/router.php
 `router.php` exists only for PHP's built-in server — it serves static files and mirrors
 the `.htaccess` deny rules. Apache never loads it.
 
+### Anomaly signals and the admin page (ANOMALY-PUBLIC)
+
+`ops/run-pipeline.sh` runs `ops/anomaly-survey.py --write-table` after the export. It writes the
+tables `anomaly_signals` and `anomaly_checks` into `webapp-php/posturi.sqlite`. If the survey fails,
+the run logs a warning and deploys without new signals. `ops/check-export.py` refuses a file
+without both tables. The register `ops/anomaly-checks.json` gives each check a state: `hidden`,
+`listed` or `published`. Only the owner sets `published`, by hand. Review verdicts go into
+`data/anomaly-reviews.csv` (`check,posting_id,verdict,reviewer,date,note`).
+
+- `/statistici/anomalii/` shows the `published` checks. It is public.
+- `/admin/anomalii/` shows every check. It needs a login and has `noindex`. No public page links to it.
+
+To make the password file, the owner runs this once on the host, outside the web root:
+
+```bash
+mkdir -p ~/posturi-private && chmod 700 ~/posturi-private
+htpasswd -c ~/posturi-private/admin.htpasswd <user>     # asks for the password
+chmod 600 ~/posturi-private/admin.htpasswd
+```
+
+`webapp-php/.htaccess` names the file `/home/pax/posturi-private/admin.htpasswd`. Change the path if
+the account home is not `/home/pax`. `deploy-php.sh` does not upload or delete this file: the
+directory is outside `DEPLOY_PATH`. The page also checks `REMOTE_USER` and answers 403 when Apache
+did not authenticate the request.
+
 ### Structure
 
 | Path | Purpose |

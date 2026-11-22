@@ -24,6 +24,22 @@ RedirectMatch 404 ^/assets/
 # bin/ holds command-line tools (UX-14 alerts.php): never web-requestable.
 RedirectMatch 404 ^/bin(/|$)
 
+# ANOMALY-PUBLIC: HTTP basic auth for /admin/. The routes go through index.php, so the
+# match is on the request URI. The password file is outside the web root and outside git;
+# deploy-php.sh never uploads or deletes it (README: "Admin pages"). The IfModule guards
+# skip the block on a host without Apache 2.4 auth modules; the PHP guard in
+# pages/anomalies_admin.php then answers 403, so the page is never open.
+<IfModule mod_authn_file.c>
+<IfModule mod_auth_basic.c>
+<If "%{REQUEST_URI} =~ m#^/admin(/|$)#">
+    AuthType Basic
+    AuthName "posturi.gov2.ro admin"
+    AuthUserFile /home/pax/posturi-private/admin.htpasswd
+    Require valid-user
+</If>
+</IfModule>
+</IfModule>
+
 # ---- Static assets ----
 # app.css is cache-busted with ?v=<mtime>; fonts and htmx are content-immutable.
 <IfModule mod_expires.c>

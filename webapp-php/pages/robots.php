@@ -16,6 +16,9 @@ Disallow: /*?
 # Browser-local lists: the page is the same for everyone and holds no content.
 Disallow: /salvate/
 
+# Admin pages (basic auth). No public page links here.
+Disallow: /admin/
+
 Sitemap: {$origin}/sitemap.xml
 
 TXT;

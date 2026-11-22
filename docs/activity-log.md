@@ -2,6 +2,27 @@
 
 ## 2026
 
+### 2026-11-23 — ANOMALY-PUBLIC phase 1: table, admin page, public page (Sonnet, from the Opus brief)
+
+**Done**
+- `ops/anomaly-survey.py --write-table` writes `anomaly_signals` and `anomaly_checks` into the export (both replaced on each run; two indexes). The JSON and CSV outputs are unchanged. `ops/anomaly-checks.json` holds 30 checks, none `published`; `data/anomaly-reviews.csv` has the header only (`data/*` is git-ignored: add it with `git add -f`).
+- Checks without a posting of their own: R15, R16, R17 and R05 write one row per employer or group, on its first posting; kind `unusual_employer` adds `{"level": "employer"}` to `detail_json`. E01 is a distribution: its 596 contract-staff findings are rows, the distribution stays in the JSON. An unavailable check (E04 without the index CSV) has no rows and NULL counts. A review verdict goes into `detail_json`; the row stays in the table.
+- Pipeline: the survey runs in `ops/run-pipeline.sh` between `pipeline.py` and `check-export`, not as a `pipeline.py` step. A failed `pipeline.py` step aborts the deploy; a survey failure must only log a warning. `check-export` has one hard rule: both tables exist (an old log record without the key passes).
+- PHP: `/statistici/anomalii/` (`pages/anomalies_public.php`: `published` checks, `false_positive` signals hidden, "in review" text when none) and `/admin/anomalii/` (`pages/anomalies_admin.php`: every check, state, review numbers, "gata de publicare", up to 500 signals per check, `noindex`). `.htaccess` basic auth for `/admin/`; `robots.txt` disallows `/admin/`; `/statistici/` links to the public page.
+- Tests: 4 + 3 + 1 Python (table mode, check-export rule, pipeline order), `anomalies_test.php` (28 assertions).
+- Measured on a copy of `tmp/261118/grid153/posturi-after2.sqlite` (9,756 postings): 4,865 signal rows. Per check: R01 50, R02 66, R03 1527, R04 10, R05 604, R06 313, R07 29, R08 531, R09a 6, R09b 9, R09c 26, R10 53, R11 95, R12 90, R13 26, R14 17, R15 8, R16 77, R17 19, R18 0, R19 88, R20 78, E01 596, E02 24, E03 222, E05 26, E06 1, E07 24, E08 250, E04 unavailable.
+
+**Hard**
+- The PHP guard in the brief reads `PHP_AUTH_USER`. PHP fills it from the `Authorization` header, so on a host with no auth module a forged header would open the page. The guard reads `REMOTE_USER` and `REDIRECT_REMOTE_USER` only. A test sends a forged header and expects 403.
+- Measured on a local Apache 2.4.71 with the real `.htaccess`: no login gives 401, a wrong password 401, a good login reaches PHP with `REDIRECT_REMOTE_USER` set (not `REMOTE_USER`, because of the rewrite to `index.php`). The `<If>` block sits inside `IfModule` guards for `mod_authn_file` and `mod_auth_basic`, so Apache 2.2 skips it.
+
+**Decided**
+- State of E06 is `error_ours`: 2 of 4 samples are our grid-matching error (SALARY-GRID-MATCH). R09a-c and E08 are `error_posting`. Other states follow spec § 4; the owner changes any of them.
+- Assumed, not verified: the host is Apache 2.4 (Dreamhost, PHP 8.2) and the home is `/home/pax`. The repo does not state the Apache version. If the path is wrong, `/admin/` returns 500, never an open page.
+- Not done: `sitemap.php` does not list the public page (not in the brief's file list).
+
+---
+
 ### 2026-11-23 — SALARY-LABELS-LIMITS: the draft figure as a last resort, and the limits on `/despre/` (Sonnet, from the Opus brief)
 
 **Done**

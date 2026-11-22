@@ -82,7 +82,10 @@ class TestPhpCallSites:
     def test_every_salary_comparison_casts_its_bind(self, sources, name):
         src = sources[name]
         comparisons = re.findall(r"SALARY_EXPR \. \"\s*[<>]=?\s*([^\"]*)\"", src)
-        assert comparisons, f"no salary comparison found in {name}"
+        # Since 66fd330 (2026-11-18) the comparisons live in helpers.php only
+        # (salary_bucket_condition); list.php may hold none, but any it holds is cast.
+        if name == "helpers.php":
+            assert comparisons, f"no salary comparison found in {name}"
         for rhs in comparisons:
             assert "CAST(? AS REAL)" in rhs, f"uncast bind in {name}: {rhs!r}"
 

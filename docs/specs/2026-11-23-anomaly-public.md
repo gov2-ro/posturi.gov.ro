@@ -1,6 +1,6 @@
 # Spec: anomaly signals on the public site (ANOMALY-PUBLIC)
 
-Date: 2026-11-23. Author: Opus. Status: draft, waits for owner decisions (§ 7).
+Date: 2026-11-23. Author: Opus. Status: decided (owner, 2026-11-23, § 7). Ready for phase 1.
 
 ## 1. Goal
 
@@ -54,14 +54,32 @@ explanation (one or two sentences), method note, and **state**:
 
 | State | Where it shows |
 |---|---|
-| `hidden` | Nowhere on the site. The survey still computes it. |
-| `listed` | On `/anomalii/` only. The page has `noindex` and no link from the main menu. |
-| `published` | On `/anomalii/`, as a chip with its explanation on the detail page, and as a filter. |
+| `hidden` | On the admin page only. |
+| `listed` | On the admin page only, marked „în verificare”. |
+| `published` | On the admin page, on the public page, as a chip with its explanation on the detail page, and as a filter. |
 
-The owner changes a state. A check moves to `published` only after a person reads a sample
-(§ 3.5). The PHP code reads the register; a state change needs a data deploy only.
+**Only the owner changes a state, by hand, in the register.** Nothing becomes `published`
+automatically, also when a review meets the threshold (§ 3.5). The PHP code reads the
+register; a state change needs a data deploy only.
 
-### 3.3 The page `/anomalii/`
+### 3.3 Two pages
+
+**Admin page `/admin/anomalii/`** (on the PHP host):
+
+- Shows every check in every state, with its state, count, share, review numbers
+  (read / real / false positive) and the full list of signals.
+- HTTP basic auth through `.htaccess`, for that path only. The password file is outside the
+  web root and outside git; `deploy-php.sh` does not overwrite it.
+- `noindex`, no link from any public page, `Disallow` in `robots.txt`.
+- Read-only. Reviews go into `data/anomaly-reviews.csv` (§ 3.5), not through the page.
+
+**Public page `/statistici/anomalii/`**:
+
+- Shows `published` checks only. When no check is `published`, the page says that the
+  signals are in review, and shows no list.
+- Indexed. `/statistici/` links to it.
+
+Both pages use the same layout for a check:
 
 - Two sections: **Posibile erori** and **Posturi neobișnuite**.
 - For each check: the label, the explanation, the count and the share, and the list of postings
@@ -70,23 +88,21 @@ The owner changes a state. A check moves to `published` only after a person read
   grupei: 3 ani (n = 140)”.
 - A short method note at the top: how a signal is computed, and that a signal is not proof
   of an error or of an irregularity.
-- `/statistici/` links to `/anomalii/`.
-
 ### 3.4 Romanian wording
 
 - Say what the data shows. Do not judge. Use „semnal”, „neobișnuit”, „posibilă eroare”.
   Do not use „ilegal”, „fraudă”, „post cu dedicație” or „neregulă”.
-- A possible error in **our** data says so: „Posibilă eroare în datele noastre”. The site
-  does not blame an employer for our parser.
+- A possible error in **our** data is shown, and it says so: „Posibilă eroare în datele
+  noastre”. The site does not blame an employer for our parser. (Owner, 2026-11-23.)
 - Every explanation names the comparison group and its size.
 
 ### 3.5 Review before publication
 
 - A file `data/anomaly-reviews.csv` (in git) records each review: `check, posting_id,
   verdict (real | false_positive | unclear), reviewer, date, note`.
-- A check moves to `published` when a person has read at least 10 samples (or all, if
-  fewer) and the false positives are 20% or less. The decision and the numbers go into the
-  activity log.
+- A check is **ready** when a person has read at least 10 samples (or all, if fewer) and
+  the false positives are 20% or less. The admin page shows „gata de publicare”. Only the
+  owner then sets `published` (§ 3.2). The decision and the numbers go into the activity log.
 - An **employer-level** check (same employer and title repeated, many postings on one day,
   many short deadlines) names an employer. It stays `listed` until the owner publishes it
   by name, check by check.
@@ -94,8 +110,8 @@ The owner changes a state. A check moves to `published` only after a person read
 
 ### 3.6 Search engines
 
-`/anomalii/` has `noindex` while any shown check is only `listed`. The detail-page chips
-show only `published` checks, so the indexed pages hold only reviewed signals.
+The admin page is not indexed (§ 3.3). The public page and the detail-page chips show only
+`published` checks, so the indexed pages hold only signals that the owner published.
 
 ## 4. Initial states (proposal)
 
@@ -116,15 +132,16 @@ show only `published` checks, so the indexed pages hold only reviewed signals.
 | R18 free-mail contact, R20 many skills | — | hidden | not an anomaly; R20 is a measure of the extraction |
 | others | per owner | listed | |
 
-No check starts as `published`. The first review round decides.
+No check starts as `published`. After the first review round, the owner decides.
 
 ## 5. Phases
 
-1. **Table and page (Sonnet).** The pipeline step, `anomaly_signals`, the register,
-   `/anomalii/` with `noindex`, the link from `/statistici/`. A `check-export` rule: the
-   table exists, and each `published` check has a count (the step limit is a later decision).
-2. **Review round (owner or Opus).** Read 10 samples per check, fill `anomaly-reviews.csv`,
-   and set the first `published` states.
+1. **Table and pages (Sonnet).** The pipeline step, `anomaly_signals`, the register, the
+   admin page with basic auth, the public page and the link from `/statistici/`. A
+   `check-export` rule: the table exists (the step limit is a later decision). The owner
+   creates the password file on the host; the brief says how.
+2. **Review round (owner or Opus).** Read 10 samples per check and fill
+   `anomaly-reviews.csv`. The owner sets the first `published` states.
 3. **Chips and filter (Sonnet).** Detail-page chips with the explanation for `published`
    checks; the filter in `build_filters()`. **Tell the session that owns DATA-STUDIES-NOT
    before this phase changes `build_filters()`.**
@@ -135,11 +152,12 @@ No check starts as `published`. The first review round decides.
 - An email alert for anomalies.
 - A change to the six existing flags or their names.
 
-## 7. Decisions for the owner
+## 7. Owner decisions (2026-11-23)
 
-1. Do we show possible errors in **our** data on the public page (§ 3.4), or fix them silently?
-   Proposal: show them as „posibilă eroare în datele noastre”. It is honest, and it shows what
-   is still to fix.
-2. Is the threshold for `published` right: 10 samples and 20% or fewer false positives?
-3. Is the route `/anomalii/` right? Alternative: a section of `/statistici/`.
-4. Is `noindex` right for the start?
+1. Possible errors in **our** data are shown, labelled „posibilă eroare în datele noastre”.
+2. The review threshold is 10 samples and 20% or fewer false positives. It marks a check
+   ready; it never publishes it. Only the owner publishes.
+3. Two pages: the public page in the statistics section (`/statistici/anomalii/`), and an
+   admin page with every check (`/admin/anomalii/`).
+4. Search engines: follows from 3. The admin page is not indexed; the public page is.
+   (Opus, from decision 3; the owner did not answer the original question.)

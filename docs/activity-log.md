@@ -2,6 +2,20 @@
 
 ## 2026
 
+### 2026-11-22 — DATA-DEADLINE-SANITY live; survey re-run on the VPS (VPS session, reviewed by Opus)
+
+**Done**
+- The VPS session pulled `f369ce0`, ran `export-to-sqlite.py --active-only` (no LLM calls), `ops/check-export.py` (33/33 pass) and `deploy-php.sh --data-only --no-export`. Export built 2026-11-22T21:34:20Z, 2,983 postings. The live site returns HTTP 200 with the new `built_at`. Cloudflare was not purged (the CF variables are not set).
+- Survey, before → after: R07 11/2898 → **0/2887** · R08 26/2983 → 26/2983 · E03 63 → **26** (76 parallel pairs not counted) · E06 27/33 → **6/33** (31 ranges wider than the grid not counted).
+- The 4 sampled R07 postings now take the card date (`expirare`), and it matches the `Termen` on the source card: `paznic-32` 2026-11-23, `muncitor-calificat-iv-bucatar-3` 2026-12-23, `administrator-financiar-contabil-6` 2026-12-02, `muncitor-necalificat-ingrijitor-animale` 2026-11-26. `v4_application_deadline` still holds the old LLM values; only `apply_deadline` changed.
+
+**Hard**
+- R08 stays at 26. The short windows are a different case from R07. Not checked against the posting text.
+- E03 samples: two plausible reposts (Apahida, 26 days; Sepsi Ut Epito, 38 days). Alexandria posts parallel "Administrator" posts in two waves 41 days apart; the check links the waves. Assumed acceptable: it is a recurring drive.
+- E06 samples, 4 of 4 are real mismatches, not range artifacts. Two point at a wrong grid row (for example a debutant inspector matched to 9052–12109 lei); two declare pay well above the grid. The source pages were not opened. A wrong grid row is a salary-matching defect, not a posting anomaly.
+
+---
+
 ### 2026-11-22 — DATA-DEADLINE-SANITY: reject an apply deadline before the publication day (Sonnet, from the Opus brief)
 
 **Done**

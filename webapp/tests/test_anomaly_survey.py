@@ -247,7 +247,20 @@ def test_e03_repost_chain(sv, tmp_path):
          {"employer_name": "A", "title": "Paznic", "published_at": "2025-09-01"},
          {"employer_name": "A", "title": "Paznic", "published_at": "2025-09-01"}]
     e, rows = counts(sv, tmp_path, "E03", p)
-    assert e["count"] == 1 and rows[0][2] == 31 and e["extra"]["same_day_pairs_not_counted"] == 1
+    assert e["count"] == 1 and rows[0][2] == 31 and e["extra"]["parallel_pairs_not_counted"] == 1
+
+
+def test_e03_parallel_and_gap(sv, tmp_path):
+    same_day = [{"employer_name": "B", "title": "Admin", "published_at": "2025-11-05"},
+                {"employer_name": "B", "title": "Admin", "published_at": "2025-11-05"}]
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    e, _ = counts(sv, tmp_path / "a", "E03", same_day)
+    assert e["count"] == 0 and e["extra"]["parallel_pairs_not_counted"] == 1
+    twenty = [{"employer_name": "C", "title": "Admin", "published_at": "2025-11-01"},
+              {"employer_name": "C", "title": "Admin", "published_at": "2025-11-21"}]
+    e, rows = counts(sv, tmp_path / "b", "E03", twenty)
+    assert e["count"] == 1 and rows[0][2] == 20
 
 
 def test_e04_edit_after_publication(sv, tmp_path):
@@ -293,6 +306,14 @@ def test_e06_pay_vs_grid(sv, tmp_path):
          {"inf_salary_min": 3000, "inf_salary_max": 3000, **g}]      # below minimum wage, excluded
     e, rows = counts(sv, tmp_path, "E06", p)
     assert (e["count"], e["denominator"]) == (1, 2) and rows[0][0] == 1
+
+
+def test_e06_seniority_spread_not_a_hit(sv, tmp_path):
+    g = {"sal_min": 4325, "sal_max": 4428}
+    p = [{"inf_salary_min": 4325, "inf_salary_max": 5939, **g},     # wide range, min = grid min
+         {"inf_salary_min": 4100, "inf_salary_max": 4200, **g}]  # min 5% below, not a hit
+    e, rows = counts(sv, tmp_path, "E06", p)
+    assert e["count"] == 0 and e["extra"]["range_wider_than_grid_not_counted"] == 2
 
 
 def test_e07_rare_freemail(sv, tmp_path):

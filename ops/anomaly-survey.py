@@ -86,6 +86,7 @@ DEFAULTS = {
     "skills_min": 12,            # row 20
     "holiday_window_min_wd": 10,  # E2: "fewer than N working days"
     "repost_days": 90,           # E3
+    "repost_min_days": 14,       # E3: a closer pair is a parallel post, not a repost
     "narrow_top_share": 0.02,    # E5
     "narrow_min_hits": 2,        # E5
     "isced_rare_share": 0.02,    # E5
@@ -619,32 +620,33 @@ def e02(c: Ctx):
     return f, rows, f"N = {n_min} working days; peer_value names the holiday", {}
 
 
-@check("E03", "repost chain: same employer + title, next posting within 90 days", "C",
+@check("E03", "repost chain: same employer + title, next posting 14 to 90 days later", "C",
        {JP: ["employer_name", "title", "published_at"]})
 def e03(c: Ctx):
     g: dict[tuple, list[dict]] = defaultdict(list)
     for p in c.postings:
         if p["_emp"] and p["_pub"]:
             g[(p["_emp"], _norm_title(p["title"] or ""))].append(p)
-    f, same_day = [], 0
-    lim = c.params["repost_days"]
+    f, parallel = [], 0
+    lim, min_gap = c.params["repost_days"], c.params["repost_min_days"]
     chains = 0
     for rows in g.values():
         rows.sort(key=lambda p: (p["_pub"], p["id"]))
         started = False
         for prev, cur in zip(rows, rows[1:]):
             gap = (cur["_pub"] - prev["_pub"]).days
-            if gap == 0:
-                same_day += 1
-            elif 0 < gap <= lim:
+            if gap < min_gap:
+                parallel += 1
+            elif gap <= lim:
                 f.append(F(cur["id"], gap, prev["id"]))
                 if not started:
                     chains += 1
                     started = True
     return f, len(c.postings), (
         "finding = the later posting of a pair; value = days after the earlier one, "
-        "peer = earlier posting id. Same-day pairs are not counted."), \
-        {"chains": chains, "same_day_pairs_not_counted": same_day}
+        "peer = earlier posting id. Pairs under repost_min_days apart are parallel posts, "
+        "not counted."), \
+        {"chains": chains, "parallel_pairs_not_counted": parallel, "min_days": min_gap}
 
 
 @check("E04", "edit after publication: title or expiry changed after first sight", "B",
@@ -736,11 +738,11 @@ def e05(c: Ctx):
                     "the group top 2% and z >= 2; a rare ISCED field has < 2% of the group."), {}
 
 
-@check("E06", "declared pay outside the grid by more than 20%", "B",
+@check("E06", "declared minimum pay outside the grid by more than 20%", "B",
        {JP: ["inf_salary_min", "inf_salary_max", "sal_min", "sal_max"]})
 def e06(c: Ctx):
     pr = c.params
-    f, rows = [], 0
+    f, rows, wider = [], 0, 0
     floor, wage, tol = pr["salary_floor_monthly"], pr["min_wage_gross"], pr["pay_tolerance"]
     for p in c.postings:
         lo = p["inf_salary_min"]
@@ -749,10 +751,14 @@ def e06(c: Ctx):
         if lo is None or gmin is None or gmax is None or lo < floor or lo < wage:
             continue
         rows += 1
-        if lo < gmin * (1 - tol) or hi > gmax * (1 + tol):
+        if hi > gmax or lo < gmin:
+            wider += 1
+        if lo < gmin * (1 - tol) or lo > gmax * (1 + tol):
             f.append(F(p["id"], f"{lo:g}-{hi:g}", f"{gmin:g}-{gmax:g}"))
     return f, rows, (f"excluded: declared min below {floor} (hourly) or below the minimum wage "
-                     f"{wage} (parameter, unconfirmed)"), {}
+                     f"{wage} (parameter, unconfirmed). Hit = declared minimum, not the range; "
+                     "a wider range (seniority spread) is counted in extra only"), \
+        {"range_wider_than_grid_not_counted": wider}
 
 
 FREE_MAIL_RE = re.compile(r"@(gmail|yahoo|ymail|hotmail|outlook|live|icloud|rocketmail)\.|@mail\.com", re.I)

@@ -2,6 +2,16 @@
 
 ## 2026
 
+### 2026-11-22 — ANOMALY-SURVEY Step 1b: E03 and E06 fixed (Sonnet, from the Opus brief)
+
+**Done:** E06 now compares the declared minimum only: a hit is a minimum more than 20% below the grid minimum or more than 20% above the grid maximum. Ranges wider than the grid go to `extra.range_wider_than_grid_not_counted`. E03 counts a pair as a repost only when the gap is 14 to 90 days (new parameter `repost_min_days`). Closer pairs go to `extra.parallel_pairs_not_counted`. Tests: one fixture per rule; 34 pass.
+
+**Measured:** on the local `tmp/261118/grid153/posturi-after2.sqlite` (9756 postings): E03 336 before, 222 after (202 chains, 299 parallel pairs). E06 1 of 4 before and after (3 wider ranges not counted). The local copy has few declared pay rows. The VPS figures (E06 27 of 33, E03 63) are not reproduced here.
+
+**Assumed:** the 14-day limit is the Opus value. Pairs are consecutive postings in publication order, so a parallel post between two reposts can shorten a gap.
+
+---
+
 ### 2026-11-22 — ANOMALY-SURVEY: VPS counts on the live export (VPS session, reviewed by Opus)
 
 **Done**

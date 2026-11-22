@@ -2,6 +2,28 @@
 
 ## 2026
 
+### 2026-11-22 — DATA-STUDIES-NOT: "Fără licență" removes the levels above it (Sonnet, from the Opus brief)
+
+**Done**
+- `build_filters()`: `studies_level_not[]` removes the level and every level above it (generală < profesională < liceală < postliceală < licență < master < doctorat). A posting with no level stays. The other `_not` filters and all URL keys are unchanged.
+- Chip „Fără studii: Licență” is now „Fără licență și peste” (doctorat: „Fără doctorat”). The control of the level has the same words (`title`, screen-reader text).
+- `posting_roles.py`: a medical title read as `doctorat` becomes `licenta` unless the text says „doctorat” / „studii doctorale”. A role with no level and a COR code in major group 2 gets `licenta`. New nullable column `study_level_source` (`text` / `inferat-ocupatie`). The „Pot aplica?” panel ignores an inferred level.
+- `export-to-sqlite.py`: stderr warning for a medical title with level `generala`.
+- Tests: `webapp-php/tests/studies_not_test.php` (32), 12 new Python tests in `test_posting_roles.py`, Playwright `studies_not.spec.js` at 375 and 1280 px (6 pass). Full suites: PHP all pass except `theme_test.php` sprite check (before this work too); Python 1768 passed, 1 known failure (`test_salary_facet_sql.py`).
+- Local counts on the export of 18 Oct (9,756 postings): exclusion removes 4,394 today, 4,842 now. Medical-title postings that pass: 72 today, 31 now. Step 4 changes 47 roles (47 postings; 3 keep `doctorat` because the text asks for it). Decision 4 fills 252 postings (256 roles). Details and VPS commands: `docs/audits/2026-11-22-studies-not.md`.
+
+**Hard**
+- The first medical pattern (title starts with „medic”) changed 35 roles and missed „2 posturi medici specialisti/primari …”. The word pattern („medic” / „medici”) changed 47, all medical.
+- `profesionala` is a level of the extraction but not of the brief's order. Added between generală and liceală.
+- The 31 medical postings that still pass: no level (23 before the inference; group 2 fills most), `generala` (9, warning only), `postliceala`.
+- `ops/check-export.py` is out of scope here. The warning sits in the export verify step.
+
+**Decided**
+- Inferred level source is `occ_cor_code` (ISCO group as fallback), not `occ_group`: 252 postings instead of 350. The cost of `occ_group`: it holds a group read from the title and the rule would trust it.
+- An inferred level is data for the filter, not a stated requirement: the eligibility panel skips it.
+
+---
+
 ### 2026-11-22 — DATA-DEADLINE-SANITY live; survey re-run on the VPS (VPS session, reviewed by Opus)
 
 **Done**

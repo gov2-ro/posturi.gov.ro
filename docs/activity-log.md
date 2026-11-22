@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-11-23 — SALARY-LABELS-LIMITS: the draft figure as a last resort, and the limits on `/despre/` (Sonnet, from the Opus brief)
+
+**Done**
+- Export: `job_postings` has `sal_baza` (`lege_in_vigoare`, `proiect`, `declaratii`; empty for an old row), `sal_draft_min`, `sal_draft_max`. New table `salary_limits` (key, JSON): `N, A, Dc, L, D, F` and `gap_pct`, `gap_n`. The sort order, the filter and `SALARY_EXPR` do not change.
+- `{X}` is computed at export time: the median of `draft / law - 1` over the postings with `baza` = `lege_in_vigoare` and a draft figure, in whole percent. `/despre/` reads it. The coverage groups do not overlap and follow ADR 0008 rule 4: stated pay (`A`), declared pay (`Dc`), law (`L`), draft (`D`), none (`F`). A project-hired post counts as `A` only if its pay is read.
+- PHP: `sal_baza()`; `list_salary()` gives `kind` „estimare aproximativă” and the tooltip for a draft figure (list, grid, table); the detail page has the heading, the note, and for a law figure the side note linked to `/estimator-salariu/`; the feeds follow.
+- Wrong texts: „Conform legii salarizării (propunere)” is now „Estimare după Legea 153/2017” (law) and „Estimare aproximativă, după proiectul de lege” (draft); the „coeficient 0 × 2.415 lei” line of a law figure is now „Salariul de bază din tabelul Legii 153/2017, la gradația N”; `stats.php` and four comments no longer say that the draft is the main figure.
+- `/despre/`: the owner text, version 2, word for word, with `#ce-nu-stim`. Without the `salary_limits` table, the page leaves out the gap sentence and the coverage paragraph.
+- Tests: 8 Python (`test_salary_limits_export.py`), `salary_limits_test.php` (35), Playwright `salary_limits.spec.js` (3 tests, at 320, 375 and 1280 px). Four older tests got `sal_baza` in their data.
+
+**Hard**
+- Old fixtures have no `sal_baza`. The rule „empty counts as draft” made every law row read „estimare aproximativă”. `sal_baza()` now falls back to the variant (`declaratii-…`, `lege…`) before the draft.
+
+**Decided**
+- The numbers come from the export (a table), not from typed text: the cost is one small table. The alternative (text numbers) goes stale after each pipeline run.
+- Not done: `data/salarii/parametri.json` (out of the brief), `archived.php`. See the backlog.
+- Not measured here: the live numbers. The local copy has no VPS data. The VPS session runs the export and reads `/despre/`.
+
+---
+
 ### 2026-11-22 — DATA-STUDIES-NOT: "Fără licență" removes the levels above it (Sonnet, from the Opus brief)
 
 **Done**

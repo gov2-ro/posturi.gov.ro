@@ -210,6 +210,14 @@ class Grid:
                 self.by_name.setdefault(key, []).append(r)
                 self.display_name.setdefault(key, name)
         self._name_tokens = {n: set(n.split()) for n in self.by_name}
+        #: The full label of a row whose synonyms were split on "/" ("agent de poliţie/penitenciare
+        #: debutant" becomes "...agent de poliţie" and "penitenciare debutant"): no synonym equals
+        #: the label, so `select()` finds it here, as a last resort.
+        self.by_label: dict[str, list[GridRow]] = {}
+        for r in rows:
+            key = norm(r.functie)
+            if key and key not in self.by_name:
+                self.by_label.setdefault(key, []).append(r)
 
     # -- variants and gradations ------------------------------------------
     @property
@@ -337,6 +345,8 @@ class Grid:
                             if key.startswith(n + " ") for r in rs]
                     if rows:
                         break
+        if not rows and name:
+            rows = list(self.by_label.get(name, []))
         if not rows and cod:
             rows = list(self.by_cod.get(cod, []))
             # Reached only when the name is missing: widen along the grade axis

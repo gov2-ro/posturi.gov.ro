@@ -17,6 +17,7 @@ than guessed. See `docs/salarii/.../SPECIFICATII_IMPLEMENTARE.md` section 5.
 Outputs (git-tracked, versioned by `--version-id`):
     data/salarii/grila-<version>.csv     one row per grid row
     data/salarii/functii-<version>.csv   retrieval index: name -> grid rows
+    data/salarii/solda-grad-<version>.csv  Anexa VI: coefficient of the rank pay (soldă de grad)
 
 A second source builds the grid of the law in force (Legea 153/2017) from the
 consolidated HTML of legislatie.just.ro, saved in `docs/salarii/lege-153/`:
@@ -752,6 +753,35 @@ def main_law(args) -> int:
     return 0
 
 
+def parse_rank_pay(wb) -> list[dict]:
+    """Anexa VI, sheet `VI_Armata`, part "2. Coeficienții de salarizare ai soldelor de grad".
+
+    One row per rank: `nr_crt`, `grad` (the label of the cell), `grade` (the rank names, split
+    on ";") and `coeficient`. The part starts at the header "Gradul militar sau gradul
+    profesional" and ends at the first row without a number.
+    """
+    if "VI_Armata" not in wb.sheetnames:
+        return []
+    out: list[dict] = []
+    started = False
+    for row in wb["VI_Armata"].iter_rows(values_only=True):
+        cells = list(row) + [None] * 4
+        label = str(cells[2] or "").strip()
+        if not started:
+            started = norm(label).startswith("gradul militar sau gradul profesional")
+            continue
+        nr = cells[1]
+        coef = coef_of(str(cells[3])) if cells[3] is not None else None
+        if not isinstance(nr, (int, float)) or not label or coef is None:
+            break
+        out.append({
+            "nr_crt": int(nr), "grad": label,
+            "grade": "|".join(x.strip() for x in label.split(";") if x.strip()),
+            "coeficient": coef,
+        })
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--source", choices=["draft", "lege-153"], default="draft",
@@ -776,6 +806,7 @@ def main() -> int:
         grid.extend(rows)
         review.extend(notes)
         per_sheet[ws.title] = len(rows)
+    rank_pay = parse_rank_pay(wb)
     wb.close()
 
     print(f"parsed {len(grid)} grid rows from {len(per_sheet)} sheets")
@@ -830,6 +861,14 @@ def main() -> int:
                 len(e["randuri"]), "|".join(e["randuri"][:40]),
             ])
     print(f"wrote {func_path} ({len(index)} distinct function names)")
+
+    if rank_pay:
+        rank_path = args.out_dir / f"solda-grad-{args.version_id}.csv"
+        with rank_path.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, fieldnames=["nr_crt", "grad", "grade", "coeficient"])
+            w.writeheader()
+            w.writerows(rank_pay)
+        print(f"wrote {rank_path} ({len(rank_pay)} ranks)")
     return 0
 
 

@@ -657,3 +657,32 @@ class TestEstimatorExport:
         assert params["draft"]["valoare_referinta_lei"] == 4100
         assert params["salariu_minim"]["lei"] == 4325 and params["salariu_minim"]["de_la"] == "2026-07-01"
         assert [g["nivel"] for g in params["gradatii"]] == [0, 1, 2, 3, 4, 5]
+
+
+class TestAnexaVILabel:
+    """Anexa VI writes "agent de poliţie/penitenciare debutant" in one cell.
+
+    The synonym split on the slash leaves no synonym that equals the full label, so the
+    label found no row (SALARY-ANEXA-VI). `select()` now falls back to the full label.
+    """
+
+    LABEL = "Funcţii corespunzătoare gradului de agent de poliţie/penitenciare debutant"
+
+    def test_the_full_label_with_debutant_finds_its_row(self, grid):
+        rows = grid.select({"functie": self.LABEL, "studii": "postliceala", "anexa": "VI"})
+        assert [(r.sheet, r.source_row, r.studii) for r in rows] == [("VI_Armata", 28, "PL")]
+        assert rows[0].coef_min == rows[0].coef_max == 1.49
+
+    def test_the_full_label_without_studies_finds_both_study_levels(self, grid):
+        rows = grid.select({"functie": self.LABEL})
+        assert sorted(r.studii for r in rows) == ["M", "PL"]
+
+    def test_the_post_pay_of_the_row(self, grid):
+        est = grid.estimate({"functie": self.LABEL, "studii": "postliceala", "anexa": "VI"})
+        assert est.lei_min == est.lei_max == math.ceil(1.49 * 4100)
+
+    def test_the_rank_pay_file_has_the_rank_table(self):
+        path = sg.DATA_DIR / f"solda-grad-{sg.DEFAULT_VERSION}.csv"
+        rows = list(csv.DictReader(path.open(encoding="utf-8")))
+        assert len(rows) == 22
+        assert {r["coeficient"] for r in rows if "Agent de poliţie" in r["grad"]} == {"0.52"}

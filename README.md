@@ -785,15 +785,19 @@ without both tables. The register `ops/anomaly-checks.json` gives each check a s
 To make the password file, the owner runs this once on the host, outside the web root:
 
 ```bash
-mkdir -p ~/posturi-private && chmod 700 ~/posturi-private
-htpasswd -c ~/posturi-private/admin.htpasswd <user>     # asks for the password
-chmod 600 ~/posturi-private/admin.htpasswd
+mkdir -p ~/.htpasswds/posturi.gov2.ro
+chmod 711 ~/.htpasswds ~/.htpasswds/posturi.gov2.ro     # Apache may enter, not list
+htpasswd -c ~/.htpasswds/posturi.gov2.ro/admin.htpasswd <user>     # asks for the password
+chmod 644 ~/.htpasswds/posturi.gov2.ro/admin.htpasswd   # Apache runs as another user and must read it
 ```
 
-`webapp-php/.htaccess` names the file `/home/pax/posturi-private/admin.htpasswd`. Change the path if
-the account home is not `/home/pax`. `deploy-php.sh` does not upload or delete this file: the
-directory is outside `DEPLOY_PATH`. The page also checks `REMOTE_USER` and answers 403 when Apache
-did not authenticate the request.
+Do not put the file in `~/posturi-private`: that directory holds the alert subscriptions and stays
+`700`, so Apache cannot read it there (a wrong login then gives 500). `webapp-php/.htaccess` names
+the file `/home/pax/.htpasswds/posturi.gov2.ro/admin.htpasswd`. Change the path if the account home
+is not `/home/pax`. `deploy-php.sh` does not upload or delete this file: the directory is outside
+`DEPLOY_PATH`. The page also checks `REMOTE_USER`. When Apache did not authenticate the request, it
+answers 401 with no data. (On the host, Apache's own 401 goes through the rewrite to `index.php`,
+so the page must send 401, not 403, or the browser shows no login prompt.)
 
 ### Structure
 

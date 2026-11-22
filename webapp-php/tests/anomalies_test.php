@@ -5,7 +5,7 @@
  * Fixture: `anomaly_checks` holds one `published` check (with one signal and one
  * `false_positive` signal), one `listed` check and one `hidden` check. A second database holds
  * no published check. The admin page needs REMOTE_USER, which Apache sets; the test starts one
- * server without it (403) and one with it.
+ * server without it (401) and one with it.
  *
  * Usage: php tests/anomalies_test.php
  */
@@ -83,9 +83,9 @@ run_suite('the public page with no published check says the signals are in revie
     assert_not_contains('<table', $h, 'no list');
 });
 
-run_suite('the admin page returns 403 without a login', function () use ($srv_pub) {
+run_suite('the admin page returns 401 without a login', function () use ($srv_pub) {
     [$code, $h] = an_get($srv_pub['base'], '/admin/anomalii/');
-    assert_same(403, $code, 'status');
+    assert_same(401, $code, 'status');
     assert_not_contains('LISTAT', $h, 'no data');
     // A forged Authorization header must not open the page (PHP_AUTH_USER is not trusted).
     $ctx = stream_context_create(['http' => ['ignore_errors' => true, 'header' => "Authorization: Basic " . base64_encode('x:y') . "\r\n"]]);
@@ -94,7 +94,7 @@ run_suite('the admin page returns 403 without a login', function () use ($srv_pu
     foreach (($http_response_header ?? []) as $line) {
         if (preg_match('#^HTTP/\S+ (\d{3})#', $line, $m)) $code = (int)$m[1];
     }
-    assert_same(403, $code, 'forged header');
+    assert_same(401, $code, 'forged header');
 });
 
 run_suite('the admin page shows every check with its state, behind a login', function () use ($srv_admin) {

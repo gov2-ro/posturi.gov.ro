@@ -29,6 +29,12 @@ No posting maps to Anexa VI today (local database, 2026-11-20: 0 postings). The 
 4. **Bonuses stay out.** Food allowance, equipment, rent, the Art. 10 compensation (up to 25%) and other bonuses are not in the figure. The result says so in one line.
 5. **The August draft stays out.** We have no August workbook. Do not compute it from VR 4,000 and the July coefficients (`parametri.json` → `2026-08-20.nota`).
 
+## Decisions (owner, 2026-11-22, after the stop of the first run)
+
+6. **Rank range.** A post row that names a range of ranks ("agent – agent șef principal") gives a range: the lowest rank for `lei_min`, the highest for `lei_max`.
+7. **"Plutonier adjutant șef"** maps to the rank "plutonier adjutant principal". The result carries a warning.
+8. **Build the law-in-force rows too.** ADR 0008 rule 10 holds the rule: post pay = 2022 lei value × 1.05; rank pay = the table of OUG 26/2024 art. XI. Step 5 is no longer a spike: see step 7.
+
 ## Steps
 
 1. **Grid.** `build-salary-grid.py` reads rows 71–95 of `VI_Armata` into a new file, `data/salarii/solda-grad-2026-07-17.csv` (columns: `nr_crt`, `grad` (the full label), `grade` (the names split on ";"), `coeficient`). Do not change the rows of `grila-2026-07-17.csv`.
@@ -42,6 +48,13 @@ No posting maps to Anexa VI today (local database, 2026-11-20: 0 postings). The 
    - Is a public figure available to check it (for example, a recruitment notice of MAI or IGPF that states the pay)?
    Stop after the report. Opus decides if the law-in-force rows get built.
 6. **Tests.** In `webapp/tests/test_salary_grid.py`: agent de poliție debutant, PL, gradation 0 = `ceil((1.49 + 0.52) × 4100)` = 8,241 lei; one officer row (for example "locotenent" with rank 0,65); one row with no rank (decision 2); the "debutant" label of step 3.
+
+7. **Law in force (decision 8, ADR 0008 rule 10).**
+   - Put the rank pay of OUG 26/2024 art. XI in a new file `data/salarii/solda-grad-lege153-2026.csv` (`grad`, `grade`, `lei`, `act_sursa`). Type it from the act text. Record the URL and the date of the text in the report.
+   - `build-salary-grid.py --source lege-153` writes the Anexa VI Cap. I rows with `lei = ceil(2022 value × 1.05)` and `act_sursa` "OUG 115/2023 art. I (1)". Do not change any other row: compare the file before and after.
+   - `estimate()` adds the rank pay of the law table to an Anexa VI law row, with the rank rules of decisions 2, 6 and 7.
+   - Tests: agent de poliție debutant, PL = 3,938 + 1,980 = 5,918 lei; one range row; one "plutonier adjutant șef" row.
+   - The estimator page shows the law figure first and the draft figure as the side note („Dacă proiectul noii legi ar fi adoptat: …”), as ADR 0008 rule 2 says.
 
 ## Where the data is
 
@@ -58,4 +71,4 @@ The local Postgres is a copy of 9 Sep 2026; the live data is on the VPS. Build a
 
 - If the rank names of the post rows do not map one to one to the rank table.
 - If a step changes the result of another annex.
-- If the law in force needs a new rule in ADR 0008.
+- If the law in force needs a rule that ADR 0008 rule 10 does not hold.

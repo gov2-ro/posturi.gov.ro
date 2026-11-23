@@ -73,8 +73,9 @@ Stage by path; never `git add -A`, stash or reset.
 
 - The snapshot has 6,645 rows (6,417 `linked` + 228 `linked_no_cif`) from the crosswalk of
   org v0.69.0 (ciulei `e314ded`), or the script says why not.
-- Deploy only after org v0.69.0 is live on org.gov2.ro. Before that, some `org_url` links do not
-  resolve on the live site. Ask ciulei or org-dev before the deploy.
+- Org v0.69.0 is live on org.gov2.ro since 2026-11-23 (data 09:56:37Z), so every `org_url` of
+  ciulei `e314ded` resolves. If you build from a newer crosswalk, ask ciulei whether its org
+  build is live before the deploy.
 - No page shows a link to a `P` record, and no page shows a candidate CUI.
 - `php webapp-php/tests/*_test.php` and the browser spec for the employer page pass.
 - Report the match count from step 2 on `data/_dev/full-2026-11-23.sqlite` (the full VPS export of 2026-11-23, not in git). Expect 6,645 matches.

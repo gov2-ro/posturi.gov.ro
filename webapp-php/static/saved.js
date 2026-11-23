@@ -374,6 +374,8 @@
     renderNav();
     renderStatus();
     if (SP) renderSaved();
+    // flux.js redraws when a posting was hidden or restored, here or in another tab.
+    try { document.dispatchEvent(new Event('posturi:prefs-changed')); } catch (e) { /* ignore */ }
   }
 
   function syncFromStorage() { readStore(); applyAll(); }
@@ -572,6 +574,7 @@
     var q = [];
     if (view === 'hidden') q.push('vedere=ascunse');
     if (view === 'notes') q.push('vedere=notite');
+    if (view === 'saved') q.push('vedere=liste');
     if (page > 1) q.push('pagina=' + page);
     return '/salvate/' + (q.length ? '?' + q.join('&') : '');
   }
@@ -581,9 +584,9 @@
     if (!root) return;
     var params = new URLSearchParams(window.location.search);
     var v = params.get('vedere');
-    // One page for searches, saved jobs and notes; only Ascunse is separate.
-    // ?vedere=notite and ?vedere=cautari (old links) show the default view.
-    var view = v === 'ascunse' ? 'hidden' : 'saved';
+    // Three tabs (UX-SALVATE-FLUX): Flux (default, drawn by flux.js), Liste (searches, employers, saved jobs
+    // and notes) and Ascunse. ?vedere=notite and ?vedere=cautari (old links) open Liste.
+    var view = v === 'ascunse' ? 'hidden' : (v === 'liste' || v === 'notite' || v === 'cautari') ? 'saved' : 'flux';
     var field = view === 'hidden' ? 'hiddenAt' : view === 'notes' ? 'note' : 'savedAt';
     var list = sortedBy(field);   // the saved-searches section is drawn by searches.js
     var savedN = sortedBy('savedAt').length, hiddenN = sortedBy('hiddenAt').length, notesN = sortedBy('note').length;
@@ -592,8 +595,8 @@
       if (a.getAttribute('data-view-tab') === view) a.setAttribute('aria-current', 'page');
       else a.removeAttribute('aria-current');
     });
-    qs('[data-count="saved"]', root).textContent = '(' + savedN + ')';
     qs('[data-count="hidden"]', root).textContent = '(' + hiddenN + ')';
+    if (view === 'flux') return;      // flux.js draws the Flux tab; the lists below are not on screen
     var hc = qs('[data-saved-heading]', root);
     if (hc) {
       var hn = view === 'hidden' ? hiddenN : view === 'notes' ? notesN : savedN;
@@ -881,7 +884,18 @@
   document.addEventListener('posturi:employers-changed', renderNav);
 
   // Small public surface for searches.js: the same notice, so a refusal reads the same everywhere.
-  window.PosturiSaved = { showNotice: showNotice };
+  // flux.js reads this browser's saved ids and hidden postings, and asks for the state to be applied to its rows.
+  window.PosturiSaved = {
+    showNotice: showNotice,
+    /** Saved or noted postings, newest first ({id, url}), and the hidden ones by source URL. */
+    state: function () {
+      readStore();
+      var hidden = Object.create(null);
+      Object.keys(S.recs).forEach(function (k) { if (S.recs[k].hiddenAt) hidden[k] = true; });
+      return { saved: sortedBy('savedAt').map(function (r) { return { id: r.id, url: r.url }; }), hidden: hidden, blocked: !!S.blocked };
+    },
+    apply: function () { applyRows(); renderStatus(); }
+  };
 
   readStore();
   if (qs('[data-saved-page]')) SP = { cache: Object.create(null), confirm: null };

@@ -90,12 +90,12 @@ test('save on the list survives reload; detail and /salvate/ agree; unsave in an
   await shot(page, testInfo, 'detail');
 
   const other = await context.newPage();
-  await other.goto('/salvate/');
+  await other.goto('/salvate/?vedere=liste');
   const item = other.locator('[data-saved-list] li');
   await expect(item).toHaveCount(1);
   await expect(item.locator('h3 a')).toHaveAttribute('href', '/job/1001-asistent-medical-generalist/');
   await expect(item).toContainText('Înscrieri deschise');
-  await expect(other.locator('[data-count="saved"]')).toHaveText('(1)');
+  await expect(other.locator('[data-saved-heading-count]')).toHaveText('(1)');
 
   // Unsave in the other tab; the first tab follows without a reload.
   await expect(page.locator('[data-saved-count]')).toHaveText('(1)');
@@ -248,7 +248,7 @@ test('hide works on employer pages', async ({ page }, testInfo) => {
 });
 
 test('/salvate/: empty state, sorting, batches of 25, per-item actions, tabs', async ({ page }, testInfo) => {
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-saved-empty]')).toContainText('Nu ai salvat încă niciun anunț');
   await expect(page.locator('body')).toContainText(PERSIST);
   await shot(page, testInfo, 'saved-empty');
@@ -263,11 +263,11 @@ test('/salvate/: empty state, sorting, batches of 25, per-item actions, tabs', a
   await seed(page, recs);
   const lookups = [];
   page.on('request', (r) => { if (r.url().includes('preferinte-posturi')) lookups.push(JSON.parse(r.postData()).ids); });
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   const items = page.locator('[data-saved-list] li');
   await expect(items).toHaveCount(25);
   await expect(items.first()).toHaveAttribute('data-pref-id', '2026');          // newest saved first
-  await expect(page.locator('[data-count="saved"]')).toHaveText('(26)');
+  await expect(page.locator('[data-saved-heading-count]')).toHaveText('(26)');
   await expect(page.locator('[data-count="hidden"]')).toHaveText('(2)');
   await expect(page.locator('[data-pager-info]')).toHaveText('1–25 din 26');
   await expect(page.locator('[data-saved-list] li[data-pref-id="2004"] [data-f="hidden-tag"]')).toBeVisible();   // saved and hidden are independent
@@ -285,12 +285,12 @@ test('/salvate/: empty state, sorting, batches of 25, per-item actions, tabs', a
   await expect(page.locator('[data-pager-next]')).toBeHidden();
 
   // Unsave from the list with an undo outside the item.
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await page.locator('[data-saved-list] li[data-pref-id="2026"] [data-pref="save"]').click();
-  await expect(page.locator('[data-count="saved"]')).toHaveText('(25)');
+  await expect(page.locator('[data-saved-heading-count]')).toHaveText('(25)');
   await expect(page.locator('[data-notice-undo]')).toBeFocused();
   await page.locator('[data-notice-undo]').click();
-  await expect(page.locator('[data-count="saved"]')).toHaveText('(26)');
+  await expect(page.locator('[data-saved-heading-count]')).toHaveText('(26)');
 
   // Hidden view: restore a hidden item without leaving the page.
   await page.goto('/salvate/?vedere=ascunse');
@@ -304,7 +304,7 @@ test('/salvate/: empty state, sorting, batches of 25, per-item actions, tabs', a
 test('clear saved / restore hidden need confirmation and touch only their own state', async ({ page }) => {
   await seed(page, [rec(2001, { savedAt: at(1) }), rec(2002, { savedAt: at(2), hiddenAt: at(3) }), rec(2003, { hiddenAt: at(4) })]);
   await page.evaluate(() => { localStorage.setItem('pg.sentinel', 'x'); localStorage.setItem('posturi.facets', '{"open":["judet"]}'); });
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-saved-list] li')).toHaveCount(2);
   const clear = page.locator('[data-clear="saved"]');
   await clear.click();
@@ -388,9 +388,9 @@ test('hide and note still work at 20 saved', async ({ page }) => {
 
 test('a reader with 25 saved jobs keeps all 25, cannot save more, can unsave', async ({ page }) => {
   await seed(page, twenty(25));
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-saved-list] > li')).toHaveCount(25);
-  await expect(page.locator('[data-count="saved"]')).toHaveText('(25)');
+  await expect(page.locator('[data-saved-heading-count]')).toHaveText('(25)');
   await expect(page.locator('[data-saved-heading-count]')).toHaveText('(25)');
   await expect(page.locator('[data-saved-count]')).toHaveText('(25)');
   expect(Object.keys((await stored(page)).records).length).toBe(25);
@@ -400,7 +400,7 @@ test('a reader with 25 saved jobs keeps all 25, cannot save more, can unsave', a
   await expect(page.locator('#pref-notice [data-notice-text]')).toHaveText(SAVE_LIMIT);
   expect(Object.keys((await stored(page)).records).length).toBe(25);
 
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await page.locator('[data-saved-list] > li').first().locator('[data-pref="save"]').click();
   await expect(page.locator('[data-saved-list] > li')).toHaveCount(24);
   expect(Object.values((await stored(page)).records).filter((r) => r.savedAt).length).toBe(24);
@@ -475,7 +475,7 @@ test.describe('storage failures', () => {
   test('unsupported version and wrong shapes are left alone', async ({ page }) => {
     for (const raw of ['{"version":2,"records":{}}', '[1,2]', '{"records":{}}', '"x"', '{"version":1,"records":[]}']) {
       await seed(page, [], raw);
-      await page.goto('/salvate/');
+      await page.goto('/salvate/?vedere=liste');
       await expect(page.locator('[data-pref-status]')).toContainText('nu pot fi citite');
       await expect(page.locator('[data-saved-empty]')).toBeVisible();
       expect(await storedRaw(page)).toBe(raw);
@@ -509,7 +509,7 @@ test.describe('resolving today’s data', () => {
   test('a failed lookup shows the cached snapshot with retry and clears nothing', async ({ page }) => {
     await seed(page, [rec(1001, { savedAt: at(1), title: 'Titlu salvat', path: '/job/1001-asistent-medical-generalist/' })]);
     await page.route('**/preferinte-posturi.json', (r) => r.abort());
-    await page.goto('/salvate/');
+    await page.goto('/salvate/?vedere=liste');
     const item = page.locator('[data-saved-list] li');
     await expect(item).toContainText('Date salvate; actualizarea nu a reușit');
     await expect(item).toContainText('Titlu salvat');
@@ -532,7 +532,7 @@ test.describe('resolving today’s data', () => {
       rec(1002, { savedAt: at(2), url: 'https://posturi.gov.ro/anunt/alt-anunt', title: 'Alt anunț salvat' }),
       rec(9999, { savedAt: at(1), title: 'Anunț dispărut' }),
     ]);
-    await page.goto('/salvate/');
+    await page.goto('/salvate/?vedere=liste');
     const a = page.locator('[data-saved-list] li[data-pref-id="1001"]');
     await expect(a.locator('h3 a')).toHaveAttribute('href', '/job/1001-asistent-medical-generalist/');
     await expect(a).toContainText('Termen: 16.10.2026');
@@ -566,7 +566,7 @@ test.describe('resolving today’s data', () => {
       rec(8003, { savedAt: at(1), url: 'https://posturi.gov.ro.evil.example/x', path: '/job/9-x/', title: 'Subdomeniu fals' }),
       rec(8004, { savedAt: at(0), url: 'https://user:pw@posturi.gov.ro/x', path: '/job/8004-x/../../admin', title: 'Credențiale' }),
     ]);
-    await page.goto('/salvate/');
+    await page.goto('/salvate/?vedere=liste');
     const items = page.locator('[data-saved-list] li');
     await expect(items).toHaveCount(4);
     await expect(items.first()).toContainText('<img src=x onerror="window.__pwned=1">');   // literal text
@@ -617,7 +617,7 @@ test('widths: no horizontal overflow on list, saved, detail, employer; nav count
   for (let i = 0; i < 12; i++) recs.push(rec(2001 + i, { savedAt: at(i), title: 'Un titlu foarte lung de anunț care trebuie să se rupă corect pe ecrane înguste ' + i, employer: 'Administrația de Salubrizare Tunari și Primăria' }));
   recs.push(rec(1002, { hiddenAt: at(50) }));
   await seed(page, recs);
-  for (const [url, name] of [['/', 'list'], ['/salvate/', 'saved'], ['/salvate/?vedere=ascunse', 'saved-hidden'],
+  for (const [url, name] of [['/', 'list'], ['/salvate/?vedere=liste', 'saved'], ['/salvate/?vedere=ascunse', 'saved-hidden'],
     ['/job/1001-asistent-medical-generalist/', 'detail'], ['/angajator/spitalul-clinic-judetean-cluj/', 'employer']]) {
     await page.goto(url);
     await expect(page.locator('[data-saved-count]')).toHaveText('(12)');
@@ -645,7 +645,7 @@ test.describe('without JavaScript', () => {
     await expect(page.locator('[data-pref="save"]').first()).toBeHidden();
     await expect(page.locator('main, body').first()).toBeVisible();
     expect(await page.evaluate(() => document.body.innerText)).toContain('necesită JavaScript');
-    await page.goto('/salvate/');
+    await page.goto('/salvate/?vedere=liste');
     expect(await page.evaluate(() => document.body.innerText)).toContain('poate fi citită doar cu JavaScript activat');
     await expect(page.locator('[data-saved-list] li')).toHaveCount(0);
     expect(await page.evaluate(() => document.body.innerText)).toContain(PERSIST);

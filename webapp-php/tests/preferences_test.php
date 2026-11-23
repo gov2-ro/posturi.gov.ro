@@ -243,7 +243,7 @@ run_suite('/salvate/ shell: layout, states, no export data, no indexing', functi
     assert_same('Salvate', trim($x->query('//h1')->item(0)->textContent ?? ''), 'heading');
     assert_contains('Salvările și anunțurile ascunse rămân în acest browser. Nu se sincronizează între dispozitive și se pot pierde dacă ștergi datele browserului.', $html, 'persistence copy always visible');
     assert_contains('noindex', $html, 'noindex');
-    foreach (['saved', 'hidden'] as $v) assert_same(1, $x->query('//a[@data-view-tab="' . $v . '"]')->length, "$v tab");
+    foreach (['flux', 'saved', 'hidden'] as $v) assert_same(1, $x->query('//a[@data-view-tab="' . $v . '"]')->length, "$v tab");
     foreach (['data-saved-empty', 'data-saved-list', 'data-saved-pager', 'data-clear-confirm'] as $a) {
         assert_same(1, $x->query('//*[@' . $a . ']')->length, "$a present");
     }
@@ -251,7 +251,7 @@ run_suite('/salvate/ shell: layout, states, no export data, no indexing', functi
     $blk = $x->query('//section[@data-alerts-block]');
     assert_same(1, $blk->length, 'the alerts block');
     assert_same('Alerte pe email', trim($x->query('.//h2', $blk->item(0))->item(0)->textContent ?? ''), 'alerts block: heading');
-    assert_contains('Primești pe email posturile noi dintr-o căutare salvată, o dată la 3 zile.', $html, 'alerts block: the sentence');
+    assert_contains('Primești pe email posturile noi dintr-o căutare salvată sau de la un angajator urmărit, o dată la 3 zile.', $html, 'alerts block: the sentence');
     $al = $x->query('.//a[@href="/alerte/"]', $blk->item(0));
     assert_same(1, $al->length, 'alerts block: one link to /alerte/');
     assert_same('Gestionează alertele', trim($al->item(0)->textContent), 'alerts block: link text');

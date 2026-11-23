@@ -20,11 +20,11 @@ async function noOverflow(page, what) {
 test('/salvate/ has the alerts block with a link to /alerte/, for each reader (no script)', async ({ browser, baseURL }) => {
   const ctx = await browser.newContext({ javaScriptEnabled: false, baseURL });
   const page = await ctx.newPage();
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   const block = page.locator('[data-alerts-block]');
   await expect(block).toBeVisible();
   await expect(block.getByRole('heading', { name: 'Alerte pe email', level: 2 })).toBeVisible();
-  await expect(block).toContainText('Primești pe email posturile noi dintr-o căutare salvată, o dată la 3 zile.');
+  await expect(block).toContainText('Primești pe email posturile noi dintr-o căutare salvată sau de la un angajator urmărit, o dată la 3 zile.');
   const link = block.getByRole('link', { name: 'Gestionează alertele' });
   await expect(link).toHaveAttribute('href', '/alerte/');
   expect((await link.boundingBox()).height).toBeGreaterThanOrEqual(44);
@@ -32,7 +32,7 @@ test('/salvate/ has the alerts block with a link to /alerte/, for each reader (n
   await ctx.close();
   // The link works, and the footer keeps "Alerte pe email".
   const p2 = await browser.newPage({ baseURL });
-  await p2.goto('/salvate/');
+  await p2.goto('/salvate/?vedere=liste');
   await p2.locator('[data-alerts-block] a').click();
   await expect(p2).toHaveURL(/\/alerte\/$/);
   await p2.goto('/');

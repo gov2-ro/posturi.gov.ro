@@ -2,6 +2,31 @@
 
 ## 2026
 
+### 2026-11-24 — SALARY-GRAD-FOOD follow-ups: no employer exclusion; list line and feed read the range (Sonnet, from the Opus brief)
+
+**Done**
+- Step 0: `salary_pay.excluded_employer()`, the compiled patterns and the `employer` argument of `pay_range()`, `_end()` and `_pay_range_columns()` are removed. `drepturi-2026.json` has a `nota` (in Romanian) instead of `reguli`. `ops/measure-pay-range.py` lost its excluded-employer count. `test_salary_pay.py`: the excluded-employer test is now `test_military_unit_name_gets_food_no_employer_list` (a civilian post at a military unit gets 347 lei), the data-file test checks the `nota`.
+- Step 1: `partials/result_list.php` selects `pay_min`/`pay_max` and reads them first, then the stated pay, then the estimate. The project-hire branch is as before. The `title` says „de la gradația minimă cerută la gradația 5, cu indemnizația de hrană unde legea o dă”.
+- Step 2: `pages/stats.php` has no change. Its two counts (`inf_salary_min > 0`, and no stated pay with `sal_min > 0`) say where the figure comes from, so they keep their meaning. It has no salary amount or median; its salary chart reads `salary_distribution()` -> `salary_bucket_sql()` -> `SALARY_EXPR`. Queries changed: none.
+- Step 3: `feeds/_feed.php`. An estimate with a range (no declared figure, no draft figure) gets „Salariu estimat: de la X la Y lei net / lună” and „Brut estimat: brut: …, gradația 1–5, cu indemnizația de hrană de 347 lei”, as the detail page words it. A row with no range keeps „la gradația 0”.
+- Step 4: CI step for `php tests/salary_range_test.php`.
+- Step 5: `salary_range_test.php` has two new suites (list line, feed item): 46 -> 55 assertions.
+
+**Measured** (local copy `data/_dev/full-2026-11-23.sqlite`; the file has no `pay_*` columns, so I added them to two scratch copies with the export function: the old code (before) and the new code (after). I served each copy with its own PHP tree.)
+- Step 0, open postings that gain food at one end or both: 36 (33 confirmed open, 3 unconfirmed); all postings 398. Open food: both ends 1,080 -> 1,114; low end only 113 -> 115; neither 152 -> 116. All rows: 12,022 -> 12,417 / 1,360 -> 1,363 / 1,494 -> 1,096. The brief says 44 postings excluded by name; the old measure counted 38 open ones with a range. The other 6 have no range.
+- Step 6, list line on `/posturi/` (1,538 open, 1,363 with a figure): before `salariu net ≈ 1.101–13.902 lei, mediana 2.734 lei (1.363 din 1.538)`; after `1.304–13.902 lei, mediana 3.102 lei (1.363 din 1.538)`. The low end moves up (gradation floor plus food), the high end is the same.
+- Step 6, stats chart (net buckets, SALARY_EXPR), open: sub 3.000 611 -> 605; 3.000–4.000 508 -> 514; 4.000–5.000 57 -> 57; 5.000–7.000 142 -> 142; peste 7.000 45 -> 45; fără 175 -> 175. The change is only the food at the 36 postings. `/statistici/` has no salary median, so there is none to compare.
+- Tests: `pytest webapp/tests` 1,828 passed, 13 skipped; every `webapp-php/tests/*_test.php` passes except `theme_test.php` in this worktree (see Hard); Playwright `salary_range`, `discovery`, `feeds`, `stats`: 80 passed, 1 skipped.
+
+**Hard**
+- The brief names `stats.php` lines 32–33 as amount reads. They are counts. I did not change them: the brief says the counts keep their meaning.
+- `theme_test.php` fails in the worktree on „the file equals the output of build-sprite.php” and passes in the main checkout. The sprite source is not in the worktree. It is not related to this change; I did not investigate.
+
+**Decided**
+- The food test has no employer input, because the law excludes people, not employers (owner, 2026-11-23). The cost of the alternative: a name list misses units and hits civilian posts (36 open civilian posts were cut).
+- In the feed, the estimate line of a post with a stated pay keeps „la gradația 0”: it is the raw grade-0 estimate, as on the detail page (it is named an estimate there too). Only the estimate-only branch changes.
+- Not done, outside the brief files: „la gradația 0” still stands in `partials/salary_chart.php` (stats and themed pages), `partials/facets.php` (salary filter hint) and `pages/about.php`. The owner decides whether to change them.
+
 ### 2026-11-23 — SALARY-GRAD-FOOD: the pay range in the export, the filter and the detail page (Sonnet, from the Opus brief)
 
 **Done**

@@ -22,15 +22,7 @@ $db_path = sys_get_temp_dir() . '/posturi-range-' . getmypid() . '.sqlite';
 build_fixture_db($db_path);
 $pdo = new PDO('sqlite:' . $db_path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 fixture_seed_law_estimates($pdo);
-// 1001: an estimate with a range, gradation 1-5, food at both ends. 1003: a stated pay, the range of posting 21359.
-$pdo->exec("UPDATE job_postings SET pay_min = 5000, pay_max = 6200, pay_grad_min = 1, pay_grad_max = 5,
-    pay_food_min = 347, pay_food_max = 347 WHERE id = 1001");
-$pdo->exec("UPDATE job_postings SET inf_salary_min = 7870, inf_salary_max = 7870, pay_min = 8808, pay_max = 10147,
-    pay_grad_min = 1, pay_grad_max = 5, pay_food_min = 347, pay_food_max = 347 WHERE id = 1003");
-$schema = json_encode(['baseSalary' => ['minValue' => 7870, 'maxValue' => 7870, 'currency' => 'RON', 'unitText' => 'month'],
-                       'responsibilities' => 'Atribuțiile postului de test.'], JSON_UNESCAPED_UNICODE);
-$pdo->exec("UPDATE posting_text SET schema_json = " . $pdo->quote($schema) . " WHERE posting_id = 1003");
-$pdo->exec("UPDATE job_postings SET has_schema = 1 WHERE id = 1003");
+fixture_seed_pay_range($pdo);
 // An export from before the columns: the same data without pay_*.
 $old_path = sys_get_temp_dir() . '/posturi-range-old-' . getmypid() . '.sqlite';
 copy($db_path, $old_path);

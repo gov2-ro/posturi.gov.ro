@@ -1143,6 +1143,21 @@ function fixture_seed_project_posts(PDO $db): array {
 }
 
 /**
+ * SALARY-GRAD-FOOD (ADR 0008 rule 11): 1001 = a law estimate with a pay range (gradation 1-5, food at both ends: 5.000-6.200);
+ * 1003 = a stated pay of 7.870 lei with the range of posting 21359 (8.808-10.147) and an extracted section "Salarizare"
+ * with a second section that must stay. Call after fixture_seed_law_estimates().
+ */
+function fixture_seed_pay_range(PDO $db): void {
+    $db->exec("UPDATE job_postings SET pay_min = 5000, pay_max = 6200, pay_grad_min = 1, pay_grad_max = 5,
+        pay_food_min = 347, pay_food_max = 347 WHERE id = 1001");
+    $db->exec("UPDATE job_postings SET inf_salary_min = 7870, inf_salary_max = 7870, pay_min = 8808, pay_max = 10147,
+        pay_grad_min = 1, pay_grad_max = 5, pay_food_min = 347, pay_food_max = 347, has_schema = 1 WHERE id = 1003");
+    $schema = json_encode(['baseSalary' => ['minValue' => 7870, 'maxValue' => 7870, 'currency' => 'RON', 'unitText' => 'month'],
+                           'responsibilities' => 'Atribuțiile postului de test.'], JSON_UNESCAPED_UNICODE);
+    $db->exec("UPDATE posting_text SET schema_json = " . $db->quote($schema) . " WHERE posting_id = 1003");
+}
+
+/**
  * SALARY-LABELS-LIMITS: posting 1001 has a law estimate with a draft figure under `proiect` (14 % over the law:
  * the side note of the detail page); posting 1003 has only a draft figure (`sal_baza` proiect: the last resort,
  * labelled "estimare aproximativă"); the table `salary_limits` has fixed numbers for /despre/#ce-nu-stim.

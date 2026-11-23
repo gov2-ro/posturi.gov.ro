@@ -2,6 +2,14 @@
 
 Date: 2026-11-23. Author: Opus. Status: decided (owner, 2026-11-23, § 7). Ready for phase 1.
 
+> **Changed 2026-11-24 (owner). This note overrides § 3.2, § 3.3, § 3.5 and § 3.6 where they differ.**
+> - **One public page, everything public.** `/anomalii/`, title „Anomalii și abateri”, no password, all checks of the register, each with its caveat. `/statistici/anomalii/` redirects there (301). The states `hidden`, `listed` and `published` go away. Nothing waits for a review round.
+> - **Caveats, not hiding.** A check that the 2026-11-23 version kept hidden (R18, R20, E01, E05, R24, R25) or called loose (R22) is public, with a caveat that says why (context, not an anomaly; not reviewed; a loose text pattern).
+> - **Admin page.** `/admin/anomalii/` keeps the review counts and the false-positive marks. A `false_positive` verdict still hides that one signal.
+> - **Search engines index everything**, the lists with employer names included. The page carries an explainer: the signals are statistics from public data, not accusations; the algorithm can be wrong; how to report a mistake. „Dacă algoritmul greșește, vrem să aflăm.” (owner)
+> - **Source quote.** Where a signal comes from the text, the page quotes the paragraph it came from; for a calendar check, the calendar line.
+> - **DS.** A local table-of-contents sidebar and a local quote block; a `ds-proposal` issue for each in the DS repo.
+
 ## 1. Goal
 
 Show the anomaly signals on the public site, where the data is. The owner decided this on

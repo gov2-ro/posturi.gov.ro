@@ -508,6 +508,11 @@ subscription: id, status, a person number, the dates and the search name. It cha
 Add `--emails` to decrypt and print the addresses too. They are personal data: do not paste
 them into a chat, an issue or a log.
 
+For counts only, run `ops/subscription-stats.sh`. It reads `~/posturi-private/subscriptions.sqlite`
+on the shared host over ssh, read-only. It prints the subscriptions, the distinct addresses, the
+status split, the subscriptions for each address, the digests sent, the outbox size and the
+pending sign-ups older than 7 days. It never decrypts or prints an address.
+
 The send log is `data/alerts.sqlite` (subscription ids and results, no addresses). The cap
 counts sends per UTC day, so `sqlite3 data/alerts.sqlite "SELECT day, COUNT(*) FROM sends WHERE result='ok' GROUP BY day"` shows the use.
 

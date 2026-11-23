@@ -440,6 +440,7 @@ def test_r21_domicile_advantage(sv, tmp_path):
     row = _text_check(sv, tmp_path, "R21", "Constituie avantaj domiciliul în UAT pentru care aplică;",
                       "Avantaj: permis de conducere. Domiciliul se dovedește cu buletin.")
     assert row[2] == "avantaj domicili"
+    assert row[4]["excerpt"][row[4]["excerpt_start"]:row[4]["excerpt_end"]] == "avantaj domiciliul"   # the whole word is marked
 
 
 def test_r22_project_advantage(sv, tmp_path):

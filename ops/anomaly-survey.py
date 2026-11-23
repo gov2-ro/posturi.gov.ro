@@ -305,6 +305,8 @@ def excerpt_around(body: str, start: int, end: int, limit: int = EXCERPT_MAX) ->
     """The paragraph of `body` that holds the match [start, end), cut on a word at about `limit`
     characters. Returns {excerpt, excerpt_start, excerpt_end, cut_start, cut_end}; the offsets
     are relative to the excerpt (whitespace is squashed to single spaces)."""
+    while end < len(body) and body[end].isalnum():   # the pattern may stop inside a word: mark the whole word
+        end += 1
     ps = body.rfind("\n\n", 0, start)
     ps = 0 if ps < 0 else ps + 2
     pe = body.find("\n\n", end)

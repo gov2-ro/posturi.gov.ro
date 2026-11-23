@@ -2,6 +2,23 @@
 
 ## 2026
 
+### 2026-11-23 — VPS checks after the 13:15 EET run: studies, salary limits, anomalies, org links (VPS session, recorded by Opus)
+
+Run `2026-11-23T11:15:01Z`, deployed healthy. Export built_at 12:27:41Z, git `1e1b3fb`, 3,084 postings (previous 2,983). "Before" is the `f369ce0` export. All queries read-only.
+
+**Done**
+- DATA-STUDIES-NOT: doctorat roles 41 → 39 (limit 200). 3 stated levels changed, all medical doctorat → licenta (18664, 18822, 18901). `study_level_source`: empty 375, `inferat-ocupatie` 73 roles on 70 postings, text 4,366; the 73 go from none to licenta and replace no stated level. Postings with a licenta role 1,339 → 1,462; licenta/master/doctorat 1,446 → 1,569. `medic%` postings by level: doctorat 4, generala 5, liceala 2, licenta 269, master 4, none 8, postliceala 5 (before 7/5/2/249/4/19/5); those that pass the exclusion 22 → 11. No-level postings by COR group: empty 110, 1: 4, 3: 60, 5: 113, 6: 1, 7: 17, 8: 18, 9: 27 (group 2 gone, was 69). Export warning: medical title + generala on 19638, 20298, 20939.
+- Anexa VI: 354 rows in `salary_grid_pay`, 59 refs `VI_Armata!NN`, of 24,852 rows.
+- SALARY-LABELS-LIMITS: `salary_limits` A 45, D 41, Dc 5, F 365, L 2,628, N 3,084, gap_n 2,607, gap_pct 15. `sal_baza`: empty 9, declaratii 5, lege_in_vigoare 2,851, proiect 219. Live `/despre/` shows the same numbers.
+- ANOMALY-PUBLIC phase 1: 1,482 signals, 30 checks, no survey warning, check-export PASS. Counts per check (id state count/denominator): E01 hidden 1261/2978; E02 1/2978; E03 30/3084; E04 5/3084; E05 hidden 7/3875; E06 6/35; E07 9/2123; E08 5/1265; R01 14/1773; R02 0/1265; R03 0/1265; R04 0/39; R05 3/1509; R06 0/2978; R07 0/2978; R08 26/3084; R09a 0/83; R09b 1/73; R09c 2/73; R10 2/83; R11 3/1265; R12 34/85; R13 3/853; R14 2/1493; R15 0/63; R16 10/2976; R17 4/2465; R18 hidden 0/2212; R19 7/3083; R20 hidden 47/4814. The rest are `listed`.
+- DATA-ORG-06: 6,645 of 6,645 snapshot rows match; check-export PASS; 6,417 with a CIF, 9 `P` ids.
+
+**Hard**
+- The Anexa VI check query used `WHERE anexa='VI'`; `salary_grid_pay` has no such column. The VPS session counted by `ref` instead.
+
+**Decided**
+- The salary/studies and anomaly sessions were not online. The numbers go here and in the backlog, so that the next session of each owner reads them. Open for the studies owner: 73 `inferat-ocupatie` licenta roles include non-medical titles (Bibliotecar, Pedagog școlar, Consilier școlar, Psiholog practicant, farmacist, profesor). Check that licenta is right for each title. Full outputs: `/tmp/studies-check.out`, `/tmp/limits-check.out`, `/tmp/anomaly-check.out`, `/tmp/org-check.out` on the VPS (`/tmp` is not durable).
+
 ### 2026-11-23 — DATA-ORG-06: CUI and org.gov2.ro link on the employer page (Sonnet, from the Opus brief)
 
 **Done**

@@ -15,7 +15,7 @@ The page shows nothing new when the employer has no verified link.
    with `status`, `cif` and `org_url`. Reading `posturi_slugs` from `institutii.csv` means
    that we split a list column and repeat the join that ciulei already does.
 2. **A committed snapshot, not a live path.** The pipeline runs on the VPS. `../ciulei` is
-   on the Mac only (to be confirmed). So an ops script copies the needed columns into
+   on the Mac only (ciulei confirmed this on 2026-11-23; it has no git remote yet). So an ops script copies the needed columns into
    this repo, and the export reads the copy. This is the pattern of `declaratii.GROUPS_CSV`.
 3. **Show only verified links.**
    - `status = linked`: show the CUI and the link.
@@ -78,6 +78,9 @@ Stage by path; never `git add -A`, stash or reset.
 
 ## Open points for the owner
 
-- Is `../ciulei` also on the VPS? If yes, the pipeline can rebuild the snapshot itself.
-  Until then, the snapshot is rebuilt on the Mac after each ciulei rebuild.
+- Ciulei has no git remote (2026-11-23). If it gets one, the VPS can clone it and the
+  pipeline can rebuild the snapshot itself. Until then, rebuild the snapshot on the Mac
+  after each ciulei rebuild.
+- The crosswalk contract is `status`: a consumer never links a row with status `unmatched`.
+  Ciulei keeps `org_url` for those rows, so the snapshot script must filter on `status`.
 - When the fresh employer export (DATA-ORG-04) reaches org and ciulei, rebuild the snapshot.

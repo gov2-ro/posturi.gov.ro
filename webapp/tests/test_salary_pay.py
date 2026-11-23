@@ -197,13 +197,17 @@ def test_gradation_values_are_the_audit_values(grid):
 
 def test_export_columns(exp):
     stated = {"salary_min": 7870, "salary_max": 7870, "experience_years": 3}
-    assert exp._pay_range_columns(stated, None) == (8808, 10147, 1, 5, 347, 347)
-    assert exp._pay_range_columns({"salary_min": 60, "experience_years": 3}, None) == (None,) * 6   # not monthly pay
+    assert exp._pay_range_columns(stated, None) == (8808, 10147, 1, 5, 347, 347, None, None)
+    assert exp._pay_range_columns({"salary_min": 60, "experience_years": 3}, None) == (None,) * 8   # not monthly pay
     law = {"baza": "lege_in_vigoare", "lei_min": 5000, "lei_max": 5000, "selector": {"anexa": "VIII"}}
     cols = exp._pay_range_columns({}, json.dumps(law))
-    assert cols[2:4] == (0, 5) and cols[0] == 5347
+    assert cols[2:4] == (0, 5) and cols[0] == 5347 and cols[6:] == (None, None)
+    # A stated pay with a law estimate: the estimate's own range, on the same basis, for the note.
+    both = exp._pay_range_columns(stated, json.dumps(law))
+    assert both[:6] == (8808, 10147, 1, 5, 347, 347)
+    assert both[6] == exp._pay_range_columns({"experience_years": 3}, json.dumps(law))[0] and both[7] > both[6]
     for est in ({"baza": "declaratii", "lei_min": 5000}, {"baza": "proiect", "lei_min": 5000},
                 dict(law, selector={"anexa": "VI"})):
-        assert exp._pay_range_columns({}, json.dumps(est)) == (None,) * 6
-    assert exp._pay_range_columns({}, None) == (None,) * 6
-    assert exp._pay_range_columns({}, "not json") == (None,) * 6
+        assert exp._pay_range_columns({}, json.dumps(est)) == (None,) * 8
+    assert exp._pay_range_columns({}, None) == (None,) * 8
+    assert exp._pay_range_columns({}, "not json") == (None,) * 8

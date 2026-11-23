@@ -130,6 +130,12 @@ run_suite('the detail page of a stated pay: the range, the note, no repeated "Sa
     assert_contains('În anunț: 7.870 lei.', $h, 'the stated figure');
     assert_same(0, preg_match('/<h2[^>]*> *Salarizare/u', $h), 'the extracted section is gone (the JSON-LD keeps it)');
     assert_contains('Atribuțiile postului de test.', $h, 'other sections stay');
+    if (str_contains($h, 'data-pay-law')) {
+        assert_contains('Estimare după Legea 153/2017, pe aceeași bază: ' . net_label(5800, 7300) . ' (brut 5.800–7.300 lei) / lună.', $h, 'the estimate note on the same basis');
+        assert_same(0, preg_match('/data-pay-law>[^<]*la gradația 0/u', $h), 'no gradation-0 estimate next to a range');
+    } else {
+        assert_true(false, 'fixture 1003 has no law estimate, so the note is not tested');
+    }
 });
 
 run_suite('the detail page of an estimate: the range replaces "la gradația 0"', function () use ($base) {

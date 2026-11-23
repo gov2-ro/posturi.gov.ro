@@ -145,6 +145,8 @@ function shim_legacy_export(PDO $pdo): void {
         'pay_grad_max'           => 'NULL',
         'pay_food_min'           => 'NULL',
         'pay_food_max'           => 'NULL',
+        'pay_est_min'            => 'NULL',
+        'pay_est_max'            => 'NULL',
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

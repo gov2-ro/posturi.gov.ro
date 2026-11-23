@@ -321,7 +321,11 @@ CREATE TABLE job_postings (
     pay_grad_min            INTEGER,
     pay_grad_max            INTEGER,
     pay_food_min            INTEGER,
-    pay_food_max            INTEGER
+    pay_food_max            INTEGER,
+    -- 2026-11-24: the rule-11 range of the law estimate (total gross), set only when a stated pay gives
+    -- pay_min/pay_max; the stated box shows it as the comparison note, on the same basis.
+    pay_est_min             REAL,
+    pay_est_max             REAL
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -772,7 +776,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
             *proj,
-            *(salary_pay.columns(None) if hire else _pay_range_columns(
+            *((None,) * 8 if hire else _pay_range_columns(
                 inferred, r["salary_estimate"])),
         ))
         total += 1
@@ -1713,11 +1717,29 @@ def _stated_salary(inferred: dict) -> tuple:
     return lo, hi
 
 
+def _estimate_range(inferred_years, salary_json_text):
+    """The rule-11 range of the law estimate of one posting, or None (ADR 0008 rule 11)."""
+    if not salary_json_text:
+        return None
+    try:
+        est = json.loads(salary_json_text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    source = salary_pay.estimate_source(est)
+    if not source:
+        return None
+    grid = salary_grid.load_grid(salary_grid.LAW_VERSION)
+    return salary_pay.pay_range(
+        source, est["lei_min"], est.get("lei_max"), years=inferred_years,
+        local=salary_pay.is_local_range(est), figure_at=salary_pay.law_figure_at(est, grid), grid=grid)
+
+
 def _pay_range_columns(inferred: dict, salary_json_text) -> tuple:
-    """The six `pay_*` columns of one posting (ADR 0008 rule 11), all None when the rule does not apply.
+    """The eight `pay_*` columns of one posting (ADR 0008 rule 11), all None when the rule does not apply.
 
     The stated pay (same test as the export of `inf_salary_min`) comes first, as in `SALARY_EXPR`;
     else the estimate, when `salary_pay.estimate_source()` says it is a figure of the law in force.
+    With a stated pay, `pay_est_min`/`pay_est_max` carry the estimate's own range, for the comparison note.
     """
     years = inferred.get("experience_years")
     try:
@@ -1730,21 +1752,11 @@ def _pay_range_columns(inferred: dict, salary_json_text) -> tuple:
             lo = float(lo)
             hi = float(hi) if hi is not None else None
         except (TypeError, ValueError):
-            return salary_pay.columns(None)
-        return salary_pay.columns(salary_pay.pay_range("stated", lo, hi, years=years))
-    if not salary_json_text:
-        return salary_pay.columns(None)
-    try:
-        est = json.loads(salary_json_text)
-    except (json.JSONDecodeError, TypeError):
-        return salary_pay.columns(None)
-    source = salary_pay.estimate_source(est)
-    if not source:
-        return salary_pay.columns(None)
-    grid = salary_grid.load_grid(salary_grid.LAW_VERSION)
-    return salary_pay.columns(salary_pay.pay_range(
-        source, est["lei_min"], est.get("lei_max"), years=years,
-        local=salary_pay.is_local_range(est), figure_at=salary_pay.law_figure_at(est, grid), grid=grid))
+            return (None,) * 8
+        est = _estimate_range(years, salary_json_text)
+        est_cols = (est["low"]["total"], est["high"]["total"]) if est else (None, None)
+        return salary_pay.columns(salary_pay.pay_range("stated", lo, hi, years=years)) + est_cols
+    return salary_pay.columns(_estimate_range(years, salary_json_text)) + (None, None)
 
 
 def _salary_columns(salary_json_text) -> dict:
@@ -2047,7 +2059,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         quality, quality_json,
         apply_deadline, deadline_source, application_status,
         project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote, proj_programme,
-        pay_min, pay_max, pay_grad_min, pay_grad_max, pay_food_min, pay_food_max"""
+        pay_min, pay_max, pay_grad_min, pay_grad_max, pay_food_min, pay_food_max, pay_est_min, pay_est_max"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart
     # (they did twice while this was hand-maintained `?` strings).

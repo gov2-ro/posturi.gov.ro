@@ -581,6 +581,11 @@ require __DIR__ . '/../inc/header.php';
             <p class="mt-1 text-xs text-ink-muted" data-pay-law>După declarațiile de avere: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună.</p>
             <?php elseif ($sbaza === 'proiect'): ?>
             <p class="mt-1 text-xs text-ink-muted" data-pay-law data-pay-project-figure>Estimare aproximativă, după proiectul de lege: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0. <?= e(SAL_PROJECT_NOTE) ?></p>
+            <?php elseif ($range && (float)($p['pay_est_min'] ?? 0) > 0):
+                /* ADR 0008 rule 11: the estimate on the same basis as the range above (floor gradation to 5, food). */
+                $_emin = (float)$p['pay_est_min']; $_emax = (float)($p['pay_est_max'] ?? $_emin);
+                $_eg = number_format($_emin, 0, ',', '.') . ($_emax > $_emin ? '–' . number_format($_emax, 0, ',', '.') : ''); ?>
+            <p class="mt-1 text-xs text-ink-muted" data-pay-law data-pay-law-range>Estimare după Legea 153/2017, pe aceeași bază: <?= e(net_label($_emin, $_emax)) ?> (brut <?= e($_eg) ?> lei) / lună.</p>
             <?php else: ?>
             <p class="mt-1 text-xs text-ink-muted" data-pay-law>Estimare după Legea 153/2017: <?= e(net_label((float)$_lmin, (float)$_lmax)) ?> (brut <?= e($_g) ?> lei) / lună, la gradația 0.</p>
             <?php endif; ?>

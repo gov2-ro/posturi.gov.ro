@@ -2,6 +2,14 @@
 
 ## 2026
 
+### 2026-11-24 — SALARY-GRAD-FOOD: the estimate note in the stated box on the same basis (Opus, owner choice)
+
+**Done.** Under a stated pay, the note „Estimare după Legea 153/2017 … la gradația 0” sat next to a range on another basis (live 21359: stated 8,808–10,147 gross vs estimate 5,760–7,871 at gradation 0). The export now writes `pay_est_min`/`pay_est_max`: the rule-11 range of the law estimate, only when a stated pay sets `pay_min`. The stated box shows „Estimare după Legea 153/2017, pe aceeași bază: … lei net (brut …) / lună”. `db.php` shims the two columns; old exports keep the old note. Tests: pytest 1,828 passed; `salary_range_test.php` 57 assertions.
+
+**Hard.** Another session (`posturi-gov-ro-7c`) has a pending proposal for the same box (layout only); synced before the edit.
+
+**Decided.** Same basis, not removal (owner): the note shows whether a stated pay is high or low against the law. The draft side note stays at gradation 0 (ADR 0008 rule 11). Live after the next VPS export.
+
 ### 2026-11-24 — SALARY-GRAD-FOOD follow-ups: no employer exclusion; list line and feed read the range (Sonnet, from the Opus brief)
 
 **Done**

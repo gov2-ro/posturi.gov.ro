@@ -781,8 +781,8 @@ the `.htaccess` deny rules. Apache never loads it.
 
 `ops/run-pipeline.sh` runs `ops/anomaly-survey.py --write-table` after the export. It writes the
 tables `anomaly_signals` and `anomaly_checks` into `webapp-php/posturi.sqlite`. If the survey fails,
-the run logs a warning and deploys without new signals. `ops/check-export.py` refuses a file
-without both tables. The register `ops/anomaly-checks.json` gives each check a state: `hidden`,
+the run logs a warning and deploys without new signals. `ops/check-export.py` warns about a file
+without both tables, and `deploy-php.sh` refuses it unless `--allow-no-anomalies` is set. The register `ops/anomaly-checks.json` gives each check a state: `hidden`,
 `listed` or `published`. Only the owner sets `published`, by hand. Review verdicts go into
 `data/anomaly-reviews.csv` (`check,posting_id,verdict,reviewer,date,note`).
 

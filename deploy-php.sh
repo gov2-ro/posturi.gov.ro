@@ -243,7 +243,10 @@ if [[ $deploy_data -eq 1 ]]; then
         has_signals=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='anomaly_signals';" 2>/dev/null || echo 0)
         has_checks=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='anomaly_checks';" 2>/dev/null || echo 0)
         anomaly_tables=$((has_signals + has_checks))
-        echo "==> Database: ${rows} postings, built ${built:-unknown}, anomaly_signals ${has_signals}, anomaly_checks ${has_checks}"
+        n_signals=-; n_checks=-
+        [[ $has_signals -eq 1 ]] && n_signals=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM anomaly_signals;" 2>/dev/null || echo "?")
+        [[ $has_checks -eq 1 ]] && n_checks=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM anomaly_checks;" 2>/dev/null || echo "?")
+        echo "==> Database: ${rows} postings, built ${built:-unknown}, ${n_signals} anomaly signals, ${n_checks} anomaly checks"
         if [[ $anomaly_tables -ne 2 ]]; then
             if [[ $allow_no_anomalies -eq 1 ]]; then
                 echo "WARNING: $DB_FILE has ${anomaly_tables} of 2 anomaly tables — the site will show no signals."

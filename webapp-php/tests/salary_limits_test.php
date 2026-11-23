@@ -48,7 +48,7 @@ run_suite('sal_draft_note() words the side note for a law figure only', function
     $sal = ['baza' => 'lege_in_vigoare', 'proiect' => ['lei_min' => 5000, 'lei_max' => 5000]];
     $n = sal_draft_note($sal);
     assert_contains('Dacă proiectul noii legi ar fi adoptat: ~', $n, 'prefix');
-    assert_contains('lei net (brut 5.000 lei).', $n, 'suffix');
+    assert_contains('lei net (brut 5.000 lei), la gradația 0.', $n, 'suffix');
     assert_same('', sal_draft_note(['baza' => 'proiect', 'proiect' => ['lei_min' => 5000]]), 'not for a draft figure');
     assert_same('', sal_draft_note(['baza' => 'lege_in_vigoare']), 'no draft figure');
 });

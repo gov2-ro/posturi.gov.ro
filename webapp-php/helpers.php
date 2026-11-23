@@ -477,7 +477,7 @@ function sal_draft_note(?array $sal): string {
     $hi = (float)($d['lei_max'] ?? $lo);
     $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
     $gross = $hi > $lo ? $fmt((int)round($lo)) . '–' . $fmt((int)round($hi)) : $fmt((int)round($lo));
-    return 'Dacă proiectul noii legi ar fi adoptat: ' . str_replace('≈ ', '~', net_label($lo, $hi)) . ' (brut ' . $gross . ' lei).';
+    return 'Dacă proiectul noii legi ar fi adoptat: ' . str_replace('≈ ', '~', net_label($lo, $hi)) . ' (brut ' . $gross . ' lei), la gradația 0.';
 }
 
 /** "≈ 2.981 lei net" (or a range) for a gross min/max, '' when there is none. */

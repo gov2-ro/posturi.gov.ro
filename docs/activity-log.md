@@ -16,6 +16,7 @@
 **Decided**
 - Sonnet first rejected the 9 (the brief said „no `P` record”). Opus review: the brief meant „no unreviewed record”, and `status` is the ciulei contract. So the script and the page key on `status` only, and the 9 are kept. Cost of the alternative: nine reviewed institutions show no CUI, and the rule would differ from the ciulei contract.
 - The page helper repeats the host check (`https://org.gov2.ro/`) although the snapshot has it. Cost: one line. It keeps a bad row from becoming a public link.
+- Live 2026-11-23: code deployed (`597e0d0`); the cron run `2026-11-23T11:15:01Z` built the export (git `1e1b3fb`, active-only) and deployed it at 12:28Z. `employer_org` on the VPS: 6,645 rows, 6,417 with a CIF, 9 `P` ids. `/angajator/cresa-sangeorz-bai/` shows „CUI 46380110 · Fișa instituției pe org.gov2.ro →”.
 
 ---
 

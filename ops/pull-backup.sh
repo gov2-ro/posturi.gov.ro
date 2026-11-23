@@ -2,7 +2,7 @@
 # Pull a backup of the VPS onto this machine (BETA-BACKUP). Run it on the Mac, by
 # hand, now and then:
 #
-#   ops/pull-backup.sh                 # host gov2-1, into ~/posturi-backups
+#   ops/pull-backup.sh                 # host g2-vps-htz, into ~/posturi-backups
 #   POSTURI_VPS=pax@1.2.3.4 ops/pull-backup.sh
 #
 # Each run writes one dated snapshot:
@@ -17,7 +17,7 @@
 # Restoring is in docs/deploy-vps.md § 7.
 #
 # Settings: the environment, else this checkout's .env (read key by key, never sourced).
-#   POSTURI_VPS          ssh destination              (default gov2-1, an ~/.ssh/config Host)
+#   POSTURI_VPS          ssh destination              (default g2-vps-htz, the ~/.ssh/config Host of gov2-1)
 #   POSTURI_VPS_DIR      checkout on the VPS          (default /home/pax/g2-dev/posturi.gov.ro)
 #   POSTURI_BACKUP_DIR   where snapshots go           (default ~/posturi-backups)
 #   POSTURI_BACKUP_KEEP  snapshots kept, newest first (default 8)
@@ -39,7 +39,7 @@ setting() {      # NAME DEFAULT -> environment, else .env, else DEFAULT
     printf '%s' "${value:-$2}"
 }
 
-VPS="$(setting POSTURI_VPS gov2-1)"
+VPS="$(setting POSTURI_VPS g2-vps-htz)"
 VPS_DIR="$(setting POSTURI_VPS_DIR /home/pax/g2-dev/posturi.gov.ro)"
 BACKUP_DIR="$(setting POSTURI_BACKUP_DIR "$HOME/posturi-backups")"
 KEEP="$(setting POSTURI_BACKUP_KEEP 8)"

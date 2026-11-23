@@ -344,7 +344,7 @@ require __DIR__ . '/../inc/header.php';
       </div>
       <?php endforeach; ?>
     </div>
-    <p class="text-sm mt-4"><a href="/statistici/anomalii/" class="text-gov hover:underline">Semnale în anunțuri: valori care diferă de un termen de comparație →</a></p>
+    <p class="text-sm mt-4"><a href="/anomalii/" class="text-gov hover:underline">Anomalii și abateri: valori care diferă de anunțuri asemănătoare →</a></p>
   </section>
 
   <?php /* 2026-10-18 (pax: "internal first"): how clear and complete the announcements

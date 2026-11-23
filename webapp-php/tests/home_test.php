@@ -198,7 +198,7 @@ run_suite('sitemap, navigation and footer', function () use ($base) {
         $groups[trim($h2->textContent)] = $links;
     }
     assert_same(['Posturi', 'Pagini tematice', 'Urmărește', 'Proiect'], array_keys($groups), 'four footer groups');
-    assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'], ['Estimator de salariu', '/estimator-salariu/']], $groups['Posturi'], 'footer: Posturi');
+    assert_same([['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'], ['Statistici', '/statistici/'], ['Anomalii și abateri', '/anomalii/'], ['Pot aplica?', '/pot-aplica/'], ['Estimator de salariu', '/estimator-salariu/']], $groups['Posturi'], 'footer: Posturi');
     assert_same([['Sănătate', '/sanatate/'], ['Administrație', '/administratie/'], ['Financiar', '/financiar/'], ['Asistență socială și consiliere', '/social/'], ['Meserii și muncitori', '/meserii/']], $groups['Pagini tematice'], 'footer: Pagini tematice');
     assert_same([['Alerte pe email', '/alerte/'], ['Flux RSS', '/posturi.rss'], ['Calendar', '/posturi.ics'], ['Salvate', '/salvate/']], $groups['Urmărește'], 'footer: Urmărește');
     assert_same(['Despre și metodologie', 'Confidențialitate', 'Cod sursă', 'Pentru angajatori'], array_column($groups['Proiect'], 0), 'footer: Proiect');

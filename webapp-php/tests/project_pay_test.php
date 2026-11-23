@@ -103,6 +103,7 @@ run_suite('SALARY-EU-CAP: the guide cap line shows only with a programme and no 
     $h = pp_detail($base, 1003);
     assert_contains('data-pay-project-cap', $h, 'no pay, programme set: the line');
     assert_contains('Ghidul programului plafonează plata la 35–90 lei net/oră, după rol și experiență.', $h, 'the words');
+    assert_contains('Plafonul este suma maximă decontată de program, nu salariul postului.', $h, 'the caveat is visible, not only in a tooltip');
     assert_contains('Ghidul solicitantului – condiții generale, martie 2023', $h, 'the source in the title');
     assert_not_contains('data-pay-project-cap', pp_detail($base, 1001), 'pay stated: no line');
     $h = pp_detail($base, 1005);

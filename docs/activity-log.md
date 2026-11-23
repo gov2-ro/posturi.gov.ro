@@ -22,6 +22,8 @@
 - The PIDS and PEO tables stay as in March 2023.
 - The fixture `webapp-php/tests/fixtures/build_db.php` got the new column; `webapp-php/db.php` is unchanged (an old export without the column shows no line).
 
+**Opus review (2026-11-23).** Accepted against the brief (`a878d90`); the extra fixture file (`build_db.php`) is needed for the schema. One change: the caveat „Plafonul este suma maximă decontată de program, nu salariul postului.” was only in a `title` tooltip, which phones do not show. It is now visible text; the tooltip keeps the source. `project_pay_test.php`: 98 assertions pass. Before deploy: the consolidated PEO guide (OMIPE 964/2024 … 5982/2025) is not read, so the PEO cap is unverified after March 2023 (12 postings get the PEO line).
+
 ### 2026-11-23 — EU-GUIDE-RATES reviewed (Opus)
 
 **Done.** Accepted the spike (`e30483e`) against its brief. Checked the main claim in the downloaded PIDS general guide (`pdftotext`, pp. 38–39): the cap table and the scope sentence („exclusiv personalului angajat pe posturi în afara organigramei”) are as reported. Opened SALARY-EU-CAP for the owner.

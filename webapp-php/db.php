@@ -138,6 +138,13 @@ function shim_legacy_export(PDO $pdo): void {
         'proj_pay_basis'         => "''",
         'proj_hours_month'       => 'NULL',
         'proj_pay_quote'         => "''",
+        // 2026-11-23 (SALARY-GRAD-FOOD, ADR 0008 rule 11): the pay range; NULL = no range, the old figure stays.
+        'pay_min'                => 'NULL',
+        'pay_max'                => 'NULL',
+        'pay_grad_min'           => 'NULL',
+        'pay_grad_max'           => 'NULL',
+        'pay_food_min'           => 'NULL',
+        'pay_food_max'           => 'NULL',
     ];
     foreach ($blank as $name => $value) {
         if (!isset($cols[$name])) $extra[] = "$value AS $name";

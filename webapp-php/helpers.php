@@ -262,6 +262,10 @@ function list_salary(array $p): ?array {
         $min = $p[$lo] ?? null;
         if ($min === null || $min === '' || (float)$min <= 0) continue;
         $rawmax = ($p[$hi] ?? null) === null || ($p[$hi] ?? '') === '' ? null : (float)$p[$hi];
+        // ADR 0008 rule 11: the range of the law in force (gradations and food allowance) replaces the figure of the
+        // source that comes first. The export computed it for that same source (the stated pay, else the estimate).
+        $range = pay_range_view($p);
+        if ($range) { $min = $range['gross_min']; $rawmax = $range['gross_max']; }
         $imin = (int)round((float)$min);
         $imax = $rawmax === null ? $imin : (int)round($rawmax);
         $fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
@@ -277,6 +281,57 @@ function list_salary(array $p): ?array {
         return $row;
     }
     return null;
+}
+
+/**
+ * The pay range of the law in force (ADR 0008 rule 11) as the page words it: the net and gross ends, the gradations
+ * and where the food allowance applies. The export computes `pay_min`/`pay_max` (total gross: base + food) with
+ * salary_pay.py; this function only reads them. Net = net_from_gross() of the total gross, as everywhere on the site.
+ * Null when the row has no range (rule 11 does not apply, a project post, or an export without the columns).
+ *
+ * `grad_max` is null for the cap of a local range (rule 3). `food` says where the allowance applies: 'both', 'low',
+ * 'high' or 'none'.
+ *
+ * @return array{gross_min: float, gross_max: float, net_min: int, net_max: int, grad_min: ?int, grad_max: ?int,
+ *               food_min: int, food_max: int, food: string, grade: string, gross: string, food_text: string}|null
+ */
+function pay_range_view(array $p): ?array {
+    if (!empty($p['project_hire'])) return null;
+    $lo = $p['pay_min'] ?? null;
+    if ($lo === null || $lo === '' || (float)$lo <= 0) return null;
+    $lo = (float)$lo;
+    $hi = ($p['pay_max'] ?? null) === null || ($p['pay_max'] ?? '') === '' ? $lo : max($lo, (float)$p['pay_max']);
+    $gmin = ($p['pay_grad_min'] ?? null) === null || ($p['pay_grad_min'] ?? '') === '' ? null : (int)$p['pay_grad_min'];
+    $gmax = ($p['pay_grad_max'] ?? null) === null || ($p['pay_grad_max'] ?? '') === '' ? null : (int)$p['pay_grad_max'];
+    $fmin = (int)($p['pay_food_min'] ?? 0);
+    $fmax = (int)($p['pay_food_max'] ?? 0);
+    $food = $fmin > 0 && $fmax > 0 ? 'both' : ($fmin > 0 ? 'low' : ($fmax > 0 ? 'high' : 'none'));
+    $fmt = static fn(float $v): string => number_format((int)round($v), 0, ',', '.');
+    $amount = number_format(max($fmin, $fmax), 0, ',', '.');
+    $food_text = match ($food) {
+        'both' => "cu indemnizația de hrană de $amount lei",
+        'low'  => "cu indemnizația de hrană de $amount lei, doar la gradațiile mici",
+        'high' => "cu indemnizația de hrană de $amount lei, doar la limita de sus",
+        default => '',
+    };
+    // A stated figure with a minimum and a maximum is already a span (owner, 2026-11-23): the high end is the stated
+    // maximum, and its gradation is known only when the span matches the gradation table. No gradation is claimed otherwise.
+    $smin = (float)($p['inf_salary_min'] ?? 0);
+    $smax = (float)($p['inf_salary_max'] ?? 0);
+    $span = $smin > 0 && $smax > $smin;
+    if ($gmin === null) $grade = '';
+    elseif ($gmax === null) $grade = $span ? '' : "de la gradația $gmin, până la plafonul legal";
+    else $grade = $gmin === $gmax ? "gradația $gmin" : "gradația {$gmin}–{$gmax}";
+    $stated = '';
+    if ($smin > 0) $stated = $span ? $fmt($smin) . '–' . $fmt($smax) : $fmt($smin);
+    $detail = implode(', ', array_filter([$grade, $food_text], fn($x) => $x !== ''));
+    return [
+        'gross_min' => $lo, 'gross_max' => $hi,
+        'net_min' => net_from_gross($lo), 'net_max' => net_from_gross($hi),
+        'grad_min' => $gmin, 'grad_max' => $gmax, 'food_min' => $fmin, 'food_max' => $fmax,
+        'food' => $food, 'grade' => $grade, 'food_text' => $food_text, 'detail' => $detail, 'stated' => $stated,
+        'gross' => $hi > $lo ? $fmt($lo) . '–' . $fmt($hi) : $fmt($lo),
+    ];
 }
 
 /**
@@ -366,7 +421,8 @@ function pay_quintiles(): ?array {
 /** Level 1–5 of a row's pay against pay_quintiles(), with a sentence that says so; null without one. */
 function pay_level(array $p): ?array {
     if (!empty($p['project_hire'])) return null;       // the pay of a project post is not on the grid scale
-    $v = (float)($p['inf_salary_min'] ?? 0) > 0 ? (float)$p['inf_salary_min'] : (float)($p['sal_min'] ?? 0);
+    $v = (float)($p['pay_min'] ?? 0) > 0 ? (float)$p['pay_min']
+        : ((float)($p['inf_salary_min'] ?? 0) > 0 ? (float)$p['inf_salary_min'] : (float)($p['sal_min'] ?? 0));
     if ($v <= 0 || !($q = pay_quintiles())) return null;
     $level = 1;
     foreach ($q['cuts'] as $cut) if ($v >= $cut) $level++;
@@ -1299,7 +1355,7 @@ const PROJECT_MONTH_EXPR = "(CASE WHEN j.proj_pay_amount > 0
  * facet counts in pages/list.php, and the landing shortcut.
  */
 const SALARY_EXPR = 'CASE WHEN j.project_hire = 1 THEN ' . PROJECT_MONTH_EXPR
-    . ' ELSE COALESCE(j.inf_salary_min, j.sal_min) END';
+    . ' ELSE COALESCE(j.pay_min, j.inf_salary_min, j.sal_min) END';
 
 /**
  * The date the site treats as "can I still apply?".

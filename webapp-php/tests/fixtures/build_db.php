@@ -159,7 +159,13 @@ CREATE TABLE job_postings (
     proj_pay_basis          TEXT NOT NULL DEFAULT '',
     proj_hours_month        REAL,
     proj_pay_quote          TEXT NOT NULL DEFAULT '',
-    proj_programme          TEXT
+    proj_programme          TEXT,
+    pay_min                 REAL,
+    pay_max                 REAL,
+    pay_grad_min            INTEGER,
+    pay_grad_max            INTEGER,
+    pay_food_min            INTEGER,
+    pay_food_max            INTEGER
 );
 CREATE TABLE posting_roles (
     posting_id        INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
@@ -1134,6 +1140,21 @@ function fixture_seed_project_posts(PDO $db): array {
     $upd->execute([2100, 'luna', 'net', null, 'având norma de lucru de 42 ore/lună, salariu net 2.100 lei, pentru perioada de 42 luni', 1002]);
     $upd->execute([null, '', '', null, '', 1003]);
     return [1001 => 'hour', 1002 => 'month', 1003 => 'none'];
+}
+
+/**
+ * SALARY-GRAD-FOOD (ADR 0008 rule 11): 1001 = a law estimate with a pay range (gradation 1-5, food at both ends: 5.000-6.200);
+ * 1003 = a stated pay of 7.870 lei with the range of posting 21359 (8.808-10.147) and an extracted section "Salarizare"
+ * with a second section that must stay. Call after fixture_seed_law_estimates().
+ */
+function fixture_seed_pay_range(PDO $db): void {
+    $db->exec("UPDATE job_postings SET pay_min = 5000, pay_max = 6200, pay_grad_min = 1, pay_grad_max = 5,
+        pay_food_min = 347, pay_food_max = 347 WHERE id = 1001");
+    $db->exec("UPDATE job_postings SET inf_salary_min = 7870, inf_salary_max = 7870, pay_min = 8808, pay_max = 10147,
+        pay_grad_min = 1, pay_grad_max = 5, pay_food_min = 347, pay_food_max = 347, has_schema = 1 WHERE id = 1003");
+    $schema = json_encode(['baseSalary' => ['minValue' => 7870, 'maxValue' => 7870, 'currency' => 'RON', 'unitText' => 'month'],
+                           'responsibilities' => 'Atribuțiile postului de test.'], JSON_UNESCAPED_UNICODE);
+    $db->exec("UPDATE posting_text SET schema_json = " . $db->quote($schema) . " WHERE posting_id = 1003");
 }
 
 /**

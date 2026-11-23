@@ -25,6 +25,8 @@ const salaryFixture = path.join(os.tmpdir(), 'posturi-browser-salary.sqlite');
 const declaredFixture = path.join(os.tmpdir(), 'posturi-browser-declared.sqlite');
 // Draft figure as a last resort and the limits on /despre/ (salary_limits.spec.js): 1001 has a side note, 1003 a draft figure, on its own port.
 const limitsFixture = path.join(os.tmpdir(), 'posturi-browser-limits.sqlite');
+// Pay range (salary_range.spec.js): 1001 an estimate with a range, 1003 a stated pay with a range (ADR 0008 rule 11), on its own port.
+const rangeFixture = path.join(os.tmpdir(), 'posturi-browser-range.sqlite');
 // UX-14: the private directory of the email alerts (a test key pair and pepper).
 const alertsDir = path.join(os.tmpdir(), 'posturi-browser-alerts');
 
@@ -115,6 +117,17 @@ module.exports = defineConfig({
       timeout: 20_000,
       env: {
         POSTURI_DB: limitsFixture,
+        POSTURI_TODAY: '2026-10-03',
+      },
+    },
+    {
+      command: `php tests/fixtures/make.php ${rangeFixture} range && php -S 127.0.0.1:8830 router.php`,
+      cwd: webappDir,
+      url: 'http://127.0.0.1:8830/',
+      reuseExistingServer: false,
+      timeout: 20_000,
+      env: {
+        POSTURI_DB: rangeFixture,
         POSTURI_TODAY: '2026-10-03',
       },
     },

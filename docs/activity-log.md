@@ -2,6 +2,38 @@
 
 ## 2026
 
+### 2026-11-23 — ANOMALY-PUBLIC phase 2: checks R21–R25 for limiting conditions (Sonnet, from the Opus brief)
+
+**Done.** Added five checks to `ops/anomaly-survey.py` and the register `ops/anomaly-checks.json`. `Ctx.texts()` loads `posting_text.body_markdown` once; a missing table gives `unavailable`. Six tests added in `webapp/tests/test_anomaly_survey.py` (44 pass). Nothing deployed.
+
+Counts on `data/_dev/full-2026-11-23.sqlite` (denominator 16,849 postings with text; 1,033 are project hires; R24 denominator 7,677):
+
+| Check | State | All | Project hires | Others |
+|---|---|---:|---:|---:|
+| R21 domicile advantage | listed | 339 | 244 | 95 |
+| R22 named-project advantage | listed | 270 | 224 | 46 |
+| R23 EU-project experience | listed | 23 | 16 | 7 |
+| R24 conditions above occupation | hidden | 230 | 49 | 181 |
+| R25 maximum age or sex | hidden | 23 | 0 | 23 |
+
+R21 to R23 match the audit (244, 224, 23). R25 gives 23 (audit: 18 + 6 = 24).
+
+Hand reading, 10 hits each (random sample, seed 1):
+- R21: 0 false positives.
+- R22: 5 of 10 do not name a project. Three say „proiecte educaționale” (generic); two match „proiect” far from the advantage (experience in cultural or IT domains). The other five name the pilot project.
+- R23: 0 false positives.
+- R24: 0 as pattern errors; the signal is weak. Credentials such as `permis_conducere` or `altele` are not demanding. 3 of 10 have a group median of 0 or 1 year.
+- R25: 1 of 10 is a false positive (child age „vârstă de până la 2 ani”; 4 of 23 hits have this form). 6 of 10 are the military age limit „cel mult 45 de ani” (legal context, 12 of 23 hits). 3 of 10 are a required sex (a boys' dormitory, a care post).
+
+R24 overlap with E05 (posting level, 53 E05 role findings = 49 postings): 6 of 230 R24 findings are E05 findings (2.6%). Below the 50% limit, so R24 is added as `hidden`. Alternatives measured: a credential of any kind gave 471 hits (11 in E05); a credential outside `aviz_medical` and `certificat_profesional` gave 230.
+
+**Hard.** The brief does not define „named credential”. Every posting has `aviz_medical` or `certificat_profesional`, so „any credential” is noise. The R25 age pattern „de până la N ani” also matches the age of a child.
+
+**Decided.**
+- Named credential = any `v3_credentials` value except `aviz_medical` and `certificat_profesional`. Language level = `v3_languages` entry with C1 or C2. Years are `inf_experience_years`; the median is per `occ_group` with n ≥ 30 (the E05/R13 rule); years must be above 0.
+- Regexes kept exactly as the brief gives them, with case-insensitive matching on all five. The R25 child-age false positive stays because R25 is `hidden` and a person reviews every hit. Cost of the alternative: a changed pattern that the owner did not approve.
+- R22 stays `listed` with the brief's pattern, although half of the sample is generic. Owner to decide whether to tighten it (for example „proiectul pilot” or a SMIS code).
+
 ### 2026-11-23 — EU-RULES-PCIDIF: what the PCIDIF rules fix for project posts (Opus)
 
 **Done.** Read the PCIDIF document, the audit of 2026-11-18 and ADR 0008. Measured on `data/_dev/full-2026-11-23.sqlite` (VPS export, 16,875 postings). Wrote `docs/audits/2026-11-23-eu-rules-pcidif.md`. Backlog: EU-RULES-PCIDIF done; new EU-GUIDE-RATES and UX-EMP-PROJECT; notes on EU-PROJECT-SICAP, SALARY-EU-ESTIMATOR and ANOMALY-PUBLIC.

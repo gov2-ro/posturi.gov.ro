@@ -214,6 +214,7 @@ class Ctx:
             p["_dl"] = d10(p.get("apply_deadline"))
             p["_emp"] = _norm_title(p.get("employer_name") or "")
         self._events = None
+        self._texts = None
 
     def missing(self, needs: dict[str, list[str]]) -> list[str]:
         out = []
@@ -242,6 +243,16 @@ class Ctx:
                     e["_pub"] = p["_pub"] if p else None
                     self._events.append(e)
         return self._events
+
+    def texts(self) -> dict[int, str]:
+        """posting_id -> body_markdown, read once (empty text is kept out)."""
+        if self._texts is None:
+            self._texts = {}
+            if "posting_text" in self.columns:
+                for r in self.db.execute("SELECT posting_id, body_markdown FROM posting_text"):
+                    if r["body_markdown"] and r["posting_id"] in self.by_id:
+                        self._texts[r["posting_id"]] = r["body_markdown"]
+        return self._texts
 
 
 # --------------------------------------------------------------------------
@@ -876,6 +887,91 @@ def write_tables(db_path, report: dict, rows: list[tuple], register: dict, revie
         return {"anomaly_signals": len(sig), "anomaly_checks": len(chk)}
     finally:
         db.close()
+
+
+# ---- Limiting conditions (R21-R25) ---------------------------------------
+# Brief: docs/briefs/2026-11-23-anomaly-limiting-conditions.md. Each check is a signal on the
+# text, not a verdict: no act that we read forbids R21-R24.
+
+PT = "posting_text"
+PT_NEEDS = {PT: ["posting_id", "body_markdown"]}
+
+R21_RE = re.compile(r"avantaj[^.\n;]{0,15}domicili", re.I)
+R22_RE = re.compile(r"avantaj[^.\n;]{0,80}(proiect|MySMIS)", re.I)
+R23_RE = re.compile(r"experien[țţt][aă][^.\n]{0,80}proiect[e]?[^.\n]{0,40}"
+                    r"fonduri (europene|nerambursabile|structurale)", re.I)
+R25_AGE_RES = (
+    re.compile(r"v[âa]rst[aă] (maxim[aă]|de (cel mult|p[âa]n[aă] la))\s*\d", re.I),
+    re.compile(r"nu (mai )?(mare|peste) de \d{2} (de )?ani", re.I),
+)
+R25_SEX_RE = re.compile(r"(sexul|de sex) (masculin|feminin)", re.I)
+
+
+def _text_regex_check(c: Ctx, regexes) -> tuple[list, int]:
+    """One finding per posting: the first match of any regex, cut at 120 characters."""
+    f = []
+    texts = c.texts()
+    for pid, body in texts.items():
+        for rx in regexes:
+            m = rx.search(body)
+            if m:
+                f.append(F(pid, " ".join(m.group(0).split())[:120], ""))
+                break
+    return f, len(texts)
+
+
+@check("R21", "advantage for domicile in the posting text", "C", PT_NEEDS)
+def r21(c: Ctx):
+    f, den = _text_regex_check(c, [R21_RE])
+    return f, den, "denominator: postings with a text; one finding per posting", {}
+
+
+@check("R22", "advantage for work in a named project in the posting text", "C", PT_NEEDS)
+def r22(c: Ctx):
+    f, den = _text_regex_check(c, [R22_RE])
+    return f, den, "denominator: postings with a text; one finding per posting", {}
+
+
+@check("R23", "experience in EU-funded projects, required or an advantage", "C", PT_NEEDS)
+def r23(c: Ctx):
+    f, den = _text_regex_check(c, [R23_RE])
+    return f, den, "denominator: postings with a text; one finding per posting", {}
+
+
+GENERIC_CREDENTIALS = {"aviz_medical", "certificat_profesional"}
+
+
+@check("R24", "several conditions above the occupation: years >= 2 x median and (language >= C1 or named credential)",
+       "C", {JP: ["inf_experience_years", "occ_group", "v3_languages", "v3_credentials"]})
+def r24(c: Ctx):
+    groups: dict[str, list[float]] = defaultdict(list)
+    for p in c.postings:
+        if p["inf_experience_years"] is not None and p["occ_group"]:
+            groups[p["occ_group"]].append(p["inf_experience_years"])
+    median = {g: statistics.median(v) for g, v in groups.items() if len(v) >= c.params["group_min_n"]}
+    f, den = [], 0
+    for p in c.postings:
+        x, m = p["inf_experience_years"], median.get(p["occ_group"])
+        if x is None or m is None:
+            continue
+        den += 1
+        if x <= 0 or x < 2 * m:
+            continue
+        langs = [l.split(":")[1] for l in json.loads(p["v3_languages"] or "[]") if ":" in l]
+        high_lang = [l for l in langs if l in ("C1", "C2")]
+        creds = sorted(set(json.loads(p["v3_credentials"] or "[]")) - GENERIC_CREDENTIALS)
+        if high_lang or creds:
+            extra = ("lang " + "+".join(high_lang)) if high_lang else "cred " + "+".join(creds)
+            f.append(F(p["id"], f"exp={x:g}; {extra}", f"median={m:g}; occ_group={p['occ_group']}"))
+    return f, den, ("denominator: postings in groups with n >= 30 and an experience value. "
+                    "Named credential = any v3_credentials value except aviz_medical and "
+                    "certificat_profesional."), {}
+
+
+@check("R25", "maximum age or a required sex in the posting text", "B", PT_NEEDS)
+def r25(c: Ctx):
+    f, den = _text_regex_check(c, [*R25_AGE_RES, R25_SEX_RE])
+    return f, den, "denominator: postings with a text; a person reviews every hit", {}
 
 
 # --------------------------------------------------------------------------

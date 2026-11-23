@@ -180,6 +180,36 @@
       "label_ro": "Etapă de calendar cu peste 30 de zile înainte de publicare",
       "explain_ro": "O etapă din calendar este cu peste 30 de zile înainte de data publicării. Comparație: ziua publicării.",
       "state": "listed"
+    },
+    "R21": {
+      "kind": "unusual",
+      "label_ro": "Avantaj pentru domiciliul în localitate",
+      "explain_ro": "Anunțul acordă un avantaj candidaților cu domiciliul în localitate. Legea permite criteriul, dar anunțul nu spune cum se punctează. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
+      "state": "listed"
+    },
+    "R22": {
+      "kind": "unusual",
+      "label_ro": "Avantaj pentru munca într-un proiect anume",
+      "explain_ro": "Anunțul acordă un avantaj candidaților care au lucrat într-un proiect anume. Legea permite criteriul, dar anunțul nu spune cum se punctează. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
+      "state": "listed"
+    },
+    "R23": {
+      "kind": "unusual",
+      "label_ro": "Experiență în proiecte cu fonduri europene",
+      "explain_ro": "Anunțul cere sau preferă experiență în proiecte cu fonduri europene. Legea permite criteriul, dar el restrânge numărul candidaților. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
+      "state": "listed"
+    },
+    "R24": {
+      "kind": "unusual",
+      "label_ro": "Mai multe condiții peste cele ale ocupației",
+      "explain_ro": "Anunțul cere vechime de cel puțin două ori mediana ocupației și, în plus, un nivel de limbă C1 sau un document numit. Condițiile pot fi justificate de post. Comparație: mediana vechimii cerute în aceeași ocupație.",
+      "state": "hidden"
+    },
+    "R25": {
+      "kind": "error_posting",
+      "label_ro": "Vârstă maximă sau sex cerut",
+      "explain_ro": "Anunțul cere o vârstă maximă sau un anumit sex. Unele posturi pot avea acest temei legal, de exemplu cele militare. O persoană verifică fiecare caz înainte de afișare. Comparație: condițiile generale din HG 1336/2022.",
+      "state": "hidden"
     }
   }
 }

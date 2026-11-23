@@ -17,6 +17,7 @@ POSTING_COLS = [
     "deadline_source", "nr_posturi", "inf_salary_min", "inf_salary_max", "sal_min", "sal_max",
     "inf_experience_years", "occ_group", "inf_anomaly_flags", "job_regime", "employer_kind",
     "contact_email", "data_proba_scrisa", "data_interviu", "data_rezultate_finale",
+    "v3_languages", "v3_credentials",
 ]
 
 
@@ -30,7 +31,7 @@ def sv():
     return mod
 
 
-def make_db(tmp_path, postings=(), events=(), roles=(), evidence=(), drop_cols=()):
+def make_db(tmp_path, postings=(), events=(), roles=(), evidence=(), drop_cols=(), texts=None):
     path = tmp_path / "x.sqlite"
     db = sqlite3.connect(path)
     cols = [c for c in POSTING_COLS if c not in drop_cols]
@@ -43,6 +44,10 @@ def make_db(tmp_path, postings=(), events=(), roles=(), evidence=(), drop_cols=(
                "isced_fields TEXT, skills TEXT, credentials TEXT)")
     db.execute("CREATE TABLE requirement_evidence (posting_id INT, ordinal INT, fact_kind TEXT, "
                "fact_index INT, status TEXT)")
+    if texts is not None:
+        db.execute("CREATE TABLE posting_text (posting_id INTEGER PRIMARY KEY, body_markdown TEXT)")
+        for pid, body in texts.items():
+            db.execute("INSERT INTO posting_text VALUES (?,?)", (pid, body))
     for i, p in enumerate(postings, start=1):
         row = {"id": i, "url": f"https://x/{i}/", "title": f"Post {i}", "employer_name": f"Emp {i}",
                **p}
@@ -421,6 +426,54 @@ def test_table_mode_unavailable_check_has_null_counts(sv, tmp_path):
     db = sqlite3.connect(db_path)
     assert db.execute("SELECT count, denominator FROM anomaly_checks WHERE check_id='R01'"
                       ).fetchone() == (None, None)
+
+
+def _text_check(sv, tmp_path, cid, hit, near_miss):
+    e, rows = counts(sv, tmp_path, cid, [{}, {}, {}], texts={1: hit, 2: near_miss, 3: "Text fără semnal."})
+    assert [r[0] for r in rows] == [1] and (e["count"], e["denominator"]) == (1, 3)
+    return rows[0]
+
+
+def test_r21_domicile_advantage(sv, tmp_path):
+    row = _text_check(sv, tmp_path, "R21", "Constituie avantaj domiciliul în UAT pentru care aplică;",
+                      "Avantaj: permis de conducere. Domiciliul se dovedește cu buletin.")
+    assert row[2] == "avantaj domicili"
+
+
+def test_r22_project_advantage(sv, tmp_path):
+    _text_check(sv, tmp_path, "R22", "Constituie avantaj activitatea în proiectul pilot MySMIS 122607",
+                "Constituie avantaj cursul de limba engleză. Proiectul de ordin se publică.")
+
+
+def test_r23_eu_project_experience(sv, tmp_path):
+    _text_check(sv, tmp_path, "R23", "experiență în proiecte finanțate din fonduri europene",
+                "experiență în proiecte educaționale. Fonduri europene există.")
+
+
+def test_r25_age_or_sex(sv, tmp_path):
+    e, rows = counts(sv, tmp_path, "R25", [{}, {}, {}, {}, {}], texts={
+        1: "au vârsta de cel mult 45 de ani la data numirii", 2: "candidați de sex masculin",
+        3: "Vârsta minimă reglementată de prevederile legale", 4: "nu mai mare de 35 de ani",
+        5: "Sexul nu are importanță."})
+    assert sorted(r[0] for r in rows) == [1, 2, 4] and e["denominator"] == 5
+
+
+def test_text_checks_unavailable_without_posting_text(sv, tmp_path):
+    e, _ = run(sv, make_db(tmp_path, [{}]), "R21")
+    assert e["status"] == "unavailable" and "posting_text (table)" in e["missing"]
+
+
+def test_r24_conditions_above_occupation(sv, tmp_path):
+    n = 31
+    p = [{"occ_group": "3", "inf_experience_years": 2.0, "v3_languages": "[]",
+          "v3_credentials": '["aviz_medical"]'} for _ in range(n)]
+    p[0] = {**p[0], "inf_experience_years": 5.0, "v3_languages": '["en:C1"]'}      # hit: language
+    p[1] = {**p[1], "inf_experience_years": 4.0, "v3_credentials": '["autorizatie"]'}  # hit: credential
+    p[2] = {**p[2], "inf_experience_years": 5.0}                                   # near miss: generic only
+    p[3] = {**p[3], "inf_experience_years": 3.0, "v3_languages": '["en:C1"]'}      # near miss: < 2 x median
+    p[4] = {**p[4], "inf_experience_years": 5.0, "v3_languages": '["en:B2"]'}      # near miss: language < C1
+    e, rows = counts(sv, tmp_path, "R24", p)
+    assert sorted(r[0] for r in rows) == [1, 2] and e["denominator"] == n
 
 
 def test_register_file_is_complete_and_unpublished(sv):

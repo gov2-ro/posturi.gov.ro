@@ -15,7 +15,7 @@ The page shows nothing new when the employer has no verified link.
    with `status`, `cif` and `org_url`. Reading `posturi_slugs` from `institutii.csv` means
    that we split a list column and repeat the join that ciulei already does.
 2. **A committed snapshot, not a live path.** The pipeline runs on the VPS. `../ciulei` is
-   on the Mac only (ciulei confirmed this on 2026-11-23; it has no git remote yet). So an ops script copies the needed columns into
+   on the Mac only (ciulei confirmed this on 2026-11-23). So an ops script copies the needed columns into
    this repo, and the export reads the copy. This is the pattern of `declaratii.GROUPS_CSV`.
 3. **Show only verified links.**
    - `status = linked`: show the CUI and the link.
@@ -78,7 +78,10 @@ Stage by path; never `git add -A`, stash or reset.
   build is live before the deploy.
 - No page shows a link to a `P` record, and no page shows a candidate CUI.
 - `php webapp-php/tests/*_test.php` and the browser spec for the employer page pass.
-- Report the match count from step 2 on `data/_dev/full-2026-11-23.sqlite` (the full VPS export of 2026-11-23, not in git). Expect 6,645 matches.
+- Report two match counts. (a) The export run on the local Postgres (a stale September copy):
+  expect far fewer than 6,645, and say so. (b) The snapshot slugs joined to `employers.slug` in
+  `data/_dev/full-2026-11-23.sqlite` (the full VPS export of 2026-11-23, not in git), by a
+  direct query or a test helper: expect 6,645.
 
 ## Open points for the owner
 

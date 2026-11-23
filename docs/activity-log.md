@@ -2,6 +2,14 @@
 
 ## 2026
 
+### 2026-11-23 — SALARY-GRAD-FOOD: the law on gradations and the food allowance; ADR 0008 rule 11 (Opus + owner)
+
+**Done.** The owner asked to show a stated salary as a range with the gradations and the food allowance, and to filter at gradation 1 „where it applies”. The VPS session measured (read-only): 25 of 1,644 open postings state pay (157 of 16,879 overall); 4 of 157 name one gradation for the figure; 6 open postings name a food amount, all 347 lei; experience is unknown for about 48% of postings. An external research report on the law (brief `docs/briefs/2026-11-23-salary-law-research.md`) is now `docs/audits/2026-11-23-salary-law-research.md`. ADR 0008 rule 11 and the build brief `docs/briefs/2026-11-23-salary-gradation-food.md` are written.
+
+**Hard.** My first claim, „almost every public post pays the food allowance”, was wrong. Since 1 Jan 2026 (Legea 141/2025) the allowance is 347 lei only below 6,000 lei net, and staff with special food rights are excluded. The owner caught it. A news search found the cap; the primary text came from the research report. Gradations follow years of work (*vechime în muncă*), not the experience a posting asks for, so the experience gives only a minimum.
+
+**Decided.** (1) The range runs from the floor gradation (from the required experience; unknown → 0) to gradation 5; the cost of a flat gradation 1 is an overstated figure for posts with no experience required. (2) The food allowance goes into the figure and the filter, by rule and not by text, tested at each end on the net without the allowance and without bonuses (as Ordin MEC 3185/2026 does); the cost of using the text is that 6 postings rank above their peers. (3) The same rule applies to the estimate. (4) Holiday vouchers stay out: they end on 31 Dec 2026. (5) A stated figure is read as gradation 0 (Art. 10 alin. (3)).
+
 ### 2026-11-23 — UX-FOLLOW-EMP and UX-SALVATE-FLUX: followed employers, employer alerts, the Flux tab (Sonnet, from the Opus brief)
 
 **Done**

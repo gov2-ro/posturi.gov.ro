@@ -1112,7 +1112,8 @@ function fixture_seed_law_estimates(PDO $db): array {
         if ($cap) $hi = max($hi, $cap);
         $sel = ['functie' => 'Consilier', 'anexa' => 'VIII'] + ($local ? ['nivel_administrativ' => 'local'] : []);
         return [$lo, $hi, json_encode(['lei_min' => $lo, 'lei_max' => $hi, 'gradatie' => 0, 'varianta' => FIXTURE_SALARY_LAW,
-            'valoare_referinta' => 2415, 'incredere' => $local ? 'interval' : 'exact', 'randuri' => [$ref], 'avertismente' => [],
+            'valoare_referinta' => 2415, 'incredere' => $local ? 'interval' : 'exact', 'randuri' => [$ref], 'avertismente' => ['Selectorul corespunde la 2 poziții din grilă.'],
+            'motiv' => '2 rând(uri) din Anexa VIII, Legea 153/2017', 'ocupatie' => 'Consilier', 'incredere_ocupatie' => 'exact',
             'disclaimer' => 'Estimare după Legea 153/2017; nu este un calcul salarial oficial.', 'baza' => 'lege_in_vigoare',
             'selector' => $sel], JSON_UNESCAPED_UNICODE)];
     };

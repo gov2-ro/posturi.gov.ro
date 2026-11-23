@@ -126,7 +126,7 @@ run_suite('the detail page of a stated pay: the range, the note, no repeated "Sa
     $net_hi = number_format(net_from_gross(10147), 0, ',', '.');
     assert_contains("de la $net_lo la $net_hi lei net", $h, 'the net range');
     assert_contains('brut: 8.808–10.147 lei / lună, gradația 1–5, cu indemnizația de hrană de 347 lei', $h, 'the gross line');
-    assert_contains('Gradația depinde de vechimea în muncă. Minimul vine din experiența cerută în anunț.', $h, 'the note');
+    assert_contains('Salariul crește cu vechimea în muncă: de la gradația 1 (3–5 ani) la gradația 5 (peste 20 de ani). Minimul vine din experiența cerută în anunț.', $h, 'the note');
     assert_contains('În anunț: 7.870 lei.', $h, 'the stated figure');
     assert_same(0, preg_match('/<h2[^>]*> *Salarizare/u', $h), 'the extracted section is gone (the JSON-LD keeps it)');
     assert_contains('Atribuțiile postului de test.', $h, 'other sections stay');

@@ -73,7 +73,8 @@ run_suite('the detail page: a draft figure is labelled, a law figure has the sid
     assert_contains('href="/estimator-salariu/"', $h, 'link');
     assert_not_contains('data-pay-project-figure', $h, 'a law figure is not labelled approximate');
     assert_not_contains('coeficient 0', $h, 'no "coeficient 0" for a law figure');
-    assert_contains('Salariul de bază din tabelul Legii 153/2017', $h, 'law basis line');
+    assert_contains('Salariul de bază: Legea 153/2017, Anexa VIII.', $h, 'law basis step');
+    assert_not_contains('Selectorul corespunde', $h, 'the grid warning is not shown');
 });
 
 run_suite('/despre/ has the owner text, the anchor and the numbers of the export', function () use ($base) {

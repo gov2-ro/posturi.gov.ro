@@ -29,8 +29,9 @@ The page shows nothing new when the employer has no verified link.
 
 ## Where the data is
 
-- The crosswalk: `../ciulei/data/posturi-org/crosswalk.csv`, 5,901 rows, built from the
-  org build of 2026-11-06 and the posturi employer export of 2026-10-18.
+- The crosswalk: `../ciulei/data/posturi-org/crosswalk.csv`, 5,901 rows, built from org
+  v0.68.0 (ciulei `9254806`, 2026-11-23) and the posturi employer export of 2026-10-18.
+  5,040 `linked`, 181 `linked_no_cif`, 680 `unmatched`.
 - Employers created on the VPS after 2026-10-18 have no row. Their page shows nothing new.
   This is correct behaviour, not an error.
 - The live counts come from the VPS export. Ask the VPS session for them after the deploy.
@@ -70,8 +71,10 @@ Stage by path; never `git add -A`, stash or reset.
 
 ## Acceptance
 
-- The snapshot has 4,892 rows (4,703 + 189) from the current crosswalk, or the script says
-  why not.
+- The snapshot has 5,221 rows (5,040 `linked` + 181 `linked_no_cif`) from the crosswalk of
+  org v0.68.0 (ciulei `9254806`), or the script says why not.
+- Deploy only after org v0.68.0 is live on org.gov2.ro. Before that, some `org_url` links open
+  the old records. Ask ciulei or org-dev before the deploy.
 - No page shows a link to a `P` record, and no page shows a candidate CUI.
 - `php webapp-php/tests/*_test.php` and the browser spec for the employer page pass.
 - Report the match count from step 2 on the local export, and say that it is the October copy.

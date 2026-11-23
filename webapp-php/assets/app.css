@@ -676,3 +676,47 @@
   .pg-chart-sq.pg-c-other { background: rgb(var(--c-cat-rest)); }
   .pg-chart-legend { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 0.25rem; font-size: 0.875rem; line-height: 1.5rem; }
 }
+
+/* 2026-11-24 (ANOMALY-PUBLIC, /anomalii/): a table of contents with groups, checks and counts, and a source quote.
+   Both are local; the DS has neither. DS proposals: table of contents https://github.com/gov2-ro/gov2ro-design-system/issues/14,
+   source quote https://github.com/gov2-ro/gov2ro-design-system/issues/15.
+   TOC: below 1024 px a "Cuprins" <details> block above the content; from 1024 px a sticky column (the page reuses the grid
+   of `.pg-toc-layout`). The header is not sticky (DS rule). The section in view has aria-current="true": bold with a bar. */
+@layer app {
+  .pg-atoc-small { border: 1px solid rgb(var(--c-line)); background: rgb(var(--c-surface)); min-width: 0; }
+  .pg-atoc-small > summary { cursor: pointer; padding: 0.75rem 1rem; min-height: 44px; font-weight: 600; color: rgb(var(--c-ink)); }
+  .pg-atoc-small > nav { padding: 0 1rem 0.75rem; }
+  .pg-atoc-side { display: none; min-width: 0; }
+  .pg-atoc-small ul, .pg-atoc-side ul { list-style: none; margin: 0; padding: 0; }
+  .pg-atoc-group ul { padding-left: 0.5rem; }
+  .pg-atoc-small a, .pg-atoc-side a {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 44px;
+    padding-left: 0.5rem; border-left: 3px solid transparent; font-size: 0.875rem; color: rgb(var(--c-ink));
+    overflow-wrap: anywhere;
+  }
+  .pg-atoc-small a:hover, .pg-atoc-side a:hover { color: rgb(var(--c-gov)); text-decoration: underline; }
+  .pg-atoc-small a.pg-atoc-g, .pg-atoc-side a.pg-atoc-g { font-weight: 600; }
+  .pg-atoc-small a[aria-current="true"], .pg-atoc-side a[aria-current="true"] {
+    border-left-color: rgb(var(--c-gov)); font-weight: 700; color: rgb(var(--c-gov));
+  }
+  .pg-atoc-n { flex: none; font-family: var(--font-mono, monospace); font-size: 0.75rem; color: rgb(var(--c-ink-muted)); }
+  @media (min-width: 1024px) {
+    .pg-atoc-small { display: none; }
+    .pg-atoc-side { display: block; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+    .pg-atoc-small a, .pg-atoc-side a { min-height: 32px; }
+  }
+
+  /* Signals: a list of cards-in-a-card, one for each posting. */
+  .pg-signals { list-style: none; margin: 0; padding: 0; }
+  .pg-signal { padding: 0.75rem 0; border-top: 1px solid rgb(var(--c-line)); min-width: 0; overflow-wrap: anywhere; }
+  .pg-signal:first-child { border-top: 0; }
+
+  /* Source quote: the paragraph of the posting, or its calendar lines. `mark` is the DS highlight. */
+  .pg-quote {
+    margin: 0.5rem 0 0; padding: 0.5rem 0.75rem; border-left: 3px solid rgb(var(--c-line-strong));
+    background: rgb(var(--c-sunken)); color: rgb(var(--c-ink)); font-size: 0.875rem; overflow-wrap: anywhere;
+  }
+  .pg-quote p { margin: 0; }
+  .pg-quote p + p { margin-top: 0.25rem; }
+  .pg-quote footer { margin-top: 0.25rem; font-size: 0.75rem; color: rgb(var(--c-ink-muted)); }
+}

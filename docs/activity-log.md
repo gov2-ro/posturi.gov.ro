@@ -2,6 +2,34 @@
 
 ## 2026
 
+### 2026-11-24 — ANOMALY-PUBLIC: one public page "Anomalii și abateri" (Sonnet, from the Opus brief)
+
+**Done.**
+- `ops/anomaly-checks.json`: `state` and its comment are gone. Each check has `group` (`erori_noastre`, `erori_anunt`, `neobisnuit`, `angajator`, `context`, from `kind`) and `caveat_ro`. Caveats: R18, R20, E01, E05, R22, R24, R25. R25 `explain_ro` lost the sentence about a person who checks each case; E05, R18 and E01 lost a sentence that the caveat now says. `anomaly_checks` has `group_id` and `caveat_ro` instead of `state`.
+- Source quote in `ops/anomaly-survey.py`: `F()` takes an optional `detail`; the runner and `write_tables` carry it into `detail_json`. Text checks (R21, R22, R23, R25) store `excerpt`, `excerpt_start`, `excerpt_end`, `cut_start`, `cut_end` (the paragraph of `body_markdown`, at most 600 characters, cut on a word, the match extended to the end of its word). Calendar checks (R02, R03, R11, E08: the event; R09a–c, R10: the lines for the two compared dates, found in `calendar_events` by date and a label keyword) store `calendar: [{eveniment, data, ora}]`. Number and date checks store nothing new.
+- PHP: `/anomalii/`, `/anomalii/{ID}/` (50 a page, `?pagina=N`, 404 for an unknown ID), 301 from `/statistici/anomalii/…`, link in `/statistici/` and in the footer group "Posturi". `pages/anomalies_public.php` rewritten: explainer, five groups, caveat note, first 20 signals, quote block, "Raportează o greșeală", TOC. The admin page keeps the review numbers and false-positive marks; the state and "Gata de publicare" are gone.
+- CSS (`app.css`, layer `app`, role tokens only): `.pg-atoc-*` (sidebar from 1024 px, "Cuprins" `<details>` below) and `.pg-quote`. DS issues: TOC https://github.com/gov2-ro/gov2ro-design-system/issues/14, quote https://github.com/gov2-ro/gov2ro-design-system/issues/15 (bodies in `docs/ds-proposals/`).
+- Tests: `test_anomaly_survey.py` (+7), `tests/anomalies_test.php` (66 assertions), `browser/anomalies.spec.js` (3 tests at 320, 375, 1280 px), a fixture `tests/fixtures/anomalies_db.php` (`make.php <path> anomalies`, port 8831).
+
+**Measured** (scratch copy of `data/_dev/full-2026-11-23.sqlite`, 9,866 postings, no reviews file, survey run 8.3 s).
+- 8,950 signals in 35 check rows (E04 has no index CSV). Largest: E01 3,729; E03 935; R05 813; R08 575; R21 339; R11 142 … R18 0 and R03 0, R07 0, R04 0.
+- With an excerpt: 604 (R21 339, R22 223, R23 23, R25 19). 395 of them are cut at one end or both (R21 219, R22 153, R23 14, R25 9). Longest excerpt 600 characters.
+- With a calendar line: 863 (E08 271, R10 184, R02 159, R11 142, R09c 76, R09b 17, R09a 14).
+- `/anomalii/` on the full export: 549 KB, 601 signals in the HTML, 0.08 s.
+- Ten random quotes read by hand (seed 7: 6 from R21, 3 from R22, 1 from R25), plus 4 more (2 from R23, 2 from R25): every excerpt holds the match and reads as one passage. Faults: the markdown shows raw (`| **CONSILIER**`, `*`, `•`), list items run together because the page squashes line breaks, and 6 of the 10 are cut at both ends. R21 matches only "avantaj domiciliul" in a list of a template of "consilier școlar"; the same text repeats across postings. One of the 2 R23 hits read is a list of documents to attach ("copia adeverinței … proiectelor finanțate din fonduri europene"), not a requirement. One of the 3 R25 hits read is a boarding school that asks for a male candidate and says why in the text.
+
+**Hard.**
+- First excerpt run marked "avantaj domicili" inside "domiciliul" (the R21 pattern stops in the word). Fixed in `excerpt_around`: the match end moves to the end of the word. The check logic is unchanged.
+- The page needs two TOC lists (a `<details>` and a sidebar), because a closed `<details>` does not show its content at 1024 px without browser-specific CSS. The script marks the current section in both.
+- `theme_test.php` fails one assertion in this worktree (the sprite equals `build-sprite.php`). The entry of the previous builder (UX-SALARY-BOX) reports the same failure; `main` passes. Assumed an environment gap in the worktree; not checked further.
+
+**Decided.**
+- Visible count = signals after the false positives, from a query, not `anomaly_checks.count`; the header, the TOC and "Toate cele N" agree.
+- Plain feedback link: the Google form of the footer has no prefill, so no `check` or `posting` parameter.
+- Hidden signal test: `detail_json NOT LIKE '%"verdict": "false_positive"%'`, not `'%false_positive%'`, so a quoted text cannot hide a signal.
+- Not done, outside the brief: `sitemap.php` (ANOMALY-SITEMAP), the header navigation (4 links, no slot; the footer and the `/statistici/` link are the slots).
+- Assumed: the caveat sentences for R18, R20, E01, E05 and R24 are Sonnet drafts built from the old `explain_ro`; the owner reads them. R22, R24 (sentence) and R25 are the brief's text.
+
 ### 2026-11-24 — UX-SALARY-BOX: one fixed width, the explainer in plain words, the salary line on the employer page (Sonnet, from the Opus brief)
 
 **Done.**

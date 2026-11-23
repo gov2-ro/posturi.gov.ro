@@ -4,7 +4,7 @@
 $_footer_groups = [
     'Posturi' => [
         ['Toate posturile', '/posturi/'], ['Angajatori', '/angajatori/'],
-        ['Statistici', '/statistici/'], ['Pot aplica?', '/pot-aplica/'], ['Estimator de salariu', '/estimator-salariu/'],
+        ['Statistici', '/statistici/'], ['Anomalii și abateri', '/anomalii/'], ['Pot aplica?', '/pot-aplica/'], ['Estimator de salariu', '/estimator-salariu/'],
     ],
     // The themed pages (inc/themes.php), in configuration order.
     'Pagini tematice' => array_map(fn($slug, $t) => [$t['label'], '/' . $slug . '/'], array_keys(themes()), themes()),

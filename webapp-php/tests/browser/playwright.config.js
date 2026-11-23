@@ -27,6 +27,8 @@ const declaredFixture = path.join(os.tmpdir(), 'posturi-browser-declared.sqlite'
 const limitsFixture = path.join(os.tmpdir(), 'posturi-browser-limits.sqlite');
 // Pay range (salary_range.spec.js): 1001 an estimate with a range, 1003 a stated pay with a range (ADR 0008 rule 11), on its own port.
 const rangeFixture = path.join(os.tmpdir(), 'posturi-browser-range.sqlite');
+// Anomalies page (anomalies.spec.js): the shared fixture plus the anomaly tables (tests/fixtures/anomalies_db.php), on its own port.
+const anomaliesFixture = path.join(os.tmpdir(), 'posturi-browser-anomalies.sqlite');
 // UX-14: the private directory of the email alerts (a test key pair and pepper).
 const alertsDir = path.join(os.tmpdir(), 'posturi-browser-alerts');
 
@@ -128,6 +130,17 @@ module.exports = defineConfig({
       timeout: 20_000,
       env: {
         POSTURI_DB: rangeFixture,
+        POSTURI_TODAY: '2026-10-03',
+      },
+    },
+    {
+      command: `php tests/fixtures/make.php ${anomaliesFixture} anomalies && php -S 127.0.0.1:8831 router.php`,
+      cwd: webappDir,
+      url: 'http://127.0.0.1:8831/',
+      reuseExistingServer: false,
+      timeout: 20_000,
+      env: {
+        POSTURI_DB: anomaliesFixture,
         POSTURI_TODAY: '2026-10-03',
       },
     },

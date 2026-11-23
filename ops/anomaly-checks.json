@@ -1,215 +1,249 @@
 {
-  "_comment": "ANOMALY-PUBLIC register. Only the owner sets a state to published. States: hidden, listed, published.",
   "checks": {
     "R01": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Număr de posturi neobișnuit de mare",
       "explain_ro": "Anunțul indică peste 20 de posturi. Valoarea poate veni dintr-un număr de proiect citit greșit de programul nostru. Comparație: pragul de 20 de posturi pe anunț.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R02": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "An în afara intervalului în calendarul concursului",
       "explain_ro": "O dată din calendar are anul în afara intervalului 2024–2026. Anul poate fi greșit în anunț sau citit greșit de programul nostru. Comparație: intervalul 2024–2026.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R03": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Etapă de calendar fără denumire",
       "explain_ro": "O etapă din calendar are denumirea goală sau formată doar din liniuțe. Cauza probabilă este citirea tabelului de către programul nostru. Comparație: etapele cu denumire completă.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R04": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Salariu lunar sub 1.000 lei",
       "explain_ro": "Salariul anunțat este sub 1.000 lei pe lună. Poate fi un tarif pe oră citit drept salariu lunar. Comparație: pragul de 1.000 lei pe lună.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R05": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Același angajator scris în mai multe feluri",
       "explain_ro": "Numele angajatorului apare în mai multe variante după ce ignorăm diacriticele și semnele de punctuație. Site-ul poate număra separat același angajator. Comparație: numele celorlalți angajatori.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R06": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Termen limită în ziua publicării",
       "explain_ro": "Termenul de depunere cade chiar în ziua publicării. Data poate fi preluată greșit de programul nostru. Comparație: anunțurile cu termen confirmat.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R07": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Termen limită înainte de publicare",
       "explain_ro": "Termenul de depunere este înaintea zilei publicării. Data poate fi greșită în anunț sau citită greșit de programul nostru. Comparație: ziua publicării.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R08": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Termen de depunere sub 7 zile",
       "explain_ro": "Termenul de depunere este mai mic de 7 zile calendaristice de la publicare. Comparație: pragul de 7 zile.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R09a": {
       "kind": "error_posting",
+      "group": "erori_anunt",
       "label_ro": "Proba scrisă înainte de termenul de depunere",
       "explain_ro": "Calendarul anunțului pune proba scrisă înainte de termenul de depunere. Comparație: ordinea firească a etapelor.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R09b": {
       "kind": "error_posting",
+      "group": "erori_anunt",
       "label_ro": "Interviu înainte de proba scrisă",
       "explain_ro": "Calendarul anunțului pune interviul înainte de proba scrisă. Comparație: ordinea firească a etapelor.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R09c": {
       "kind": "error_posting",
+      "group": "erori_anunt",
       "label_ro": "Rezultate finale înainte de interviu",
       "explain_ro": "Calendarul anunțului pune rezultatele finale înainte de interviu. Comparație: ordinea firească a etapelor.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R10": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Proba scrisă la cel mult 5 zile după termen",
       "explain_ro": "Proba scrisă este la 0–5 zile după termenul de depunere. Comparație: pragul de 5 zile.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R11": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Etapă de concurs într-o zi de weekend",
       "explain_ro": "O etapă din calendar cade într-o sâmbătă sau duminică. Comparație: zilele lucrătoare.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R12": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "„Debutant” în titlu, dar experiență cerută",
       "explain_ro": "Titlul conține „debutant”, iar anunțul cere cel puțin un an de experiență. Comparație: postările cu „debutant” în titlu și experiență declarată.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R13": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Experiență mult peste media grupei",
       "explain_ro": "Experiența cerută este de cel puțin 7 ani și depășește de 3 ori media grupei plus 3 ani. Comparație: postările din aceeași grupă de ocupații (cel puțin 30 de postări).",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R14": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Experiență cerută de cel puțin 16 ani",
       "explain_ro": "Anunțul cere 16 ani de experiență sau mai mult. Comparație: pragul de 16 ani. Valoarea poate fi și o eroare de citire.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R15": {
       "kind": "unusual_employer",
+      "group": "angajator",
       "label_ro": "Angajator cu multe termene scurte",
       "explain_ro": "Cel puțin jumătate din anunțurile angajatorului au termen sub 7 zile. Comparație: angajatorii cu cel puțin 8 anunțuri.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R16": {
       "kind": "unusual_employer",
+      "group": "angajator",
       "label_ro": "Același titlu publicat de cel puțin 3 ori",
       "explain_ro": "Angajatorul publică de cel puțin 3 ori același titlu. Comparație: pragul de 3 publicări.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R17": {
       "kind": "unusual_employer",
+      "group": "angajator",
       "label_ro": "Cel puțin 10 anunțuri într-o singură zi",
       "explain_ro": "Angajatorul publică cel puțin 10 anunțuri în aceeași zi. Comparație: pragul de 10 anunțuri pe zi.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R18": {
       "kind": "context",
+      "group": "context",
       "label_ro": "Contact pe adresă de e-mail gratuită",
-      "explain_ro": "Adresa de contact este la un furnizor gratuit (Gmail, Yahoo). Nu este o anomalie; este doar context.",
-      "state": "hidden"
+      "explain_ro": "Adresa de contact este la un furnizor gratuit (Gmail, Yahoo).",
+      "caveat_ro": "Context, nu o anomalie: o adresă gratuită nu arată o problemă în anunț."
     },
     "R19": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Anunț valabil mai puțin de 5 zile",
       "explain_ro": "Anunțul expiră la mai puțin de 5 zile după publicare. Comparație: pragul de 5 zile.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R20": {
       "kind": "context",
+      "group": "context",
       "label_ro": "Rol cu cel puțin 12 competențe",
       "explain_ro": "Rolul are cel puțin 12 competențe extrase. Măsoară extragerea noastră, nu anunțul.",
-      "state": "hidden"
+      "caveat_ro": "Context, nu o anomalie: valoarea măsoară extragerea noastră, nu anunțul."
     },
     "E01": {
       "kind": "context",
+      "group": "context",
       "label_ro": "Zile lucrătoare până la termen",
-      "explain_ro": "Distribuția zilelor lucrătoare dintre publicare și termen. Nu este o listă de anunțuri. Semnalele: posturi contractuale sub 10 zile lucrătoare (HG 1336/2022, art. 34).",
-      "state": "hidden"
+      "explain_ro": "Distribuția zilelor lucrătoare dintre publicare și termen. Semnalele: posturi contractuale sub 10 zile lucrătoare (HG 1336/2022, art. 34).",
+      "caveat_ro": "Context, nu o anomalie: lista arată doar posturile contractuale cu termen scurt."
     },
     "E02": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Termen scurt peste sărbători",
       "explain_ro": "Intervalul de depunere include Crăciunul, Paștele sau 1–15 august și are sub 10 zile lucrătoare. Comparație: pragul de 10 zile lucrătoare.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "E03": {
       "kind": "unusual_employer",
+      "group": "angajator",
       "label_ro": "Același post publicat din nou",
       "explain_ro": "Același angajator publică din nou același titlu după 14–90 de zile. Comparație: perechea de anunțuri anterioară.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "E04": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Titlu sau expirare modificate după publicare",
       "explain_ro": "Titlul sau data de expirare s-au schimbat după prima apariție în listă. Comparație: prima versiune văzută de site.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "E05": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Cerințe foarte restrânse",
-      "explain_ro": "Anunțul are cerințe rare pe cel puțin două măsuri. Măsurile sunt slabe, deci semnalul nu este afișat. Comparație: grupa de ocupații.",
-      "state": "hidden"
+      "explain_ro": "Anunțul are cerințe rare pe cel puțin două măsuri. Comparație: grupa de ocupații.",
+      "caveat_ro": "Măsurile sunt slabe. Semnalul arată doar că cerințele sunt rare în grupa de ocupații."
     },
     "E06": {
       "kind": "error_ours",
+      "group": "erori_noastre",
       "label_ro": "Salariu declarat în afara grilei",
       "explain_ro": "Salariul minim declarat în anunț este cu peste 20% în afara intervalului din grilă. Cauza poate fi potrivirea greșită a grilei de către programul nostru. Comparație: intervalul grilei pentru funcție.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "E07": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Contact pe e-mail gratuit, rar pentru acest tip de angajator",
       "explain_ro": "Anunțul indică o adresă de e-mail gratuită, deși sub 15% din angajatorii de același tip folosesc una. Comparație: angajatorii de același tip.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "E08": {
       "kind": "error_posting",
+      "group": "erori_anunt",
       "label_ro": "Etapă de calendar cu peste 30 de zile înainte de publicare",
       "explain_ro": "O etapă din calendar este cu peste 30 de zile înainte de data publicării. Comparație: ziua publicării.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R21": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Avantaj pentru domiciliul în localitate",
       "explain_ro": "Anunțul acordă un avantaj candidaților cu domiciliul în localitate. Legea permite criteriul, dar anunțul nu spune cum se punctează. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R22": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Avantaj pentru munca într-un proiect anume",
       "explain_ro": "Anunțul acordă un avantaj candidaților care au lucrat într-un proiect anume. Legea permite criteriul, dar anunțul nu spune cum se punctează. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
-      "state": "listed"
+      "caveat_ro": "Model de text larg: în 5 din 10 cazuri verificate, anunțul nu numește un proiect."
     },
     "R23": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Experiență în proiecte cu fonduri europene",
       "explain_ro": "Anunțul cere sau preferă experiență în proiecte cu fonduri europene. Legea permite criteriul, dar el restrânge numărul candidaților. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
-      "state": "listed"
+      "caveat_ro": ""
     },
     "R24": {
       "kind": "unusual",
+      "group": "neobisnuit",
       "label_ro": "Mai multe condiții peste cele ale ocupației",
       "explain_ro": "Anunțul cere vechime de cel puțin două ori mediana ocupației și, în plus, un nivel de limbă C1 sau un document numit. Condițiile pot fi justificate de post. Comparație: mediana vechimii cerute în aceeași ocupație.",
-      "state": "hidden"
+      "caveat_ro": "Semnal nerevizuit de o persoană. Condițiile pot fi justificate de post."
     },
     "R25": {
       "kind": "error_posting",
+      "group": "erori_anunt",
       "label_ro": "Vârstă maximă sau sex cerut",
-      "explain_ro": "Anunțul cere o vârstă maximă sau un anumit sex. Unele posturi pot avea acest temei legal, de exemplu cele militare. O persoană verifică fiecare caz înainte de afișare. Comparație: condițiile generale din HG 1336/2022.",
-      "state": "hidden"
+      "explain_ro": "Anunțul cere o vârstă maximă sau un anumit sex. Unele posturi pot avea acest temei legal, de exemplu cele militare. Comparație: condițiile generale din HG 1336/2022.",
+      "caveat_ro": "Semnal dintr-o căutare de text. Unele posturi au temei legal, de exemplu cele militare. Citatul arată textul exact."
     }
   }
 }

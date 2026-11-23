@@ -11,12 +11,14 @@
  *   php tests/fixtures/make.php /tmp/posturi-project.sqlite project     # three project-hired posts, 1001-1003 (tests/project_pay_test.php, browser/project_pay.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-limits.sqlite limits       # a draft note on 1001, a last-resort draft figure on 1003, the limits table (tests/salary_limits_test.php, browser/salary_limits.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-range.sqlite range         # a pay range on 1001 (estimate) and 1003 (stated), ADR 0008 rule 11 (tests/salary_range_test.php, browser/salary_range.spec.js)
+ *   php tests/fixtures/make.php /tmp/posturi-anomalies.sqlite anomalies # the anomaly tables, one check in each group (tests/anomalies_test.php, browser/anomalies.spec.js)
  * Used by the request tests and by the Playwright global setup.
  */
 require_once __DIR__ . '/build_db.php';
 require_once __DIR__ . '/theme_db.php';
 require_once __DIR__ . '/chips_db.php';
 require_once __DIR__ . '/professional_db.php';
+require_once __DIR__ . '/anomalies_db.php';
 
 $path = $argv[1] ?? (sys_get_temp_dir() . '/posturi-fixture.sqlite');
 $evidence = ($argv[2] ?? '') === 'evidence';
@@ -49,5 +51,8 @@ if (($argv[2] ?? '') === 'range') {
     $pdo = new PDO('sqlite:' . $path);
     fixture_seed_law_estimates($pdo);
     fixture_seed_pay_range($pdo);
+}
+if (($argv[2] ?? '') === 'anomalies') {
+    fixture_seed_anomalies(new PDO('sqlite:' . $path));
 }
 echo "$path\n";

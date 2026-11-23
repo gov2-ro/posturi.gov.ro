@@ -218,7 +218,16 @@ if ($is_root && !$hx_fragment && !$_GET) {
     require __DIR__ . '/pages/employer.php';
 } elseif ($uri === '/statistici' || $uri === '/statistici/') {
     require __DIR__ . '/pages/stats.php';
-} elseif ($uri === '/statistici/anomalii' || $uri === '/statistici/anomalii/') {
+} elseif (preg_match('#^/statistici/anomalii(/.*)?$#', $uri, $m)) {
+    // 2026-11-24: the anomaly page moved to /anomalii/. The old URL, and any path under it, redirects.
+    http_response_code(301);
+    $rest = rtrim($m[1] ?? '', '/');
+    header('Location: /anomalii' . $rest . '/' . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : ''));
+    exit;
+} elseif ($uri === '/anomalii' || $uri === '/anomalii/') {
+    require __DIR__ . '/pages/anomalies_public.php';
+} elseif (preg_match('#^/anomalii/([A-Za-z0-9]+)/?$#', $uri, $m)) {
+    $_GET['check'] = $m[1];
     require __DIR__ . '/pages/anomalies_public.php';
 } elseif ($uri === '/admin/anomalii' || $uri === '/admin/anomalii/') {
     require __DIR__ . '/pages/anomalies_admin.php';

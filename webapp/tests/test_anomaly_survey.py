@@ -378,18 +378,20 @@ def table_run(sv, db_path, tmp_path, reviews=None, register=None):
 
 def test_table_mode_writes_rows_and_replaces(sv, tmp_path):
     db_path = make_db(tmp_path, [{"nr_posturi": 339395}, {"nr_posturi": 3}, {"nr_posturi": 21}])
-    reg = {"R01": {"kind": "error_ours", "label_ro": "L", "explain_ro": "X", "state": "listed"}}
+    reg = {"R01": {"kind": "error_ours", "label_ro": "L", "group": "erori_noastre", "explain_ro": "X", "caveat_ro": "C"}}
     n = table_run(sv, db_path, tmp_path, register=reg)
     assert n["anomaly_signals"] >= 2
     db = sqlite3.connect(db_path)
     r01 = db.execute("SELECT posting_id, value, peer_value FROM anomaly_signals WHERE check_id='R01' "
                      "ORDER BY posting_id").fetchall()
     assert r01 == [(1, "339395", "20"), (3, "21", "20")]
-    row = db.execute("SELECT kind, label_ro, state, count, denominator, reviewed FROM anomaly_checks "
+    row = db.execute("SELECT kind, label_ro, group_id, caveat_ro, count, denominator, reviewed FROM anomaly_checks "
                      "WHERE check_id='R01'").fetchone()
-    assert row == ("error_ours", "L", "listed", 2, 3, 0)
-    # a check with no register entry still gets a row, state listed
-    assert db.execute("SELECT state FROM anomaly_checks WHERE check_id='R02'").fetchone() == ("listed",)
+    assert row == ("error_ours", "L", "erori_noastre", "C", 2, 3, 0)
+    # a check with no register entry still gets a row, with the default group and no caveat
+    assert db.execute("SELECT group_id, caveat_ro FROM anomaly_checks WHERE check_id='R02'"
+                      ).fetchone() == ("neobisnuit", "")
+    assert "state" not in {r[1] for r in db.execute("PRAGMA table_info(anomaly_checks)")}
     idx = {r[1] for r in db.execute("PRAGMA index_list(anomaly_signals)")}
     assert len(idx) == 2
     db.execute("INSERT INTO anomaly_signals VALUES (99,'ZZ','','','{}')")
@@ -438,6 +440,7 @@ def test_r21_domicile_advantage(sv, tmp_path):
     row = _text_check(sv, tmp_path, "R21", "Constituie avantaj domiciliul în UAT pentru care aplică;",
                       "Avantaj: permis de conducere. Domiciliul se dovedește cu buletin.")
     assert row[2] == "avantaj domicili"
+    assert row[4]["excerpt"][row[4]["excerpt_start"]:row[4]["excerpt_end"]] == "avantaj domiciliul"   # the whole word is marked
 
 
 def test_r22_project_advantage(sv, tmp_path):
@@ -481,9 +484,69 @@ def test_r24_conditions_above_occupation(sv, tmp_path):
     assert sorted(r[0] for r in rows) == [1, 2] and e["denominator"] == n
 
 
-def test_register_file_is_complete_and_unpublished(sv):
+def test_register_file_is_complete_and_has_groups(sv):
     reg = sv.load_register(sv.DEFAULT_CHECKS)
     assert {c["id"] for c in sv.CHECKS} == set(reg)
-    assert all(v["state"] in ("hidden", "listed") for v in reg.values())
+    assert all("state" not in v for v in reg.values())
+    assert all(v["group"] == sv.GROUP_OF_KIND[v["kind"]] for v in reg.values())
+    assert all(reg[c]["caveat_ro"] for c in ("R18", "R20", "E01", "E05", "R22", "R24", "R25"))
     assert all(v["kind"] in ("error_ours", "error_posting", "unusual", "unusual_employer", "context")
                for v in reg.values())
+
+
+# ---- Source quote (2026-11-24) ----------------------------------------------
+
+def test_excerpt_is_the_paragraph_with_the_match(sv):
+    body = "Primul paragraf.\n\nCondiții: vârsta maximă 45 ani,\nla data numirii.\n\nAl treilea."
+    s0 = body.index("vârsta maximă 45")
+    d = sv.excerpt_around(body, s0, s0 + len("vârsta maximă 45"))
+    assert d["excerpt"] == "Condiții: vârsta maximă 45 ani, la data numirii."
+    assert d["excerpt"][d["excerpt_start"]:d["excerpt_end"]] == "vârsta maximă 45"
+    assert not d["cut_start"] and not d["cut_end"]
+
+
+def test_excerpt_is_cut_on_a_word(sv):
+    body = ("cuvânt " * 200) + "MATCH" + (" cuvânt" * 200)
+    s0 = body.index("MATCH")
+    d = sv.excerpt_around(body, s0, s0 + 5)
+    assert len(d["excerpt"]) <= 600 and d["cut_start"] and d["cut_end"]
+    assert d["excerpt"][d["excerpt_start"]:d["excerpt_end"]] == "MATCH"
+    assert d["excerpt"].startswith("cuvânt") and d["excerpt"].endswith("cuvânt")
+
+
+def test_text_check_stores_the_excerpt(sv, tmp_path):
+    _, rows = counts(sv, tmp_path, "R25", [{}], texts={1: "Alt text.\n\nCandidați de sex masculin, conform legii."})
+    d = rows[0][4]
+    assert d["source"] == "text" and "de sex masculin" in d["excerpt"]
+    assert d["excerpt"][d["excerpt_start"]:d["excerpt_end"]] == "de sex masculin"
+    # table mode keeps it in detail_json
+    (tmp_path / "t").mkdir()
+    db_path = make_db(tmp_path / "t", [{}], texts={1: "Candidați de sex masculin."})
+    table_run(sv, db_path, tmp_path)
+    db = sqlite3.connect(db_path)
+    (dj,) = db.execute("SELECT detail_json FROM anomaly_signals WHERE check_id='R25'").fetchone()
+    assert json.loads(dj)["excerpt"] == "Candidați de sex masculin."
+
+
+def test_calendar_checks_store_the_calendar_line(sv, tmp_path):
+    e, rows = counts(sv, tmp_path, "R11", [{"published_at": "2026-01-02"}],
+                     events=[(1, "Proba scrisă", "2026-01-03")])   # a Saturday
+    d = rows[0][4]
+    assert d["source"] == "calendar"
+    assert (d["calendar"][0]["eveniment"], d["calendar"][0]["data"]) == ("Proba scrisă", "2026-01-03")
+
+
+def test_stage_check_stores_the_lines_it_compares(sv, tmp_path):
+    p = [{"apply_deadline": "2026-03-10", "data_proba_scrisa": "2026-03-05"}]
+    ev = [(1, "Depunerea dosarelor", "2026-03-10"), (1, "Proba scrisă", "2026-03-05")]
+    _, rows = counts(sv, tmp_path, "R09a", p, events=ev)
+    assert [l["eveniment"] for l in rows[0][4]["calendar"]] == ["Depunerea dosarelor", "Proba scrisă"]
+    # no matching line: nothing is stored
+    (tmp_path / "b").mkdir()
+    _, rows = counts(sv, tmp_path / "b", "R09a", p)
+    assert rows[0][4] is None
+
+
+def test_number_checks_store_no_detail(sv, tmp_path):
+    _, rows = counts(sv, tmp_path, "R01", [{"nr_posturi": 30}])
+    assert rows[0][4] is None

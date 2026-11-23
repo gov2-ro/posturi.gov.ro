@@ -21,6 +21,10 @@ $uri = '/' . trim($uri ?? '/', '/');
 // query string is ignored entirely.
 if ($uri === '/preferinte-posturi.json') { require __DIR__ . '/feeds/preferinte.json.php'; exit; }
 
+// UX-SALVATE-FLUX: the Flux tab of /salvate/ asks for the open postings of the reader's sources in one GET.
+// Routed here for the same reason: s[], e[] and id[] are not list filters, and the handler gives its own JSON errors.
+if ($uri === '/flux.json') { require __DIR__ . '/feeds/flux.json.php'; exit; }
+
 // UX-14: email alerts. Routed before the query-string decoder: the subscribe
 // form takes the saved search as ?cheie=, which is not a list filter and must
 // not meet the list validation. Each page sets its own no-store headers and

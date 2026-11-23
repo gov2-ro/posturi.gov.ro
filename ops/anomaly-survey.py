@@ -214,6 +214,7 @@ class Ctx:
             p["_dl"] = d10(p.get("apply_deadline"))
             p["_emp"] = _norm_title(p.get("employer_name") or "")
         self._events = None
+        self._cal_by_posting = None
         self._texts = None
 
     def missing(self, needs: dict[str, list[str]]) -> list[str]:
@@ -244,6 +245,17 @@ class Ctx:
                     self._events.append(e)
         return self._events
 
+    def calendar_lines(self, posting_id, d, keyword_re=None) -> list[dict]:
+        """The calendar line of a posting dated `d` (one line; the one whose label matches
+        `keyword_re` first). Empty list when the posting has no line on that day."""
+        if self._cal_by_posting is None:
+            self._cal_by_posting = defaultdict(list)
+            for e in self.events():
+                self._cal_by_posting[e["posting_id"]].append(e)
+        same = [e for e in self._cal_by_posting.get(posting_id, []) if d is not None and e["_d"] == d]
+        pick = [e for e in same if keyword_re and keyword_re.search(e["eveniment"] or "")] or same
+        return [calendar_line(pick[0])] if pick else []
+
     def texts(self) -> dict[int, str]:
         """posting_id -> body_markdown, read once (empty text is kept out)."""
         if self._texts is None:
@@ -271,8 +283,65 @@ def check(cid: str, title: str, klass: str, needs: dict[str, list[str]], baselin
     return deco
 
 
-def F(posting_id, value, peer=""):
-    return (posting_id, value, peer)
+def F(posting_id, value, peer="", detail=None):
+    """One finding. `detail` (a dict) goes into `detail_json` in table mode: a source quote."""
+    return (posting_id, value, peer, detail) if detail else (posting_id, value, peer)
+
+
+def calendar_line(e: dict) -> dict:
+    """A calendar row as the page quotes it."""
+    return {"eveniment": " ".join(str(e.get("eveniment") or "").split()),
+            "data": str(e.get("data") or ""), "ora": str(e.get("ora") or "")}
+
+
+EXCERPT_MAX = 600
+
+
+def _squash(t: str) -> str:
+    return re.sub(r"\s+", " ", t)
+
+
+def excerpt_around(body: str, start: int, end: int, limit: int = EXCERPT_MAX) -> dict:
+    """The paragraph of `body` that holds the match [start, end), cut on a word at about `limit`
+    characters. Returns {excerpt, excerpt_start, excerpt_end, cut_start, cut_end}; the offsets
+    are relative to the excerpt (whitespace is squashed to single spaces)."""
+    ps = body.rfind("\n\n", 0, start)
+    ps = 0 if ps < 0 else ps + 2
+    pe = body.find("\n\n", end)
+    pe = len(body) if pe < 0 else pe
+    a, m, z = _squash(body[ps:start]), _squash(body[start:end]), _squash(body[end:pe])
+    a = a.lstrip()
+    z = z.rstrip()
+    cut_start = cut_end = False
+    if len(a) + len(m) + len(z) > limit:
+        room = max(limit - len(m), 0)
+        keep_a = min(len(a), room // 2)
+        keep_z = min(len(z), room - keep_a)
+        keep_a = min(len(a), room - keep_z)
+        if keep_a < len(a):
+            cut = a[len(a) - keep_a:]
+            if a[len(a) - keep_a - 1] != " " and " " in cut:   # drop a broken word
+                cut = cut[cut.index(" ") + 1:]
+            a, cut_start = cut, True
+        if keep_z < len(z):
+            cut = z[:keep_z]
+            if z[keep_z] != " " and " " in cut:
+                cut = cut[:cut.rindex(" ")]
+            z, cut_end = cut, True
+    return {"excerpt": a + m + z, "excerpt_start": len(a), "excerpt_end": len(a) + len(m),
+            "cut_start": cut_start, "cut_end": cut_end}
+
+
+def cal_detail(events: list[dict]) -> dict | None:
+    """Detail of a calendar finding: the calendar lines it compares."""
+    return {"source": "calendar", "calendar": [calendar_line(e) for e in events]}
+
+
+#: Which calendar line stands for a stage column of `job_postings` (R09a-c, R10).
+STAGE_KEYWORD = {"apply_deadline": re.compile(r"depun|înscri|inscri", re.I),
+                 "data_proba_scrisa": re.compile(r"scris", re.I),
+                 "data_interviu": re.compile(r"interviu", re.I),
+                 "data_rezultate_finale": re.compile(r"final|rezultat", re.I)}
 
 
 def short_flag(p) -> bool:
@@ -303,7 +372,7 @@ def r02(c: Ctx):
     for e in ev:
         y = int(e["_year_raw"]) if e["_year_raw"].isdigit() else None
         if y is not None and not (lo <= y <= hi):
-            f.append(F(e["posting_id"], e["data"], f"{lo}-{hi}"))
+            f.append(F(e["posting_id"], e["data"], f"{lo}-{hi}", cal_detail([e])))
     return f, len(ev), f"range {lo}-{hi}; one finding per event", {}
 
 
@@ -314,7 +383,7 @@ JUNK_LABEL_RE = re.compile(r"^[\s–—•\-·*.:;]*$")
        {"calendar_events": ["posting_id", "eveniment"]}, "1,713")
 def r03(c: Ctx):
     ev = c.events()
-    f = [F(e["posting_id"], e["eveniment"] or "", "") for e in ev
+    f = [F(e["posting_id"], e["eveniment"] or "", "", cal_detail([e])) for e in ev
          if JUNK_LABEL_RE.match(e["eveniment"] or "")]
     return f, len(ev), "one finding per event", {}
 
@@ -407,7 +476,10 @@ def _stage_check(c: Ctx, a_col: str, b_col: str, cmp):
             continue
         rows += 1
         if cmp(a, b):
-            f.append(F(p["id"], b.isoformat(), a.isoformat()))
+            lines = (c.calendar_lines(p["id"], a, STAGE_KEYWORD.get(a_col))
+                     + c.calendar_lines(p["id"], b, STAGE_KEYWORD.get(b_col)))
+            f.append(F(p["id"], b.isoformat(), a.isoformat(),
+                       {"source": "calendar", "calendar": lines} if lines else None))
     return f, rows
 
 
@@ -445,7 +517,7 @@ def r10(c: Ctx):
 def r11(c: Ctx):
     lo, hi = c.params["year_min"], c.params["year_max"]
     ev = [e for e in c.events() if e["_d"] and lo <= e["_d"].year <= hi]
-    f = [F(e["posting_id"], e["_d"].isoformat(), e["_d"].strftime("%a")) for e in ev
+    f = [F(e["posting_id"], e["_d"].isoformat(), e["_d"].strftime("%a"), cal_detail([e])) for e in ev
          if e["_d"].weekday() >= 5]
     return f, len(ev), f"events dated {lo}-{hi}; one finding per event", {}
 
@@ -798,7 +870,7 @@ def e07(c: Ctx):
 def e08(c: Ctx):
     lim = c.params["old_event_days"]
     ev = [e for e in c.events() if e["_d"] and e["_pub"]]
-    f = [F(e["posting_id"], e["_d"].isoformat(), e["_pub"].isoformat()) for e in ev
+    f = [F(e["posting_id"], e["_d"].isoformat(), e["_pub"].isoformat(), cal_detail([e])) for e in ev
          if (e["_pub"] - e["_d"]).days > lim]
     return f, len(ev), "one finding per event; peer = publication date", {}
 
@@ -810,10 +882,12 @@ def e08(c: Ctx):
 DEFAULT_CHECKS = ROOT / "ops" / "anomaly-checks.json"
 DEFAULT_REVIEWS = ROOT / "data" / "anomaly-reviews.csv"
 VERDICTS = ("real", "false_positive", "unclear")
+GROUP_OF_KIND = {"error_ours": "erori_noastre", "error_posting": "erori_anunt", "unusual": "neobisnuit",
+                 "unusual_employer": "angajator", "context": "context"}
 
 
 def load_register(path) -> dict:
-    """The register: check id -> {kind, label_ro, explain_ro, state}. Missing file: empty."""
+    """The register: check id -> {kind, group, label_ro, explain_ro, caveat_ro}. Missing file: empty."""
     p = Path(path)
     if not p.exists():
         return {}
@@ -857,11 +931,11 @@ def write_tables(db_path, report: dict, rows: list[tuple], register: dict, revie
         db.execute("CREATE TABLE anomaly_signals (posting_id INTEGER, check_id TEXT, value TEXT, "
                    "peer_value TEXT, detail_json TEXT)")
         db.execute("CREATE TABLE anomaly_checks (check_id TEXT PRIMARY KEY, kind TEXT, label_ro TEXT, "
-                   "explain_ro TEXT, state TEXT, count INTEGER, denominator INTEGER, "
+                   "group_id TEXT, explain_ro TEXT, caveat_ro TEXT, count INTEGER, denominator INTEGER, "
                    "reviewed INTEGER, real INTEGER, false_positive INTEGER)")
         sig = []
-        for pid, cid, value, peer in rows:
-            detail = {}
+        for pid, cid, value, peer, *extra in rows:
+            detail = dict(extra[0]) if extra and extra[0] else {}
             if register.get(cid, {}).get("kind") == "unusual_employer":
                 detail["level"] = "employer"
             verdict = reviews.get((cid, int(pid)))
@@ -879,10 +953,11 @@ def write_tables(db_path, report: dict, rows: list[tuple], register: dict, revie
             rv = [v for (c, _), v in reviews.items() if c == cid]
             ok = e["status"] == "ok"
             chk.append((cid, reg.get("kind", "unusual"), reg.get("label_ro", e["title"]),
-                        reg.get("explain_ro", ""), reg.get("state", "listed"),
+                        reg.get("group", GROUP_OF_KIND.get(reg.get("kind", "unusual"), "neobisnuit")),
+                        reg.get("explain_ro", ""), reg.get("caveat_ro", ""),
                         e["count"] if ok else None, e["denominator"] if ok else None,
                         len(rv), rv.count("real"), rv.count("false_positive")))
-        db.executemany("INSERT INTO anomaly_checks VALUES (?,?,?,?,?,?,?,?,?,?)", chk)
+        db.executemany("INSERT INTO anomaly_checks VALUES (?,?,?,?,?,?,?,?,?,?,?)", chk)
         db.commit()
         return {"anomaly_signals": len(sig), "anomaly_checks": len(chk)}
     finally:
@@ -910,14 +985,16 @@ R25_SEX_RE = re.compile(r"(sexul|de sex) (masculin|feminin)", re.I)
 
 
 def _text_regex_check(c: Ctx, regexes) -> tuple[list, int]:
-    """One finding per posting: the first match of any regex, cut at 120 characters."""
+    """One finding per posting: the first match of any regex, cut at 120 characters.
+    `detail` holds the paragraph around the match (`excerpt`)."""
     f = []
     texts = c.texts()
     for pid, body in texts.items():
         for rx in regexes:
             m = rx.search(body)
             if m:
-                f.append(F(pid, " ".join(m.group(0).split())[:120], ""))
+                f.append(F(pid, " ".join(m.group(0).split())[:120], "",
+                           {"source": "text", **excerpt_around(body, m.start(), m.end())}))
                 break
     return f, len(texts)
 
@@ -998,7 +1075,7 @@ def run(c: Ctx, only: set[str] | None = None) -> tuple[dict, list[tuple]]:
             report[ch["id"]] = entry
             continue
         urls, seen = [], set()
-        for pid, _, _ in findings:
+        for pid, *_ in findings:
             u = c.url(pid)
             if u and u not in seen:
                 seen.add(u)
@@ -1009,7 +1086,7 @@ def run(c: Ctx, only: set[str] | None = None) -> tuple[dict, list[tuple]]:
                      share=round(len(findings) / den, 4) if den else None,
                      sample_urls=urls, notes=notes, extra=extra)
         report[ch["id"]] = entry
-        rows += [(pid, ch["id"], v, peer) for pid, v, peer in findings]
+        rows += [(f[0], ch["id"], f[1], f[2], f[3] if len(f) > 3 else None) for f in findings]
     return report, rows
 
 
@@ -1056,7 +1133,7 @@ def main(argv=None) -> int:
     with open(args.csv, "w", encoding="utf-8", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["posting_id", "check", "value", "peer_value"])
-        w.writerows(rows)
+        w.writerows(r[:4] for r in rows)
     for cid, e in report.items():
         if e["status"] == "ok":
             print(f"{cid:5} {e['count']:>6} / {e['denominator']:<7} {e['title']}")

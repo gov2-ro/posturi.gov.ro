@@ -2,6 +2,22 @@
 
 ## 2026
 
+### 2026-11-23 — DATA-ORG-04: fresh full employer export for org; DATA-ORG-06 briefed (Opus)
+
+**Done**
+- `ops/export-employers-for-org.py` leaves out an employer name with no letter (`c7945cd`). The import files postings with no institution under employer `x` („—”); org made it the proposed record `Px`. DATA-ORG-07 tracks the import fix.
+- A full VPS export (`export-to-sqlite.py` without `--active-only`, built_at 2026-11-23T09:52:55Z, git `4d9938c`): 16,875 postings, 7,631 employers, 376 MB. The Mac pulled it with rsync from `pax@78.46.142.169`; sha256 matched, `integrity_check` ok. Copy at `data/_dev/full-2026-11-23.sqlite` (not in git).
+- `institutii-publice/data/posturi/employers.csv`: 7,630 rows (was 5,901 on 2026-11-02), 7,557 with a county, 73 with 0 postings. 1,730 new slugs; only `x` is gone. The old file is kept as `employers.2026-11-02.csv`.
+- DATA-ORG-06 brief: `docs/briefs/2026-11-23-employer-org-link.md`. Ciulei's crosswalk (org v0.68.0): 5,040 linked, 181 linked_no_cif, 680 unmatched.
+
+**Hard**
+- The Mac has no ssh Host `gov2-1`, although `docs/deploy-vps.md` § 7 and `ops/pull-backup.sh` assume one. The IP works with key login.
+
+**Decided**
+- The employer CSV is made on the Mac from the pulled sqlite, not on the VPS. The `x` fix was not pushed, so a VPS run would have kept `Px`. Cost: a 376 MB copy.
+- Employer slugs are stable: the import never renames a slug, and no code deletes employers. Told org and ciulei; a future EMPLOYER-DUPLICATES merge must publish an old-to-new slug map.
+- DATA-ORG-06 reads the ciulei crosswalk through a committed snapshot, because ciulei is not on the VPS. `status` is the contract: never link `unmatched`.
+
 ### 2026-11-23 — ANOMALY-PUBLIC phase 1 live: admin login on the shared host (Opus)
 
 **Done**

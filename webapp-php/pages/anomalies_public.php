@@ -5,7 +5,7 @@ declare(strict_types=1);
  * ANOMALY-PUBLIC — "Anomalii și abateri", and the render code of the admin page too.
  *
  * Public routes (2026-11-24 change, docs/specs/2026-11-23-anomaly-public.md):
- *   `/anomalii/`            every check of the register, the first 20 signals of each;
+ *   `/anomalii/`            every check of the register, the first 10 signals of each (2026-11-24: page size);
  *   `/anomalii/{ID}/`       the full list of one check, 50 signals a page (`?pagina=N`).
  * `/statistici/anomalii/…` redirects here (index.php). Everything is public and indexed.
  * `pages/anomalies_admin.php` sets `$anomaly_admin = true`, checks the login and requires this
@@ -17,7 +17,7 @@ declare(strict_types=1);
 
 $anomaly_admin = $anomaly_admin ?? false;
 // Signal rows per check: the overview, the page of one check, the admin page.
-const ANOMALY_OVERVIEW_ROWS = 20;
+const ANOMALY_OVERVIEW_ROWS = 10;
 const ANOMALY_PAGE_ROWS = 50;
 const ANOMALY_ADMIN_ROWS = 500;
 // The feedback form of the footer (inc/footer.php). The form has no prefill: the link is plain.
@@ -77,7 +77,8 @@ function anomaly_quote(?string $detail_json): string {
         $a = (int)($d['excerpt_start'] ?? 0);
         $z = (int)($d['excerpt_end'] ?? 0);
         $body = ($d['cut_start'] ?? false ? '… ' : '')
-            . e(mb_substr($t, 0, $a)) . '<mark>' . e(mb_substr($t, $a, $z - $a)) . '</mark>' . e(mb_substr($t, $z))
+            . nl2br(e(mb_substr($t, 0, $a)), false) . '<mark>' . e(mb_substr($t, $a, $z - $a)) . '</mark>'
+            . nl2br(e(mb_substr($t, $z)), false)
             . ($d['cut_end'] ?? false ? ' …' : '');
         return '<blockquote class="pg-quote"><p>' . $body . '</p><footer>din textul anunțului</footer></blockquote>';
     }

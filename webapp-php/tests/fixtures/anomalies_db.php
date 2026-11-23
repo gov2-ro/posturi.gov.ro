@@ -29,6 +29,6 @@ function fixture_seed_anomalies(PDO $db): void {
     $sig->execute([1002, 'R09a', '2026-01-01', '2026-02-01', json_encode(['source' => 'calendar', 'calendar' => [
         ['eveniment' => 'Proba scrisă', 'data' => '2026-01-01', 'ora' => '10:00']]], JSON_UNESCAPED_UNICODE)]);
     $sig->execute([1003, 'R25', 'sex masculin', '', json_encode(['source' => 'text',
-        'excerpt' => 'Condiții: candidați de sex masculin & <b>x</b>, conform legii.',
+        'excerpt' => "Condiții: candidați de sex masculin & <b>x</b>,\nconform legii.",
         'excerpt_start' => 23, 'excerpt_end' => 35, 'cut_start' => false, 'cut_end' => true], JSON_UNESCAPED_UNICODE)]);
 }

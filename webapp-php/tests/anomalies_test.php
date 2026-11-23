@@ -71,7 +71,7 @@ run_suite('the public page shows every group in order, with caveats and quotes, 
     assert_contains('AVERTISMENT-R25 semnal din text.', $h, 'a caveat renders');
     assert_contains('Context, nu o anomalie: test.', $h, 'a context caveat renders');
     assert_contains('<blockquote class="pg-quote">', $h, 'a quote renders');
-    assert_contains('candidați de <mark>sex masculin</mark> &amp; &lt;b&gt;x&lt;/b&gt;, conform legii. …', $h, 'match marked, text escaped, cut shown');
+    assert_contains('candidați de <mark>sex masculin</mark> &amp; &lt;b&gt;x&lt;/b&gt;,<br>' . "\n" . 'conform legii. …', $h, 'match marked, text escaped, cut shown');
     assert_contains('din textul anunțului', $h, 'text source line');
     assert_contains('din calendarul concursului', $h, 'calendar source line');
     assert_contains('<mark>2026-01-01 10:00</mark>', $h, 'calendar line');
@@ -146,6 +146,13 @@ run_suite('the admin page shows every check with the review numbers, behind a lo
     assert_not_contains('Gata de publicare', $h, 'no publication');
     assert_contains('(fals pozitiv)', $h, 'a false_positive signal is visible to the admin');
     assert_contains('name="robots" content="noindex"', $h, 'noindex');
+});
+
+run_suite('a quote keeps its line breaks; the sitemap lists /anomalii/', function () use ($srv_pub) {
+    [, $h] = an_get($srv_pub['base'], '/anomalii/');
+    assert_contains('<b>x</b>,<br>' . "\n" . 'conform legii.', html_entity_decode($h), 'the line break of the quote');
+    [, $sm] = an_get($srv_pub['base'], '/sitemap.xml');
+    assert_contains('/anomalii/</loc>', $sm, 'sitemap entry');
 });
 
 run_suite('robots.txt disallows /admin/ and /statistici/ links to the public page', function () use ($srv_pub) {

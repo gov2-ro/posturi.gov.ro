@@ -500,9 +500,17 @@ def test_excerpt_is_the_paragraph_with_the_match(sv):
     body = "Primul paragraf.\n\nCondiții: vârsta maximă 45 ani,\nla data numirii.\n\nAl treilea."
     s0 = body.index("vârsta maximă 45")
     d = sv.excerpt_around(body, s0, s0 + len("vârsta maximă 45"))
-    assert d["excerpt"] == "Condiții: vârsta maximă 45 ani, la data numirii."
+    assert d["excerpt"] == "Condiții: vârsta maximă 45 ani,\nla data numirii."   # line breaks stay
     assert d["excerpt"][d["excerpt_start"]:d["excerpt_end"]] == "vârsta maximă 45"
     assert not d["cut_start"] and not d["cut_end"]
+
+
+def test_excerpt_drops_markdown_marks(sv):
+    body = "| **Criteriu** | Punctaj |\n|---|---|\n| Domiciliul în comună | 5 |\n* vârsta maximă 45 ani\n- studii medii"
+    s0 = body.index("vârsta")
+    d = sv.excerpt_around(body, s0, s0 + len("vârsta maximă 45"))
+    assert d["excerpt"] == "Criteriu · Punctaj\nDomiciliul în comună · 5\n• vârsta maximă 45 ani\n• studii medii"
+    assert d["excerpt"][d["excerpt_start"]:d["excerpt_end"]] == "vârsta maximă 45"
 
 
 def test_excerpt_is_cut_on_a_word(sv):

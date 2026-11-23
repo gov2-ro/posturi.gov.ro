@@ -30,6 +30,7 @@ sm_url($origin . '/',            $last_update, 'daily',   '1.0');
 sm_url($origin . '/posturi/',    $last_update, 'daily',   '0.9');
 sm_url($origin . '/angajatori/', $last_update, 'weekly',  '0.6');
 sm_url($origin . '/statistici/', $last_update, 'weekly',  '0.5');
+sm_url($origin . '/anomalii/',   $last_update, 'weekly',  '0.5');
 sm_url($origin . '/despre/',     null,         'monthly', '0.3');
 sm_url($origin . '/estimator-salariu/', null,  'monthly', '0.5');
 if (declared_available()) sm_url($origin . '/salarii-declarate/', null, 'monthly', '0.5');

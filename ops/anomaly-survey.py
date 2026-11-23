@@ -298,7 +298,20 @@ EXCERPT_MAX = 600
 
 
 def _squash(t: str) -> str:
-    return re.sub(r"\s+", " ", t)
+    """Plain text for a quote: markdown marks out, one line per source line (2026-11-24, owner:
+    raw `| **…**` and run-together list items read as broken). Offsets stay valid because the
+    caller cleans the parts before, inside and after the match separately."""
+    out = []
+    for line in t.split("\n"):
+        if re.fullmatch(r"\s*\|?[\s:|-]*-{3,}[\s:|-]*\|?\s*", line):   # a table separator row
+            continue
+        line = re.sub(r"\*\*|__|(?<!\w)\*(?=\S)|(?<=\S)\*(?!\w)|`|^\s*#{1,6}\s+", "", line)
+        if "|" in line:
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            line = " · ".join(c for c in cells if c)
+        line = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "• ", line)
+        out.append(re.sub(r"[ \t\u00a0]+", " ", line))
+    return "\n".join(out)
 
 
 def excerpt_around(body: str, start: int, end: int, limit: int = EXCERPT_MAX) -> dict:
@@ -312,8 +325,9 @@ def excerpt_around(body: str, start: int, end: int, limit: int = EXCERPT_MAX) ->
     pe = body.find("\n\n", end)
     pe = len(body) if pe < 0 else pe
     a, m, z = _squash(body[ps:start]), _squash(body[start:end]), _squash(body[end:pe])
-    a = a.lstrip()
-    z = z.rstrip()
+    a = re.sub(r"^\s+", "", a)
+    a = re.sub(r"\n\s*\n+", "\n", a)
+    z = re.sub(r"\n\s*\n+", "\n", z).rstrip()
     cut_start = cut_end = False
     if len(a) + len(m) + len(z) > limit:
         room = max(limit - len(m), 0)

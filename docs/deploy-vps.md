@@ -305,7 +305,7 @@ reports itself skipped and the rest still run — which is what makes the script
 on a laptop against a copied export:
 
 ```bash
-scp gov2-1:g2-dev/posturi.gov.ro/webapp-php/posturi.sqlite /tmp/
+scp g2-vps-htz:g2-dev/posturi.gov.ro/webapp-php/posturi.sqlite /tmp/
 .venv/bin/python ops/check-export.py --db /tmp/posturi.sqlite --no-log
 ```
 
@@ -626,11 +626,12 @@ A failed run leaves no snapshot and does not move `latest`. Sizes on 2026-10-25:
 not `-Fc`, so the Mac's Postgres 14 tools can read a dump from the VPS's Postgres 16
 (a `-Fc` archive from 16 is refused by `pg_restore` 14).
 
-**One-time setup.** The script connects with `ssh gov2-1` and key login only
-(`BatchMode`). Add a host entry to `~/.ssh/config`:
+**One-time setup.** The script connects with `ssh g2-vps-htz` and key login only
+(`BatchMode`). `g2-vps-htz` is the Mac's ssh alias for the box `gov2-1`. Add a host entry to
+`~/.ssh/config`:
 
 ```
-Host gov2-1
+Host g2-vps-htz
     HostName <the VPS address>
     User pax
 ```

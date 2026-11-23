@@ -8,6 +8,8 @@
 #   --data-only   push only posturi.sqlite. What the cron on the VPS runs.
 #   --no-export   deploy the posturi.sqlite that is already there, don't rebuild it.
 #   --dry-run     show what rsync would move, change nothing.
+#   --allow-no-anomalies  deploy a database without the anomaly_signals and
+#                 anomaly_checks tables. Without this flag the script refuses it.
 #
 # Why the split: code deploys are manual from the development machine, while the
 # data deploy runs unattended twice a day from the VPS. If the cron pushed the whole
@@ -37,6 +39,7 @@ deploy_data=1
 do_export=1
 dry_run=0
 verify_only=0
+allow_no_anomalies=0
 positional=()
 
 for arg in "$@"; do
@@ -45,8 +48,9 @@ for arg in "$@"; do
         --data-only) deploy_code=0 ;;
         --no-export) do_export=0 ;;
         --dry-run)   dry_run=1 ;;
+        --allow-no-anomalies) allow_no_anomalies=1 ;;
         --verify)    verify_only=1 ;;
-        -h|--help)   sed -n '2,20p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,22p' "$0"; exit 0 ;;
         -*)          echo "Unknown flag: $arg" >&2; exit 2 ;;
         *)           positional+=("$arg") ;;
     esac
@@ -234,7 +238,21 @@ if [[ $deploy_data -eq 1 ]]; then
         rows=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM job_postings;" 2>/dev/null || echo 0)
         [[ "$rows" -gt 0 ]] || die "$DB_FILE has no job_postings — refusing to deploy an empty site"
         built=$(sqlite3 "$DB_FILE" "SELECT built_at FROM build_meta WHERE id=1;" 2>/dev/null || true)
-        echo "==> Database: ${rows} postings, built ${built:-unknown}"
+        # Only ops/anomaly-survey.py --write-table writes these two tables. A fresh
+        # export has neither, and the site would show no signals (OPS-ANOMALY-DEPLOY).
+        has_signals=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='anomaly_signals';" 2>/dev/null || echo 0)
+        has_checks=$(sqlite3 "$DB_FILE" "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='anomaly_checks';" 2>/dev/null || echo 0)
+        anomaly_tables=$((has_signals + has_checks))
+        echo "==> Database: ${rows} postings, built ${built:-unknown}, anomaly_signals ${has_signals}, anomaly_checks ${has_checks}"
+        if [[ $anomaly_tables -ne 2 ]]; then
+            if [[ $allow_no_anomalies -eq 1 ]]; then
+                echo "WARNING: $DB_FILE has ${anomaly_tables} of 2 anomaly tables — the site will show no signals."
+            else
+                die "$DB_FILE has ${anomaly_tables} of 2 anomaly tables — the site would show no signals.
+       Run: $PYTHON ops/anomaly-survey.py webapp-php/posturi.sqlite --write-table --json data/anomaly-survey.json --csv data/anomaly-survey.csv [--index-csv data/posturi_gov_ro.csv]
+       Or pass --allow-no-anomalies to deploy without signals."
+            fi
+        fi
     fi
 fi
 

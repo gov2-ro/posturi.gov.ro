@@ -315,8 +315,21 @@ real run compares its deltas against.
 ### What a run does
 
 `ops/check-llm-balance.py`, then `pipeline.py --continue-on-error --since 7 --active-only
---resume --workers 4 --prompt-version v4`, then `ops/check-export.py`, then — only if the check passes —
-`./deploy-php.sh --data-only --no-export`.
+--resume --workers 4 --prompt-version v4`, then `ops/anomaly-survey.py --write-table`, then
+`ops/check-export.py`, then — only if the check passes — `./deploy-php.sh --data-only --no-export`.
+After a failed survey, the run adds `--allow-no-anomalies` to that last command.
+
+For a manual data deploy, run four commands in this order: export, survey, check, deploy.
+
+```bash
+.venv/bin/python export-to-sqlite.py --active-only --out webapp-php/posturi.sqlite
+.venv/bin/python ops/anomaly-survey.py webapp-php/posturi.sqlite --write-table \
+    --json data/anomaly-survey.json --csv data/anomaly-survey.csv --index-csv data/posturi_gov_ro.csv
+.venv/bin/python ops/check-export.py
+./deploy-php.sh --data-only --no-export
+```
+
+`deploy-php.sh` refuses an export without the tables `anomaly_signals` and `anomaly_checks`.
 
 - **`--active-only` is the cost guard.** 6,904 postings have no `schema_json` but only
   about 15 of them are active; the rest will never reach the export. Without this flag

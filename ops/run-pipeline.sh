@@ -199,7 +199,11 @@ if [ "$check_status" -ne 0 ]; then
 fi
 
 # --no-export: pipeline.py's export-sqlite step already built the file, floors and all.
-./deploy-php.sh --data-only --no-export
+# A failed survey leaves the export without anomaly tables; deploy-php.sh refuses that
+# unless it is told the gap is known.
+deploy_flags=()
+[ "$survey_status" -ne 0 ] && deploy_flags+=(--allow-no-anomalies)
+./deploy-php.sh --data-only --no-export ${deploy_flags[@]+"${deploy_flags[@]}"}
 
 # Tie the deploy outcome to the candidate run id so check-export's baselines
 # only ever learn from candidates that actually reached the shared host.

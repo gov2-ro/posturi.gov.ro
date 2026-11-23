@@ -34,6 +34,8 @@ R24 overlap with E05 (posting level, 53 E05 role findings = 49 postings): 6 of 2
 - Regexes kept exactly as the brief gives them, with case-insensitive matching on all five. The R25 child-age false positive stays because R25 is `hidden` and a person reviews every hit. Cost of the alternative: a changed pattern that the owner did not approve.
 - R22 stays `listed` with the brief's pattern, although half of the sample is generic. Owner to decide whether to tighten it (for example „proiectul pilot” or a SMIS code).
 
+**Opus review (2026-11-23).** Accepted against the brief. The two loose patterns came from the brief, so Opus tightened them (same day): R22 now needs „proiectul pilot” or an SMIS code (270 → 223 hits: 192 project hires, 31 others; 5 of 5 sampled name the pilot project). R25 age now needs an age of 16–99 (23 → 19 hits: 12 „cel mult 45”, 6 sex, 1 „vârstă maximă 50”). Two near-miss tests added; 45 tests pass. The `explain_ro` texts wait for the owner.
+
 ### 2026-11-23 — EU-RULES-PCIDIF: what the PCIDIF rules fix for project posts (Opus)
 
 **Done.** Read the PCIDIF document, the audit of 2026-11-18 and ADR 0008. Measured on `data/_dev/full-2026-11-23.sqlite` (VPS export, 16,875 postings). Wrote `docs/audits/2026-11-23-eu-rules-pcidif.md`. Backlog: EU-RULES-PCIDIF done; new EU-GUIDE-RATES and UX-EMP-PROJECT; notes on EU-PROJECT-SICAP, SALARY-EU-ESTIMATOR and ANOMALY-PUBLIC.

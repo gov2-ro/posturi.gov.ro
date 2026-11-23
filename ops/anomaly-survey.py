@@ -897,11 +897,13 @@ PT = "posting_text"
 PT_NEEDS = {PT: ["posting_id", "body_markdown"]}
 
 R21_RE = re.compile(r"avantaj[^.\n;]{0,15}domicili", re.I)
-R22_RE = re.compile(r"avantaj[^.\n;]{0,80}(proiect|MySMIS)", re.I)
+# Named project only: "proiectul pilot" or an SMIS code (Opus review: "proiect" alone gave 5 of 10 generic hits).
+R22_RE = re.compile(r"avantaj[^.\n;]{0,80}(proiectul pilot|SMIS)", re.I)
 R23_RE = re.compile(r"experien[țţt][aă][^.\n]{0,80}proiect[e]?[^.\n]{0,40}"
                     r"fonduri (europene|nerambursabile|structurale)", re.I)
 R25_AGE_RES = (
-    re.compile(r"v[âa]rst[aă] (maxim[aă]|de (cel mult|p[âa]n[aă] la))\s*\d", re.I),
+    # An adult age only (16-99): "vârstă de până la 2 ani" is a child's age (Opus review).
+    re.compile(r"v[âa]rst[aă] (maxim[aă]|de (cel mult|p[âa]n[aă] la))\s*(1[6-9]|[2-9]\d)\b", re.I),
     re.compile(r"nu (mai )?(mare|peste) de \d{2} (de )?ani", re.I),
 )
 R25_SEX_RE = re.compile(r"(sexul|de sex) (masculin|feminin)", re.I)

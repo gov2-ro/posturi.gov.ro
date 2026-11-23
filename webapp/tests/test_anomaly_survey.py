@@ -445,17 +445,22 @@ def test_r22_project_advantage(sv, tmp_path):
                 "Constituie avantaj cursul de limba engleză. Proiectul de ordin se publică.")
 
 
+def test_r22_generic_projects_are_not_a_hit(sv, tmp_path):
+    e, rows = counts(sv, tmp_path, "R22", [{}], texts={1: "Constituie avantaj experiența în proiecte educaționale."})
+    assert rows == [] and e["count"] == 0
+
+
 def test_r23_eu_project_experience(sv, tmp_path):
     _text_check(sv, tmp_path, "R23", "experiență în proiecte finanțate din fonduri europene",
                 "experiență în proiecte educaționale. Fonduri europene există.")
 
 
 def test_r25_age_or_sex(sv, tmp_path):
-    e, rows = counts(sv, tmp_path, "R25", [{}, {}, {}, {}, {}], texts={
+    e, rows = counts(sv, tmp_path, "R25", [{}, {}, {}, {}, {}, {}], texts={
         1: "au vârsta de cel mult 45 de ani la data numirii", 2: "candidați de sex masculin",
         3: "Vârsta minimă reglementată de prevederile legale", 4: "nu mai mare de 35 de ani",
-        5: "Sexul nu are importanță."})
-    assert sorted(r[0] for r in rows) == [1, 2, 4] and e["denominator"] == 5
+        5: "Sexul nu are importanță.", 6: "copii cu vârsta de până la 2 ani"})
+    assert sorted(r[0] for r in rows) == [1, 2, 4] and e["denominator"] == 6
 
 
 def test_text_checks_unavailable_without_posting_text(sv, tmp_path):

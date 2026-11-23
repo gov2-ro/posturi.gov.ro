@@ -148,6 +148,8 @@ def pay_range(source: str | None, low: float | None, high: float | None = None, 
     high = high if high and high >= low else low
     floor = grid.gradation_for_years(years)
     excluded = excluded_employer(employer, rights) is not None
+    if source == "stated" and high > low:
+        return _stated_span(low, high, floor, excluded, rights, grid)
     if figure_at:
         low_base = figure_at(floor)[0]
         high_base = int(round(high)) if local else figure_at(TOP_GRADATION)[1]
@@ -157,6 +159,30 @@ def pay_range(source: str | None, low: float | None, high: float | None = None, 
     lo_end = _end(low_base, floor, excluded, rights)
     hi_end = _end(high_base, None if local else TOP_GRADATION, excluded, rights)
     return {"low": lo_end, "high": hi_end, "method": "rows" if figure_at else "scaled"}
+
+
+#: Owner decision 2026-11-23: a stated figure with a minimum and a maximum is already a span. The ratio of
+#: the top gradation to gradation 0 is 1.2452; a stated ratio within this tolerance is read as gradation 0 to 5.
+SPAN_TOLERANCE = 0.02
+
+
+def _stated_span(low: float, high: float, floor: int, excluded: bool, rights: dict, grid) -> dict:
+    """A stated minimum and maximum. The high end is the stated maximum, with no gradation on top.
+
+    Its gradation is 5 when `high / low` is the ratio of the table within `SPAN_TOLERANCE`, else None.
+    The low end is the minimum x the floor gradation, capped at the maximum; when the cap applies its
+    gradation is None and `capped` is True (the page then claims no gradation for that end).
+    """
+    top = grid.multiplier(TOP_GRADATION)
+    high_base = int(round(high))
+    low_base = _scaled(low, grid.multiplier(floor))
+    capped = low_base > high_base
+    if capped:
+        low_base = high_base
+    high_grad = TOP_GRADATION if abs(high / low / top - 1) <= SPAN_TOLERANCE else None
+    return {"low": _end(low_base, None if capped else floor, excluded, rights),
+            "high": _end(high_base, high_grad, excluded, rights),
+            "method": "stated-span", "capped": capped}
 
 
 def columns(rng: dict | None) -> tuple:

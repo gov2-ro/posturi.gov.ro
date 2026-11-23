@@ -563,7 +563,7 @@ require __DIR__ . '/../inc/header.php';
               <?php if ($range): ?>
               <p class="text-lg font-semibold text-ink" data-pay-net>de la <?= e(number_format($range['net_min'], 0, ',', '.')) ?><?= $range['net_max'] > $range['net_min'] ? ' la ' . e(number_format($range['net_max'], 0, ',', '.')) : '' ?> lei net <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
             </div>
-            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună, <?= e($range['grade']) ?><?= $range['food_text'] !== '' ? ', ' . e($range['food_text']) : '' ?>. În anunț: <?= e(number_format((float)$p['inf_salary_min'], 0, ',', '.')) ?> lei.</p>
+            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună<?= $range['detail'] !== '' ? ', ' . e($range['detail']) : '' ?>. În anunț: <?= e($range['stated']) ?> lei.</p>
             <p class="text-xs text-ink-muted" data-pay-range-note><?= e($range_note) ?></p>
               <?php else: ?>
               <p class="text-lg font-semibold text-ink" data-pay-net><?= e($stated['text']) ?> <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
@@ -611,7 +611,7 @@ require __DIR__ . '/../inc/header.php';
                 <span class="text-sm font-normal text-ink-muted">/ lună</span>
               </p>
             </div>
-            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună, <?= e($range['grade']) ?><?= $range['food_text'] !== '' ? ', ' . e($range['food_text']) : '' ?></p>
+            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună<?= $range['detail'] !== '' ? ', ' . e($range['detail']) : '' ?></p>
             <p class="text-xs text-ink-muted" data-pay-range-note><?= e($range_note) ?></p>
               <?php else: ?>
               <p class="text-lg font-semibold text-ink" data-pay-net>

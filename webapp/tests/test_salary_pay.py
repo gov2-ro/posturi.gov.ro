@@ -90,6 +90,46 @@ def test_excluded_employer_gets_gradations_but_no_food(grid):
         assert sp.excluded_employer(name) is None, name
 
 
+def test_stated_span_keeps_its_maximum_and_adds_no_gradation(grid):
+    # Owner, 2026-11-23: 20202 states 4,544 (gradation 0) to 5,855.
+    r = sp.pay_range("stated", 4544, 5855, years=0, employer="X", grid=grid)
+    assert ends(r) == [(0, 4544, 347, 4891), (None, 5855, 347, 6202)]      # ratio 1.289: no gradation number for the high end
+    assert r["capped"] is False
+    r5 = sp.pay_range("stated", 4544, 5855, years=5, employer="X", grid=grid)
+    assert r5["low"]["base"] == min(math.ceil(round(4544 * grid.multiplier(2), 6)), 5855)
+    assert abs(r5["low"]["base"] - math.ceil(4544 * 1.075 * 1.05)) <= 1 and r5["low"]["gradation"] == 2
+    assert r5["high"]["base"] == 5855
+
+
+def test_stated_span_that_matches_the_table_reports_gradation_5(grid):
+    r = sp.pay_range("stated", 5126, 6375, years=None, employer="X", grid=grid)     # ratio 1.244
+    assert ends(r)[1] == (5, 6375, 347, 6722)
+
+
+def test_stated_span_ratio_1_5_is_not_a_gradation_table(grid):
+    r = sp.pay_range("stated", 4000, 6000, years=0, employer="X", grid=grid)
+    assert r["high"]["gradation"] is None and r["high"]["base"] == 6000
+
+
+def test_stated_span_low_end_is_capped_at_the_maximum(grid):
+    r = sp.pay_range("stated", 6000, 6100, years=20, employer="X", grid=grid)      # 6,000 x 1.2452 > 6,100
+    assert r["capped"] is True
+    assert ends(r)[0] == (None, 6100, 347, 6447)
+
+
+def test_stated_span_food_is_tested_at_each_end(grid):
+    r = sp.pay_range("stated", 9000, 11000, years=0, employer="X", grid=grid)
+    assert (r["low"]["food"], r["high"]["food"]) == (347, 0)
+    r = sp.pay_range("stated", 9000, 11000, years=0, employer="Unitatea Militară 01", grid=grid)
+    assert (r["low"]["food"], r["high"]["food"]) == (0, 0)
+
+
+def test_single_stated_figure_is_unchanged(grid):
+    for hi in (7870, None):
+        r = sp.pay_range("stated", 7870, hi, years=3, employer="X", grid=grid)
+        assert ends(r) == [(1, 8461, 347, 8808), (5, 9800, 347, 10147)]
+
+
 def test_no_range_outside_the_scope(grid):
     assert sp.pay_range("declared", 5000, grid=grid) is None
     assert sp.pay_range("draft", 5000, grid=grid) is None

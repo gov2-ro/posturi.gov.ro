@@ -314,14 +314,22 @@ function pay_range_view(array $p): ?array {
         'high' => "cu indemnizația de hrană de $amount lei, doar la limita de sus",
         default => '',
     };
-    $grade = $gmin === null ? '' : ($gmax === null
-        ? "de la gradația $gmin, până la plafonul legal"
-        : ($gmin === $gmax ? "gradația $gmin" : "gradația {$gmin}–{$gmax}"));
+    // A stated figure with a minimum and a maximum is already a span (owner, 2026-11-23): the high end is the stated
+    // maximum, and its gradation is known only when the span matches the gradation table. No gradation is claimed otherwise.
+    $smin = (float)($p['inf_salary_min'] ?? 0);
+    $smax = (float)($p['inf_salary_max'] ?? 0);
+    $span = $smin > 0 && $smax > $smin;
+    if ($gmin === null) $grade = '';
+    elseif ($gmax === null) $grade = $span ? '' : "de la gradația $gmin, până la plafonul legal";
+    else $grade = $gmin === $gmax ? "gradația $gmin" : "gradația {$gmin}–{$gmax}";
+    $stated = '';
+    if ($smin > 0) $stated = $span ? $fmt($smin) . '–' . $fmt($smax) : $fmt($smin);
+    $detail = implode(', ', array_filter([$grade, $food_text], fn($x) => $x !== ''));
     return [
         'gross_min' => $lo, 'gross_max' => $hi,
         'net_min' => net_from_gross($lo), 'net_max' => net_from_gross($hi),
         'grad_min' => $gmin, 'grad_max' => $gmax, 'food_min' => $fmin, 'food_max' => $fmax,
-        'food' => $food, 'grade' => $grade, 'food_text' => $food_text,
+        'food' => $food, 'grade' => $grade, 'food_text' => $food_text, 'detail' => $detail, 'stated' => $stated,
         'gross' => $hi > $lo ? $fmt($lo) . '–' . $fmt($hi) : $fmt($lo),
     ];
 }

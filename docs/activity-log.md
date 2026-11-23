@@ -35,6 +35,8 @@
 - New files outside the brief list: `webapp-php/tests/salary_range_test.php`, `.../browser/salary_range.spec.js`, `ops/measure-pay-range.py`; edits to the test fixtures (`build_db.php`, `make.php`), `playwright.config.js` (port 8830) and `test_salary_facet_sql.py` (the pinned expression).
 - Not done (backlog SALARY-GRAD-FOOD-FOLLOWUP): `result_list.php`, `stats.php`, `ci.yml`.
 
+**Fix, same day (owner decision).** A stated figure with a minimum and a maximum keeps its maximum as the high end, with no gradation on top; the low end is the minimum × the floor gradation, capped at the maximum. Open stated: 14 ranges (3 high gradation 5, 11 none, 2 capped); all rows 70 (18 / 52 / 3). 20202 (4,544–5,855, 0 years): 4,891–7,638 → 4,891–6,202. 19676 (5,126–6,375): 5,473–8,286 → 5,473–6,722. 21359 unchanged (8,808–10,147). Open buckets: 4000–5000 56 → 57, 5000–7000 143 → 142; the others unchanged.
+
 **Assumed**
 - The brief, the audit and ADR rule 11 were untracked or uncommitted in the main checkout; I copied them into the branch (commit `docs: brief, audit and ADR 0008 rule 11`), together with the owner's draft backlog and log entries.
 - Management and Anexa VI rows are known from the `selector` in `sal_json` (`tip_post`, `anexa`), not from the rows.

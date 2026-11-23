@@ -63,6 +63,21 @@ run_suite('pay_range_view() words the range of posting 21359', function () {
     assert_same(null, pay_range_view(['pay_min' => 8808, 'project_hire' => 1]), 'a project post has no range');
 });
 
+run_suite('pay_range_view() of a stated span: no gradation claimed for an end that is not computed', function () {
+    // 20202: 4.544-5.855 stated; low = gradation 0 + food, high = the stated maximum (no gradation number).
+    $v = pay_range_view(['inf_salary_min' => 4544, 'inf_salary_max' => 5855, 'pay_min' => 4891, 'pay_max' => 6202,
+                         'pay_grad_min' => 0, 'pay_grad_max' => null, 'pay_food_min' => 347, 'pay_food_max' => 347]);
+    assert_same('', $v['grade'], 'no grade text');
+    assert_same('cu indemnizația de hrană de 347 lei', $v['detail'], 'only the food');
+    assert_same('4.544–5.855', $v['stated'], 'the stated span');
+    $v = pay_range_view(['inf_salary_min' => 5126, 'inf_salary_max' => 6375, 'pay_min' => 5473, 'pay_max' => 6722,
+                         'pay_grad_min' => 0, 'pay_grad_max' => 5, 'pay_food_min' => 347, 'pay_food_max' => 347]);
+    assert_same('gradația 0–5, cu indemnizația de hrană de 347 lei', $v['detail'], 'a span that matches the table');
+    $v = pay_range_view(['inf_salary_min' => 7870, 'inf_salary_max' => 7870, 'pay_min' => 8808, 'pay_max' => 10147,
+                         'pay_grad_min' => 1, 'pay_grad_max' => 5, 'pay_food_min' => 347, 'pay_food_max' => 347]);
+    assert_same('7.870', $v['stated'], 'a single stated figure');
+});
+
 run_suite('list_salary() and pay_level() read the range before the old figure', function () {
     $row = ['inf_salary_min' => 7870, 'inf_salary_max' => 7870, 'pay_min' => 8808, 'pay_max' => 10147];
     $s = list_salary($row);

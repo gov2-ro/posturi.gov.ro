@@ -230,3 +230,20 @@ def test_project_pay_quote_is_cut_at_word_boundaries():
     q = classify.project_pay(text)["quote"]
     assert "50 lei/oră net" in q and q.startswith("…") and q.endswith("…")
     assert "x" not in q and "y" not in q                      # no cut word at either end
+
+
+# ---- project_programme() (SALARY-EU-CAP) ----
+
+@pytest.mark.parametrize("text,want", [
+    ("proiect finanțat prin Programul Incluziune și Demnitate Socială 2021-2027", "pids"),
+    ("finanțat prin PoIDS 2021-2027", "pids"),
+    ("Programul PIDS, apel 6.1", "pids"),
+    ("Cod SMIS 339395, echipa comunitară integrată", "pids"),
+    ("finanțat prin Programul Educație și Ocupare 2021-2027", "peo"),
+    ("proiect PEO, cod SMIS 300001", "peo"),
+    ("Programul Incluziune și Demnitate Socială și Programul Educație și Ocupare", None),
+    ("proiect finanțat prin PNRR", None),
+    ("echipa tipografiei Pidso și Peoria", None),      # no whole word
+])
+def test_project_programme(text, want):
+    assert classify.project_programme(text) == want

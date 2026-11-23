@@ -2,6 +2,26 @@
 
 ## 2026
 
+### 2026-11-23 — SALARY-EU-CAP: the guide cap as context on project posts (Sonnet, from the Opus brief)
+
+**Done**
+- Step 0, guide version. I searched the web for a PoIDS or PEO general guide later than March 2023 (four searches: PIDS and PEO, "consolidat", "plafoane aplicabile cheltuielilor cu personalul", OMIPE amendments). I found no later PIDS general guide. I found a university copy of a **consolidated PEO general guide**, which integrates OMIPE 964/2024, 4300/2024, 5651/2025 and 5982/2025 (search snippet). The link `https://utcluj.ro/documente/a8da27bd-38ba-495a-96e1-44e755b3ea9b` now answers 404 and I could not read it. So I could not compare its cap table with the March 2023 table. The mfe.gov.ro originals were not reached either. Three PEO 2025 specific guides (edupedu: IPT, CJRAE) hold no personnel cap and refer to the general guide. **Open [U]**: the table may have changed after March 2023. The line therefore cites "martie 2023" in its tooltip.
+- `classify.project_programme(text)` returns `pids` or `peo`, else None. PoIDS: "Incluziune și Demnitate", whole words PoIDS and PIDS, SMIS 339395. PEO: "Programul Educație și Ocupare", whole word PEO. A text that names both gives None. It runs on the same text as `project_hire` (body and attachment) and only when `project_hire` is true. The exporter writes the new column `proj_programme`.
+- Detail page: in the project box, `data-pay-project-cap` shows when `$proj_pay` is null and the programme is set. The title holds the source sentence. No new class, no change to `SALARY_EXPR`, filter, sort, chart or list.
+- Tests: `test_project_programme` (9 cases); `project_pay_test.php` suite for line shown (no pay, programme), hidden (pay stated), hidden (no programme).
+
+**Measured** (`data/_dev/full-2026-11-23.sqlite`, 1,033 project hires, same rule applied to `body_markdown`; that file has no attachment text)
+- `pids`: 621; of these 612 state no pay and get the line.
+- `peo`: 16; of these 12 get the line.
+- None: 396 (380 without pay, no line).
+- Hand read of 10 PIDS (random seed 1) and 10 PIDS outside the SMIS 339395 cluster, and 10 PEO: no false positive in 30. Most PIDS hits are the code `PIDS/586/PO4/339395`, a true PIDS project.
+
+**Assumed**
+- A project hire sits outside the organigramă, so the cap applies (the guide excludes posts inside the organigramă). Not checked per post.
+- `v4_funding_programme` is not used; it is empty for 969 of 1,033.
+- The PIDS and PEO tables stay as in March 2023.
+- The fixture `webapp-php/tests/fixtures/build_db.php` got the new column; `webapp-php/db.php` is unchanged (an old export without the column shows no line).
+
 ### 2026-11-23 — EU-GUIDE-RATES reviewed (Opus)
 
 **Done.** Accepted the spike (`e30483e`) against its brief. Checked the main claim in the downloaded PIDS general guide (`pdftotext`, pp. 38–39): the cap table and the scope sentence („exclusiv personalului angajat pe posturi în afara organigramei”) are as reported. Opened SALARY-EU-CAP for the owner.

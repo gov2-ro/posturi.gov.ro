@@ -151,6 +151,19 @@ def project_hire(text, funding_kind) -> bool:
     return False
 
 
+_PROG_PIDS = re.compile(r"\bincluziune\s+si\s+demnitate\b|\bpo?ids\b|smis[^0-9]{0,25}339395\b")
+_PROG_PEO = re.compile(r"\bprogramul\s+educatie\s+si\s+ocupare\b|\bpeo\b")
+
+
+def project_programme(text) -> str | None:
+    """SALARY-EU-CAP: 'pids' or 'peo' when the text names exactly one of the two programmes, else None.
+    PoIDS: "Incluziune și Demnitate Socială", PoIDS, PIDS, SMIS 339395. PEO: "Educație și Ocupare", whole word PEO.
+    A text that names both gives None (the guide cap is not safe to pick)."""
+    t = fold(text)
+    pids, peo = bool(_PROG_PIDS.search(t)), bool(_PROG_PEO.search(t))
+    return "pids" if pids and not peo else "peo" if peo and not pids else None
+
+
 def _fold_keep_length(text) -> str:
     """fold() without the whitespace collapse: one output character for each input character,
     so that a match offset in the folded text is an offset in the original."""

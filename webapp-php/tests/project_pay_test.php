@@ -23,6 +23,10 @@ build_fixture_db($db_path);
 $pdo = new PDO('sqlite:' . $db_path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 fixture_seed_law_estimates($pdo);
 fixture_seed_project_posts($pdo);
+// SALARY-EU-CAP: 1001 = PIDS with a stated pay; 1003 = PEO, no pay; 1005 = project post, no pay, no programme.
+$pdo->exec("UPDATE job_postings SET proj_programme = 'pids' WHERE id = 1001");
+$pdo->exec("UPDATE job_postings SET proj_programme = 'peo' WHERE id = 1003");
+$pdo->exec("UPDATE job_postings SET funding_kind = 'fonduri_europene', project_hire = 1 WHERE id = 1005");
 // The feeds list the extracted facts, salary first, only for a post with an extraction: give the three one (empty).
 $pdo->exec("UPDATE posting_text SET schema_json = '{}' WHERE posting_id IN (1001, 1002, 1003) AND (schema_json IS NULL OR schema_json = '')");
 $grid = $pdo->query("SELECT id, sal_min FROM job_postings WHERE id IN (1001, 1002, 1003)")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -94,6 +98,18 @@ foreach ([1001 => 'hour', 1002 => 'month', 1003 => 'none'] as $id => $case) {
         }
     });
 }
+
+run_suite('SALARY-EU-CAP: the guide cap line shows only with a programme and no stated pay', function () use ($base) {
+    $h = pp_detail($base, 1003);
+    assert_contains('data-pay-project-cap', $h, 'no pay, programme set: the line');
+    assert_contains('Ghidul programului plafonează plata la 35–90 lei net/oră, după rol și experiență.', $h, 'the words');
+    assert_contains('Ghidul solicitantului – condiții generale, martie 2023', $h, 'the source in the title');
+    assert_not_contains('data-pay-project-cap', pp_detail($base, 1001), 'pay stated: no line');
+    $h = pp_detail($base, 1005);
+    assert_contains('data-pay-project-note', $h, '1005 shows the project box');
+    assert_not_contains('data-pay-project-cap', $h, 'no programme: no line');
+    assert_not_contains('data-pay-project-cap', pp_detail($base, 1002), 'no programme, pay stated: no line');
+});
 
 run_suite('a post that is not project-hired keeps its grid figure on the page', function () use ($base) {
     $h = pp_detail($base, 1004);

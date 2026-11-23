@@ -308,7 +308,9 @@ CREATE TABLE job_postings (
     proj_pay_unit           TEXT NOT NULL DEFAULT '',
     proj_pay_basis          TEXT NOT NULL DEFAULT '',
     proj_hours_month        REAL,
-    proj_pay_quote          TEXT NOT NULL DEFAULT ''
+    proj_pay_quote          TEXT NOT NULL DEFAULT '',
+    -- 2026-11-23 (SALARY-EU-CAP): the programme the post names, 'pids' | 'peo' | NULL; set only when project_hire = 1.
+    proj_programme          TEXT
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -633,7 +635,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         proj = (1 if hire else 0,
                 pay["amount"] if pay else None, pay["unit"] if pay else "",
                 pay["basis"] if pay else "", pay["hours_per_month"] if pay else None,
-                pay["quote"] if pay else "")
+                pay["quote"] if pay else "",
+                classify.project_programme(text) if hire else None)
 
         anomaly_flags = inferred.get("anomaly_flags") or []
         requires_computer = inferred.get("requires_computer")
@@ -1996,7 +1999,7 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         work_mode, funding_kind, job_regime, employer_kind, occ_group, med_specialty,
         quality, quality_json,
         apply_deadline, deadline_source, application_status,
-        project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote"""
+        project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote, proj_programme"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart
     # (they did twice while this was hand-maintained `?` strings).

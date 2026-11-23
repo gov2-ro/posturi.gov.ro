@@ -538,6 +538,10 @@ require __DIR__ . '/../inc/header.php';
             <p class="mt-1 text-xs text-ink-muted [overflow-wrap:anywhere]" data-pay-project-quote>Din anunț: „<?= e($proj_pay['quote']) ?>”</p>
             <?php endif; ?>
             <?php endif; ?>
+            <?php /* SALARY-EU-CAP: context, not a figure (ADR 0008 rule 5): the guide cap of the programme, only when the text states no pay. */ ?>
+            <?php if (!$proj_pay && in_array((string)($p['proj_programme'] ?? ''), ['pids', 'peo'], true)): ?>
+            <p class="mt-1 text-xs text-ink-muted" data-pay-project-cap title="Plafonul este suma maximă decontată de program, nu salariul postului. Sursa: Ghidul solicitantului – condiții generale, martie 2023.">Ghidul programului plafonează plata la 35–90 lei net/oră, după rol și experiență.</p>
+            <?php endif; ?>
           </div>
         </section>
         <?php endif; ?>

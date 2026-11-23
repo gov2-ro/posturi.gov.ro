@@ -159,7 +159,13 @@ CREATE TABLE job_postings (
     proj_pay_basis          TEXT NOT NULL DEFAULT '',
     proj_hours_month        REAL,
     proj_pay_quote          TEXT NOT NULL DEFAULT '',
-    proj_programme          TEXT
+    proj_programme          TEXT,
+    pay_min                 REAL,
+    pay_max                 REAL,
+    pay_grad_min            INTEGER,
+    pay_grad_max            INTEGER,
+    pay_food_min            INTEGER,
+    pay_food_max            INTEGER
 );
 CREATE TABLE posting_roles (
     posting_id        INTEGER NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,

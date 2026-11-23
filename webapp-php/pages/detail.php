@@ -518,6 +518,14 @@ require __DIR__ . '/../inc/header.php';
       // estimate box, and the estimate becomes one note in it. The deduced conditions then leave out "Salariu" (the box has it).
       $stated = (float)($p['inf_salary_min'] ?? 0) > 0 ? list_salary($p) : null;
       if ($stated) unset($cond['Salariu']);
+      // ADR 0008 rule 11: the pay range of the law in force (gradations + food allowance), for the stated or the estimated figure.
+      $range = pay_range_view($p);
+      $range_note = 'Gradația depinde de vechimea în muncă. Minimul vine din experiența cerută în anunț.';
+      // The extracted section „Salarizare” repeats a stated pay that the top box already shows (when other sections remain).
+      if ($stated && $schema_sections) {
+          $_other = array_values(array_filter($schema_sections, fn($sec) => !in_array($sec['key'], ['baseSalary', 'salary'], true)));
+          if ($_other) $schema_sections = $_other;
+      }
       // A post hired for an EU/PNRR project (SALARY-EU-DETAIL): the pay is the hourly rate of the project, never the grid.
       // No grid figure, no meter, no estimator link, no deduced "Salariu"; the pay the text states, with its source, else the box alone.
       $proj = !empty($p['project_hire']);
@@ -552,9 +560,16 @@ require __DIR__ . '/../inc/header.php';
           <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
               <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu anunțat</h2>
+              <?php if ($range): ?>
+              <p class="text-lg font-semibold text-ink" data-pay-net>de la <?= e(number_format($range['net_min'], 0, ',', '.')) ?><?= $range['net_max'] > $range['net_min'] ? ' la ' . e(number_format($range['net_max'], 0, ',', '.')) : '' ?> lei net <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
+            </div>
+            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună, <?= e($range['grade']) ?><?= $range['food_text'] !== '' ? ', ' . e($range['food_text']) : '' ?>. În anunț: <?= e(number_format((float)$p['inf_salary_min'], 0, ',', '.')) ?> lei.</p>
+            <p class="text-xs text-ink-muted" data-pay-range-note><?= e($range_note) ?></p>
+              <?php else: ?>
               <p class="text-lg font-semibold text-ink" data-pay-net><?= e($stated['text']) ?> <span class="text-sm font-normal text-ink-muted">/ lună</span></p>
             </div>
             <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($stated['gross']) ?> / lună, din anunț</p>
+              <?php endif; ?>
             <?php if ($pl = pay_level($p)): ?>
             <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
               <span><?= e($pl['text']) ?></span></p>
@@ -591,6 +606,14 @@ require __DIR__ . '/../inc/header.php';
             <p class="text-xs text-ink-muted" data-pay-gross>circa <?= e($decl['brut']) ?> lei brut</p>
             <p class="text-xs text-ink-muted" data-pay-band>Cei mai mulți primesc între <?= e($decl['p25']) ?> și <?= e($decl['p75']) ?> lei net.</p>
               <?php else: ?>
+              <?php if ($range): ?>
+              <p class="text-lg font-semibold text-ink" data-pay-net>de la <?= e(number_format($range['net_min'], 0, ',', '.')) ?><?= $range['net_max'] > $range['net_min'] ? ' la ' . e(number_format($range['net_max'], 0, ',', '.')) : '' ?> lei net
+                <span class="text-sm font-normal text-ink-muted">/ lună</span>
+              </p>
+            </div>
+            <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună, <?= e($range['grade']) ?><?= $range['food_text'] !== '' ? ', ' . e($range['food_text']) : '' ?></p>
+            <p class="text-xs text-ink-muted" data-pay-range-note><?= e($range_note) ?></p>
+              <?php else: ?>
               <p class="text-lg font-semibold text-ink" data-pay-net>
                 <?= e(net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']))) ?>
                 <span class="text-sm font-normal text-ink-muted">/ lună, la gradația 0</span>
@@ -598,6 +621,7 @@ require __DIR__ . '/../inc/header.php';
             </div>
             <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= (int)$sal['lei_min'] === (int)$sal['lei_max']
                 ? number_format((int)$sal['lei_min'], 0, ',', '.') : number_format((int)$sal['lei_min'], 0, ',', '.') . '–' . number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei / lună, la gradația 0</p>
+              <?php endif; ?>
               <?php endif; ?>
             <?php if ($sbaza === 'proiect'): ?>
             <p class="mt-0.5 text-xs text-ink-muted" data-pay-project-figure><?= e(SAL_PROJECT_NOTE) ?></p>

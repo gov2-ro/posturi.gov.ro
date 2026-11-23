@@ -2,6 +2,19 @@
 
 ## 2026
 
+### 2026-11-23 — EU-RULES-PCIDIF: what the PCIDIF rules fix for project posts (Opus)
+
+**Done.** Read the PCIDIF document, the audit of 2026-11-18 and ADR 0008. Measured on `data/_dev/full-2026-11-23.sqlite` (VPS export, 16,875 postings). Wrote `docs/audits/2026-11-23-eu-rules-pcidif.md`. Backlog: EU-RULES-PCIDIF done; new EU-GUIDE-RATES and UX-EMP-PROJECT; notes on EU-PROJECT-SICAP, SALARY-EU-ESTIMATOR and ANOMALY-PUBLIC.
+
+Numbers (baseline): 1,033 project hires; 591 state an SMIS code (95 codes, top 339395 with 285 and 122607 with 246); 659 cite HG 1336/2022, 46 HG 234/2023, 0 HG 325/2018; 151 have a window under 10 working days (14.6 %, against 8.7 % for other postings); 244 give an advantage for domicile in the UAT; 224 for work in the pilot project; 7+ years of experience in 3.3 % (other postings 6.3 %).
+
+**Hard.** The document is an AI research report. It mixes acts with consultancy pages and Reddit, and it names HG 325/2018, which HG 234/2023 repealed. Each claim needed a status: agrees with the data, lead, or out of date. `LIKE '%SMIS%'` matches „transmis”: the first count (1,938) was wrong; the case-sensitive regex gives 631.
+
+**Decided.**
+- No act caps the years of experience for a hire by contest or by internal procedure. The procurement ban does not apply. So R13 and R14 stay `unusual`. The alternative (an `error_posting` kind) would accuse employers of a breach that no text defines.
+- No hourly-to-month conversion with 1,720 h. It is a reimbursement divisor. The cost of using it: a month figure that no posting states, for 10 postings.
+- Owner, 2026-11-23: yes to D1–D4. Briefs for Sonnet: `docs/briefs/2026-11-23-anomaly-limiting-conditions.md` (D3) and `docs/briefs/2026-11-23-eu-guide-rates.md` (D4). D1 waits for EU-PROJECT-SICAP; D2 waits for UX-EMP-02.
+
 ### 2026-11-23 — VPS checks after the 13:15 EET run: studies, salary limits, anomalies, org links (VPS session, recorded by Opus)
 
 Run `2026-11-23T11:15:01Z`, deployed healthy. Export built_at 12:27:41Z, git `1e1b3fb`, 3,084 postings (previous 2,983). "Before" is the `f369ce0` export. All queries read-only.

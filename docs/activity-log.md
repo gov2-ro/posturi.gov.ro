@@ -36,6 +36,16 @@ R24 overlap with E05 (posting level, 53 E05 role findings = 49 postings): 6 of 2
 
 **Opus review (2026-11-23).** Accepted against the brief. The two loose patterns came from the brief, so Opus tightened them (same day): R22 now needs „proiectul pilot” or an SMIS code (270 → 223 hits: 192 project hires, 31 others; 5 of 5 sampled name the pilot project). R25 age now needs an age of 16–99 (23 → 19 hits: 12 „cel mult 45”, 6 sex, 1 „vârstă maximă 50”). Two near-miss tests added; 45 tests pass. The `explain_ro` texts wait for the owner.
 
+### 2026-11-23 — EU-GUIDE-RATES: hourly caps in the PoIDS and PEO guides (Sonnet, from the Opus brief)
+
+**Done.** Counted SMIS codes among 1,033 project hires (591 with a code; top code 339395, 215 postings). PoIDS covers most of them. Downloaded and read the PIDS and PEO general guides (March 2023), the PoIDS Action 6.1 specific guide (2025) and the PCIDIF Beneficiary Manual (Jan 2024). Files are in `data/eu-guides/` (not in git). Audit: `docs/audits/2026-11-23-eu-guide-rates.md`.
+
+**Measured.** PIDS and PEO general guides hold the same net lei/hour table: 70/80/90 (managers, implementation experts; <5, 5–10, >10 years), 50/60/75 (support), 35/45 (administrative). It applies only to staff outside the organigram of a public body. The Action 6.1 guide sends to it. The PCIDIF manual has no hourly figure. Of 21 PIDS/PEO postings with an hourly rate, none states a net rate above 90; 8 sit exactly on 70, 80 or 90.
+
+**Hard.** ADR Centru (AP4 SCI 2000, AP10 PCIDIF e-guvernare) answers HTTP 403. The `v4_funding_programme` column is empty for 969 of 1,033 hires, so I named the programme from the text.
+
+**Decided.** Nothing; Opus decides on SALARY-EU-DETAIL. Assumed: the programme of the home-care codes; that the copies equal the MFE originals; the 2026 tax rates in the Iași conversion (122.35 incl. employer cost = 70 net).
+
 ### 2026-11-23 — EU-RULES-PCIDIF: what the PCIDIF rules fix for project posts (Opus)
 
 **Done.** Read the PCIDIF document, the audit of 2026-11-18 and ADR 0008. Measured on `data/_dev/full-2026-11-23.sqlite` (VPS export, 16,875 postings). Wrote `docs/audits/2026-11-23-eu-rules-pcidif.md`. Backlog: EU-RULES-PCIDIF done; new EU-GUIDE-RATES and UX-EMP-PROJECT; notes on EU-PROJECT-SICAP, SALARY-EU-ESTIMATOR and ANOMALY-PUBLIC.

@@ -166,6 +166,9 @@ def collect_metrics(con: sqlite3.Connection, db_path: Path) -> dict:
     m["anomaly_tables"] = one(
         "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' "
         "AND name IN ('anomaly_signals', 'anomaly_checks')")
+    m["employer_org_rows"] = one(
+        "SELECT COUNT(*) FROM employer_org") if one(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'employer_org'") else None
     m["duplicate_urls"] = one(
         "SELECT COUNT(*) FROM (SELECT url FROM job_postings "
         "GROUP BY url HAVING COUNT(*) > 1)")
@@ -372,6 +375,14 @@ def evaluate(
     soft("anomaly_tables", anomaly_tables == 2,
          f"{anomaly_tables} of 2 anomaly tables (anomaly_signals, anomaly_checks) in the export"
          if anomaly_tables != 2 else "anomaly_signals and anomaly_checks exist")
+
+    # DATA-ORG-06: the employer pages show the CUI and the org link from this table. A soft check:
+    # an empty table (no snapshot) only hides the line. An older record lacks the key: present.
+    org_rows = m.get("employer_org_rows", 1)
+    soft("employer_org", org_rows is None or org_rows > 0,
+         "employer_org is empty (data/org/employer-org.csv missing or matches no employer)"
+         if org_rows is not None and org_rows == 0 else
+         f"{org_rows} employers linked to org.gov2.ro" if org_rows else "no employer_org table (older export)")
 
     hard("fts_complete", m["fts_rows"] == m["job_postings"],
          f"FTS index has {m['fts_rows']} rows against {m['job_postings']} postings"

@@ -38,6 +38,7 @@ Output: posturi.sqlite with tables:
 """
 
 import argparse
+import csv
 import json
 import os
 import socket
@@ -834,6 +835,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
         export_salary_titles(con)
         export_salary_ins_context(con)
     export_declared_institutions(cur, con)
+    export_employer_org(con)
     export_salary_limits(con)
     if active_only:
         export_archive(cur, con)
@@ -1588,6 +1590,36 @@ def export_declared_institutions(cur, con: sqlite3.Connection, path: Path = decl
           f"{built['slug_clashes']} slug clashes")
     return {"institutions": len(built["institutions"]), "groups": len(built["groups"]), "matched": matched,
             "employers": len(built["employers"]), "extra_employers": built["extra_employers"]}
+
+
+EMPLOYER_ORG_CSV = Path(__file__).resolve().parent / "data" / "org" / "employer-org.csv"
+
+EMPLOYER_ORG_DDL = """
+DROP TABLE IF EXISTS employer_org;
+-- DATA-ORG-06: the verified link of an employer to its record on org.gov2.ro. The rows come from the
+-- snapshot data/org/employer-org.csv (ops/build-employer-org.py). `cif` is NULL for a record with no CIF.
+CREATE TABLE employer_org (
+    employer_id INTEGER PRIMARY KEY REFERENCES employers(id),
+    org_id      TEXT NOT NULL,
+    cif         TEXT,
+    org_url     TEXT NOT NULL
+);
+"""
+
+
+def export_employer_org(con: sqlite3.Connection, path: Path = EMPLOYER_ORG_CSV) -> dict:
+    """Write employer_org from the snapshot, joined on employers.slug. A missing snapshot gives an empty table."""
+    con.executescript(EMPLOYER_ORG_DDL)
+    if not path.exists():
+        print(f"WARNING: employer_org is empty ({path} not found)")
+        return {"snapshot": 0, "matched": 0, "unmatched": 0}
+    with open(path, encoding="utf-8", newline="") as fh:
+        snap = list(csv.DictReader(fh))
+    ids = dict(con.execute("SELECT slug, id FROM employers"))
+    rows = [(ids[r["slug"]], r["org_id"], r["cif"] or None, r["org_url"]) for r in snap if r["slug"] in ids]
+    con.executemany("INSERT OR REPLACE INTO employer_org VALUES (?,?,?,?)", rows)
+    print(f"employer_org: {len(snap)} snapshot rows, {len(rows)} match an employer, {len(snap) - len(rows)} do not")
+    return {"snapshot": len(snap), "matched": len(rows), "unmatched": len(snap) - len(rows)}
 
 
 def git_sha() -> str:

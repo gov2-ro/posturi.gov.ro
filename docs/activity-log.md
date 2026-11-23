@@ -2,6 +2,14 @@
 
 ## 2026
 
+### 2026-11-23 — EU-GUIDE-RATES reviewed (Opus)
+
+**Done.** Accepted the spike (`e30483e`) against its brief. Checked the main claim in the downloaded PIDS general guide (`pdftotext`, pp. 38–39): the cap table and the scope sentence („exclusiv personalului angajat pe posturi în afara organigramei”) are as reported. Opened SALARY-EU-CAP for the owner.
+
+**Hard.** The originals on mfe.gov.ro and ADR Centru were not reached (HTTP 403); the copies come from a commune, a university and a municipality.
+
+**Decided.** The cap is context, not a figure (ADR 0008 rule 5): it is a reimbursement ceiling, and a posting can pay below it (Blăgești 17.70 lei/h). The cost of a figure: the filter and the sort would place PIDS posts at the ceiling.
+
 ### 2026-11-23 — ANOMALY-PUBLIC phase 2: checks R21–R25 for limiting conditions (Sonnet, from the Opus brief)
 
 **Done.** Added five checks to `ops/anomaly-survey.py` and the register `ops/anomaly-checks.json`. `Ctx.texts()` loads `posting_text.body_markdown` once; a missing table gives `unavailable`. Six tests added in `webapp/tests/test_anomaly_survey.py` (44 pass). Nothing deployed.

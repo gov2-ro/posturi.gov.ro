@@ -44,6 +44,9 @@ $stmt8->execute([$eid]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
 
+require_once __DIR__ . '/../inc/employer_org.php';
+$org_link = employer_org_link($eid);
+
 // Per-angajator feeds: the three site-wide feeds accept `?employer=<slug>` and
 // scope themselves to this profile. Advertise them in <head> for feed readers…
 $feed_qs = '?employer=' . rawurlencode($employer['slug']);
@@ -67,6 +70,9 @@ require __DIR__ . '/../inc/header.php';
     </h1>
     <?php if ($top_category): ?>
       <div class="text-sm text-ink-muted"><?= e($top_category) ?></div>
+    <?php endif; ?>
+    <?php if ($org_link): ?>
+      <p class="g2-text-meta mt-1" data-employer-org><?php if ($org_link['cif'] !== null): ?>CUI <?= e($org_link['cif']) ?> · <?php endif; ?><a class="g2-link-quiet" href="<?= e($org_link['url']) ?>">Fișa instituției pe org.gov2.ro →</a></p>
     <?php endif; ?>
   </div>
 

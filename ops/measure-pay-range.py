@@ -6,7 +6,7 @@ Reads an export sqlite (`data/posturi.sqlite` or a copy), runs the export functi
 
 - the postings per `salary_bucket` value before and after (rule 7: the keys do not change);
 - the postings per floor gradation and per kind (stated / law grid / not in scope, with the reason);
-- the food at the low end, the high end, both, neither; the postings that an excluded employer drops;
+- the food at the low end, the high end, both, neither;
 - the method of the law figures (grid rows, or the figure scaled).
 
 It uses the stored `inferred`, `sal_json`, `employer_name` and project columns, so it needs no Postgres. The
@@ -97,7 +97,7 @@ def main() -> int:
     for scope in ("open", "all"):
         before, after = Counter(), Counter()
         floor, kind, food, methods, reasons = Counter(), Counter(), Counter(), Counter(), Counter()
-        excluded = stated_ranges = n = 0
+        stated_ranges = n = 0
         for r in rows:
             if scope == "open" and r["application_status"] not in OPEN:
                 continue
@@ -106,7 +106,7 @@ def main() -> int:
                 inferred = json.loads(r["inferred"] or "{}")
             except json.JSONDecodeError:
                 inferred = {}
-            cols = exp._pay_range_columns(inferred, r["sal_json"], r["employer_name"])
+            cols = exp._pay_range_columns(inferred, r["sal_json"])
             old = project_month(r) if r["project_hire"] else (
                 r["inf_salary_min"] if (r["inf_salary_min"] or 0) > 0 else r["sal_min"])
             new = old if (r["project_hire"] or cols[0] is None) else cols[0]
@@ -125,20 +125,18 @@ def main() -> int:
             floor[cols[2]] += 1
             lo, hi = cols[4] > 0, cols[5] > 0
             food["both" if lo and hi else "low only" if lo else "high only" if hi else "neither"] += 1
-            if salary_pay.excluded_employer(r["employer_name"]):
-                excluded += 1
             if stated and exp._stated_salary(inferred)[1] not in (None, exp._stated_salary(inferred)[0]):
                 stated_ranges += 1
             if not stated:
                 est = json.loads(r["sal_json"])
                 rng = salary_pay.pay_range("law", est["lei_min"], est.get("lei_max"), years=inferred.get("experience_years"),
-                                           employer=r["employer_name"], local=salary_pay.is_local_range(est),
+                                           local=salary_pay.is_local_range(est),
                                            figure_at=salary_pay.law_figure_at(est, exp.salary_grid.load_grid(exp.salary_grid.LAW_VERSION)))
                 methods[rng["method"]] += 1
         out[scope] = {"postings": n, "bucket_before": dict(before), "bucket_after": dict(after),
                       "kind": dict(kind), "not_in_scope_reason": dict(reasons),
                       "floor_gradation": {str(k): v for k, v in sorted(floor.items(), key=lambda kv: (kv[0] is None, kv[0]))},
-                      "food": dict(food), "excluded_employer_with_range": excluded,
+                      "food": dict(food),
                       "stated_with_a_range_of_figures": stated_ranges, "law_method": dict(methods)}
     if args.json:
         print(json.dumps(out, indent=1, ensure_ascii=False))
@@ -151,8 +149,7 @@ def main() -> int:
             print(f"{k:16}{d['bucket_before'].get(k, 0):>8}{d['bucket_after'].get(k, 0):>8}")
         for name in ("kind", "not_in_scope_reason", "floor_gradation", "food", "law_method"):
             print(f"{name}: {d[name]}")
-        print(f"excluded employer (with a range): {d['excluded_employer_with_range']}; "
-              f"stated figure that is itself a range: {d['stated_with_a_range_of_figures']}")
+        print(f"stated figure that is itself a range: {d['stated_with_a_range_of_figures']}")
     return 0
 
 

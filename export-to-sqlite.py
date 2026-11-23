@@ -773,7 +773,7 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             _application_status(deadline, today),
             *proj,
             *(salary_pay.columns(None) if hire else _pay_range_columns(
-                inferred, r["salary_estimate"], r["employer_name"])),
+                inferred, r["salary_estimate"])),
         ))
         total += 1
         if len(batch) >= 500:
@@ -1713,7 +1713,7 @@ def _stated_salary(inferred: dict) -> tuple:
     return lo, hi
 
 
-def _pay_range_columns(inferred: dict, salary_json_text, employer_name: str | None) -> tuple:
+def _pay_range_columns(inferred: dict, salary_json_text) -> tuple:
     """The six `pay_*` columns of one posting (ADR 0008 rule 11), all None when the rule does not apply.
 
     The stated pay (same test as the export of `inf_salary_min`) comes first, as in `SALARY_EXPR`;
@@ -1731,7 +1731,7 @@ def _pay_range_columns(inferred: dict, salary_json_text, employer_name: str | No
             hi = float(hi) if hi is not None else None
         except (TypeError, ValueError):
             return salary_pay.columns(None)
-        return salary_pay.columns(salary_pay.pay_range("stated", lo, hi, years=years, employer=employer_name))
+        return salary_pay.columns(salary_pay.pay_range("stated", lo, hi, years=years))
     if not salary_json_text:
         return salary_pay.columns(None)
     try:
@@ -1743,7 +1743,7 @@ def _pay_range_columns(inferred: dict, salary_json_text, employer_name: str | No
         return salary_pay.columns(None)
     grid = salary_grid.load_grid(salary_grid.LAW_VERSION)
     return salary_pay.columns(salary_pay.pay_range(
-        source, est["lei_min"], est.get("lei_max"), years=years, employer=employer_name,
+        source, est["lei_min"], est.get("lei_max"), years=years,
         local=salary_pay.is_local_range(est), figure_at=salary_pay.law_figure_at(est, grid), grid=grid))
 
 

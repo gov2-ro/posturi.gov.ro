@@ -590,7 +590,7 @@ run_suite('the salary filter lists the six options with the counts of their link
         $label = trim(preg_replace('/\s+/', ' ', $in->parentNode->textContent));
         assert_same(count(result_ids($sb, 'salary_bucket=' . $v)), paren_or_trailing($label), "count of $v");
     }
-    assert_contains('Net lunar estimat, la gradația 0.', $html, 'help text');
+    assert_contains('Net lunar estimat, de la gradația minimă cerută, cu indemnizația de hrană unde legea o dă.', $html, 'help text');
 });
 
 run_suite('salary_bucket is a multi-value parameter: values combine with OR', function () use ($sb) {

@@ -69,12 +69,13 @@ require __DIR__ . '/../inc/header.php';
           <strong>Ce arată site-ul.</strong> Foarte puține anunțuri spun salariul. Când anunțul îl spune,
           site-ul îl afișează ca „salariu anunțat”. Când anunțul nu îl spune, site-ul afișează un
           <strong>salariu net estimat</strong>. Site-ul îl calculează din salariul de bază brut după
-          Legea 153/2017, la gradația 0, fără persoane în întreținere. Filtrul „Salariu” folosește tot
-          salariul net. Salariul brut este pe pagina fiecărui anunț.
+          Legea 153/2017, fără persoane în întreținere. Salariul este un interval: de la gradația pe care
+          o dă experiența cerută în anunț (3 ani dau gradația 1) până la gradația 5. Site-ul adaugă indemnizația
+          de hrană de 347 lei când salariul net este de cel mult 6.000 lei. Filtrul „Salariu” folosește
+          capătul de jos al intervalului, net. Salariul brut este pe pagina fiecărui anunț.
         </p>
         <p>
-          <strong><mark>Estimarea nu este un calcul oficial</mark>.</strong> Ea nu include sporurile, gradațiile de
-          vechime și indemnizația de hrană. Angajatorul stabilește salariul real. Un anunț al cărui titlu nu
+          <strong><mark>Estimarea nu este un calcul oficial</mark>.</strong> Ea nu include sporurile și primele. Angajatorul stabilește salariul real. Un anunț al cărui titlu nu
           corespunde unei funcții din lege nu are estimare. Filtrul „fără salariu estimat” îl arată.
         </p>
         <p>
@@ -113,7 +114,7 @@ require __DIR__ . '/../inc/header.php';
           <li><strong>Sporurile.</strong> Angajatorul le acordă după regulamentul lui și după condițiile locului de muncă. Legea limitează totalul sporurilor la 30% pentru toată instituția, nu pentru o persoană.</li>
           <li><strong>Salariul stabilit de consiliul local.</strong> În primării și în serviciile lor, consiliul stabilește salariul. Legea dă numai plafonul. De aceea site-ul arată un interval.</li>
           <li><strong>Salariul colegilor.</strong> Un angajat nou poate primi salariul colegilor care au aceeași funcție. Unele instituții plătesc peste tabelul legii.</li>
-          <li><strong>Persoana angajată.</strong> Vechimea, persoanele în întreținere și scutirile de impozit schimbă salariul. Site-ul calculează la gradația 0, fără persoane în întreținere. <a href="/estimator-salariu/" class="text-gov hover:underline">Estimatorul de salariu</a> are o opțiune pentru vechime.</li>
+          <li><strong>Persoana angajată.</strong> Vechimea, persoanele în întreținere și scutirile de impozit schimbă salariul. Gradația depinde de vechimea în muncă, nu de experiența cerută. Site-ul pornește de la gradația pe care o dă experiența cerută și calculează fără persoane în întreținere. <a href="/estimator-salariu/" class="text-gov hover:underline">Estimatorul de salariu</a> are o opțiune pentru vechime.</li>
           <li><strong>Armata, poliția și serviciile de informații.</strong> Instituția stabilește coeficientul fiecărei funcții, între limitele legii. Multe dintre aceste ordine nu sunt publice.</li>
           <li><strong>Angajatorii care nu aplică Legea 153/2017.</strong> Companiile de stat, BNR și ASF au alte reguli. Pentru posturile dintr-un proiect, cifra este a funcției celei mai apropiate din grilă.</li>
           <li><strong>Potrivirea titlului.</strong> Site-ul alege funcția din grilă după titlul anunțului. Un titlu general, de exemplu „Referent”, poate corespunde mai multor funcții.</li>

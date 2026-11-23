@@ -223,7 +223,7 @@
         facet_group('Ocupație',            $occupation_options, 'occupation', $occ_sel,     false, $auto_help);
         // Estimated (law in force, declared pay or draft law) unless the posting states a salary.
         facet_group('Salariu',             $salary_options,     'salary_bucket', $sal_bucket, false,
-                    'Salariul anunțat, altfel cel estimat după legea în vigoare (Legea 153/2017). Net lunar estimat, la gradația 0.');
+                    'Salariul anunțat, altfel cel estimat după legea în vigoare (Legea 153/2017). Net lunar estimat, de la gradația minimă cerută, cu indemnizația de hrană unde legea o dă.');
         facet_group('Nivel de studii',     $studies_options,    'studies_level', $studies_lvls, false,
                     'Nivelul cerut de anunț sau dedus din ocupație; nu stabilește dacă vă calificați.');
         facet_group('Domeniu de studii',   $isced_options,      'isced',      $isced_sel);

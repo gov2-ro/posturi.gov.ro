@@ -2,6 +2,44 @@
 
 ## 2026
 
+### 2026-11-23 — SALARY-GRAD-FOOD: the pay range in the export, the filter and the detail page (Sonnet, from the Opus brief)
+
+**Done**
+- `data/salarii/drepturi-2026.json`: food 347 lei, net cap 6,000 lei, the eight excluded employer groups as name patterns, each with its act and start date. The gradation table stays in `parametri.json` (one copy); the new file points to it. The values of `parametri.json` equal the audit: 7.5 / 5 / 5 / 2.5 / 2.5 %, compounded (g5 = 1.2451876), tranches 3 / 5 / 10 / 15 / 20 years.
+- `salary_pay.py`: `pay_range()` (pure), `estimate_source()` (rule 11 scope: only the law grid; not declared, draft, Anexa VI, management row), `is_local_range()`, `law_figure_at()`, `columns()`. Food test: `net_from_gross(base) <= 6000`, base without the allowance.
+- Export: `pay_min`, `pay_max` (total gross), `pay_grad_min/max`, `pay_food_min/max` in `job_postings`; `_pay_range_columns()` in `export-to-sqlite.py`. A project post and every out-of-scope figure get NULL.
+- PHP: `SALARY_EXPR` = `COALESCE(j.pay_min, j.inf_salary_min, j.sal_min)` inside the existing `CASE`; `list_salary()` and `pay_level()` read the same precedence; `pay_range_view()` words the range; `db.php` shims an export without the columns; the detail page shows „de la X la Y lei net / lună”, the gross line with gradations and food, one note, and drops „Salarizare” when the stated box shows (kept when it is the only section).
+- Tests: `webapp/tests/test_salary_pay.py` (21), `webapp-php/tests/salary_range_test.php` (41 assertions), `webapp-php/tests/browser/salary_range.spec.js` at 320, 375 and 1280 px (9 runs), fixture seeder `fixture_seed_pay_range()`. `test_salary_facet_sql.py` pins the new expression.
+- `ops/measure-pay-range.py`: the step-8 measurement, runnable on any export (the owner runs it on the VPS).
+- Posting 21359 (stated 7,870, 3 years): low = gradation 1, base 8,461, food 347, total 8,808; high = gradation 5, base 9,800 (net 5,733, so under the cap), food 347, total 10,147. Equal to the brief.
+
+**Measured** (local copy `data/_dev/full-2026-11-23.sqlite`: VPS copy of 23 Nov, 16,875 rows, 1,538 open; it holds the stored `inferred` and `sal_json`, so the export function ran on the real inputs. It is NOT a Postgres re-export: the local Postgres is the September copy, 9,756 rows, max id 14141. Posting 21359 is in neither file. The owner measures again on the VPS.)
+- Rows with a range: open 1,345 (stated 19, law grid 1,326); all 14,876 (stated 128, law grid 14,748). Without a range but with a figure, open 95: management row 70, draft grid 21, declared 3, project hire 1; no figure at all 98.
+- `salary_bucket`, open postings, before → after: net-sub-3000 778 → 611; net-3000-4000 359 → 508; net-4000-5000 46 → 56; net-5000-7000 140 → 143; net-peste-7000 40 → 45; fara-estimare 175 → 175. All rows: 9,068 → 7,233; 3,858 → 5,510; 414 → 556; 1,380 → 1,367; 311 → 365; 1,844 → 1,844. The keys did not change (rule 7). The low end moves up because of the food (347 lei) and the gradation.
+- Floor gradation, open: 0: 930, 1: 137, 2: 250, 3: 23, 4: 5, 5: 0. All rows: 0: 10,299, 1: 1,508, 2: 2,681, 3: 309, 4: 62, 5: 17.
+- Food, open: both ends 1,079; low end only 114; high end only 0; neither 152. All rows: 12,019 / 1,363 / 0 / 1,494. Employers excluded by name: open 38, all 420 (these have gradations and no food).
+- Law figures computed from the grid rows: open 1,256, scaled 70; all 13,967 and 781 (the refs are cut at 12 rows, or do not reproduce the figure).
+- Ten detail pages read through the PHP app on a copy of the file with the columns added (20202, 19676, 20187, 21257, 20981, 20888, 20935, 17818, 21169, 21076): all show the net range, the gross line and the note; no „Salarizare” section next to a stated box; the military unit 17818 has no food; the local ranges (21257, 20888) say „până la plafonul legal”.
+
+**Hard**
+- `Grid.row_pay()` is not „figure × multiplier”. It rounds once on `lei × regula × multiplier`, and it lifts a row to the minimum wage (4,325 lei). Scaling the stored figure differs by up to 2 lei, and at the minimum wage by up to 1,061 lei: 5,368 of 15,674 law estimates (34 %) in the local copy sit exactly at 4,325, so the scaled low end would start at 5,385 for a gradation-5 post. I measured it on 14,960 row/gradation pairs: 3,878 differ (max 2 lei) outside the minimum-wage rows. So the law figures come from `row_pay()` over the rows named in `randuri`. A guard checks that the rows reproduce the stored figure at gradation 0: on the September data 7,392 of 7,398 estimates with fewer than 12 refs did. The rest scale the figure.
+- A stated figure that is itself a range (14 of 19 open stated postings) often spans gradation 0 to 5 already (20202: 4,544 to 5,855; 19676: ratio 1.244). The rule then counts the gradations twice. I applied the brief as written and filed it in the backlog.
+- My first idea for the exclusion list used patterns that the real employer names miss: „Școala Militară…”, military hospitals. Left as a first cut; the owner reviews it.
+
+**Decided** (by me, inside the brief)
+- Net = `net_from_gross(total gross)`, food included, for the page and the filter (one rule on the whole site). The allowance may be taxed differently; not modelled.
+- A stated figure with a maximum: low = minimum × floor, high = maximum × gradation 5.
+- Excluded employers keep the gradations; only the food drops.
+- Brief step 3 skipped (see backlog). Not changed, as the brief says: the estimator, `/salarii/`, the draft figure, the declared pay.
+- The detail page keeps the old „la gradația 0” text where no range exists, and in the estimate line inside the stated box (that line is the estimate, not the stated pay).
+- New files outside the brief list: `webapp-php/tests/salary_range_test.php`, `.../browser/salary_range.spec.js`, `ops/measure-pay-range.py`; edits to the test fixtures (`build_db.php`, `make.php`), `playwright.config.js` (port 8830) and `test_salary_facet_sql.py` (the pinned expression).
+- Not done (backlog SALARY-GRAD-FOOD-FOLLOWUP): `result_list.php`, `stats.php`, `ci.yml`.
+
+**Assumed**
+- The brief, the audit and ADR rule 11 were untracked or uncommitted in the main checkout; I copied them into the branch (commit `docs: brief, audit and ADR 0008 rule 11`), together with the owner's draft backlog and log entries.
+- Management and Anexa VI rows are known from the `selector` in `sal_json` (`tip_post`, `anexa`), not from the rows.
+- Experience is `inferred.experience_years`, the value of `inf_experience_years`.
+
 ### 2026-11-23 — SALARY-GRAD-FOOD: the law on gradations and the food allowance; ADR 0008 rule 11 (Opus + owner)
 
 **Done.** The owner asked to show a stated salary as a range with the gradations and the food allowance, and to filter at gradation 1 „where it applies”. The VPS session measured (read-only): 25 of 1,644 open postings state pay (157 of 16,879 overall); 4 of 157 name one gradation for the figure; 6 open postings name a food amount, all 347 lei; experience is unknown for about 48% of postings. An external research report on the law (brief `docs/briefs/2026-11-23-salary-law-research.md`) is now `docs/audits/2026-11-23-salary-law-research.md`. ADR 0008 rule 11 and the build brief `docs/briefs/2026-11-23-salary-gradation-food.md` are written.

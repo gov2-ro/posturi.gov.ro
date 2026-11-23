@@ -357,7 +357,14 @@
       var l = api && api.list ? api.list() : [];
       searches = Array.isArray(l) ? l.length : 0;
     } catch (e) { searches = 0; }
-    var total = saved + searches;
+    // Followed employers: a third store (employers.js), counted the same way.
+    var employers = 0;
+    try {
+      var apiE = window.PosturiEmployers;
+      var le = apiE && apiE.list ? apiE.list() : [];
+      employers = Array.isArray(le) ? le.length : 0;
+    } catch (e) { employers = 0; }
+    var total = saved + searches + employers;
     n.textContent = '(' + total + ')';
     n.hidden = !!S.blocked && total === 0;
   }
@@ -871,6 +878,7 @@
   window.addEventListener('popstate', function () { if (SP) renderSaved(); });
   // searches.js announces each write to its own store (this tab, and other tabs through `storage`).
   document.addEventListener('posturi:searches-changed', renderNav);
+  document.addEventListener('posturi:employers-changed', renderNav);
 
   // Small public surface for searches.js: the same notice, so a refusal reads the same everywhere.
   window.PosturiSaved = { showNotice: showNotice };

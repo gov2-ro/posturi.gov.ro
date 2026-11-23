@@ -103,6 +103,29 @@ require __DIR__ . '/../inc/header.php';
     <a href="/posturi.json<?= e($feed_qs) ?>" class="py-1 text-gov hover:underline">JSON API</a>
   </div>
 
+  <?php /* UX-FOLLOW-EMP: follow this employer in the browser (static/employers.js, `posturi.employers.v1`, cap 10) and ask for an
+     email alert on it. The alert key is search_key() of `employer=<slug>` (ADR 0001): the same subscribe form as for a saved search.
+     The toggle needs JavaScript and stays hidden without it; the alert link is a plain link. */
+  $follow_key = search_key(['employer' => $employer['slug']]);
+  $follow_alert_href = '/alerte/abonare/?cheie=' . rawurlencode($follow_key) . '&sort=&nume=' . rawurlencode($employer['name']); ?>
+  <div class="mb-8 -mt-3" data-employer-follow-block>
+    <div class="flex flex-wrap gap-2" role="group" aria-label="Angajatorul acesta">
+      <span class="follow-group" data-employer-follow-wrap hidden>
+        <button type="button" data-employer-follow aria-pressed="false"
+                data-slug="<?= e($employer['slug']) ?>" data-name="<?= e($employer['name']) ?>" class="follow-btn">
+          <svg class="pref-ico" aria-hidden="true"><use href="#i-bookmark"/></svg>
+          <span data-employer-follow-label>Urmărește angajatorul</span></button>
+      </span>
+      <span class="follow-group">
+        <a href="<?= e($follow_alert_href) ?>" data-employer-alert class="follow-btn">Alertă pe email<span class="sr-only">: <?= e($employer['name']) ?></span></a>
+      </span>
+    </div>
+    <p data-employer-msg role="status" aria-live="polite" class="min-h-4 mt-1 text-xs text-ink-muted"></p>
+    <p data-employer-limit hidden class="mt-1 max-w-xl border border-note-line bg-note px-3 py-2 text-xs leading-snug text-note-ink">
+      Urmărești deja 10 angajatori. Șterge unul din <a href="/salvate/?vedere=liste" class="underline">Salvate</a>, apoi încearcă din nou.
+    </p>
+  </div>
+
   <?php /* SALARY-DECLARATII-PAGE: the pay of the asset declarations, when the employer matches an institution. */
   $declared_inst = declared_institution_of_employer($eid);
   if ($declared_inst): $declared_slug = $declared_inst['slug']; ?>

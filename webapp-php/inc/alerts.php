@@ -212,14 +212,24 @@ function al_client_ip(): string {
  * The query parameters of a canonical, non-empty search key, or null.
  * The key must equal search_key() of its own parameters (ADR 0001), so a
  * hand-made key that selects the same postings in another spelling is refused.
+ *
+ * With $subscribing, an `employer=<slug>` key must name an employer that exists (UX-FOLLOW-EMP):
+ * an alert on an unknown slug would send an empty digest for ever, so the subscribe form refuses it.
+ * The digest run does not pass the flag: a subscription whose employer left the export finds no postings and stays quiet.
  */
-function al_parse_key(string $key): ?array {
+function al_parse_key(string $key, bool $subscribing = false): ?array {
     if ($key === '' || strlen($key) > ALERTS_KEY_MAX) return null;
     parse_str($key, $params);
     if (!is_array($params) || $params === []) return null;
     if (search_key($params) !== $key) return null;
     [$valid, $err] = validated_query($params);
-    return $err === null && $valid ? $valid : null;
+    if ($err !== null || !$valid) return null;
+    if ($subscribing && isset($valid['employer']) && $valid['employer'] !== '') {
+        $stmt = db()->prepare('SELECT 1 FROM employers WHERE slug = ?');
+        $stmt->execute([$valid['employer']]);
+        if (!$stmt->fetchColumn()) return null;
+    }
+    return $valid;
 }
 
 function al_clean_label(string $label): string {
@@ -263,7 +273,7 @@ function al_queue_login(PDO $pdo, string $email, string $email_index): void {
  */
 function al_subscribe(PDO $pdo, array $in, string $ip): string {
     $key = (string)($in['cheie'] ?? '');
-    if (al_parse_key($key) === null) return 'invalid-key';
+    if (al_parse_key($key, true) === null) return 'invalid-key';
     $email = al_normalize_email((string)($in['email'] ?? ''));
     if ($email === null) return 'invalid-email';
     if (trim((string)($in['website'] ?? '')) !== '') return 'sent';   // honeypot: look the same, store nothing

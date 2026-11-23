@@ -1369,11 +1369,16 @@ function salary_explainer(array $sal, ?array $range, string $seniority, string $
         if ($n > 1 && $est_url !== '') { $step['link'] = $est_url; $step['link_text'] = 'Vezi-le în estimator →'; }
         $steps[] = $step;
     }
+    // The box already shows the seniority sentence: the step names the rule instead of repeating it.
     $steps[] = $range && $range['grad_min'] !== null
-        ? ['head' => 'Gradația:', 'text' => $seniority]
+        ? ['head' => 'Gradația:', 'text' => ($range['grad_max'] !== null && $range['grad_max'] > $range['grad_min']
+              ? 'De la gradația ' . $range['grad_min'] . ' la gradația ' . $range['grad_max']
+              : 'Gradația ' . $range['grad_min']) . '. Legea 153/2017, art. 10, leagă fiecare gradație de anii de vechime în muncă.']
         : ['head' => 'Gradația:', 'text' => 'Am folosit gradația ' . (int)($sal['gradatie'] ?? 0) . ' (' . (SALARY_GRAD_YEARS[(int)($sal['gradatie'] ?? 0)] ?? '') . ' de vechime în muncă).'];
     if ($range && $range['food_text'] !== '') {
-        $steps[] = ['head' => 'Indemnizația de hrană:', 'text' => $cap($range['food_text']) . '.'];
+        $_food_lei = number_format(max((int)$range['food_min'], (int)$range['food_max']), 0, ',', '.');
+        $_food_where = match ($range['food']) { 'low' => ', doar la gradațiile mici', 'high' => ', doar la limita de sus', default => '' };
+        $steps[] = ['head' => 'Indemnizația de hrană:', 'text' => "$_food_lei lei pe lună, adăugați la brut$_food_where."];
     }
     $steps[] = ['head' => 'Net:', 'text' => 'Din brut scădem CAS 25 %, CASS 10 % și impozitul de 10 %, cu deducerea personală. Nu am socotit persoane în întreținere.'];
     $notes = [];

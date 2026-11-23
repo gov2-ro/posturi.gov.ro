@@ -7,7 +7,7 @@ $end   = min($page * $PAGE_SIZE, $total_count);
 $chips = $active_chips ?? [];
 
 // 2026-11-18 (owner): the net salary range of the results, after the count. The figure of a posting is the one of its row
-// (list_salary(): the stated salary, else the estimate from the grid), as net pay (net_from_gross()). The range is the lowest
+// (list_salary(): the range of rule 11, else the stated salary, else the estimate from the grid), as net pay (net_from_gross()). The range is the lowest
 // lower figure to the highest upper figure; the median is the median of the lower figures (the figure the salary filter uses),
 // shown from 5 postings with a figure. The scope is the list itself (facet_scope('') applies every filter). A figure under
 // 1.000 lei gross is not a monthly salary (posting 16966 states 60 lei, an hourly rate; DATA-SALARY-NOT-MONTHLY): the range skips it.
@@ -15,7 +15,7 @@ $_sr = null;
 if ($total_count && function_exists('facet_scope')) {
     $_sr_s = facet_scope('');
     // A project-hired post counts by its stated month pay (SALARY_EXPR), never by the grid: `p` is that figure.
-    $_sr_st = db()->prepare("SELECT j.inf_salary_min AS a, j.inf_salary_max AS b, j.sal_min AS c, j.sal_max AS d,
+    $_sr_st = db()->prepare("SELECT j.pay_min AS e, j.pay_max AS f, j.inf_salary_min AS a, j.inf_salary_max AS b, j.sal_min AS c, j.sal_max AS d,
         j.project_hire AS ph, " . PROJECT_MONTH_EXPR . " AS p FROM job_postings j {$_sr_s['join']}"
         . ($_sr_s['where'] ? ' WHERE ' . implode(' AND ', $_sr_s['where']) : ''));
     $_sr_st->execute($_sr_s['binds']);
@@ -26,7 +26,10 @@ if ($total_count && function_exists('facet_scope')) {
             $_sr_lo[] = $_sr_hi[] = net_from_gross((float)$_sr_r['p']);
             continue;
         }
-        [$lo, $hi] = (float)$_sr_r['a'] > 0 ? [(float)$_sr_r['a'], (float)$_sr_r['b']] : [(float)$_sr_r['c'], (float)$_sr_r['d']];
+        // Same precedence as list_salary() and SALARY_EXPR (ADR 0008 rule 11): the range of the law first, then the stated pay, then the estimate.
+        if ((float)$_sr_r['e'] > 0) [$lo, $hi] = [(float)$_sr_r['e'], (float)$_sr_r['f']];
+        elseif ((float)$_sr_r['a'] > 0) [$lo, $hi] = [(float)$_sr_r['a'], (float)$_sr_r['b']];
+        else [$lo, $hi] = [(float)$_sr_r['c'], (float)$_sr_r['d']];
         if ($lo < 1000) continue;
         $_sr_lo[] = net_from_gross($lo);
         $_sr_hi[] = net_from_gross(max($lo, $hi));
@@ -56,7 +59,7 @@ $_sr_fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
       <span class="font-mono font-medium text-ink"><?= $total_count ?></span>
       <?= $total_count === 1 ? 'anunț găsit' : 'anunțuri găsite' ?>
       <?php if ($_sr): ?>
-      <span data-salary-range title="Salariul anunțat sau, pentru cele mai multe posturi, cel estimat după legea în vigoare (Legea 153/2017), la gradația 0."> · salariu net ≈ <span class="text-ink"><?= $_sr['min'] === $_sr['max'] ? e($_sr_fmt($_sr['min'])) : e($_sr_fmt($_sr['min'])) . '–' . e($_sr_fmt($_sr['max'])) ?> lei</span><?php if ($_sr['k'] >= 5): ?>, mediana <span class="text-ink"><?= e($_sr_fmt($_sr['median'])) ?> lei</span><?php endif; ?><?php if ($_sr['k'] < $total_count): ?> <span class="text-ink-faint">(<?= e($_sr_fmt($_sr['k'])) ?> din <?= e($_sr_fmt($total_count)) ?>)</span><?php endif; ?></span>
+      <span data-salary-range title="Salariul anunțat sau, pentru cele mai multe posturi, cel estimat după legea în vigoare (Legea 153/2017): de la gradația minimă cerută la gradația 5, cu indemnizația de hrană unde legea o dă."> · salariu net ≈ <span class="text-ink"><?= $_sr['min'] === $_sr['max'] ? e($_sr_fmt($_sr['min'])) : e($_sr_fmt($_sr['min'])) . '–' . e($_sr_fmt($_sr['max'])) ?> lei</span><?php if ($_sr['k'] >= 5): ?>, mediana <span class="text-ink"><?= e($_sr_fmt($_sr['median'])) ?> lei</span><?php endif; ?><?php if ($_sr['k'] < $total_count): ?> <span class="text-ink-faint">(<?= e($_sr_fmt($_sr['k'])) ?> din <?= e($_sr_fmt($total_count)) ?>)</span><?php endif; ?></span>
       <?php endif; ?>
     <?php else: ?>
       Niciun rezultat

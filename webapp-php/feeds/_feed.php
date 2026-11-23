@@ -252,6 +252,7 @@ function feed_details(array $r, array $events): array {
         : ($sbaza === 'proiect' ? 'Estimare aproximativă, după proiectul de lege' : 'Estimare după Legea 153/2017');
     $draft_note = $sbaza === 'lege_in_vigoare' ? sal_draft_note($sal) : '';
     $stated = (float)($r['inf_salary_min'] ?? 0) > 0 ? list_salary($r) : null;
+    $range = pay_range_view($r);
     $proj = !empty($r['project_hire']);
     if ($proj) {
         // A post hired for an EU/PNRR project (SALARY-EU-DETAIL): the pay of the project, never the grid.
@@ -265,6 +266,15 @@ function feed_details(array $r, array $events): array {
         feed_put($x, 'Salariu anunțat', $stated['text'] . ' / lună');
         feed_put($x, 'Brut anunțat', $stated['gross'] . ' brut / lună, din anunț');
         if ($est_net !== '') feed_put($x, $est_name, $est_net . ' (' . $est_gross . ') / lună' . $est_tail . ($sbaza === 'proiect' ? '. ' . SAL_PROJECT_NOTE : ''));
+        if ($draft_note !== '') feed_put($x, 'Proiectul noii legi', $draft_note);
+    } elseif ($range && !$dv && $sbaza !== 'proiect') {
+        // ADR 0008 rule 11: the range of the law in force, worded as the detail page does (net from-to; brut with the gradations
+        // and the food allowance). No "la gradația 0": the figure is not the gradation 0 one.
+        $nf = static fn(int $v): string => number_format($v, 0, ',', '.');
+        $net = 'de la ' . $nf($range['net_min']) . ($range['net_max'] > $range['net_min'] ? ' la ' . $nf($range['net_max']) : '') . ' lei net';
+        feed_put($x, 'Salariu estimat', $net . ' / lună');
+        feed_put($x, 'Brut estimat', 'brut: ' . $range['gross'] . ' lei / lună' . ($range['detail'] !== '' ? ', ' . $range['detail'] : ''));
+        feed_put($x, 'Despre estimare', trim((string)($sal['disclaimer'] ?? '')));
         if ($draft_note !== '') feed_put($x, 'Proiectul noii legi', $draft_note);
     } elseif ($est_net !== '') {
         $proj_fig = $sbaza === 'proiect';

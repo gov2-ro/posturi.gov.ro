@@ -157,6 +157,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/llms_test.php
 
+      - name: Pay range, gradations and food allowance (ADR 0008 rule 11)
+        working-directory: webapp-php
+        run: php tests/salary_range_test.php
+
       - name: One look, the gov2 DS; no skins (ADR 0005)
         working-directory: webapp-php
         run: php tests/ds_test.php

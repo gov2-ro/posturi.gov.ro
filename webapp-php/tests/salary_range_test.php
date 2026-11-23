@@ -145,6 +145,45 @@ run_suite('the detail page without a range keeps the old text, and keeps "Salari
     assert_not_contains('data-pay-range-note', $h, 'no range note');
 });
 
+run_suite('the list line reads the range: lowest low end, highest high end (rule 11)', function () use ($base, $db_path) {
+    $pdo = new PDO('sqlite:' . $db_path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $lo = $hi = [];
+    foreach ($pdo->query("SELECT pay_min, pay_max, inf_salary_min a, inf_salary_max b, sal_min c, sal_max d FROM job_postings WHERE project_hire = 0 OR project_hire IS NULL") as $r) {
+        [$l, $h] = (float)$r['pay_min'] > 0 ? [(float)$r['pay_min'], (float)$r['pay_max']]
+            : ((float)$r['a'] > 0 ? [(float)$r['a'], (float)$r['b']] : [(float)$r['c'], (float)$r['d']]);
+        if ($l < 1000) continue;
+        $lo[] = net_from_gross($l); $hi[] = net_from_gross(max($l, $h));
+    }
+    $pdo = null;
+    $fmt = fn(float $v): string => number_format((int)round($v), 0, ',', '.');
+    $h = preg_replace('/\s+/u', ' ', sr_get($base, '/posturi/?status=all'));
+    assert_true(preg_match('/<span data-salary-range.*?<\/span><\/span>/u', $h, $m) === 1, 'the line is there');
+    $title = $m[0] ?? '';
+    $h = preg_replace('/\s+/u', ' ', strip_tags($title));
+    assert_contains('salariu net ≈ ' . $fmt(min($lo)) . '–' . $fmt(max($hi)) . ' lei', $h, 'lowest low end to highest high end');
+    assert_same(max($hi), net_from_gross(10147), 'the high end is the net of the range of 1003');
+    assert_not_contains('la gradația 0.', $title, 'the title no longer says gradation 0');
+    assert_contains('de la gradația minimă cerută la gradația 5', $title, 'the title words the range');
+});
+
+run_suite('the feed item of an estimate with a range: the wording of the detail page', function () use ($db_path) {
+    $copy = $db_path . '.feed';
+    copy($db_path, $copy);
+    $pdo = new PDO('sqlite:' . $copy, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+    $pdo->exec("UPDATE posting_text SET schema_json = '{\"responsibilities\":\"Atributii.\"}' WHERE posting_id IN (1001, 1002)");
+    $pdo->exec("UPDATE job_postings SET has_schema = 1 WHERE id IN (1001, 1002)");
+    $pdo = null;
+    $srv = start_fixture_server($copy, '2026-10-03');
+    $x = preg_replace('/\s+/u', ' ', html_entity_decode((string)@file_get_contents($srv['base'] . '/posturi.rss?status=all'), ENT_QUOTES | ENT_HTML5));
+    $net_lo = number_format(net_from_gross(5000), 0, ',', '.');
+    $net_hi = number_format(net_from_gross(6200), 0, ',', '.');
+    assert_contains("<b>Salariu estimat:</b> de la $net_lo la $net_hi lei net / lună", $x, 'the net range');
+    assert_contains('<b>Brut estimat:</b> brut: 5.000–6.200 lei / lună, gradația 1–5, cu indemnizația de hrană de 347 lei', $x, 'the gross line');
+    assert_not_contains("$net_hi lei net / lună, la gradația 0", $x, 'no "la gradația 0" on the range');
+    assert_contains('lei brut / lună, la gradația 0', $x, 'a row with no range keeps the old text');
+    stop_fixture_server($srv, $copy);
+});
+
 run_suite('an old export renders the detail page', function () use ($old_path) {
     $srv = start_fixture_server($old_path, '2026-10-03');
     $h = (string)@file_get_contents($srv['base'] . '/job/1003/');

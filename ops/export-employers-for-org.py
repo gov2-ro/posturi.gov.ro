@@ -9,6 +9,8 @@ Columns: slug, name, county, locality, postings, first_seen, last_seen.
   On a tie, the value of the newest posting wins.
 - `postings`, `first_seen` and `last_seen` count and date the postings in the file. An employer
   with no posting in the file gets 0 postings, no dates, and no county.
+- An employer whose name has no letter (the source placeholder "—") is left out.
+  The import puts postings with no institution under it, so it is not one employer.
 
 Use a file that holds all postings (`export-to-sqlite.py` without `--active-only`).
 An active-only file gives a county to about one employer in five.
@@ -50,8 +52,11 @@ def export(db_path, out_path):
             "SELECT employer_id, judet_name, locality, COALESCE(published_at, '') "
             "FROM job_postings WHERE employer_id IS NOT NULL"):
         postings.setdefault(emp, []).append((published, (county or "").strip(), (locality or "").strip()))
-    rows, no_county = [], 0
+    rows, no_county, skipped = [], 0, []
     for emp_id, name, slug in employers:
+        if not any(ch.isalpha() for ch in name):
+            skipped.append(f"{slug} ({name!r})")
+            continue
         ps = postings.get(emp_id, [])
         county = top_value([(p, c) for p, c, _ in ps])
         dates = sorted(p for p, _, _ in ps if p)
@@ -64,7 +69,7 @@ def export(db_path, out_path):
         w = csv.DictWriter(fh, fieldnames=COLUMNS)
         w.writeheader()
         w.writerows(rows)
-    return len(rows), no_county
+    return len(rows), no_county, skipped
 
 
 def main():
@@ -74,8 +79,10 @@ def main():
     args = ap.parse_args()
     if not args.db.exists():
         sys.exit(f"{args.db}: no such file")
-    n, no_county = export(args.db, args.out)
+    n, no_county, skipped = export(args.db, args.out)
     print(f"{args.out}: {n} employers, {no_county} without a county")
+    if skipped:
+        print(f"left out {len(skipped)} employer(s) with no letter in the name: {', '.join(skipped)}")
 
 
 if __name__ == "__main__":

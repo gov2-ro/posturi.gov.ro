@@ -2,6 +2,32 @@
 
 ## 2026
 
+### 2026-11-24 — UX-SALARY-BOX: one fixed width, the explainer in plain words, the salary line on the employer page (Sonnet, from the Opus brief)
+
+**Done.**
+- The three pay boxes of the detail page (`data-pay-project`, `data-pay-stated`, the estimate box `data-pay-estimate`) are `block w-full max-w-2xl`. Measured at 1280 px: 672 px closed and open, for the law, declared and stated box. At 375 px: 343 px, no horizontal scroll.
+- Estimate box layout: heading and meter in one row; figure; gross; seniority line; pay level text; draft-law line (own rule); footer row (link „Calculează cu altă gradație” on the left, „Cum a fost calculat” summary on the right); the panel opens inside the box under the footer. The disclaimer moved under the box (`data-pay-disclaimer`). The stated box got container classes only (no footer, no disclaimer there).
+- `SALARY_GRAD_YEARS` (art. 10 alin. (4)) and the seniority line „Salariul crește cu vechimea în muncă: de la gradația 1 (3–5 ani) la gradația 5 (peste 20 de ani). Minimul vine din experiența cerută în anunț.” (last sentence left out for gradation 0). It replaces `$range_note` in both the estimate and the stated box (same `data-pay-range-note`). One range-less or one-gradation case keeps the old sentence.
+- `salary_explainer()` in `helpers.php` builds the plain steps (function, selector entries, base pay with Anexa and N, gradation, food, net) and „De reținut”. The grid refs and `varianta` are only in `data-pay-rows` and `data-pay-variant`. The warning „Selectorul corespunde la …” and the old „Salariul de bază din tabelul …” line are filtered in PHP. The coefficient branch is in words.
+- Employer page: both lists show the 💰 line (`partials/pay_line.php`, a copy of the markup of `result_list.php`; `result_list.php` is not changed). The two SELECTs got the pay columns that `list_salary()`, `pay_level()` and `pay_meter()` read. The list column is `max-w-lg`.
+- Tests: new Playwright checks in `salary_range.spec.js` (same width before and after opening, no `/L153-|Selectorul|lege153-|Varianta/` in the panel, no horizontal scroll, `.pg-salary` on the employer page, stated and estimate box same width). Fixture `fixture_seed_law_estimates()` now has `motiv`, `ocupatie`, `incredere_ocupatie` and a „Selectorul…” warning. `salary_range_test.php`, `salary_range.spec.js`, `salary_limits_test.php` and `discovery_test.php` changed where the text or markup moved. Other lists checked and left alone: `archived.php` (has the line), `new_soon.php` and `anomalies_public.php` (compact lists, not changed).
+
+**Measured.**
+- Main list (`/`, list view, 1280 px): the list column is 952 px; one row is 460 px (two columns, `minmax(24rem, 1fr)`, gap 2rem). At 1920 px: column 1592 px, row 509 px. The main list has no max width of its own; the width of one row is the useful number. The employer list column is capped at `max-w-lg` (32rem = 512 px, a little more than the widest row measured).
+- N (rows the title matches) comes from `motiv` („N rând(uri) din Anexa …”) when it parses, else `count(randuri)` (which holds at most 12 refs). The fixture has `motiv` „2 rând(uri)” and one ref, so the test shows the `motiv` path. I could not check live data (no VPS access here).
+- Tests: all `webapp-php/tests/*_test.php` pass except `theme_test.php` (one assertion: sprite file equals the output of `build-sprite.php`; I did not touch icons; assumed pre-existing, not checked on main). Playwright: see the report.
+
+**Hard.**
+- The summary and the link must be in one row while the panel is full width under both. `details { display: contents }` does not flatten the content slot in Chromium 153 (tested): the panel stayed in the row. Solution: the link is absolute on the left from `sm` up, the summary is right-aligned over the full width of the details; below `sm` they stack. A wrapped link on a very narrow screen is not a problem (it stacks).
+- The employer row overflowed by 24 px at 375 px with the new line: the left `<div>` needed `min-w-0`.
+
+**Decided.**
+- The step „Anexa” of `selector_provenienta` is skipped in step 2: step 3 already says „Anexa VIII” (otherwise „Anexa: Anexa VIII”).
+- The „Vezi-le în estimator →” link shows only when N is above 1 (the text says „them”).
+- A partial for the employer lists, not a change to `result_list.php` (no risk to the list rendering). Cost: the markup exists twice.
+- `static/app.css` is rebuilt (`npm run css`): new classes.
+- Assumed: „one gradation only or no gradation” keeps today’s sentence (I did not remove it).
+
 ### 2026-11-24 — SALARY-GRAD-FOOD: the estimate note in the stated box on the same basis (Opus, owner choice)
 
 **Done.** Under a stated pay, the note „Estimare după Legea 153/2017 … la gradația 0” sat next to a range on another basis (live 21359: stated 8,808–10,147 gross vs estimate 5,760–7,871 at gradation 0). The export now writes `pay_est_min`/`pay_est_max`: the rule-11 range of the law estimate, only when a stated pay sets `pay_min`. The stated box shows „Estimare după Legea 153/2017, pe aceeași bază: … lei net (brut …) / lună”. `db.php` shims the two columns; old exports keep the old note. Tests: pytest 1,828 passed; `salary_range_test.php` 57 assertions.

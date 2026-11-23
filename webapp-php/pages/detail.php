@@ -520,7 +520,13 @@ require __DIR__ . '/../inc/header.php';
       if ($stated) unset($cond['Salariu']);
       // ADR 0008 rule 11: the pay range of the law in force (gradations + food allowance), for the stated or the estimated figure.
       $range = pay_range_view($p);
+      // UX-SALARY-BOX: the seniority line with the years of each gradation (Legea 153/2017 art. 10 alin. (4)).
       $range_note = 'Gradația depinde de vechimea în muncă. Minimul vine din experiența cerută în anunț.';
+      if ($range && $range['grad_min'] !== null && $range['grad_max'] !== null && $range['grad_min'] < $range['grad_max']) {
+          $range_note = 'Salariul crește cu vechimea în muncă: de la gradația ' . $range['grad_min'] . ' (' . (SALARY_GRAD_YEARS[$range['grad_min']] ?? '') . ') la gradația '
+              . $range['grad_max'] . ' (' . (SALARY_GRAD_YEARS[$range['grad_max']] ?? '') . ').'
+              . ($range['grad_min'] > 0 ? ' Minimul vine din experiența cerută în anunț.' : '');
+      }
       // The extracted section „Salarizare” repeats a stated pay that the top box already shows (when other sections remain).
       if ($stated && $schema_sections) {
           $_other = array_values(array_filter($schema_sections, fn($sec) => !in_array($sec['key'], ['baseSalary', 'salary'], true)));
@@ -537,7 +543,7 @@ require __DIR__ . '/../inc/header.php';
 
         <?php if ($proj): ?>
         <section class="py-2" data-pay-project>
-          <div class="inline-block max-w-full rounded-lg border border-info-line bg-info px-3 py-2 align-top">
+          <div class="block w-full max-w-2xl rounded-lg border border-info-line bg-info px-3 py-2">
             <p class="font-semibold text-info-ink" data-pay-project-note>Post finanțat din fonduri europene: salariul depinde de bugetul proiectului.</p>
             <?php if ($proj_pay): ?>
             <p class="mt-1 text-lg font-semibold text-ink [overflow-wrap:anywhere]" data-pay-project-figure><?= e($proj_pay['full']) ?></p>
@@ -557,7 +563,7 @@ require __DIR__ . '/../inc/header.php';
         <?php /* The salary first: a stated figure, else the estimate. */ ?>
         <?php if ($stated): ?>
         <section class="py-2" data-pay-stated>
-          <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
+          <div class="block w-full max-w-2xl rounded-lg border border-note-line bg-note px-3 py-2">
             <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
               <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink">Salariu anunțat</h2>
               <?php if ($range): ?>
@@ -596,61 +602,61 @@ require __DIR__ . '/../inc/header.php';
           </div>
         </section>
         <?php elseif ($show_sal): ?>
-        <?php /* Highlighted, as wide as its content, three rows: the figure, how it ranks, the
-           caveat with the way in to the calculation. */ ?>
+        <?php /* UX-SALARY-BOX: one fixed width; the figure, what raises it, the actions in a footer row, the caveat under the box.
+           „Cum a fost calculat” opens inside the box, so the box never changes its width. */
+        $_pl = pay_level($p);
+        // The estimator opens on the first law row of this estimate (brief UX-SALARY-ESTIMATOR, decision 7).
+        $_est_ref = ($sal['baza'] ?? '') === 'lege_in_vigoare' && salary_est_available() ? (string)(($sal['randuri'] ?? [])[0] ?? '') : '';
+        $_est_url = $_est_ref !== '' ? salary_est_row_url($_est_ref, 0, ($sal['selector']['nivel_administrativ'] ?? '') === 'local') : '';
+        ?>
         <section class="py-2">
-          <div class="inline-block max-w-full rounded-lg border border-note-line bg-note px-3 py-2 align-top">
-            <div class="flex flex-wrap items-baseline gap-x-4 gap-y-0.5">
+          <div class="block w-full max-w-2xl rounded-lg border border-note-line bg-note px-3 py-2" data-pay-estimate>
+            <div class="flex items-center justify-between gap-3">
               <h2 class="text-xs font-semibold uppercase tracking-widest text-note-ink"><?= $sbaza === 'proiect' ? 'Estimare aproximativă' : 'Salariu estimat' ?></h2>
-              <?php /* Net first: the main figure. The gross range is one smaller line below. */ ?>
-              <?php if ($decl): /* The median is the main figure; the band p25-p75 is the line below. No "la gradația 0". */ ?>
-              <p class="text-lg font-semibold text-ink" data-pay-net>≈ <?= e($decl['estimare']) ?> lei net
-                <span class="text-sm font-normal text-ink-muted">pe lună</span>
-              </p>
+              <?= $_pl ? pay_meter($p, 'pay-meter-lg') : '' ?>
             </div>
+            <?php /* Net first: the main figure. The gross range is one smaller line below. */ ?>
+            <?php if ($decl): /* The median is the main figure; the band p25-p75 is the line below. No "la gradația 0". */ ?>
+            <p class="text-lg font-semibold text-ink" data-pay-net>≈ <?= e($decl['estimare']) ?> lei net
+              <span class="text-sm font-normal text-ink-muted">pe lună</span>
+            </p>
             <p class="text-xs text-ink-muted" data-pay-gross>circa <?= e($decl['brut']) ?> lei brut</p>
             <p class="text-xs text-ink-muted" data-pay-band>Cei mai mulți primesc între <?= e($decl['p25']) ?> și <?= e($decl['p75']) ?> lei net.</p>
-              <?php else: ?>
-              <?php if ($range): ?>
-              <p class="text-lg font-semibold text-ink" data-pay-net>de la <?= e(number_format($range['net_min'], 0, ',', '.')) ?><?= $range['net_max'] > $range['net_min'] ? ' la ' . e(number_format($range['net_max'], 0, ',', '.')) : '' ?> lei net
-                <span class="text-sm font-normal text-ink-muted">/ lună</span>
-              </p>
-            </div>
+            <?php elseif ($range): ?>
+            <p class="text-lg font-semibold text-ink" data-pay-net>de la <?= e(number_format($range['net_min'], 0, ',', '.')) ?><?= $range['net_max'] > $range['net_min'] ? ' la ' . e(number_format($range['net_max'], 0, ',', '.')) : '' ?> lei net
+              <span class="text-sm font-normal text-ink-muted">/ lună</span>
+            </p>
             <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= e($range['gross']) ?> lei / lună<?= $range['detail'] !== '' ? ', ' . e($range['detail']) : '' ?></p>
-            <p class="text-xs text-ink-muted" data-pay-range-note><?= e($range_note) ?></p>
-              <?php else: ?>
-              <p class="text-lg font-semibold text-ink" data-pay-net>
-                <?= e(net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']))) ?>
-                <span class="text-sm font-normal text-ink-muted">/ lună, la gradația 0</span>
-              </p>
-            </div>
+            <p class="mt-0.5 text-xs text-ink-muted" data-pay-range-note><?= e($range_note) ?></p>
+            <?php else: ?>
+            <p class="text-lg font-semibold text-ink" data-pay-net>
+              <?= e(net_label((float)$sal['lei_min'], (float)($sal['lei_max'] ?? $sal['lei_min']))) ?>
+              <span class="text-sm font-normal text-ink-muted">/ lună, la gradația 0</span>
+            </p>
             <p class="text-xs text-ink-muted" data-pay-gross>brut: <?= (int)$sal['lei_min'] === (int)$sal['lei_max']
                 ? number_format((int)$sal['lei_min'], 0, ',', '.') : number_format((int)$sal['lei_min'], 0, ',', '.') . '–' . number_format((int)$sal['lei_max'], 0, ',', '.') ?> lei / lună, la gradația 0</p>
-              <?php endif; ?>
-              <?php endif; ?>
+            <?php endif; ?>
             <?php if ($sbaza === 'proiect'): ?>
             <p class="mt-0.5 text-xs text-ink-muted" data-pay-project-figure><?= e(SAL_PROJECT_NOTE) ?></p>
             <?php endif; ?>
+            <?php if ($_pl): ?>
+            <p class="mt-0.5 text-ink" data-pay-level="<?= (int)$_pl['level'] ?>"><?= e($_pl['text']) ?></p>
+            <?php endif; ?>
             <?php if ($draft_note !== ''): ?>
-            <p class="mt-0.5 text-xs text-ink-muted" data-pay-draft-note><a href="/estimator-salariu/" class="underline hover:text-gov"><?= e($draft_note) ?></a></p>
+            <p class="mt-2 border-t border-note-line pt-2 text-xs text-ink-muted" data-pay-draft-note><a href="/estimator-salariu/" class="underline hover:text-gov"><?= e($draft_note) ?></a></p>
             <?php endif; ?>
-            <?php if ($pl = pay_level($p)): ?>
-            <p class="mt-0.5 flex items-center gap-2 text-ink" data-pay-level="<?= (int)$pl['level'] ?>"><?= pay_meter($p, 'pay-meter-lg') ?>
-              <span><?= e($pl['text']) ?></span></p>
-            <?php endif; ?>
-            <?php /* The estimator opens on the first law row of this estimate (brief UX-SALARY-ESTIMATOR, decision 7). */
-            $_est_ref = ($sal['baza'] ?? '') === 'lege_in_vigoare' && salary_est_available() ? (string)(($sal['randuri'] ?? [])[0] ?? '') : '';
-            if ($_est_ref !== ''): ?>
-            <p class="mt-1 text-xs" data-salary-estimator-link><a href="<?= e(salary_est_row_url($_est_ref, 0, ($sal['selector']['nivel_administrativ'] ?? '') === 'local')) ?>" class="text-gov underline">Calculează cu altă gradație</a></p>
-            <?php endif; ?>
-            <div class="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-muted">
-              <p><?= e((string)($sal['disclaimer'] ?? '')) ?></p>
-              <details class="open:basis-full">
-                <summary class="cursor-pointer list-none text-xs font-semibold uppercase tracking-widest text-note-ink marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+            <?php /* Footer: the actions in one row. From sm up the link sits on the left and the summary on the right of the
+               same line (the link is absolute so that the open panel can span the full width under both). */ ?>
+            <div class="relative mt-2 border-t border-note-line pt-2 text-xs" data-pay-footer>
+              <?php if ($_est_url !== ''): ?>
+              <p class="mb-1 sm:absolute sm:left-0 sm:top-2 sm:mb-0" data-salary-estimator-link><a href="<?= e($_est_url) ?>" class="text-gov underline">Calculează cu altă gradație</a></p>
+              <?php endif; ?>
+              <details>
+                <summary class="block cursor-pointer list-none text-xs font-semibold uppercase tracking-widest text-note-ink marker:content-none hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus<?= $_est_url !== '' ? ' sm:text-right' : '' ?>">
                   Cum a fost calculat ▾
                 </summary>
                 <?php if ($decl): ?>
-                <div class="pt-2 text-sm text-ink" data-pay-explainer>
+                <div class="mt-2 border-t border-note-line pt-2 text-sm text-ink" data-pay-explainer>
                   <?php /* Copy: docs/specs/2026-11-20-salary-declared-explainer.md, section 3. */ ?>
                   <p class="mb-1 font-semibold">Cum am estimat salariul</p>
                   <ol class="mb-2 list-decimal space-y-1 pl-5">
@@ -667,53 +673,29 @@ require __DIR__ . '/../inc/header.php';
                   <p class="text-xs text-ink-muted"><strong>Surse:</strong> declarațiile de avere, prin monitorul.ai/integritate; INS, seriile FOM106D și FOM106G.
                     <a href="/estimator-salariu/#metoda-declaratii" class="text-gov underline" data-pay-method-link>Metoda pe larg →</a></p>
                 </div>
-                <?php else: ?>
-                <div class="pt-2 text-sm text-ink">
-                  <?php /* What used to be separate lines on the card: the net assumptions and the
-                     caveats on the range. They open with the calculation. */ ?>
-                  <p class="mb-1 text-xs text-ink-muted">Net: estimare cu CAS 25 %, CASS 10 %, impozit 10 % cu deducerea personală, fără persoane în întreținere.</p>
-                  <?php if (!empty($sal['avertismente'])): ?>
-                  <ul class="mb-2 space-y-0.5 text-xs text-ink-muted">
-                    <?php foreach ($sal['avertismente'] as $w): ?>
-                      <li>• <?= e((string)$w) ?></li>
+                <?php else: $_ex = salary_explainer($sal, $range, $range_note, $_est_url); ?>
+                <?php /* The raw grid rows and the variant are for debugging only: attributes, never text. */ ?>
+                <div class="mt-2 border-t border-note-line pt-2 text-sm text-ink" data-pay-law-explainer
+                     data-pay-rows="<?= e(implode(',', (array)($sal['randuri'] ?? []))) ?>" data-pay-variant="<?= e((string)($sal['varianta'] ?? '')) ?>">
+                  <ol class="mb-2 list-decimal space-y-1 pl-5">
+                    <?php foreach ($_ex['steps'] as $_i => $_st): ?>
+                    <li data-explainer-step="<?= $_i + 1 ?>"><strong><?= e($_st['head']) ?></strong> <?= e($_st['text']) ?><?php if (!empty($_st['link'])): ?>
+                      <a href="<?= e($_st['link']) ?>" class="text-gov underline"><?= e($_st['link_text']) ?></a><?php endif; ?></li>
                     <?php endforeach; ?>
+                  </ol>
+                  <?php if ($_ex['notes']): ?>
+                  <p class="mb-0.5 font-semibold">De reținut</p>
+                  <ul class="mb-1 list-disc space-y-0.5 pl-5 text-xs text-ink-muted">
+                    <?php foreach ($_ex['notes'] as $_w): ?><li><?= e($_w) ?></li><?php endforeach; ?>
                   </ul>
                   <?php endif; ?>
-                  <?php if (($sal['coef_min'] ?? null) === null): /* Law figure: the pay comes from the table of the law, there is no coefficient. */ ?>
-                  <p class="mb-2 text-xs text-ink-muted" data-pay-law-basis>Salariul de bază din tabelul Legii 153/2017, la gradația <?= (int)$sal['gradatie'] ?>.</p>
-                  <?php else: ?>
-                  <p class="mb-2 font-mono text-xs text-ink-muted">
-                    coeficient
-                    <?= e(rtrim(rtrim(number_format((float)$sal['coef_min'], 4, ',', '.'), '0'), ',')) ?><?php
-                      if ((float)$sal['coef_min'] !== (float)$sal['coef_max']): ?>–<?= e(rtrim(rtrim(number_format((float)$sal['coef_max'], 4, ',', '.'), '0'), ',')) ?><?php endif; ?>
-                    × valoare de referință <?= number_format((float)$sal['valoare_referinta'], 0, ',', '.') ?> lei
-                    × gradația <?= (int)$sal['gradatie'] ?>
-                  </p>
-                  <?php endif; ?>
-                  <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                    <?php if (!empty($sal['ocupatie'])): ?>
-                      <dt class="text-ink-muted">Ocupație</dt>
-                      <dd><?= e((string)$sal['ocupatie']) ?><?php if (!empty($sal['incredere_ocupatie'])): ?>
-                        <span class="text-ink-muted">(<?= e(OCC_CONFIDENCE_LABELS[$sal['incredere_ocupatie']] ?? (string)$sal['incredere_ocupatie']) ?>)</span>
-                      <?php endif; ?></dd>
-                    <?php endif; ?>
-                    <?php foreach ((array)($sal['selector_provenienta'] ?? []) as $field => $basis): ?>
-                      <dt class="text-ink-muted"><?= e(SELECTOR_FIELD_LABELS[$field] ?? $field) ?></dt>
-                      <dd><?= e(selector_value_label((string)$field, ($sal['selector'] ?? [])[$field] ?? '')) ?>
-                        <span class="text-ink-muted">— <?= e((string)$basis) ?></span></dd>
-                    <?php endforeach; ?>
-                    <?php if (!empty($sal['randuri'])): ?>
-                      <dt class="text-ink-muted">Rânduri din grilă</dt>
-                      <dd class="font-mono"><?= e(implode(', ', (array)$sal['randuri'])) ?></dd>
-                    <?php endif; ?>
-                    <dt class="text-ink-muted">Varianta</dt>
-                    <dd><?= e((string)$sal['varianta']) ?></dd>
-                  </dl>
                 </div>
                 <?php endif; ?>
               </details>
             </div>
           </div>
+          <?php /* The caveat: one small line under the box, not inside it. */ ?>
+          <p class="mt-1 max-w-2xl text-xs text-ink-muted" data-pay-disclaimer><?= e((string)($sal['disclaimer'] ?? '')) ?></p>
         </section>
         <?php endif; ?>
 

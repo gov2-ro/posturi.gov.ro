@@ -302,7 +302,7 @@ run_suite('deadline wording: confirmed, fallback, unknown, closed', function () 
     assert_contains('Termen neprecizat', $d1005, 'detail unknown');
     $emp = get_html($base, '/angajator/primaria-comunei-gaiceana/');
     assert_contains($note, $emp, 'employer listing fallback note');
-    assert_not_contains('(estimat)', $emp, 'employer listing: old bare qualification gone');
+    assert_contains('class="pg-salary', $emp, 'employer listing: the salary line, with its own "(estimat)" (UX-SALARY-BOX)');
     $emp3 = get_html($base, '/angajator/administratia-de-salubrizare-tunari/');
     assert_contains('Termen neprecizat', $emp3, 'employer listing unknown');
 });

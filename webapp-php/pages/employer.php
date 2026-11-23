@@ -35,11 +35,11 @@ $stmt6->execute([$eid]); $top_cat_row = $stmt6->fetch();
 $top_category = $top_cat_row ? $top_cat_row['employer_category'] : null;
 
 // Active postings (50)
-$stmt7 = db()->prepare("SELECT id, url, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND $open_sql ORDER BY apply_deadline ASC LIMIT 50");
+$stmt7 = db()->prepare("SELECT id, url, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie, inf_salary_min, inf_salary_max, sal_min, sal_max, sal_baza, sal_variant, pay_min, pay_max, pay_grad_min, pay_grad_max, pay_food_min, pay_food_max, project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote FROM job_postings WHERE employer_id = ? AND $open_sql ORDER BY apply_deadline ASC LIMIT 50");
 $stmt7->execute([$eid]); $active_postings = $stmt7->fetchAll();
 
 // Recent expired (25)
-$stmt8 = db()->prepare("SELECT id, url, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie FROM job_postings WHERE employer_id = ? AND application_status = 'closed' ORDER BY published_at DESC LIMIT 25");
+$stmt8 = db()->prepare("SELECT id, url, title, occ_canonical, judet_name, locality, published_at, expires_at, apply_deadline, job_level, job_type, categorie, inf_salary_min, inf_salary_max, sal_min, sal_max, sal_baza, sal_variant, pay_min, pay_max, pay_grad_min, pay_grad_max, pay_food_min, pay_food_max, project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote FROM job_postings WHERE employer_id = ? AND application_status = 'closed' ORDER BY published_at DESC LIMIT 25");
 $stmt8->execute([$eid]); $expired_postings = $stmt8->fetchAll();
 
 $page_title = $employer['name'];
@@ -157,7 +157,8 @@ require __DIR__ . '/../inc/header.php';
     <?php endif; ?>
 
     <!-- Listings -->
-    <div class="flex-1 min-w-0">
+    <?php /* UX-SALARY-BOX: at most the width of one row of the main list (measured: 460 px at 1280, 509 px at 1920; 32rem = 512 px). */ ?>
+    <div class="flex-1 min-w-0 max-w-lg">
       <?php if ($active_postings || $expired_postings): ?>
       <div data-pref-banner hidden class="mb-4 border border-info-line bg-info px-3 py-2 text-xs leading-snug text-info-ink">
         <p data-pref-banner-page hidden><span data-pref-banner-count></span> pe această pagină.
@@ -174,7 +175,8 @@ require __DIR__ . '/../inc/header.php';
         <?php foreach ($active_postings as $p): $dl = posting_deadline($p); $days = days_until($dl['date']); $est = $dl['source'] === 'expirare'; $dt = display_title($p); ?>
         <div class="py-3 border-b border-line last:border-0 data-[pref-hidden=true]:opacity-60"<?= pref_attrs($p, $employer['name']) ?> data-pref-hideable>
           <div class="flex items-start justify-between gap-3">
-            <div>
+            <div class="min-w-0">
+              <?php /* min-w-0: the salary line must wrap inside the row, not push the page wider. */ ?>
               <div class="leading-snug"><a href="<?= e(job_url($p)) ?>" class="font-display text-sm italic font-semibold text-ink hover:text-gov"><?= e($dt['primary']) ?></a><?= pref_controls($p) ?></div>
               <?php if ($dt['secondary']): ?>
                 <div class="text-xs not-italic text-ink-faint"><?= e($dt['secondary']) ?></div>
@@ -184,6 +186,7 @@ require __DIR__ . '/../inc/header.php';
                 <?php if ($p['job_level']): ?><span>· <?= e($p['job_level']) ?></span><?php endif; ?>
                 <?php if ($p['categorie']): ?><span>· <?= e($p['categorie']) ?></span><?php endif; ?>
               </div>
+              <?php require __DIR__ . '/../partials/pay_line.php'; ?>
               <?= pref_flag() ?>
             </div>
             <?php if ($days !== null): ?>
@@ -218,6 +221,7 @@ require __DIR__ . '/../inc/header.php';
             <?php if ($place = place_label($p)): ?><span><?= e($place) ?></span><?php endif; ?>
             <?php if ($p['expires_at']): ?><span class="font-mono">· Înscrieri închise · anunț expirat <?= fmt_date($p['expires_at']) ?></span><?php endif; ?>
           </div>
+          <?php require __DIR__ . '/../partials/pay_line.php'; ?>
           <?= pref_flag() ?>
         </div>
         <?php endforeach; ?>

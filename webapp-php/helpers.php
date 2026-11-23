@@ -1330,6 +1330,61 @@ const SELECTOR_FIELD_LABELS = [
     'anexa'               => 'Anexa',
 ];
 
+/** Years of work (vechime în muncă) of each gradation: Legea 153/2017 art. 10 alin. (4). */
+const SALARY_GRAD_YEARS = [0 => 'sub 3 ani', 1 => '3–5 ani', 2 => '5–10 ani', 3 => '10–15 ani', 4 => '15–20 ani', 5 => 'peste 20 de ani'];
+
+/**
+ * The steps of „Cum a fost calculat” for a figure under the law (UX-SALARY-BOX), in plain words: no grid refs, no
+ * "selector", no "variantă". `$seniority` is the seniority line of the page (empty or the old sentence when there is no
+ * range). Returns steps (head, text, optional link) and the remaining warnings ("De reținut").
+ * N (the grid rows the title matches) comes from `motiv` ("7 rând(uri) din Anexa II, …") and, failing that, from count(randuri).
+ *
+ * @return array{steps: list<array{head: string, text: string, link?: string, link_text?: string}>, notes: list<string>}
+ */
+function salary_explainer(array $sal, ?array $range, string $seniority, string $est_url): array {
+    $cap = static fn(string $t): string => mb_strtoupper(mb_substr($t, 0, 1)) . mb_substr($t, 1);
+    $dot = static fn(string $t): string => preg_match('/[.!?]$/u', $t) ? $t : $t . '.';
+    $steps = [];
+    if (!empty($sal['ocupatie'])) {
+        $conf = OCC_CONFIDENCE_LABELS[$sal['incredere_ocupatie'] ?? ''] ?? '';
+        $steps[] = ['head' => 'Funcția: ' . $sal['ocupatie'] . '.',
+                    'text' => 'Am dedus-o din titlul anunțului' . ($conf !== '' ? ' (' . mb_strtolower($conf) . ')' : '') . '.'];
+    }
+    foreach ((array)($sal['selector_provenienta'] ?? []) as $field => $basis) {
+        if ($field === 'anexa') continue;       // the base-pay step names the Anexa
+        $steps[] = ['head' => (SELECTOR_FIELD_LABELS[$field] ?? $field) . ': ' . selector_value_label((string)$field, ($sal['selector'] ?? [])[$field] ?? '') . '.',
+                    'text' => $dot($cap((string)$basis))];
+    }
+    $motiv = (string)($sal['motiv'] ?? '');
+    $anexa = preg_match('/Anexa\s+([IVX]+)/u', $motiv, $m) ? $m[1] : (string)(($sal['selector'] ?? [])['anexa'] ?? '');
+    $n = preg_match('/^(\d+)\s+rând/u', $motiv, $m) ? (int)$m[1] : count((array)($sal['randuri'] ?? []));
+    if (($sal['coef_min'] ?? null) !== null) {
+        $c = static fn($v): string => rtrim(rtrim(number_format((float)$v, 4, ',', '.'), '0'), ',');
+        $coef = $c($sal['coef_min']) . ((float)$sal['coef_min'] !== (float)$sal['coef_max'] ? '–' . $c($sal['coef_max']) : '');
+        $steps[] = ['head' => 'Salariul de bază:', 'text' => 'coeficientul ' . $coef . ' × valoarea de referință '
+            . number_format((float)$sal['valoare_referinta'], 0, ',', '.') . ' lei.'];
+    } else {
+        $step = ['head' => 'Salariul de bază: Legea 153/2017' . ($anexa !== '' ? ', Anexa ' . $anexa : '') . '.',
+                 'text' => $n > 1 ? "Titlul se potrivește cu $n funcții din tabelul legii. Intervalul le cuprinde pe toate." : ''];
+        if ($n > 1 && $est_url !== '') { $step['link'] = $est_url; $step['link_text'] = 'Vezi-le în estimator →'; }
+        $steps[] = $step;
+    }
+    $steps[] = $range && $range['grad_min'] !== null
+        ? ['head' => 'Gradația:', 'text' => $seniority]
+        : ['head' => 'Gradația:', 'text' => 'Am folosit gradația ' . (int)($sal['gradatie'] ?? 0) . ' (' . (SALARY_GRAD_YEARS[(int)($sal['gradatie'] ?? 0)] ?? '') . ' de vechime în muncă).'];
+    if ($range && $range['food_text'] !== '') {
+        $steps[] = ['head' => 'Indemnizația de hrană:', 'text' => $cap($range['food_text']) . '.'];
+    }
+    $steps[] = ['head' => 'Net:', 'text' => 'Din brut scădem CAS 25 %, CASS 10 % și impozitul de 10 %, cu deducerea personală. Nu am socotit persoane în întreținere.'];
+    $notes = [];
+    foreach ((array)($sal['avertismente'] ?? []) as $w) {
+        $w = (string)$w;
+        if (str_starts_with($w, 'Selectorul corespunde la') || str_starts_with($w, 'Salariul de bază din tabelul Legii 153/2017, la gradația')) continue;
+        $notes[] = $w;
+    }
+    return ['steps' => $steps, 'notes' => $notes];
+}
+
 // ---- Salary/experience buckets ----
 
 /**

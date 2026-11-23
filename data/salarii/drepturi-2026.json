@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "nota": "Drepturile bănești care se adaugă sau se limitează peste salariul de bază (ADR 0008, regula 11). O singură sursă pentru sumă, plafon și angajatorii excluși. Gradațiile sunt în parametri.json (o singură copie). Dacă legea se schimbă sau Curtea Constituțională hotărăște (dosar 57D/2026, neconfirmat), se schimbă doar aceste fișiere. Baza juridică: docs/audits/2026-11-23-salary-law-research.md.",
+  "indemnizatie_hrana": {
+    "lei": 347,
+    "plafon_net_lei": 6000,
+    "plafon_se_verifica": "la netul fără indemnizația de hrană și fără prime (Ordin MEC 3185/2026 pentru învățământ; regula nu este scrisă expres pentru alte sectoare, o extindem prin analogie)",
+    "act": "Legea 153/2017 art. 18 alin. (1), modificat prin Legea 141/2025 art. XV pct. 5",
+    "de_la": "2026-01-01",
+    "pana_la": null,
+    "observatii": "Fixă, 347 lei/lună, pentru salarii lunare de cel mult 6.000 lei net inclusiv. Fără acest drept: personalul cu alte drepturi de hrană din legislația specifică."
+  },
+  "gradatii": {
+    "sursa": "parametri.json, cheia gradatii (citită prin salary_grid.py). Valorile nu se repetă aici.",
+    "act": "Legea 153/2017 art. 10 alin. (3), (4) și (6)",
+    "de_la": "2018-01-01",
+    "pana_la": null,
+    "observatii": "Procentele 7,5 / 5 / 5 / 2,5 / 2,5 se aplică succesiv; gradația 5 înseamnă 1,2451876 × gradația 0. Se ia vechimea în muncă, nu vechimea în specialitate."
+  },
+  "angajatori_exclusi_hrana": {
+    "act": "Legea 141/2025 art. XV pct. 5 (personal cu alte drepturi de hrană potrivit legislației specifice); lista categoriilor din forma din 2023 a art. 18 alin. (1)",
+    "de_la": "2026-01-01",
+    "pana_la": null,
+    "potrivire": "Fiecare model este o expresie regulată pe numele angajatorului, scris cu litere mici, fără diacritice și fără semne (salary_grid.norm()).",
+    "reguli": [
+      {"id": "mapn", "eticheta": "Ministerul Apărării Naționale și unitățile militare",
+       "modele": ["\\bministerul apararii nationale\\b", "\\bunitatea militara\\b"]},
+      {"id": "mai", "eticheta": "Ministerul Afacerilor Interne și inspectoratele sale",
+       "modele": ["\\bministerul afacerilor interne\\b",
+                  "\\binspectoratul general (al politiei|pentru situatii de urgenta|al jandarmeriei|pentru imigrari|de aviatie)\\b",
+                  "\\binspectoratul (de politie|pentru situatii de urgenta|de jandarmi|judetean de jandarmi|judetean de politie)\\b",
+                  "\\binspectoratul teritorial al politiei de frontiera\\b",
+                  "\\bpolitia romana\\b", "\\bpolitia de frontiera\\b", "\\bjandarmeria\\b"]},
+      {"id": "anp", "eticheta": "Administrația Națională a Penitenciarelor și penitenciarele",
+       "modele": ["\\badministratia nationala a penitenciarelor\\b", "\\bpenitenciarul\\b"]},
+      {"id": "sri", "eticheta": "Serviciul Român de Informații",
+       "modele": ["\\bserviciul roman de informatii\\b"]},
+      {"id": "sie", "eticheta": "Serviciul de Informații Externe",
+       "modele": ["\\bserviciul de informatii externe\\b"]},
+      {"id": "spp", "eticheta": "Serviciul de Protecție și Pază",
+       "modele": ["\\bserviciul de protectie si paza\\b"]},
+      {"id": "sts", "eticheta": "Serviciul de Telecomunicații Speciale",
+       "modele": ["\\bserviciul de telecomunicatii speciale\\b"]},
+      {"id": "anrsps", "eticheta": "Administrația Națională a Rezervelor de Stat și Probleme Speciale",
+       "modele": ["\\badministratia nationala a rezervelor de stat\\b"]}
+    ]
+  },
+  "nu_includem": "Biletele de vacanță (800 lei/an, doar până la 31.12.2026, Legea 141/2025 art. XLIV) și orice primă."
+}

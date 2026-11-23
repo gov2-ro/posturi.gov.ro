@@ -61,6 +61,7 @@ if str(ROOT) not in sys.path:
 
 import declaratii  # noqa: E402  (declared pay: Groups.employer(), estimate_dict())
 import salary_grid  # noqa: E402  (the one pay formula: Grid.row_pay(), ADR 0008)
+import salary_pay  # noqa: E402  (gradation range and food allowance, ADR 0008 rule 11)
 import classify  # noqa: E402  (deterministic labels from the posting's words, 261016)
 import evidence  # noqa: E402  (pure quote locator: where an extracted requirement comes from)
 import posting_roles  # noqa: E402  (pure role read model, shared with later history work)
@@ -310,7 +311,17 @@ CREATE TABLE job_postings (
     proj_hours_month        REAL,
     proj_pay_quote          TEXT NOT NULL DEFAULT '',
     -- 2026-11-23 (SALARY-EU-CAP): the programme the post names, 'pids' | 'peo' | NULL; set only when project_hire = 1.
-    proj_programme          TEXT
+    proj_programme          TEXT,
+    -- 2026-11-23 (SALARY-GRAD-FOOD, ADR 0008 rule 11): the pay range of the law in force: from the floor
+    -- gradation to gradation 5, plus the food allowance. pay_min/pay_max are the TOTAL gross (base + food) of
+    -- the low and the high end; the others say how: gradation (NULL for the cap of a local range), food (0 or
+    -- 347). All NULL when rule 11 does not apply (salary_pay.pay_range()); the old figure then stays.
+    pay_min                 REAL,
+    pay_max                 REAL,
+    pay_grad_min            INTEGER,
+    pay_grad_max            INTEGER,
+    pay_food_min            INTEGER,
+    pay_food_max            INTEGER
 );
 
 CREATE INDEX idx_jp_employer   ON job_postings(employer_id);
@@ -761,6 +772,8 @@ def export(pg, con: sqlite3.Connection, active_only: bool = False):
             deadline["date"], deadline["source"],
             _application_status(deadline, today),
             *proj,
+            *(salary_pay.columns(None) if hire else _pay_range_columns(
+                inferred, r["salary_estimate"], r["employer_name"])),
         ))
         total += 1
         if len(batch) >= 500:
@@ -1700,6 +1713,40 @@ def _stated_salary(inferred: dict) -> tuple:
     return lo, hi
 
 
+def _pay_range_columns(inferred: dict, salary_json_text, employer_name: str | None) -> tuple:
+    """The six `pay_*` columns of one posting (ADR 0008 rule 11), all None when the rule does not apply.
+
+    The stated pay (same test as the export of `inf_salary_min`) comes first, as in `SALARY_EXPR`;
+    else the estimate, when `salary_pay.estimate_source()` says it is a figure of the law in force.
+    """
+    years = inferred.get("experience_years")
+    try:
+        years = float(years) if years is not None else None
+    except (TypeError, ValueError):
+        years = None
+    lo, hi = _stated_salary(inferred)
+    if lo is not None:
+        try:
+            lo = float(lo)
+            hi = float(hi) if hi is not None else None
+        except (TypeError, ValueError):
+            return salary_pay.columns(None)
+        return salary_pay.columns(salary_pay.pay_range("stated", lo, hi, years=years, employer=employer_name))
+    if not salary_json_text:
+        return salary_pay.columns(None)
+    try:
+        est = json.loads(salary_json_text)
+    except (json.JSONDecodeError, TypeError):
+        return salary_pay.columns(None)
+    source = salary_pay.estimate_source(est)
+    if not source:
+        return salary_pay.columns(None)
+    grid = salary_grid.load_grid(salary_grid.LAW_VERSION)
+    return salary_pay.columns(salary_pay.pay_range(
+        source, est["lei_min"], est.get("lei_max"), years=years, employer=employer_name,
+        local=salary_pay.is_local_range(est), figure_at=salary_pay.law_figure_at(est, grid), grid=grid))
+
+
 def _salary_columns(salary_json_text) -> dict:
     """Flatten `JobPosting.salary_estimate` into sortable columns.
 
@@ -1999,7 +2046,8 @@ def _insert_postings(con: sqlite3.Connection, batch: list):
         work_mode, funding_kind, job_regime, employer_kind, occ_group, med_specialty,
         quality, quality_json,
         apply_deadline, deadline_source, application_status,
-        project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote, proj_programme"""
+        project_hire, proj_pay_amount, proj_pay_unit, proj_pay_basis, proj_hours_month, proj_pay_quote, proj_programme,
+        pay_min, pay_max, pay_grad_min, pay_grad_max, pay_food_min, pay_food_max"""
     # One source of truth for the column list: the placeholders are generated
     # from it, so the column count and the value count cannot drift apart
     # (they did twice while this was hand-maintained `?` strings).

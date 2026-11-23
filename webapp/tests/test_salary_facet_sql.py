@@ -75,8 +75,9 @@ class TestPhpCallSites:
 
     def test_the_expression_is_defined_once(self, sources):
         # 2026-11-19: a CASE on project_hire; every other post keeps the old precedence.
+        # 2026-11-23 (ADR 0008 rule 11): the range of the law in force, pay_min, comes first.
         assert sources["helpers.php"].count("const SALARY_EXPR = ") == 1
-        assert "' ELSE COALESCE(j.inf_salary_min, j.sal_min) END'" in sources["helpers.php"]
+        assert "' ELSE COALESCE(j.pay_min, j.inf_salary_min, j.sal_min) END'" in sources["helpers.php"]
 
     @pytest.mark.parametrize("name", ["helpers.php", "pages/list.php"])
     def test_every_salary_comparison_casts_its_bind(self, sources, name):

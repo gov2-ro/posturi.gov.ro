@@ -6,6 +6,8 @@ the needed columns into `data/org/employer-org.csv`, and `export-to-sqlite.py` r
 
 Keeps only the rows with `status` `linked` or `linked_no_cif`. Never keeps `unmatched`: its
 `org_url` points to a proposed `P` record that nobody reviewed. Never copies `candidate_cifs`.
+The rule is `status`, not the id prefix: a `linked` row can point to a `P` record whose CIF org
+curated from SEAP evidence (ciulei, 2026-11-23). That record is reviewed, so it is kept.
 Rejects a row when `cif` is not digits only, or when `org_url` does not start with
 `https://org.gov2.ro/`. Prints the counts per status and the number of rejected rows.
 
@@ -39,7 +41,7 @@ def build(rows):
         url = (r.get("org_url") or "").strip()
         slug = (r.get("slug") or "").strip()
         org_id = (r.get("org_id") or "").strip()
-        ok = (slug and org_id and not org_id.startswith("P") and url.startswith(URL_PREFIX)
+        ok = (slug and org_id and url.startswith(URL_PREFIX)
               and (cif == "" or cif.isdigit()) and (status == "linked_no_cif" or cif != ""))
         if not ok:
             rejected.append(r)
@@ -71,8 +73,7 @@ def main(argv=None) -> int:
     print(f"skipped by status: {dict(skipped)}")
     print(f"rejected: {len(rejected)}")
     for r in rejected[:20]:
-        why = ("org_id is a proposed P record" if (r.get("org_id") or "").startswith("P")
-               else "cif is not digits, or org_url is not on org.gov2.ro")
+        why = "no slug or org_id, cif is not digits, or org_url is not on org.gov2.ro"
         print(f"  rejected {r.get('slug')} ({r.get('status')}): {why}", file=sys.stderr)
     print(f"wrote {len(kept)} rows to {out}")
     return 0

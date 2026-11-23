@@ -5,17 +5,17 @@
 ### 2026-11-23 — DATA-ORG-06: CUI and org.gov2.ro link on the employer page (Sonnet, from the Opus brief)
 
 **Done**
-- `ops/build-employer-org.py` copies the ciulei crosswalk (`e314ded`, org v0.69.0) into `data/org/employer-org.csv`: 6,408 `linked` + 228 `linked_no_cif` = 6,636 rows; 985 `unmatched` skipped by status; 9 rejected.
+- `ops/build-employer-org.py` copies the ciulei crosswalk (`e314ded`, org v0.69.0) into `data/org/employer-org.csv`: 6,417 `linked` + 228 `linked_no_cif` = 6,645 rows; 985 `unmatched` skipped by status; 0 rejected (after the Opus review, see Decided).
 - `export-to-sqlite.py` writes `employer_org(employer_id, org_id, cif, org_url)` by `employers.slug`. `ops/check-export.py` has a soft rule `employer_org` (warning when the table is empty).
-- The employer page shows „CUI … · Fișa instituției pe org.gov2.ro →” under the name (helper `webapp-php/inc/employer_org.php`; tokens `g2-text-meta`, `g2-link-quiet`). Test: `webapp-php/tests/employer_org_test.php` (33 assertions).
-- Match counts. (a) Export on the local Postgres (September copy): 5,215 of 6,636 snapshot rows match an employer, 1,421 do not. (b) The snapshot on `employers.slug` of `data/_dev/full-2026-11-23.sqlite`: 6,636 of 6,636.
+- The employer page shows „CUI … · Fișa instituției pe org.gov2.ro →” under the name (helper `webapp-php/inc/employer_org.php`; tokens `g2-text-meta`, `g2-link-quiet`). Test: `webapp-php/tests/employer_org_test.php` (29 assertions after the review).
+- Match counts. (a) Export on the local Postgres (September copy), before the review: 5,215 of 6,636 snapshot rows match an employer, 1,421 do not. (b) The snapshot on `employers.slug` of `data/_dev/full-2026-11-23.sqlite`, after the review: 6,645 of 6,645, 9 of them `P` ids.
 
 **Hard**
-- The brief expects 6,645 rows. The crosswalk has 9 `linked` rows whose `org_id` is a proposed `P` record (each has a CIF, empty `link_tier`). The brief also says that no `P` record reaches the snapshot. The script rejects the 9: 6,645 - 9 = 6,636. Ciulei must say whether `status = linked` may point to a `P` record.
+- The brief expects 6,645 rows. The crosswalk has 9 `linked` rows whose `org_id` is a proposed `P` record (each has a CIF, empty `link_tier`). The brief also says that no `P` record reaches the snapshot. The script rejects the 9: 6,645 - 9 = 6,636. Ciulei answered: yes. Each of the 9 is a proposed record whose CIF org curated from a SEAP authority (`curation/identities.csv`, `cif_source = curation`). A curated identity keeps its `P` id, so these 9 stay `P`.
 
 **Decided**
-- The `P` rule wins over the count of 6,645. Cost of the alternative: nine pages would link to an unreviewed record.
-- The page helper repeats two checks (host `https://org.gov2.ro/`, no `P` id) although the snapshot has them. Cost: two lines. It keeps a bad row from becoming a public link.
+- Sonnet first rejected the 9 (the brief said „no `P` record”). Opus review: the brief meant „no unreviewed record”, and `status` is the ciulei contract. So the script and the page key on `status` only, and the 9 are kept. Cost of the alternative: nine reviewed institutions show no CUI, and the rule would differ from the ciulei contract.
+- The page helper repeats the host check (`https://org.gov2.ro/`) although the snapshot has it. Cost: one line. It keeps a bad row from becoming a public link.
 
 ---
 

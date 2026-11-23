@@ -90,3 +90,5 @@ Stage by path; never `git add -A`, stash or reset.
   after each ciulei rebuild.
 - The crosswalk contract is `status`: a consumer never links a row with status `unmatched`.
   Ciulei keeps `org_url` for those rows, so the snapshot script must filter on `status`.
+- Amended at review (2026-11-23): „no `P` record” in Acceptance means no unreviewed record. A
+  `linked` row can point to a `P` id whose CIF org curated (9 rows); it is kept.

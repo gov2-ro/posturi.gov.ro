@@ -804,7 +804,7 @@ so the page must send 401, not 403, or the browser shows no login prompt.)
 The employer page shows the CUI and a link to the record on org.gov2.ro, when the employer has a verified link. The source is the ciulei crosswalk. The pipeline runs on the VPS, and ciulei is on the Mac only. So a snapshot is committed.
 
 - Rebuild the snapshot on the Mac after each ciulei rebuild: `ops/build-employer-org.py --from ../ciulei/data/posturi-org/crosswalk.csv`. Then commit `data/org/employer-org.csv` (`git add -f`, because `data/*` is ignored).
-- The script keeps only `linked` and `linked_no_cif` rows. It never keeps `unmatched` rows, proposed `P` records or `candidate_cifs`.
+- The script keeps only `linked` and `linked_no_cif` rows. It never keeps `unmatched` rows or `candidate_cifs`. The rule is `status`, not the id prefix: a `linked` row can point to a `P` record whose CIF org reviewed (9 rows in ciulei `e314ded`).
 - `export-to-sqlite.py` joins the snapshot on `employers.slug` and writes `employer_org`. A missing snapshot gives an empty table and a warning. `ops/check-export.py` warns (soft) when the table is empty.
 - An employer with no row shows nothing new.
 

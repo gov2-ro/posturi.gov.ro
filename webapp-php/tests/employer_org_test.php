@@ -2,8 +2,8 @@
 /**
  * DATA-ORG-06 — the CUI and the org.gov2.ro link on the employer page (brief 2026-11-23).
  *
- * Checked: CUI and link; link only; nothing (no row); nothing for a `P` record or a foreign host; no table
- * (an older export); and ops/build-employer-org.py (no `unmatched` row, no `P` record, no candidate CUI,
+ * Checked: CUI and link; link only; a reviewed `P` record with a CUI; nothing (no row) or a foreign host; no table
+ * (an older export); and ops/build-employer-org.py (no `unmatched` row, a `linked` P record kept, no candidate CUI,
  * bad CIF and bad URL rejected).
  *
  * Usage: php tests/employer_org_test.php
@@ -61,13 +61,19 @@ run_suite('link only, when there is no CUI', function () use ($srv) {
     assert_not_contains('CUI', $h, 'no CUI');
 });
 
-run_suite('nothing, when there is no row, a P record or a foreign host', function () use ($srv) {
-    foreach (['administratia-de-salubrizare-tunari', 'angajator-propus', 'angajator-strain'] as $slug) {
+run_suite('a reviewed P record shows the CUI and the link', function () use ($srv) {
+    [$code, $h] = eo_get($srv['base'], '/angajator/angajator-propus/');
+    assert_same(200, $code, 'status');
+    assert_contains('CUI 12345678', $h, 'the CUI');
+    assert_contains('href="https://org.gov2.ro/#id=Pangajator-propus"', $h, 'the link');
+});
+
+run_suite('nothing, when there is no row or a foreign host', function () use ($srv) {
+    foreach (['administratia-de-salubrizare-tunari', 'angajator-strain'] as $slug) {
         [$code, $h] = eo_get($srv['base'], "/angajator/$slug/");
         assert_same(200, $code, "$slug status");
         assert_not_contains('data-employer-org', $h, "$slug: no line");
         assert_not_contains('Fișa instituției pe org.gov2.ro', $h, "$slug: no label");
-        assert_not_contains('12345678', $h, "$slug: no CUI");
         assert_not_contains('evil.example', $h, "$slug: no foreign link");
     }
 });
@@ -97,13 +103,13 @@ run_suite('ops/build-employer-org.py keeps only verified rows', function () {
     fclose($fh);
     $script = escapeshellarg(__DIR__ . '/../../ops/build-employer-org.py');
     $out = shell_exec("python3 $script --from " . escapeshellarg("$dir/crosswalk.csv") . " --out " . escapeshellarg("$dir/out.csv") . " 2>&1");
-    assert_contains('rejected: 3', (string)$out, 'three rows rejected (P record, bad CIF, bad URL)');
+    assert_contains('rejected: 2', (string)$out, 'two rows rejected (bad CIF, bad URL)');
     $lines = array_map('trim', file("$dir/out.csv"));
     assert_same('slug,status,org_id,cif,org_url', $lines[0], 'header');
-    assert_same(['a-nocif', 'b-ok', 'g-cand'], array_map(fn($l) => explode(',', $l)[0], array_slice($lines, 1)), 'sorted by slug; verified rows only');
+    assert_same(['a-nocif', 'b-ok', 'd-proposed', 'g-cand'], array_map(fn($l) => explode(',', $l)[0], array_slice($lines, 1)), 'sorted by slug; verified rows only');
     $all = implode("\n", $lines);
     assert_not_contains('Pc', $all, 'no unmatched row');
-    assert_not_contains('Pd', $all, 'no P record');
+    assert_contains('Pd', $all, 'a linked P record is kept');
     assert_not_contains('999', $all, 'no candidate CUI');
     assert_not_contains('777', $all, 'no candidate CUI (linked_no_cif)');
     array_map('unlink', glob("$dir/*"));

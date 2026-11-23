@@ -93,6 +93,10 @@ jobs:
         working-directory: webapp-php
         run: php tests/request_test.php
 
+      - name: Search phrases (fts_query)
+        working-directory: webapp-php
+        run: php tests/fts_query_test.php
+
       - name: Discovery filters and status wording (UX-01A)
         working-directory: webapp-php
         run: php tests/discovery_test.php

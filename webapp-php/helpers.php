@@ -2924,18 +2924,40 @@ function facet_counts(
  *
  * Returns '' when the query has no usable terms; callers must then skip the
  * MATCH clause entirely rather than pass an empty expression to SQLite.
+ *
+ * A part in quotes ("manager proiect", „manager proiect”) is one FTS5 phrase: its
+ * words must be adjacent and in order. Without this, a quoted search matched any
+ * posting with both words anywhere in its text (owner report, 2026-11-24).
+ * The prefix wildcard applies to a trailing unquoted term only.
  */
 function fts_query(string $q): string {
-    $terms = preg_split('/[^\p{L}\p{N}]+/u', $q, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    if (!$terms) return '';
+    $words = static fn(string $t): array => preg_split('/[^\p{L}\p{N}]+/u', $t, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $quote = static fn(string $w): string => '"' . str_replace('"', '""', $w) . '"';
 
-    $terms = array_slice($terms, 0, 12); // cap pathological input
-    $last  = count($terms) - 1;
+    // Split into quoted phrases and loose text; an unclosed quote counts as loose text.
+    $items = [];   // [kind, words]: kind 'phrase' or 'term'
+    $rest  = preg_replace_callback('/["„“”]([^"„“”]*)["„“”]/u', static function ($m) use (&$items, $words) {
+        $w = $words($m[1]);
+        if (count($w) > 1) $items[] = ['phrase', $w];
+        elseif ($w) $items[] = ['term', $w];
+        return ' ';
+    }, $q);
+    $loose = $words($rest);
+    if (!$items && !$loose) return '';
+
     $parts = [];
-    foreach ($terms as $i => $term) {
-        $quoted = '"' . str_replace('"', '""', $term) . '"';
+    $budget = 12; // cap pathological input
+    foreach ($items as [$kind, $w]) {
+        $w = array_slice($w, 0, $budget);
+        $budget -= count($w);
+        if ($w) $parts[] = $kind === 'phrase' ? $quote(implode(' ', $w)) : $quote($w[0]);
+        if ($budget <= 0) break;
+    }
+    $loose = array_slice($loose, 0, max(0, $budget));
+    $last  = count($loose) - 1;
+    foreach ($loose as $i => $term) {
         // Single letters make useless prefixes ("a*" matches half the corpus).
-        $parts[] = ($i === $last && mb_strlen($term) >= 2) ? $quoted . ' *' : $quoted;
+        $parts[] = ($i === $last && mb_strlen($term) >= 2) ? $quote($term) . ' *' : $quote($term);
     }
     return implode(' AND ', $parts);
 }

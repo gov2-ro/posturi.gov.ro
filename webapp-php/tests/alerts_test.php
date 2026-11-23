@@ -23,6 +23,7 @@ $made = make_alerts_dir($dir);
 $pair = $made['pair'];
 putenv('ALERTS_DIR=' . $dir);
 
+require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../query.php';
 require_once __DIR__ . '/../inc/alerts.php';
 
@@ -225,7 +226,32 @@ function http(string $base, string $method, string $path, array $form = []): arr
 
 $db_path = $tmp . '/posturi.sqlite';
 build_fixture_db($db_path);
+putenv('POSTURI_DB=' . $db_path);      // db() of this process: the employer checks below read the employers table
 putenv('ALERTS_DIR=' . $dir);
+
+// UX-FOLLOW-EMP: the key of a followed employer is `employer=<slug>` (search_key() of that one filter).
+run_suite('an employer key: accepted for a known slug, refused for an unknown one', function () use ($pair) {
+    $slug = 'spitalul-clinic-judetean-cluj';
+    assert_same('employer=' . $slug, search_key(['employer' => $slug]), 'the key of the employer filter');
+    assert_true(al_parse_key('employer=' . $slug, true) !== null, 'a known slug passes the subscribe check');
+    assert_same(null, al_parse_key('employer=nu-exista', true), 'an unknown slug is refused at subscribe time');
+    assert_same(null, al_parse_key('employer=', true), 'an empty slug is no key');
+    assert_true(al_parse_key('employer=nu-exista') !== null, 'the digest run does not look at the employers table: the key stays valid, the digest stays quiet');
+    assert_true(al_parse_key('employer=' . $slug . '&judet%5B%5D=cluj', true) !== null, 'an employer plus a county is still a canonical key');
+
+    $pdo = al_db();
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM subscriptions")->fetchColumn();
+    $ob = count(outbox_plain($pdo, $pair));
+    assert_same('invalid-key', al_subscribe($pdo, sub_in('employer=nu-exista', 'emp@example.com', ['nume' => 'Nimeni']), '1.2.3.4'), 'an unknown employer is refused');
+    assert_same($before, (int)$pdo->query("SELECT COUNT(*) FROM subscriptions")->fetchColumn(), 'a refusal stores no row');
+    assert_same($ob, count(outbox_plain($pdo, $pair)), 'a refusal queues no email');
+    assert_same('sent', al_subscribe($pdo, sub_in('employer=' . $slug, 'emp@example.com', ['nume' => 'Spitalul Clinic Județean Cluj']), '1.2.3.4'), 'a known employer is accepted');
+    $row = $pdo->query("SELECT search_key, label FROM subscriptions WHERE email_index = '" . al_email_index('emp@example.com') . "'")->fetch();
+    assert_same('employer=' . $slug, $row['search_key'], 'the key is stored as given');
+    assert_same('Spitalul Clinic Județean Cluj', $row['label'], 'the employer name is the label');
+    $pdo->exec("DELETE FROM subscriptions WHERE email_index = '" . al_email_index('emp@example.com') . "'");
+    $pdo->exec("DELETE FROM outbox");
+});
 $srv = start_fixture_server($db_path);
 $base = $srv['base'];
 
@@ -341,6 +367,22 @@ run_suite('bin/ is not web-requestable', function () use ($base) {
     assert_true(str_contains(file_get_contents(__DIR__ . '/../bin/alerts.php'), "PHP_SAPI !== 'cli'"), 'the script refuses a non-CLI SAPI');
 });
 
+run_suite('the subscribe form for an employer key', function () use ($base) {
+    $slug = 'spitalul-clinic-judetean-cluj';
+    $href = fn(string $key, string $name) => '/alerte/abonare/?cheie=' . rawurlencode($key) . '&sort=&nume=' . rawurlencode($name);
+    [$st, $body] = http($base, 'GET', $href('employer=' . $slug, 'Spitalul Clinic Județean Cluj'));
+    assert_same(200, $st, 'the form opens for a known employer');
+    assert_contains('Spitalul Clinic Județean Cluj', $body, 'the label is the employer name');
+    assert_contains('name="cheie" value="employer=' . $slug . '"', $body, 'the key goes into the form');
+    [$st] = http($base, 'GET', $href('employer=nu-exista', 'Nimeni'));
+    assert_same(400, $st, 'the form refuses an unknown employer');
+    // The link on the employer page is the same shape as the link of a saved search.
+    [$st, $page] = http($base, 'GET', '/angajator/' . $slug . '/');
+    assert_same(200, $st, 'the employer page opens');
+    assert_contains('href="' . $href('employer=' . $slug, 'Spitalul Clinic Județean Cluj') . '"', str_replace('&amp;', '&', $page), 'the employer page links to the form');
+    assert_contains('data-employer-follow', $page, 'the follow toggle is on the employer page');
+});
+
 stop_fixture_server($srv, $db_path);
 
 // ---- Command line ----
@@ -447,6 +489,24 @@ run_suite('bin/alerts.php candidates: postings created after "since"', function 
     assert_same(0, $j['candidates'][0]['total'], 'nothing after a later since');
     [$j, $code] = cli($cdir, $db, ['candidates'], 'not json');
     assert_same(1, $code, 'bad stdin fails');
+
+    // UX-FOLLOW-EMP: an employer key needs no new matching code; the host asks the same list filter.
+    al_subscribe($pdo, sub_in('employer=spitalul-clinic-judetean-cluj', 'emp@example.com', ['nume' => 'Spitalul Clinic Județean Cluj']), '6.6.6.7');
+    foreach (outbox_plain($pdo, $c['pair']) as $o) {
+        $row = al_auth($pdo, $o['subscription_id'], $o['token']);
+        if ($row && $row['status'] === 'pending') al_confirm($pdo, $row);
+    }
+    $id3 = (int)$pdo->query("SELECT id FROM subscriptions WHERE search_key = 'employer=spitalul-clinic-judetean-cluj'")->fetchColumn();
+    [$j, $code] = cli($cdir, $db, ['candidates'], json_encode([['id' => $id3, 'since' => '2026-10-02T05:30:00Z']]));
+    assert_same(0, $code, 'candidates exits 0 for an employer key');
+    $ids = array_column($j['candidates'][0]['items'] ?? [], 'id');
+    sort($ids);
+    assert_same([1001, 1006], $ids, 'the employer: its two postings created after since (1007 is older)');
+    // An employer that left the export: the key stays valid and the answer is empty, not an error.
+    $pdo->prepare("UPDATE subscriptions SET search_key = 'employer=a-plecat' WHERE id = ?")->execute([$id3]);
+    [$j, $code] = cli($cdir, $db, ['candidates'], json_encode([['id' => $id3, 'since' => '2026-10-02T05:30:00Z']]));
+    assert_same(0, $code, 'a vanished employer: exit 0');
+    assert_same(0, $j['candidates'][0]['total'] ?? -1, 'a vanished employer: nothing to send');
     @unlink($db);
     putenv('ALERTS_DIR=' . $GLOBALS['dir']);
 });

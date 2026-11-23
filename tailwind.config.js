@@ -17,7 +17,7 @@
 const c = (v) => `rgb(var(--c-${v}) / <alpha-value>)`;
 
 module.exports = {
-  content: ["./webapp-php/**/*.php", "./webapp-php/static/saved.js"],
+  content: ["./webapp-php/**/*.php", "./webapp-php/static/saved.js", "./webapp-php/static/flux.js"],
   theme: {
     fontFamily: {
       display: "var(--font-display)",

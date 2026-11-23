@@ -2,6 +2,42 @@
 
 ## 2026
 
+### 2026-11-23 — UX-FOLLOW-EMP and UX-SALVATE-FLUX: followed employers, employer alerts, the Flux tab (Sonnet, from the Opus brief)
+
+**Done**
+- Part A. `static/employers.js` holds `posturi.employers.v1` (`{version:1, employers:[{slug,name,addedAt}]}`, cap 10; a full list refuses the 11th and drops nothing). The employer page has the toggle „Urmărește angajatorul” / „Nu mai urmări” (hidden without JavaScript) and the link „Alertă pe email” (always shown) to `/alerte/abonare/?cheie=employer%3D<slug>&sort=&nume=<name>`. The navbar count is saved jobs + searches + employers (`saved.js` `renderNav`).
+- Alerts, server. `al_parse_key($key, true)` checks the slug in `employers` when the key has `employer=`; `al_subscribe()` and the subscribe page pass the flag. An unknown slug gives `invalid-key` and a 400. `bin/alerts.php` does not pass the flag: a subscription whose employer left the export stays valid and sends nothing. No change to ADR 0003, the subscriptions schema, `ops/alerts.py`, or the email template.
+- Part B. `/salvate/` has three tabs from `?vedere=`: none = Flux, `liste` (also the old `notite` and `cautari`) = Liste, `ascunse` = Ascunse. Liste order: alerts block, Căutări salvate, Angajatori urmăriți, Anunțuri salvate, Gestionare (new button „Șterge angajatorii urmăriți”, same confirm pattern). `data-view-tab` values: `flux`, `saved` (Liste), `hidden`.
+- Part C. `GET /flux.json?s[]=&e[]=&id[]=` (`feeds/flux.json.php`, routed before the query decoder like `/preferinte-posturi.json`). Caps 4/10/20 give 400. Each search key and each employer goes through `build_filters()`; the saved ids are returned only when open. Output `{today, rows, sources}`. 100 rows per source, 300 in all, newest first, one row per posting with `src` indices. `truncated` is `total > rows returned for that source`. `static/flux.js` draws the stats, chips, sort switch and cards (25 to a page). `Disallow: /flux.json` in `robots.txt`.
+- Tests: `tests/flux_test.php` (103 assertions), `tests/alerts_test.php` (+11), `tests/preferences_test.php` (updated), `tests/browser/flux.spec.js` (21 tests at 3 widths). The specs of saved, searches, notes and toc now open `/salvate/?vedere=liste`, where they used `/salvate/`.
+
+**Measured**
+- Fixture, 4 searches + 10 employers + 4 ids: 3–4 ms, 37 rows (Playwright, `responseEnd` minus `requestStart`).
+- Local export (the 9 Sep copy, `POSTURI_TODAY=2026-09-09`, 1,848 open postings), 4 searches (two counties, one family, one text) + the 10 employers with most postings + 20 saved ids: first request 178 ms (cold), then 41–42 ms; 300 rows, 153 KB uncompressed. Row count per source: searches 140, 41, 382, 626 (all truncated); employers 34 down to 8; saved 20.
+- Browser suites at 320, 375 and 1280 px (saved, searches, alerts, notes, toc, flux, compact, ds, home): 437 passed, 16 skipped, 3 failed. The 3 failures are `alerts.spec.js:54` (TEST-ALERTS-PRIVACY-LINK, failing before this work; baseline of saved + searches + alerts was 129 passed, 3 failed).
+- PHP: every `tests/*_test.php` passes except `theme_test.php` (one assertion, the health-icons sprite: fails on `main` too).
+- An employer-only digest (fixture, `bin/alerts.php candidates` then `ops/alerts.py build_digest`): subject „2 anunțuri noi: Spitalul Clinic Județean Cluj”; the link „Căutarea ta” goes to `/?employer=spitalul-clinic-judetean-cluj`. The template reads well; no change.
+
+**Hard**
+- The old-export compatibility: my first `/flux.json` named its columns (`j.sal_max`) and failed on the 9 Sep copy. It now selects `j.*`, like `feed_rows()`.
+- A hand-made string such as `garbage` parses to „no filter” and listed every posting. The endpoint now takes only a canonical key (`search_key($params) === $key`), as `al_parse_key()` does. Anything else is a source with `unknown: true`.
+- Saving a posting in the Flux must not redraw the list: `onPref()` in `saved.js` reads whether the row is still in the page after the update, and would show an undo notice. The Flux redraws only when the set of hidden postings changes (event `posturi:prefs-changed`).
+- At 320 px the two employer buttons in one `.follow-group` overflowed the page by 15 px. They are now two groups in a wrapping row.
+
+**Decided**
+- A followed employer is a separate store, not a search slot (pax, in the brief). Cost of the alternative: 10 employers would use the 4 search slots.
+- The slug check is at subscribe time only. Cost of checking in the digest too: a merged or removed employer would make `candidates` fail instead of staying quiet.
+- `status` in a saved key: the Flux forces the open default. `status=soon` and `status=unknown` keep their meaning (subsets of open). `status=closed` selects nothing. Cost of forcing all of them: a saved search of closed postings would list every open posting.
+- `domain` in the stats is `inf_profession_family` (one value per posting, the „Domeniu profesional” of the chips). The policy domain (`v3_policy_domains`) is a list; it would count a posting several times.
+- The salary stat uses the figure of the list card (stated, else estimated), net, and skips under 1.000 lei gross (an hourly rate). Cost of „stated only”: 44 of 9,757 postings state a salary; the block would almost never show.
+- „Today” for „new” and „closing” comes from the server (`today` in the answer): one clock for the page and the tests.
+- `/salvate/` links elsewhere (navbar, „Vezi salvatele”) keep the address `/salvate/`; it opens Flux, which includes the saved postings.
+
+**Assumed**
+- The `source_url` field was added to each row (the brief lists no such field): `saved.js` identifies a posting by its official URL, so a card cannot save or hide without it.
+- `tailwind.config.js` scans `static/flux.js` now (one entry), so the classes of the generated stat tiles are built. `static/app.css` is rebuilt with `npm run css`.
+- No DS proposal issue was opened for the tabs; they were local before this work.
+
 ### 2026-11-23 — SALARY-EU-CAP: the guide cap as context on project posts (Sonnet, from the Opus brief)
 
 **Done**

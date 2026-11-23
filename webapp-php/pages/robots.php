@@ -15,6 +15,7 @@ Disallow: /*?
 
 # Browser-local lists: the page is the same for everyone and holds no content.
 Disallow: /salvate/
+Disallow: /flux.json
 
 # Admin pages (basic auth). No public page links here.
 Disallow: /admin/

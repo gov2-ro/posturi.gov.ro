@@ -93,7 +93,7 @@ test('/salvate/: noted postings listed with saved ones, edit in place, CSV expor
   await row(page, 1001).locator('[data-note-editor] textarea').fill('Salariu: 4.100, nu 5.200; vezi anexa, rândul 3.');
   await row(page, 1001).locator('[data-note-save]').click();
 
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-saved-list] li')).toHaveCount(2);
   const noted = page.locator('[data-saved-list] li[data-pref-id="1001"]');
   await expect(noted.locator('[data-f="user-note"]')).toContainText('vezi anexa');
@@ -108,7 +108,7 @@ test('/salvate/: noted postings listed with saved ones, edit in place, CSV expor
   await expect(page.locator('[data-saved-list] li[data-pref-id="1001"] [data-f="user-note"]')).toContainText('rândul 3');
 
   // CSV: both saved and noted, UTF-8 with a BOM, quoted where needed.
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('[data-export-csv]').click()]);
   expect(dl.suggestedFilename()).toMatch(/^posturi-salvate-\d{8}\.csv$/);
   const csv = fs.readFileSync(await dl.path(), 'utf8');

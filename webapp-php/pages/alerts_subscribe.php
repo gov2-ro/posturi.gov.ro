@@ -26,7 +26,7 @@ $error = '';
 if (!al_enabled()) {
     http_response_code(503);
     $state = 'unavailable';
-} elseif (al_parse_key($key) === null) {
+} elseif (al_parse_key($key, true) === null) {
     http_response_code(400);
     $state = 'bad-key';
 } elseif ($is_post) {

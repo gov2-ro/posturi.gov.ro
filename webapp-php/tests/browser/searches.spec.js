@@ -166,7 +166,7 @@ test('navbar count is saved jobs + saved searches, across save, delete and tabs'
   // Another tab: a delete there updates this one through the storage event.
   const other = await context.newPage();
   other.on('pageerror', (e) => pageErrors.get(page).push(e.message));
-  await other.goto('/salvate/');
+  await other.goto('/salvate/?vedere=liste');
   await expect(other.locator('[data-saved-count]')).toHaveText('(2)');
   await other.locator('[data-search-delete]').first().click();
   await expect(other.locator('[data-saved-count]')).toHaveText('(1)');
@@ -208,7 +208,7 @@ test('/salvate/ Căutări salvate section: list, rename, open, delete, clear all
     rec(TWO_KEY, { label: 'Cluj · Ilfov', sort: 'deadline', savedAt: '2026-10-01T10:00:00.000Z' }),
     rec('q=treia', { label: 'A treia', savedAt: '2026-09-15T10:00:00.000Z' }),
   ]);
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-count="searches"]')).toHaveText('(3)');
   await expect(page.locator('[data-view-tab="searches"]')).toHaveCount(0);
   await expect(page.locator('[data-saved-count]')).toHaveText('(3)');
@@ -252,7 +252,7 @@ test('/salvate/ Căutări salvate section: list, rename, open, delete, clear all
   expect((await stored(page)).searches[TWO_KEY].openedAt).not.toBeNull();
 
   // Clear all: an in-page confirmation, not a dialog.
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await page.locator('[data-clear-searches]').click();
   const box = page.locator('[data-searches-confirm]');
   await expect(box).toBeVisible();
@@ -267,14 +267,15 @@ test('/salvate/ Căutări salvate section: list, rename, open, delete, clear all
   await shot(page, 'searches-empty');
 });
 
-test('/salvate/ is one page: Căutări salvate first, Anunțuri salvate after; ?vedere=cautari is the same', async ({ page }) => {
+test('/salvate/?vedere=liste: Căutări salvate, Angajatori urmăriți, Anunțuri salvate; ?vedere=cautari is the same', async ({ page }) => {
   await seedSearches(page, [rec('q=prima', { label: 'Prima' })]);
-  for (const url of ['/salvate/', '/salvate/?vedere=cautari']) {
+  for (const url of ['/salvate/?vedere=liste', '/salvate/?vedere=cautari']) {
     await page.goto(url);
     // The alerts block (2026-11-17, brief nav-toc-theme-hero) is above both; it is not a list of saved things.
-    const heads = page.locator('[data-saved-page] h2:not(#alerts-block-title)');
+    const heads = page.locator('[data-saved-page] h2:not(#alerts-block-title):not(#flux-heading)');
     await expect(heads.nth(0)).toContainText('Căutări salvate');
-    await expect(heads.nth(1)).toContainText('Anunțuri salvate');
+    await expect(heads.nth(1)).toContainText('Angajatori urmăriți');
+    await expect(heads.nth(2)).toContainText('Anunțuri salvate');
     await expect(page.locator('[data-view-tab="saved"]')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('[data-searches-list] > li')).toHaveCount(1);
     await expect(page.locator('[data-saved-empty]')).toBeVisible();
@@ -282,9 +283,11 @@ test('/salvate/ is one page: Căutări salvate first, Anunțuri salvate after; ?
     const b = await page.locator('[data-saved-heading]').boundingBox();
     expect(a.y).toBeLessThan(b.y);
   }
-  await expect(page.locator('[data-saved-page] p.bg-info')).toContainText('4 căutări și 20 de anunțuri');
-  // Only the hidden view is separate; ?vedere=notite (old links) is the one page.
+  await expect(page.locator('[data-saved-page] p.bg-info')).toContainText('4 căutări, 10 angajatori și 20 de anunțuri');
+  // Flux (the default) and Ascunse do not show the searches; ?vedere=notite (old links) opens Liste.
   await page.goto('/salvate/?vedere=ascunse');
+  await expect(page.locator('[data-searches-panel]')).toBeHidden();
+  await page.goto('/salvate/');
   await expect(page.locator('[data-searches-panel]')).toBeHidden();
   await page.goto('/salvate/?vedere=notite');
   await expect(page.locator('[data-searches-panel]')).toBeVisible();
@@ -302,7 +305,7 @@ test('a corrupt store: no error, button hidden, value kept, saved jobs still wor
   expect(await storedRaw(page)).toBe(CORRUPT);
 
   // The tab says so, and writes nothing.
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-searches-empty-text]')).toHaveText('Căutările salvate nu pot fi citite din acest browser.');
   expect(await storedRaw(page)).toBe(CORRUPT);
 
@@ -329,7 +332,7 @@ test('invalid records are dropped on read and kept in storage', async ({ page })
     version: 1, defaultId: null,
     searches: { 'q=ok': rec('q=ok'), 'q=bad': { key: 'q=bad', qs: 'other', sort: '', label: 'x', savedAt: 'no' } },
   }));
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-count="searches"]')).toHaveText('(1)');
   await page.goto(TWO);
   await toggle(page).click();
@@ -354,7 +357,7 @@ test('an old salary_bucket record is re-keyed on read; the toggle shows it as sa
   expect(s.version).toBe(1);
   // Reading again changes nothing.
   const before = await storedRaw(page);
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   expect(await storedRaw(page)).toBe(before);
 });
 
@@ -365,7 +368,7 @@ test('two records that get one key after re-keying: the newer savedAt stays', as
     rec(OLD, { label: 'old', savedAt: '2026-10-05T10:00:00.000Z' }),
     rec(NEW, { label: 'new', savedAt: '2026-10-01T10:00:00.000Z' }),
   ]);
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   const s = await stored(page);
   expect(Object.keys(s.searches)).toEqual([NEW]);
   expect(s.searches[NEW].label).toBe('old');

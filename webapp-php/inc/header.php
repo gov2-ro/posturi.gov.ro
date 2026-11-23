@@ -77,6 +77,8 @@ if (!isset($_build_stamp)) {
   <script src="/static/saved.js?v=<?= @filemtime(__DIR__ . '/../static/saved.js') ?: '1' ?>" defer></script>
   <?php /* UX-15: saved searches (`posturi.searches.v1`); a separate store from saved.js. */ ?>
   <script src="/static/searches.js?v=<?= @filemtime(__DIR__ . '/../static/searches.js') ?: '1' ?>" defer></script>
+  <?php /* UX-FOLLOW-EMP: followed employers (`posturi.employers.v1`); a separate store again. */ ?>
+  <script src="/static/employers.js?v=<?= @filemtime(__DIR__ . '/../static/employers.js') ?: '1' ?>" defer></script>
   <?= $head_extra ?? '' ?>
 </head>
 <body class="min-h-screen flex flex-col font-sans">

@@ -54,7 +54,7 @@ async function fits(page, selector, what) {
 test('subscribe from /salvate/, confirm, manage, delete', async ({ page }, testInfo) => {
   const email = `ana-${testInfo.project.name}-${Date.now()}@example.com`;
   await seedSearches(page, [rec(CLUJ, 'Cluj, medici'), rec(ILFOV, 'Ilfov')]);
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   const row = page.locator('[data-search-key]').filter({ hasText: 'Cluj, medici' });
   const button = row.getByRole('link', { name: /Alertă pe email/ });
   await expect(button).toBeVisible();
@@ -73,7 +73,7 @@ test('subscribe from /salvate/, confirm, manage, delete', async ({ page }, testI
   await expect(page.getByText('Verifică-ți emailul. Linkul ajunge în cel mult 5 minute.')).toBeVisible();
 
   // /salvate/ marks the search in this browser, and only that search.
-  await page.goto('/salvate/');
+  await page.goto('/salvate/?vedere=liste');
   await expect(page.locator('[data-search-key]').filter({ hasText: 'Cluj, medici' }).getByText('alertă cerută')).toBeVisible();
   await expect(page.locator('[data-search-key]').filter({ hasText: 'Ilfov' }).getByText('alertă cerută')).toBeHidden();
 

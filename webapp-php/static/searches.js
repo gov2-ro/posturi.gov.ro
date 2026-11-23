@@ -337,9 +337,9 @@
     var panel = root && qs('[data-searches-panel]', root);
     if (!panel) return;
     var st = load();
-    // Shown in the default view only; ?vedere=cautari (old links) is the default view.
+    // Shown in the Liste tab only (UX-SALVATE-FLUX); ?vedere=cautari and ?vedere=notite (old links) open Liste.
     var v = new URLSearchParams(window.location.search).get('vedere');
-    var view = v !== 'ascunse';   // ?vedere=notite (old links) shows the one page
+    var view = v === 'liste' || v === 'notite' || v === 'cautari';
     var list = API.list();
     var count = qs('[data-count="searches"]', root);
     if (count) count.textContent = st.status === 'ok' ? '(' + list.length + ')' : '';

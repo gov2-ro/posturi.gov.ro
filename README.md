@@ -497,6 +497,13 @@ FIX-07) is a controlled 400.
 # Just the database, already built by pipeline.py — what the cron runs
 ./deploy-php.sh --data-only --no-export
 
+# A manual data deploy: four commands, in this order
+.venv/bin/python export-to-sqlite.py --active-only --out webapp-php/posturi.sqlite
+.venv/bin/python ops/anomaly-survey.py webapp-php/posturi.sqlite --write-table \
+    --json data/anomaly-survey.json --csv data/anomaly-survey.csv --index-csv data/posturi_gov_ro.csv
+.venv/bin/python ops/check-export.py
+./deploy-php.sh --data-only --no-export
+
 # See what would move, change nothing
 ./deploy-php.sh --dry-run
 
@@ -512,7 +519,7 @@ heard of.
 The deploy script:
 1. Aborts if `webapp-php/static/app.css` is missing (see *Stylesheet* below), or if `DEPLOY_PATH` looks like a home directory — it runs `rsync --delete`
 2. Runs `export-to-sqlite.py --active-only` — pulls active postings (expires_at >= today) from PostgreSQL into `webapp-php/posturi.sqlite`, unless `--no-export`
-3. Refuses to ship a database that fails `integrity_check` or has no postings
+3. Refuses to ship a database that fails `integrity_check`, has no postings, or lacks the tables `anomaly_signals` and `anomaly_checks`. The flag `--allow-no-anomalies` overrides the last check; `ops/run-pipeline.sh` sets it only after a failed survey
 4. **Code**: rsyncs `webapp-php/` with `--delete`, minus `assets/` (Tailwind source), `router.php` and `tests/` (dev only) and `*.sqlite*` — excluding the database also protects it from the deletion pass
 5. **Data**: rsyncs `posturi.sqlite` alone, no `--delete` and no `--inplace`, so rsync's write-temp-then-rename swaps it atomically and a request mid-transfer still sees the whole previous database
 6. Code deploy only: stamps the current `git rev-parse --short HEAD` into `webapp-php/static/code-version.txt` (gitignored) before the rsync, so the host names the checkout it runs

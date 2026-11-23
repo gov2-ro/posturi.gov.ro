@@ -28,6 +28,19 @@
 - `static/app.css` is rebuilt (`npm run css`): new classes.
 - Assumed: „one gradation only or no gradation” keeps today’s sentence (I did not remove it).
 
+### 2026-11-24 — OPS-ANOMALY-DEPLOY: deploy-php.sh refuses an export without the anomaly tables (Sonnet, from the Opus brief)
+
+**Done.** `deploy-php.sh` has the option `--allow-no-anomalies`. In a data deploy it counts `anomaly_signals` and `anomaly_checks` in `sqlite_master`. With fewer than 2 and no flag, it stops with exit code 1 and prints the survey command. With the flag, it prints a `WARNING` and goes on. The `==> Database:` line shows both counts. `ops/run-pipeline.sh` passes the flag only when `survey_status` is not 0. README and `docs/deploy-vps.md` show the four manual commands (export, survey, check, deploy).
+
+**Measured.** Test on a copy of the September export (1,848 postings, 0 anomaly tables). `deploy-php.sh` has no way to point at another database file, so I ran a copy of the script in a scratch directory. `rsync`, `ssh` and `curl` were stubs that print their arguments; no host was contacted.
+- No tables, no flag: `==> Database: 1848 postings, built 2026-09-09T18:22:18+00:00, anomaly_signals 0, anomaly_checks 0`, then `ERROR: ... has 0 of 2 anomaly tables — the site would show no signals.`, exit 1, no rsync.
+- No tables, `--allow-no-anomalies`: `WARNING: ... has 0 of 2 anomaly tables — the site will show no signals.`, then the stub rsync ran, exit 0.
+- After `anomaly-survey.py --write-table` on the copy (`wrote anomaly_signals: 111 rows; anomaly_checks: 35 rows`): `anomaly_signals 1, anomaly_checks 1`, no warning, stub rsync ran, exit 0.
+
+**Hard.** The `.venv` is in the main checkout, not in the worktree. I did not run the full `run-pipeline.sh` (it needs the VPS). I checked its change with `bash -n` only.
+
+**Decided.** The brief's decision stands. The `run-pipeline.sh` call uses `${deploy_flags[@]+...}` so an empty array is safe under `set -u`.
+
 ### 2026-11-24 — SALARY-GRAD-FOOD: the estimate note in the stated box on the same basis (Opus, owner choice)
 
 **Done.** Under a stated pay, the note „Estimare după Legea 153/2017 … la gradația 0” sat next to a range on another basis (live 21359: stated 8,808–10,147 gross vs estimate 5,760–7,871 at gradation 0). The export now writes `pay_est_min`/`pay_est_max`: the rule-11 range of the law estimate, only when a stated pay sets `pay_min`. The stated box shows „Estimare după Legea 153/2017, pe aceeași bază: … lei net (brut …) / lună”. `db.php` shims the two columns; old exports keep the old note. Tests: pytest 1,828 passed; `salary_range_test.php` 57 assertions.

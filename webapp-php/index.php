@@ -71,7 +71,11 @@ if ($uri === '/alerte' || str_starts_with($uri, '/alerte/')) {
 // ---- Request validation: one decoder, one 400 path ----
 // Every page, filter builder and feed reads the normalized $_GET that this
 // produces; a malformed shape (?q[]=medic) never reaches trim() or SQL.
-[$valid_params, $query_error] = validated_query($_GET);
+// API-01: /api/v1/* validates its own parameters (strict: an unknown one is a 400, as JSON), so the raw query
+// goes to inc/api.php. The decoder below is for the HTML pages and the old feeds, which ignore unknown parameters.
+$is_api = $uri === '/api/v1' || str_starts_with($uri, '/api/v1/');
+$api_get = $_GET;
+[$valid_params, $query_error] = $is_api ? [[], null] : validated_query($_GET);
 $is_feed = in_array($uri, ['/posturi.json', '/posturi.atom', '/posturi.rss', '/posturi.ics'], true);
 
 if ($query_error !== null) {
@@ -119,6 +123,11 @@ unset($_GET['org_htmx_cache-buster']);
 // The buffer holds the headers back until then. Expires is sent too because
 // the host's mod_expires adds its own max-age=600 only when the response has
 // no Expires.
+/** The cache policy of a successful GET: the edge keeps it for an hour, the browser for five minutes. */
+function default_cache_headers(): void {
+    header('Cache-Control: public, max-age=300, s-maxage=3600');
+    header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
+}
 $__timings = [];
 $__timing_start = $__timing_last = microtime(true);
 ob_start();
@@ -134,13 +143,18 @@ register_shutdown_function(function (): void {
     $status = http_response_code();
     $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
     if (in_array($status, [200, 301], true) && in_array($method, ['GET', 'HEAD'], true)) {
-        header('Cache-Control: public, max-age=300, s-maxage=3600');
-        header('Expires: ' . gmdate('D, d M Y H:i:s', time() + 300) . ' GMT');
+        default_cache_headers();
     } else {
         header('Cache-Control: no-store');
         header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
     }
 });
+
+// API-01: the public JSON API. Never returns; the error answers are JSON with no-store (inc/api.php).
+if ($is_api) {
+    require __DIR__ . '/inc/api.php';
+    api_dispatch($uri, $api_get);
+}
 
 // Route feeds first (exact match, sets Content-Type before any output)
 if ($uri === '/posturi.json') { require __DIR__ . '/feeds/jobs.json.php';  exit; }
@@ -246,6 +260,8 @@ if ($is_root && !$hx_fragment && !$_GET) {
     require __DIR__ . '/pages/employer_builder.php';
 } elseif ($uri === '/despre' || $uri === '/despre/') {
     require __DIR__ . '/pages/about.php';
+} elseif ($uri === '/api') {
+    require __DIR__ . '/pages/api_docs.php';
 } elseif (($theme = theme_for_uri($uri)) !== null) {
     // A themed landing page (inc/themes.php). `/{slug}/?…` is a filtered list: it has one URL, `/?…` (ADR 0004).
     if ($_GET) {

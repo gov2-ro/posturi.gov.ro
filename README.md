@@ -815,6 +815,29 @@ The employer page shows the CUI and a link to the record on org.gov2.ro, when th
 - `export-to-sqlite.py` joins the snapshot on `employers.slug` and writes `employer_org`. A missing snapshot gives an empty table and a warning. `ops/check-export.py` warns (soft) when the table is empty.
 - An employer with no row shows nothing new.
 
+### Public API (API-01)
+
+The site has a public JSON API without tokens. The docs page for readers is `/api/` (`pages/api_docs.php`, Romanian). Brief: `docs/briefs/2026-11-24-public-api.md`.
+
+| Route | Answer |
+|---|---|
+| `GET /api/v1/` | The index: `api_version`, `data` (`built_at`, `postings`), the links. |
+| `GET /api/v1/posturi` | The list: 100 rows for each page, `?page=N`, the filters of the list page, `q` and `employer`. The order is `published_at DESC, id DESC`. |
+| `GET /api/v1/posturi/<id>` | One posting with its structured data (extraction, pay, calendar, attachments, body). 404 when the ID is not in the export. |
+| `GET /api/v1/descarcare` | The bulk download: every posting of the export as `api_posting()` objects, one `.json.gz` file. |
+
+- **One serializer.** `api_list_row()` and `api_posting()` in `webapp-php/inc/api.php` serve the list, the posting and the download. The list row has every field of a `/posturi.json` row, with the same values (`tests/api_test.php` compares them). `api_posting()` leaves out the internal fields: the selector and grid row IDs of `sal_json`, the `inf_*` columns, the provenance hashes and times, `quality`, `source_host`, `employer_id` and `judet_id`.
+- **Strict parameters.** An unknown parameter on `/api/*` gives HTTP 400 with `{"error": "…"}`. The allow-list is `api_list_params()`: `MULTI_PARAMS`, `QUERY_FACETS` and `QUERY_SCALARS`, without `sort` and `title` (they change nothing in the API), plus `page`. `/api/` shows the table of the allow-list with `API_PARAM_DOCS`, so a new filter needs a description (`tests/api_test.php` fails without it). The HTML pages and the feeds still ignore unknown parameters.
+- **Errors.** Every error is JSON with `Cache-Control: no-store`: 400, 404 and 405 (with `Allow: GET, HEAD`), and 503 for the download. A success has the default cache policy of `index.php` (`s-maxage=3600`).
+- **The download cache.** The first request after a data deploy builds `posturi-private/api/posturi-<built_at>.json.gz` (`al_dir()`, outside the web root). The build takes an exclusive `flock` on `build.lock`, writes a temporary file and renames it. After a build, it deletes the older `posturi-*.json.gz` files. When the folder cannot be written, the answer is 503. The file has no `Content-Encoding`: the client gets the `.gz` file.
+- **Tests.** `php webapp-php/tests/api_test.php`; the four routes also run in `tests/compat_test.php`; `tests/browser/api.spec.js` checks `/api/` at 320, 375 and 1280 px.
+
+Cloudflare rate-limit rule (owner step, in the Cloudflare dashboard):
+
+- Expression: `starts_with(http.request.uri.path, "/api/")`
+- Proposal: 60 requests for each 10 seconds for each IP, then block for 10 seconds. The rule must not count requests that Cloudflare answers from its cache, if the plan allows that.
+- Open: the free plan may not allow this rule on this zone. The deploy from the Mac does not purge the edge (`CF_ZONE_ID` is empty there), so a cached API answer can be up to 1 hour old.
+
 ### Structure
 
 | Path | Purpose |
@@ -823,7 +846,7 @@ The employer page shows the CUI and a link to the record on org.gov2.ro, when th
 | `db.php` | PDO singleton for `posturi.sqlite` |
 | `helpers.php` | Markdown rendering, date formatting, filter builder, facet queries, FTS query builder, active-filter chips, URL helpers |
 | `pages/` | List, detail, employer list, employer detail, stats, about |
-| `feeds/` | Atom, JSON API, iCal endpoints — follow the active filters; `?employer=<slug>` scopes a feed to one angajator (linked from each employer profile) |
+| `feeds/` | The feeds: RSS, Atom, iCal and `/posturi.json` (a JSON feed of up to 200 rows, not the API) — follow the active filters; `?employer=<slug>` scopes a feed to one angajator (linked from each employer profile). The JSON API is `inc/api.php` (§ Public API) |
 | `partials/` | Result list and facet sidebar (both HTMX out-of-band swappable) |
 | `inc/` | Header/footer HTML, `<head>` metadata (canonical, OpenGraph, JSON-LD hook) |
 | `assets/` | Tailwind source — **not deployed** |

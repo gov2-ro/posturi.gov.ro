@@ -14,7 +14,7 @@ $_footer_groups = [
     ],
     'Proiect' => [
         ['Despre și metodologie', '/despre/'], ['Confidențialitate', '/despre/#confidentialitate'],
-        ['Cod sursă', 'https://github.com/gov2-ro/posturi.gov.ro', 'i-brand-github'], ['Pentru angajatori', '/pentru-angajatori/anunt/'],
+        ['Cod sursă', 'https://github.com/gov2-ro/posturi.gov.ro', 'i-brand-github'], ['Pentru angajatori', '/pentru-angajatori/anunt/'], ['API', '/api/'],
     ],
 ]; ?>
 <footer class="g2-footer mt-12">

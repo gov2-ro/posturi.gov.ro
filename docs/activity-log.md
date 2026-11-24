@@ -2,6 +2,33 @@
 
 ## 2026
 
+### 2026-11-24 — API-01: the public JSON API, built (Sonnet, from the Opus brief)
+
+**Done.**
+- `webapp-php/inc/api.php`: the serializer (`api_list_row()`, `api_posting()`), the strict parameters, the four routes and the bulk download. `index.php` sends `/api/v1/*` to it before the HTML query decoder, and routes `/api/` to `pages/api_docs.php`. The default cache policy is now the function `default_cache_headers()` (the shutdown handler calls it, and so does the download, which flushes its headers before the handler runs). The old feeds are unchanged.
+- `/api/` (Romanian): endpoints with examples, the parameter table (generated from `api_list_params()` and `API_PARAM_DOCS`), pagination, the download, limits and HTTP codes, the field table (`API_FIELD_DOCS`), source, feeds. Linked from `/despre/` (list item next to the feeds), the footer („Proiect”: API), `llms.txt` (three links), the sitemap and the README (§ Public API, with the Cloudflare rule).
+- Tests: `tests/api_test.php` (1,288 assertions; its fixture adds 130 postings), `tests/browser/api.spec.js`; `llms_test.php`, `home_test.php` (footer) and `compat_test.php` (four routes and the docs page against every old export shape) updated.
+
+**Measured.**
+- Download build, `api_ensure_download()` through PHP CLI, level 6 gzip, peak memory 4.0 MB (`memory_get_peak_usage(true)`, rows are written one by one):
+  - A copy of `data/_dev/full-2026-11-23.sqlite` cut to the live slice (3,011 rows: `expires_at` from 23 Nov, or no `expires_at` and seen from 20 Nov; the same rule as `LIVE_SQL`; this is the shape the host holds, `active_only = 1`): 1.4 s, 9.9 MB gzip (about 3.3 KB for each posting).
+  - The whole `full-2026-11-23.sqlite` (16,875 rows, all history, `active_only = 0`; it is NOT deployed): 7.2 s, 41.9 MB gzip (246 MB of JSON). That is over the 25 MB limit of the brief. I did not stop, because the host never holds that file. The download grows with the live slice: 25 MB is about 7,500 postings, 2.5 times today.
+  - `export-to-sqlite.py --active-only` did not help: the local PostgreSQL has 2 live postings (a September copy), and the export refused to promote.
+- `Server-Timing` of the PHP built-in server, warm, on the live-slice copy: list page 1, 5.6–8.9 ms; list with `q=asistent`, 44 ms; one posting, 1.0–5.3 ms. On the full copy: list page 1, 6–22 ms; a deep page (`page=50`), 31 ms; a posting, 1.0 ms. The host (shared hosting, Apache) will be slower; check `Server-Timing` after the deploy.
+- Tests: every `webapp-php/tests/*_test.php` passes (`api_test` 1,288, `compat_test` 1,790, `llms_test` 112, `home_test` 856, `feeds_test` 3,392); Playwright `api`, `chrome`, `toc`, `home`, `ds`, `employer_assistant`, `employer_builder`, `feeds`: 387 passed (the footer count of `home.spec.js` went from 19 to 20 links).
+
+**Decided (builder).**
+- The allow-list leaves out `sort` and `title`. Both are in `QUERY_SCALARS`, but `build_filters()` does not read them; the API order is fixed. A parameter that does nothing would only make a new cache key. `skill_mode` stays (`facet_mode()` reads it).
+- A list with no result has `pages` 1 and gives HTTP 200 with an empty `results` (so `page=1` is never a 404).
+- `api_posting()` leaves out: the selector and grid row IDs of `sal_json` (`selector`, `randuri`, `selector_provenienta`, `coef_*`, `valoare_referinta`), the `inf_*` columns, `schema_source_revision`, `detail_content_hash`, `detail_fetched_at`, `created_at`, `updated_at`, `last_seen_at`, `quality`, `quality_json`, `source_host`, `employer_id`, `judet_id`, `tip` and `detalii_raw`. The posting keeps `contact.person` (the detail page shows it; it is a name and a function, for example „Rusu Mihaela având funcția șef serviciu”). The owner decides whether it stays in a public bulk file.
+- JSON uses `JSON_INVALID_UTF8_SUBSTITUTE` in addition to the two flags of the brief, so that one bad byte in a source text cannot fail the whole download.
+- Errors are in Romanian, like the errors of the feeds.
+- The test that gives 503 starts a second server with `ALERTS_DIR` below a regular file. The tests always set `ALERTS_DIR` to a temporary folder: without it the download would build in `posturi-private/` of the repository.
+
+**Hard.** The shutdown handler of `index.php` runs after the body, and `ob_start()` holds the body. For the download I had to drop the buffer before `readfile()` (a 10 MB file would sit in memory otherwise) and send the cache headers myself. A test that compared `/posturi.json` with the API found that the FTS index of the fixture does not hold the 130 rows that the test inserts: the test compares `q` with the feed instead of with a fixed number.
+
+**Open.** The licence of the data: `/despre/` has no licence text, so `/api/` says „Datele provin de pe posturi.gov.ro”. The Cloudflare rate-limit rule and the headers of the download on the live host (`curl -sI` twice: `cf-cache-status`, `Content-Encoding`) wait for the deploy (backlog API-01-OWNER).
+
 ### 2026-11-24 — API-01: a public JSON API, briefed (Opus + owner)
 
 **Done:** Checked the live cache of `/posturi.json`. Cloudflare caches it for each full URL (`s-maxage=3600`): the bare URL was a `HIT` (age 2312 s), and `?q=medic` was a `MISS` and then a `HIT`. Wrote the brief `docs/briefs/2026-11-24-public-api.md`.

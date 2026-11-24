@@ -330,7 +330,9 @@ $paths = ['/', '/posturi/', '/?status=closed', '/?status=unknown', '/?status=soo
           job_url(['id' => 1009, 'title' => 'Expert contabil și referent (două roluri)']),
           job_url(['id' => 1011, 'title' => 'Șofer autospecială']),
           '/angajatori/', '/statistici/', '/despre/', '/sitemap.xml',
-          '/posturi.json', '/posturi.atom', '/posturi.ics', '/versiuni.json'];
+          '/posturi.json', '/posturi.atom', '/posturi.ics', '/versiuni.json',
+          // API-01: the four routes of the public API and its docs page, against every shape of export.
+          '/api/v1/', '/api/v1/posturi?status=all', '/api/v1/posturi/1008', '/api/v1/descarcare', '/api/'];
 
 // Each shape of old export is served for real and every route fetched.
 $shapes = [
@@ -359,6 +361,9 @@ $flat_cases = [
         => "v3_skills LIKE '%\"Contabilitate\"%' AND v3_credentials LIKE '%\"autorizatie\"%'",
 ];
 foreach ($shapes as $label => $file) {
+    // The download of /api/v1/descarcare is built in a private folder of its own for each export (the stamp is the same in all).
+    $api_priv = "$tmp-private-" . md5($file);
+    putenv('ALERTS_DIR=' . $api_priv);
     $srv = start_fixture_server($file, COMPAT_TODAY);
     if (in_array($file, [$noroles, $oldest_noroles], true)) {
         run_suite("requirement filters equal the posting-level predicates against $label", function () use ($srv, $file, $flat_cases) {
@@ -424,6 +429,9 @@ foreach ($shapes as $label => $file) {
         assert_not_contains('no such column', $log, 'server log: no missing columns');
     });
     stop_fixture_server($srv, $file);
+    foreach (glob($api_priv . '/api/*') ?: [] as $f) @unlink($f);
+    @rmdir($api_priv . '/api');
+    @rmdir($api_priv);
 }
 @unlink($current);
 @unlink($nov5);

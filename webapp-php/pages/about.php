@@ -45,6 +45,7 @@ require __DIR__ . '/../inc/header.php';
           <li>Căutare full-text și filtrare după județ, nivel, tip, domeniu, grad, studii etc.</li>
           <li>Statistici agregate despre piața muncii în sectorul public</li>
           <li>Clasificare automată a anunțurilor (domeniu profesional, nivel de experiență, studii)</li>
+          <li><a href="/api/" class="text-gov hover:underline">API public JSON</a> (gratuit, fără cheie) și <a href="/api/v1/descarcare" class="text-gov hover:underline">descărcarea completă</a> a tuturor anunțurilor, într-un singur fișier</li>
           <li>Export în formate standard: <a href="/posturi.json" class="text-gov hover:underline">JSON</a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>, <a href="/posturi.ics" class="text-gov hover:underline">iCal</a> — respectă filtrele active, iar cu <code>?employer=&lt;slug&gt;</code> se restrâng la un singur angajator (link direct pe fiecare pagină de angajator)</li>
           <li>Calendarul iCal se poate <strong>abona</strong> (nu doar descărca): adaugă adresa <code>/posturi.ics?…</code> în Google Calendar (<em>Alte calendare → Prin URL</em>) sau într-un client care acceptă <code>webcal://</code>. Filtrează cu aceiași parametri ca lista (<code>?judet[]=cluj&amp;judet[]=timis</code>). Calendarul primește numele din filtre (de exemplu „posturi.gov2.ro Liceală Cluj”), deci fiecare abonament filtrat are un nume propriu.</li>
         </ul>

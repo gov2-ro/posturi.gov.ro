@@ -54,6 +54,9 @@ echo "\n## Date și fluxuri\n\n";
 echo $link('Flux RSS', '/posturi.rss', 'anunțurile noi, în format RSS');
 echo $link('Flux Atom', '/posturi.atom', 'anunțurile noi, în format Atom');
 echo $link('Calendar', '/posturi.ics', 'termenele concursurilor, în format iCalendar');
+echo $link('API public', '/api/v1/', 'indexul API-ului JSON: lista anunțurilor (/api/v1/posturi) și un anunț cu toate datele lui (/api/v1/posturi/{id})');
+echo $link('Documentația API', '/api/', 'parametri, câmpuri, limite și coduri HTTP, în română');
+echo $link('Descărcare completă', '/api/v1/descarcare', 'toate anunțurile într-un singur fișier JSON comprimat (.json.gz)');
 echo $link('Harta site-ului', '/sitemap.xml', 'toate paginile');
 
 echo "\n## Căutare prin URL\n\n";

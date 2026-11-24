@@ -18,6 +18,9 @@ require_once __DIR__ . '/fixtures/page_helpers.php';
 putenv('POSTURI_TODAY=2026-10-03');
 $db = sys_get_temp_dir() . '/posturi-llms-' . getmypid() . '.sqlite';
 build_theme_fixture_db($db);
+// The link to /api/v1/descarcare builds a file in the private folder: a temporary one, never the repository's.
+$api_dir = sys_get_temp_dir() . '/posturi-llms-private-' . getmypid();
+putenv('ALERTS_DIR=' . $api_dir);
 $srv = start_fixture_server($db);
 $base = $srv['base'];
 [$status, $txt, $hd] = http_page($base, '/llms.txt');
@@ -53,7 +56,7 @@ run_suite('each link is on the base URL of the site or on the repository; each i
             assert_same('https://github.com/gov2-ro/posturi.gov.ro', $url, 'the only other link is the repository');
         }
     }
-    foreach (['/', '/posturi/', '/statistici/', '/angajatori/', '/despre/', '/pot-aplica/', '/estimator-salariu/', '/posturi.rss', '/posturi.atom', '/posturi.ics', '/sitemap.xml'] as $path) {
+    foreach (['/', '/posturi/', '/statistici/', '/angajatori/', '/despre/', '/pot-aplica/', '/estimator-salariu/', '/posturi.rss', '/posturi.atom', '/posturi.ics', '/sitemap.xml', '/api/', '/api/v1/', '/api/v1/descarcare'] as $path) {
         assert_contains('](' . $base . $path . ')', implode("\n", $lines), "$path is listed");
     }
 });
@@ -105,4 +108,7 @@ run_suite('robots.txt is not changed by llms.txt', function () use ($base) {
 });
 
 stop_fixture_server($srv, $db);
+foreach (glob($api_dir . '/api/*') ?: [] as $f) @unlink($f);
+@rmdir($api_dir . '/api');
+@rmdir($api_dir);
 finish();

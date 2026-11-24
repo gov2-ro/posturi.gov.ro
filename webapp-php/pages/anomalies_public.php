@@ -148,7 +148,7 @@ function anomaly_render_check(array $c, array $rows, int $visible, bool $admin, 
         <?php foreach ($rows as $r) anomaly_render_signal($r, $c, $admin); ?>
       </ul>
       <?php if (!$full && $visible > count($rows)): ?>
-        <p class="text-sm mt-3"><a href="/anomalii/<?= e($id) ?>/" class="text-gov hover:underline">Toate cele <?= $visible ?> semnale →</a></p>
+        <p class="text-sm mt-3"><a href="/anomalii/<?= e($id) ?>/" target="_blank" rel="noopener" class="text-gov hover:underline">Toate cele <?= $visible ?> semnale ↗</a></p>
       <?php endif; ?>
       <?php endif; ?>
     </article>
@@ -177,6 +177,10 @@ $anomaly_checks = [];
 $anomaly_missing = false;
 try {
     $anomaly_checks = db()->query("SELECT * FROM anomaly_checks ORDER BY check_id")->fetchAll();
+    // 2026-11-24 (owner): a check with public = 0 shows on the admin page only (R18: kept for a future quality score).
+    if (!$anomaly_admin) {
+        $anomaly_checks = array_values(array_filter($anomaly_checks, fn ($c) => (int)($c['public'] ?? 1) !== 0));
+    }
     $anomaly_visible = anomaly_visible_counts($anomaly_admin);
 } catch (PDOException $ex) {
     $anomaly_missing = true;   // an export from before ANOMALY-PUBLIC
@@ -256,7 +260,9 @@ require __DIR__ . '/../inc/header.php';
               if ($anomaly_one !== '') {
                   $rows = anomaly_rows($c['check_id'], $anomaly_admin, ANOMALY_PAGE_ROWS, ($anomaly_page - 1) * ANOMALY_PAGE_ROWS);
               } else {
-                  $rows = anomaly_rows($c['check_id'], $anomaly_admin, $anomaly_admin ? ANOMALY_ADMIN_ROWS : ANOMALY_OVERVIEW_ROWS);
+                  // `overview_rows` shortens a long list (E01, R24: 5); the full list opens in a new tab.
+                  $n = (int)($c['overview_rows'] ?? 0) > 0 ? (int)$c['overview_rows'] : ANOMALY_OVERVIEW_ROWS;
+                  $rows = anomaly_rows($c['check_id'], $anomaly_admin, $anomaly_admin ? ANOMALY_ADMIN_ROWS : $n);
               }
               anomaly_render_check($c, $rows, $vis, $anomaly_admin, $anomaly_one !== '');
               if ($anomaly_one !== ''):

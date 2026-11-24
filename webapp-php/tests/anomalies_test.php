@@ -148,6 +148,17 @@ run_suite('the admin page shows every check with the review numbers, behind a lo
     assert_contains('name="robots" content="noindex"', $h, 'noindex');
 });
 
+run_suite('a check with public = 0 is admin-only; overview_rows shortens a list; the full list opens in a new tab', function () use ($srv_pub) {
+    [, $h] = an_get($srv_pub['base'], '/anomalii/');
+    assert_not_contains('Eticheta ASCUNSA-ADMIN', $h, 'the admin-only check is not on the public page');
+    [$code] = an_get($srv_pub['base'], '/anomalii/R20/');
+    assert_same(404, $code, 'nor on its own page');
+    $r14 = substr($h, strpos($h, 'aria-label="Semnale: Eticheta GRUP-NEOBISNUIT"'));
+    $r14 = substr($r14, 0, strpos($r14, '</article>'));
+    assert_same(5, substr_count(substr($r14, 0, strpos($r14, '</ul>')), '<li'), 'five rows for R14');
+    assert_contains('target="_blank" rel="noopener"', $r14, 'the full list in a new tab');
+});
+
 run_suite('a quote keeps its line breaks; the sitemap lists /anomalii/', function () use ($srv_pub) {
     [, $h] = an_get($srv_pub['base'], '/anomalii/');
     assert_contains('<b>x</b>,<br>' . "\n" . 'conform legii.', html_entity_decode($h), 'the line break of the quote');

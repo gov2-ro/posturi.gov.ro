@@ -948,7 +948,7 @@ def write_tables(db_path, report: dict, rows: list[tuple], register: dict, revie
                    "peer_value TEXT, detail_json TEXT)")
         db.execute("CREATE TABLE anomaly_checks (check_id TEXT PRIMARY KEY, kind TEXT, label_ro TEXT, "
                    "group_id TEXT, explain_ro TEXT, caveat_ro TEXT, count INTEGER, denominator INTEGER, "
-                   "reviewed INTEGER, real INTEGER, false_positive INTEGER)")
+                   "reviewed INTEGER, real INTEGER, false_positive INTEGER, public INTEGER, overview_rows INTEGER)")
         sig = []
         for pid, cid, value, peer, *extra in rows:
             detail = dict(extra[0]) if extra and extra[0] else {}
@@ -972,8 +972,11 @@ def write_tables(db_path, report: dict, rows: list[tuple], register: dict, revie
                         reg.get("group", GROUP_OF_KIND.get(reg.get("kind", "unusual"), "neobisnuit")),
                         reg.get("explain_ro", ""), reg.get("caveat_ro", ""),
                         e["count"] if ok else None, e["denominator"] if ok else None,
-                        len(rv), rv.count("real"), rv.count("false_positive")))
-        db.executemany("INSERT INTO anomaly_checks VALUES (?,?,?,?,?,?,?,?,?,?,?)", chk)
+                        len(rv), rv.count("real"), rv.count("false_positive"),
+                        # 2026-11-24 (owner): `public: false` keeps a check off the public page (admin only);
+                        # `overview_rows` shortens a long list on /anomalii/ (the full list is on its own page).
+                        0 if reg.get("public") is False else 1, reg.get("overview_rows")))
+        db.executemany("INSERT INTO anomaly_checks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", chk)
         db.commit()
         return {"anomaly_signals": len(sig), "anomaly_checks": len(chk)}
     finally:
@@ -990,8 +993,7 @@ PT_NEEDS = {PT: ["posting_id", "body_markdown"]}
 R21_RE = re.compile(r"avantaj[^.\n;]{0,15}domicili", re.I)
 # Named project only: "proiectul pilot" or an SMIS code (Opus review: "proiect" alone gave 5 of 10 generic hits).
 R22_RE = re.compile(r"avantaj[^.\n;]{0,80}(proiectul pilot|SMIS)", re.I)
-R23_RE = re.compile(r"experien[țţt][aă][^.\n]{0,80}proiect[e]?[^.\n]{0,40}"
-                    r"fonduri (europene|nerambursabile|structurale)", re.I)
+# R23 (experience in EU-funded projects) dropped 2026-11-24 by the owner: an advantage, not a limit.
 R25_AGE_RES = (
     # An adult age only (16-99): "vârstă de până la 2 ani" is a child's age (Opus review).
     re.compile(r"v[âa]rst[aă] (maxim[aă]|de (cel mult|p[âa]n[aă] la))\s*(1[6-9]|[2-9]\d)\b", re.I),
@@ -1024,12 +1026,6 @@ def r21(c: Ctx):
 @check("R22", "advantage for work in a named project in the posting text", "C", PT_NEEDS)
 def r22(c: Ctx):
     f, den = _text_regex_check(c, [R22_RE])
-    return f, den, "denominator: postings with a text; one finding per posting", {}
-
-
-@check("R23", "experience in EU-funded projects, required or an advantage", "C", PT_NEEDS)
-def r23(c: Ctx):
-    f, den = _text_regex_check(c, [R23_RE])
     return f, den, "denominator: postings with a text; one finding per posting", {}
 
 

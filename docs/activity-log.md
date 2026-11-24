@@ -2,6 +2,12 @@
 
 ## 2026
 
+### 2026-11-24 — ANOMALY-PUBLIC: owner review of the live page (Opus)
+
+**Done.** R23 (experience in EU-funded projects) is dropped: an advantage, not a limit. R18 (free e-mail) is admin-only through a new register key `public: false`; it may feed a future quality score. E01 and R24 show 5 signals on `/anomalii/` (`overview_rows`); every „Toate cele N semnale” link opens the full list in a new tab. E05 caveat: „Semnal nerevizuit de o persoană 👩🏻‍🌾⁉️” (owner wording). R25, R20 and E01 stay as they are. Before this: quoted search phrases fixed (`3e05e65`); quotes as plain text with line breaks, 10 signals per check, sitemap (`6eb8945`, live; VPS: 1,528 signals, context group 1,227).
+
+**Decided.** `anomaly_checks` gets two columns, `public` and `overview_rows`; an export without them reads as public with the default length.
+
 ### 2026-11-24 — ANOMALY-PUBLIC: one public page "Anomalii și abateri" (Sonnet, from the Opus brief)
 
 **Done.**

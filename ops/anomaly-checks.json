@@ -138,7 +138,8 @@
       "group": "context",
       "label_ro": "Contact pe adresă de e-mail gratuită",
       "explain_ro": "Adresa de contact este la un furnizor gratuit (Gmail, Yahoo).",
-      "caveat_ro": "Context, nu o anomalie: o adresă gratuită nu arată o problemă în anunț."
+      "caveat_ro": "Context, nu o anomalie: o adresă gratuită nu arată o problemă în anunț.",
+      "public": false
     },
     "R19": {
       "kind": "unusual",
@@ -159,7 +160,8 @@
       "group": "context",
       "label_ro": "Zile lucrătoare până la termen",
       "explain_ro": "Distribuția zilelor lucrătoare dintre publicare și termen. Semnalele: posturi contractuale sub 10 zile lucrătoare (HG 1336/2022, art. 34).",
-      "caveat_ro": "Context, nu o anomalie: lista arată doar posturile contractuale cu termen scurt."
+      "caveat_ro": "Context, nu o anomalie: lista arată doar posturile contractuale cu termen scurt.",
+      "overview_rows": 5
     },
     "E02": {
       "kind": "unusual",
@@ -187,7 +189,7 @@
       "group": "neobisnuit",
       "label_ro": "Cerințe foarte restrânse",
       "explain_ro": "Anunțul are cerințe rare pe cel puțin două măsuri. Comparație: grupa de ocupații.",
-      "caveat_ro": "Măsurile sunt slabe. Semnalul arată doar că cerințele sunt rare în grupa de ocupații."
+      "caveat_ro": "Semnal nerevizuit de o persoană 👩🏻‍🌾⁉️ Semnalul arată doar că cerințele sunt rare în grupa de ocupații."
     },
     "E06": {
       "kind": "error_ours",
@@ -224,19 +226,13 @@
       "explain_ro": "Anunțul acordă un avantaj candidaților care au lucrat într-un proiect anume. Legea permite criteriul, dar anunțul nu spune cum se punctează. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
       "caveat_ro": "Model de text larg: în 5 din 10 cazuri verificate, anunțul nu numește un proiect."
     },
-    "R23": {
-      "kind": "unusual",
-      "group": "neobisnuit",
-      "label_ro": "Experiență în proiecte cu fonduri europene",
-      "explain_ro": "Anunțul cere sau preferă experiență în proiecte cu fonduri europene. Legea permite criteriul, dar el restrânge numărul candidaților. Comparație: anunțurile aceleiași ocupații fără acest criteriu.",
-      "caveat_ro": ""
-    },
     "R24": {
       "kind": "unusual",
       "group": "neobisnuit",
       "label_ro": "Mai multe condiții peste cele ale ocupației",
       "explain_ro": "Anunțul cere vechime de cel puțin două ori mediana ocupației și, în plus, un nivel de limbă C1 sau un document numit. Condițiile pot fi justificate de post. Comparație: mediana vechimii cerute în aceeași ocupație.",
-      "caveat_ro": "Semnal nerevizuit de o persoană. Condițiile pot fi justificate de post."
+      "caveat_ro": "Semnal nerevizuit de o persoană. Condițiile pot fi justificate de post.",
+      "overview_rows": 5
     },
     "R25": {
       "kind": "error_posting",

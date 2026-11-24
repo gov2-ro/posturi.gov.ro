@@ -453,11 +453,6 @@ def test_r22_generic_projects_are_not_a_hit(sv, tmp_path):
     assert rows == [] and e["count"] == 0
 
 
-def test_r23_eu_project_experience(sv, tmp_path):
-    _text_check(sv, tmp_path, "R23", "experiență în proiecte finanțate din fonduri europene",
-                "experiență în proiecte educaționale. Fonduri europene există.")
-
-
 def test_r25_age_or_sex(sv, tmp_path):
     e, rows = counts(sv, tmp_path, "R25", [{}, {}, {}, {}, {}, {}], texts={
         1: "au vârsta de cel mult 45 de ani la data numirii", 2: "candidați de sex masculin",

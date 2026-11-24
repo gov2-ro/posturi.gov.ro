@@ -20,7 +20,15 @@ function fixture_seed_anomalies(PDO $db): void {
     $chk->execute(['R16', 'unusual_employer', 'Eticheta GRUP-ANGAJATOR', 'angajator', 'Explicație angajator.', '', 0, 100, 0, 0, 0]);
     $chk->execute(['R25', 'error_posting', 'Eticheta CU-AVERTISMENT', 'erori_anunt', 'Explicație text.', 'AVERTISMENT-R25 semnal din text.', 1, 100, 0, 0, 0]);
     $chk->execute(['R18', 'context', 'Eticheta GRUP-CONTEXT', 'context', 'Explicație context.', 'Context, nu o anomalie: test.', 1, 100, 0, 0, 0]);
+    // 2026-11-24: `public` and `overview_rows` (register keys). R14 shows 5 rows on the overview; R20 is admin-only.
+    $db->exec("ALTER TABLE anomaly_checks ADD COLUMN public INTEGER");
+    $db->exec("ALTER TABLE anomaly_checks ADD COLUMN overview_rows INTEGER");
+    $db->exec("UPDATE anomaly_checks SET public = 1");
+    $db->exec("UPDATE anomaly_checks SET overview_rows = 5 WHERE check_id = 'R14'");
+    $db->exec("INSERT INTO anomaly_checks VALUES ('R20', 'context', 'Eticheta ASCUNSA-ADMIN', 'context', 'Explicație ascunsă.', '',
+        1, 100, 0, 0, 0, 0, NULL)");
     $sig = $db->prepare("INSERT INTO anomaly_signals VALUES (?,?,?,?,?)");
+    $sig->execute([1001, 'R20', '13', '', '{}']);
     $sig->execute([1001, 'R14', '17', '16', '{}']);
     $sig->execute([1002, 'R14', '99', '16', '{"verdict": "false_positive"}']);
     for ($i = 0; $i < 8; $i++) $sig->execute([1001 + $i, 'R14', (string)(18 + $i), '16', '{}']);

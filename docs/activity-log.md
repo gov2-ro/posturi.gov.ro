@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-11-24 — API-01 live: deploy, Cloudflare rule, attribution (Opus)
+
+**Done:** Added the Cloudflare rate-limit rule in the dashboard (zone gov2.ro, host posturi.gov2.ro + path `/api/`, 60 per 10 s per IP, block 10 s). Added the attribution (posturi.gov.ro and posturi.gov2.ro) and the API contact (cancelarie@gov2.ro) to `/api/`. Deployed code `b12909d` from the Mac. Measured on the live site:
+- `/api/v1/posturi`: 200, count 1,592 (default status `active`), 16 pages, about 79 KB per page. `?x=1` gives 400.
+- One posting: `Server-Timing` 3.9 ms. List with `judet=cluj`: 47.2 ms (both cache misses).
+- `/api/v1/descarcare`: `application/gzip`, no `Content-Encoding`, 10,655,473 bytes, 3,041 postings (all statuses), `data_built_at` 2026-11-24T12:19:16Z. The first request (the build on the host) took 6.2 s and was a `MISS`. The second request was a `HIT` and took 1.5 s. So `posturi-private/api/` is writable on the host.
+- Cloudflare hides the e-mail address on `/api/` (`/cdn-cgi/l/email-protection`), as on `/despre/`.
+
+**Hard:** The free plan allows one rate-limit rule with only a 10 s period and a 10 s block, and it counts cache hits too. The zone is `gov2.ro`, so the rule must name the host.
+
+**Decided:** `contact.person` stays in the API, because the detail page already shows it. Wrong turn: I said that `CF_ZONE_ID` was empty on the Mac, from the backlog note of 2026-11-15, without checking. The deploy purged the edge, so the value is set.
+
 ### 2026-11-24 — API-01: the public JSON API, built (Sonnet, from the Opus brief)
 
 **Done.**

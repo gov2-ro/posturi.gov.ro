@@ -46,7 +46,7 @@ function fixture_seed_interesting(PDO $db, bool $anomalies = true): void {
         $set += ['id' => $id, 'url' => "https://posturi.gov.ro/anunt/fixture-$id", 'title' => "Post $id",
                  'sal_min' => null, 'sal_max' => null, 'inf_salary_min' => null, 'inf_salary_max' => null,
                  'pay_min' => 5000, 'pay_max' => null, 'nr_posturi' => null, 'v5_vacancies_total' => null,
-                 'project_hire' => 0];
+                 'project_hire' => 0, 'occ_group' => ''];   // the base row 1006 has COR 2212 (a doctor)
         $cols = array_keys($set);
         $st = $db->prepare('UPDATE temp.t_clone SET ' . implode(', ', array_map(fn($c) => "$c = ?", $cols)));
         $st->execute(array_values($set));
@@ -68,7 +68,10 @@ function fixture_seed_interesting(PDO $db, bool $anomalies = true): void {
     $high = 20000;
     // value 1
     $clone(3001, ['pay_min' => $high, 'title' => 'Muncitor calificat'], [['study' => 'licenta', 'none' => 1]]);
-    $clone(3002, ['pay_min' => $high, 'title' => 'Șofer'], [['study' => 'liceala', 'exp' => 5.0]]);
+    $clone(3002, ['pay_min' => $high, 'title' => 'Șofer'], [['study' => 'liceala', 'exp' => 2.0]]);
+    // 2026-11-24 (owner): no doctors; the „studii medii” branch needs under 3 years.
+    $clone(3007, ['pay_min' => $high, 'title' => 'Medic specialist', 'occ_group' => '2212'], [['study' => 'licenta', 'none' => 1]]);
+    $clone(3008, ['pay_min' => $high, 'title' => 'Asistent medical'], [['study' => 'postliceala', 'exp' => 5.0]]);
     $clone(3003, ['pay_min' => $high, 'title' => 'Expert'], [['study' => 'licenta', 'exp' => 5.0]]);
     $clone(3004, ['pay_min' => 100, 'title' => 'Paznic'], [['study' => 'liceala', 'exp' => 0.0, 'none' => 1]]);
     $clone(3005, ['pay_min' => $high, 'title' => 'Referent doua roluri'], [['study' => 'liceala', 'exp' => 5.0], ['study' => 'licenta', 'exp' => 5.0]]);

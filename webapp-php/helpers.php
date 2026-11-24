@@ -2568,6 +2568,18 @@ function interes_no_experience_sql(): string {
     return 'EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND (r.exp_years < 1 OR (r.exp_none_required = 1 AND r.exp_years IS NULL)))';
 }
 
+/** Years of experience under which the „studii medii” branch of `salariu-cerinte-mici` counts as low requirements. */
+const INTERES_LOW_EXP_YEARS = 3;
+
+/**
+ * SQL: a post for a medical doctor or dentist: COR 221 or 2261, or a title that starts with „medic” or names
+ * „doctor-medic” (the title rule of posting_roles.is_medical_title(), DATA-STUDIES-NOT; keep them in step).
+ */
+function interes_medical_sql(): string {
+    return "(COALESCE(j.occ_group, '') LIKE '221%' OR COALESCE(j.occ_group, '') LIKE '2261%'
+        OR LOWER(j.title) LIKE 'medic%' OR LOWER(j.title) LIKE '%doctor-medic%' OR LOWER(j.title) LIKE '%doctor medic%')";
+}
+
 /** SQL: the posting states a study level, and the highest one is „medii” or lower. */
 function interes_medium_studies_sql(): string {
     $in = fn(array $l) => implode(',', array_map(fn($s) => "'$s'", $l));   // constants, not input
@@ -2586,7 +2598,12 @@ function interes_sql(string $value): ?array {
     switch ($value) {
         case 'salariu-cerinte-mici':
             [$pay, $pb] = interes_pay_sql(INTERES_PAY_TOP);
-            return ["($pay AND (" . interes_no_experience_sql() . ' OR (' . interes_medium_studies_sql() . ')))', $pb];
+            // 2026-11-24 (owner, after the hand-read samples): no medical doctors (the extraction marks some as
+            // "no experience", but the post needs medical school and residency), and the „studii medii” branch
+            // also needs under 3 years of experience (it took nurses who need 5).
+            return ["($pay AND NOT " . interes_medical_sql() . ' AND (' . interes_no_experience_sql()
+                . ' OR (' . interes_medium_studies_sql() . ' AND NOT EXISTS (SELECT 1 FROM posting_roles r
+                    WHERE r.posting_id = j.id AND r.exp_years >= ' . INTERES_LOW_EXP_YEARS . '))))', $pb];
         case 'multe-posturi':
             // A multi-role posting counts the vacancies of ONE role, not the sum (nr_posturi is the sum).
             return ['(CASE WHEN (SELECT COUNT(*) FROM posting_roles r WHERE r.posting_id = j.id) > 1
@@ -2610,7 +2627,7 @@ function interes_sql(string $value): ?array {
 /** The sentence that says what a filter value is (chip title, facet row title). */
 function interes_rule(string $value): string {
     return match ($value) {
-        'salariu-cerinte-mici' => 'Salariu în treapta ' . INTERES_PAY_TOP . ' din 5 față de posturile active, fără experiență cerută sau cu studii medii.',
+        'salariu-cerinte-mici' => 'Salariu în treapta ' . INTERES_PAY_TOP . ' din 5 față de posturile active, fără experiență cerută sau cu studii medii și sub ' . INTERES_LOW_EXP_YEARS . ' ani de experiență. Fără posturile de medic.',
         'multe-posturi'        => INTERES_VACANCIES . ' sau mai multe posturi la același anunț.',
         'debutant-platit'      => 'Post de debutant, stagiar sau începător, cu salariu în treapta ' . INTERES_PAY_ENTRY . ' sau 5 din 5.',
         'greu-de-ocupat'       => 'Același angajator a publicat același titlu de două ori, la 14–90 de zile distanță.',

@@ -100,6 +100,13 @@ run_suite('the chip carries the sentence as its title', function () use ($base, 
     assert_contains('Multe posturi la același anunț', $html, 'chip label');
 });
 
+run_suite('salariu-cerinte-mici leaves out doctors and medium studies with 3+ years (owner, 2026-11-24)', function () {
+    $ids = in_value('salariu-cerinte-mici');
+    assert_true(!in_array(3007, $ids, true), 'a doctor marked "no experience" is out');
+    assert_true(!in_array(3008, $ids, true), 'a nurse with 5 years is out');
+    assert_true(in_array(3002, $ids, true), 'medium studies with 2 years is in');
+});
+
 run_suite('the detail page has one line for each value that holds', function () use ($base) {
     $h = (string)@file_get_contents($base . '/job/3010/');
     assert_contains('data-interesting="multe-posturi"', $h, 'line');

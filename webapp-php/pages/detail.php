@@ -699,6 +699,16 @@ require __DIR__ . '/../inc/header.php';
         </section>
         <?php endif; ?>
 
+        <?php /* UX-INTERESTING (spec § 2.1): one line for each "Posturi interesante" filter that holds for this posting. A fact, not a judgement. */
+        $_interes = interes_for_posting($p, pay_level($p)); ?>
+        <?php if ($_interes): ?>
+        <section class="py-1" data-interesting-list>
+          <?php foreach ($_interes as $_iv => $_isent): ?>
+          <p class="max-w-2xl text-sm text-ink" data-interesting="<?= e($_iv) ?>">Interesant: <a href="<?= e(home_list_url(['interes' => [$_iv]])) ?>" class="text-gov underline"><?= e(INTERES_LABELS[$_iv]) ?></a> — <?= e($_isent) ?></p>
+          <?php endforeach; ?>
+        </section>
+        <?php endif; ?>
+
         <?php if ($cond || $tag_groups): ?>
         <section class="flex flex-wrap items-baseline gap-x-6 gap-y-1 py-2">
           <div class="flex items-baseline gap-1.5">

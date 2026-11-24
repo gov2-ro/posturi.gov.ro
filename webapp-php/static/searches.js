@@ -36,7 +36,7 @@
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
-    'regime', 'inst', 'cor', 'medspec', 'salary_bucket',
+    'regime', 'inst', 'cor', 'medspec', 'salary_bucket', 'interes',
     'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
     'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not', 'cor_not',
     'studies_level_not', 'exp_level_not'

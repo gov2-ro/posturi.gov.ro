@@ -104,6 +104,7 @@ $_sr_fmt = static fn(int $v): string => number_format($v, 0, ',', '.');
     <a href="<?= e($chip['href']) ?>"
        data-chip-param="<?= e($chip['param']) ?>"
        data-chip-value="<?= e($chip['value']) ?>"
+       <?= !empty($chip['title']) ? 'title="' . e($chip['title']) . '"' : '' ?>
        class="inline-flex items-center gap-1 rounded-full border border-info-line bg-gov-light px-2.5 py-1 text-xs text-gov transition-colors hover:border-alert-line hover:bg-alert hover:text-alert-ink">
       <?php if ($chip['group'] !== ''): ?><span class="opacity-70"><?= e($chip['group']) ?>:</span><?php endif; ?>
       <span class="font-medium"><?= e($chip['label']) ?></span>

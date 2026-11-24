@@ -12,6 +12,7 @@
  *   php tests/fixtures/make.php /tmp/posturi-limits.sqlite limits       # a draft note on 1001, a last-resort draft figure on 1003, the limits table (tests/salary_limits_test.php, browser/salary_limits.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-range.sqlite range         # a pay range on 1001 (estimate) and 1003 (stated), ADR 0008 rule 11 (tests/salary_range_test.php, browser/salary_range.spec.js)
  *   php tests/fixtures/make.php /tmp/posturi-anomalies.sqlite anomalies # the anomaly tables, one check in each group (tests/anomalies_test.php, browser/anomalies.spec.js)
+ *   php tests/fixtures/make.php /tmp/posturi-interesting.sqlite interesting # the "Posturi interesante" cases and the anomaly tables (tests/interesting_test.php, browser/interesting.spec.js)
  * Used by the request tests and by the Playwright global setup.
  */
 require_once __DIR__ . '/build_db.php';
@@ -19,6 +20,7 @@ require_once __DIR__ . '/theme_db.php';
 require_once __DIR__ . '/chips_db.php';
 require_once __DIR__ . '/professional_db.php';
 require_once __DIR__ . '/anomalies_db.php';
+require_once __DIR__ . '/interesting_db.php';
 
 $path = $argv[1] ?? (sys_get_temp_dir() . '/posturi-fixture.sqlite');
 $evidence = ($argv[2] ?? '') === 'evidence';
@@ -54,5 +56,8 @@ if (($argv[2] ?? '') === 'range') {
 }
 if (($argv[2] ?? '') === 'anomalies') {
     fixture_seed_anomalies(new PDO('sqlite:' . $path));
+}
+if (($argv[2] ?? '') === 'interesting') {
+    fixture_seed_interesting(new PDO('sqlite:' . $path, null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]));
 }
 echo "$path\n";

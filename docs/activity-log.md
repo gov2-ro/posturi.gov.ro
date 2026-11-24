@@ -2,6 +2,44 @@
 
 ## 2026
 
+### 2026-11-24 — UX-INTERESTING: „Posturi interesante”, phase A and B (Sonnet, from the Opus brief)
+
+**Done.**
+- `helpers.php`: `interes_sql($value)` is the one definition of each value (WHERE fragment and binds). The filter `interes[]` (`build_filters()`, OR inside the group, unknown values ignored), the facet count, the detail line and the home card all use it. Also: `INTERES_LABELS`, the thresholds as constants (`INTERES_PAY_TOP` 5, `INTERES_PAY_ENTRY` 4, `INTERES_VACANCIES` 5), `interes_values()` (phase B only when the table `anomaly_signals` exists), `interes_rule()` (the sentence of a value), `interes_for_posting()`. `interes` is in `MULTI_PARAMS`, `FILTER_CHIP_GROUPS` and `filter_value_label()`, so saved searches, alerts and feeds carry it with no special case. `static/searches.js` lists it too (the test that compares the two lists failed without it).
+- List page: group „Posturi interesante” (`pages/list.php`, `partials/facets.php`); each row has the sentence as `title`. The chip has the sentence as `title` (`partials/result_list.php`, one attribute).
+- Detail page: one line „Interesant: {label} — {sentence}” for each value that holds, in `<section data-interesting-list>` after the salary section, each `<p data-interesting="{value}">`. The salary box and its `data-pay-*` attributes are unchanged. The block is outside the `if ($show_sal)` section, so a posting with no salary box still shows its lines.
+- Home page: one card for each value after „Primul job”, only when the value has 5 or more open postings. All card links have `text-base` (16 px; was 19 px); the count is `text-sm`. After the cards: „Vezi și: anomalii și abateri statistice” (`[data-home-anomalies-link]`, 44 px target).
+- Tests: `tests/interesting_test.php` (90 assertions), fixture `tests/fixtures/interesting_db.php` (`make.php <path> interesting`; 60 filler postings that set the pay quintiles, 28 case postings), `tests/browser/interesting.spec.js` (3 tests at 320, 375, 1280 px; port 8832).
+
+**Measured** (scratch copy of `data/_dev/full-2026-11-23.sqlite`, 16,875 postings, 1,538 open; the file has no `pay_*` columns and no anomaly tables, so I added both to the scratch copy: `pay_*` with `_pay_range_columns()` from the columns `sal_*` and `inferred`, and the tables with `ops/anomaly-survey.py --write-table`. The estimate JSON has no `selector`, so the Anexa VI, management and local-range exclusions of rule 11 are not applied: 14,802 rows got `pay_min`. Quintile cuts, gross lei: 4,672 / 5,146 / 5,597 / 6,526.)
+- Open postings in each value: `salariu-cerinte-mici` 34, `multe-posturi` 54, `debutant-platit` 76, `greu-de-ocupat` (E03) 166, `competente-rare` (E05) 9.
+- Value 1 by threshold and branch: pay level 5: no experience 26, medium studies 16, either 34. Pay level 4 or 5: 148 / 111 / 192. 8 of the 34 are in only through „studii medii”.
+- Value 3: 3 or more 113; 5 or more 54; 10 or more 28.
+- Value 4: title word „debutant” 171 open, „stagiar” 4, „începător” 0. Pay level 4 or 5: 76 (all „debutant”; „stagiar” 0). Pay level 5 only: 8.
+- Overlap (open postings): 1 and 4: 5; 1 and 2: 1; 3 and 4: 3; 3 and 2: 4; 3 and 5: 1; 4 and 2: 6; the other pairs 0. 320 distinct postings in at least one value.
+- Ten postings of each value read by hand (seed 11; 9 for E05, which has 9):
+  - Value 1: the sentence holds for 10 of 10 as the data says, but 2 are doubtful as „cerințe mici”: two nurses with „cu studii medii” and 5 years of experience (#21133, #20742); and 4 doctors (`medic specialist`) in the „fără experiență” branch, because the extraction says „none required” with no years. One more had the flag next to 5 years (#20609): the rule now drops it (35 to 34 postings).
+  - Value 3: 10 of 10 hold. 3 of 10 are multi-role postings; the number shown is the largest role (7, 10, 51, 16). `nr_posturi` 339395 (R01) is in the open set; it is one posting.
+  - Value 4: 10 of 10 have the word in the title and a level 4 pay. 3 are multi-role postings where only one role is „debutant”.
+  - Value 2 (E03): 10 of 10 hold: same employer, same title, an earlier posting on the date shown. Some titles are generic („posturi vacante pe perioada nedeterminată”).
+  - Value 5 (E05): 9 of 9 have a role in the top 2 % of the occupation group on experience or a rare field; a few read as normal (educator, „studii superioare”).
+- Tests: `pytest webapp/tests` 1,834 passed, 13 skipped; every `webapp-php/tests/*_test.php` passes except `theme_test.php` (sprite check, the known worktree failure of the two entries above); Playwright `home`, `discovery`, `salary_range`, `anomalies`, `searches`, `interesting`, `chips`: 225 passed, 3 skipped.
+
+**Hard.**
+- The spec says „the same title test as R12”, but R12 tests only „debutant”; the spec lists three words. The filter uses the three (`INTERES_ENTRY_LIKE`, SQL `LIKE`; `%ncep_tor%` takes „începător” and „ÎNCEPĂTOR”). A comment says the lists must agree. R12 is not changed.
+- `LIKE` has no case folding for „Î”, so the pattern starts after it. The fixture has a title in capitals to hold this.
+- The flag `exp_none_required` is true next to years of experience in the data. The rule takes „no experience” as a role with under 1 year, or the flag with no years.
+- The chip `title` needed one attribute in `partials/result_list.php`, a file the brief does not name; the brief asks for the chip title, and the chip markup lives only there.
+
+**Decided.**
+- Value 1 reads the roles: „no experience” = any role; „studii medii” = at least one role with a level up to postliceală and no role above it. A posting with no stated level does not count. The cost of „all roles”: a multi-role posting with one junior role would drop out.
+- Value 3 uses `nr_posturi` (else `v5_vacancies_total`) for a posting with one role, and the largest `vacancy_count` for a posting with several, as the spec says (not the sum).
+- Level 5 of 5 is `SALARY_EXPR >= cut 4`, level 4 is `>= cut 3`; a project post is never in a level (as `pay_level()`).
+- Phase B reads `anomaly_signals` with a copy of the false-positive test (`INTERES_FP_LIKE`), because `ANOMALY_FP_LIKE` lives in a page file and the two constants must not collide.
+- The sentence on the detail page for value 2 uses the date of the earlier posting (the peer of the E03 signal); the filter lists the later one.
+
+**Assumed.** The pay columns of the scratch copy are close to the live ones (the exclusions above are missing); the VPS session must repeat the numbers. The thresholds are the spec's first values.
+
 ### 2026-11-24 — ANOMALY-PUBLIC: owner review of the live page (Opus)
 
 **Done.** R23 (experience in EU-funded projects) is dropped: an advantage, not a limit. R18 (free e-mail) is admin-only through a new register key `public: false`; it may feed a future quality score. E01 and R24 show 5 signals on `/anomalii/` (`overview_rows`); every „Toate cele N semnale” link opens the full list in a new tab. E05 caveat: „Semnal nerevizuit de o persoană 👩🏻‍🌾⁉️” (owner wording). R25, R20 and E01 stay as they are. Before this: quoted search phrases fixed (`3e05e65`); quotes as plain text with line breaks, 10 signals per check, sitemap (`6eb8945`, live; VPS: 1,528 signals, context group 1,227).

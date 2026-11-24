@@ -52,7 +52,7 @@
                 <?php elseif ($depth || !empty($item['tree'])): ?>
                 <span class="facet-twisty-pad" aria-hidden="true"></span>
                 <?php endif; ?>
-                <label class="group flex min-w-0 flex-1 items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>">
+                <label class="group flex min-w-0 flex-1 items-center gap-2 py-1 <?= $dead ? 'cursor-not-allowed opacity-40' : 'cursor-pointer' ?>"<?= !empty($item['title']) ? ' title="' . e($item['title']) . '"' : '' ?>>
                   <input type="checkbox" name="<?= e($field) ?>" value="<?= e($val) ?>"
                          class="facet-check accent-gov shrink-0"<?= checked_if($on) ?><?= $dead ? ' disabled' : '' ?>>
                   <span class="flex-1 truncate text-sm text-ink <?= $dead ? '' : 'transition-colors group-hover:text-gov' ?>"><?= e($lbl) ?></span>
@@ -229,6 +229,8 @@
         facet_group('Domeniu de studii',   $isced_options,      'isced',      $isced_sel);
         facet_group('Experiență minimă',   $exp_options,        'exp_level',  $exp_levels, false,
                     $auto_help . ' Unele intervale includ anunțuri fără experiență precizată.');
+        facet_group('Posturi interesante', $interes_options,    'interes',    $interes_sel, false,
+                    'Fapte despre anunț, față de celelalte posturi active. Nu sunt o părere despre angajator.');
         facet_group('Funcție',             $level_options,      'level',      $levels);
         // 261016: the source's "Categorie" (contractuală / publică / militară) is the
         // institution's free pick — muncitori filed as "Funcție publică". Replaced by

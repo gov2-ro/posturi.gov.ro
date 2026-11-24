@@ -2066,6 +2066,7 @@ const FILTER_CHIP_GROUPS = [
     'seniority'      => 'Grad',
     'work_type'      => 'Normă',
     'exp_level'      => 'Experiență',
+    'interes'        => 'Interesant',
     'studies_level'  => 'Studii din text',
     'remote'         => '',
     'computer'       => 'Calculator',
@@ -2136,7 +2137,7 @@ const MULTI_PARAMS = [
     'family', 'seniority', 'work_type', 'exp_level', 'studies_level', 'anomaly',
     'isced', 'skill', 'lang', 'credential', 'domain', 'stage', 'eqf',
     'occupation', 'funding', 'sector', 'duration', 'schedule', 'loc', 'recruitment',
-    'regime', 'inst', 'cor', 'medspec', 'salary_bucket',
+    'regime', 'inst', 'cor', 'medspec', 'salary_bucket', 'interes',
     // NEGATABLE_PARAMS' exclusion lists
     'family_not', 'occupation_not', 'inst_not', 'sector_not', 'regime_not', 'funding_not',
     'duration_not', 'isced_not', 'skill_not', 'lang_not', 'credential_not', 'domain_not', 'cor_not',
@@ -2201,6 +2202,7 @@ function filter_value_label(string $key, string $value): string {
         'work_type'                        => WORK_TYPE_LABELS[$value] ?? $value,
         'exp_level'                        => bucket_label(EXP_BUCKETS, $value),
         'salary_bucket'                    => salary_bucket_label($value),
+        'interes'                          => INTERES_LABELS[$value] ?? $value,
         'status'                           => STATUS_LABELS[$value] ?? ($value === 'all' ? 'Toate' : $value),
         'remote'                           => 'Telemuncă',
         'schema'                           => $value === 'yes' ? 'Structurată' : 'Text brut',
@@ -2256,6 +2258,7 @@ function active_filter_chips(): array {
                 'value' => $value,
                 'group' => $group,
                 'label' => filter_value_label($key, $value),
+                'title' => $key === 'interes' ? interes_rule($value) : '',   // the sentence of the filter value
                 'href'  => qs_without($key, is_array($raw) ? $value : null),
             ];
         }
@@ -2503,6 +2506,167 @@ const ROLE_ARRAY_GROUPS = [
     'skill'      => 'skills',
     'credential' => 'credentials',
 ];
+
+// ---- "Posturi interesante" (UX-INTERESTING, spec docs/specs/2026-11-24-interesting-jobs.md) ----
+//
+// One filter parameter, `interes[]`. Each value is a fact about a posting against its peers,
+// never a judgement of the employer. interes_sql() is the ONE definition of a value: the
+// filter, the facet count, the home-page card and the detail-page line all use it.
+
+/** value => label, in the order the facet shows them. The last two (phase B) need the anomaly tables. */
+const INTERES_LABELS = [
+    'salariu-cerinte-mici' => 'Salariu mare, cerințe mici',
+    'multe-posturi'        => 'Multe posturi la același anunț',
+    'debutant-platit'      => 'Debutant bine plătit',
+    'greu-de-ocupat'       => 'Post republicat',
+    'competente-rare'      => 'Cerințe rare',
+];
+const INTERES_PHASE_B = ['greu-de-ocupat', 'competente-rare'];
+/** First thresholds of the spec (§ 2); the owner may change them after the measures (§ 6). */
+const INTERES_PAY_TOP    = 5;   // value 1: pay level of the posting, at least
+const INTERES_PAY_ENTRY  = 4;   // value 4: pay level of the posting, at least
+const INTERES_VACANCIES  = 5;   // value 3: vacancies of one role, at least
+/** Value 1, low requirements: the study levels up to „medii”. The higher ones are the rest of STUDIES_ORDER. */
+const INTERES_LOW_STUDIES = ['generala', 'profesionala', 'liceala', 'postliceala'];
+/**
+ * Entry-level title words (value 4), as SQL LIKE patterns over `j.title` (LIKE ignores ASCII case;
+ * in „începător” the `_` takes the „ă” and the pattern starts after the „î”).
+ * Keep them in step with the title test of anomaly check R12 (ops/anomaly-survey.py, `r12`). R12 tests
+ * only „debutant”; the spec adds „stagiar” and „începător” for this filter.
+ */
+const INTERES_ENTRY_LIKE = ['%debutant%', '%stagiar%', '%ncep_tor%'];
+/** A signal with this review is hidden (same test as ANOMALY_FP_LIKE in pages/anomalies_public.php). */
+const INTERES_FP_LIKE = '%"verdict": "false_positive"%';
+
+/** Whether the export has the anomaly tables (phase B values). */
+function interes_has_anomalies(): bool {
+    static $has = null;
+    if ($has === null) {
+        $has = (bool)db()->query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'anomaly_signals'")->fetchColumn();
+    }
+    return $has;
+}
+
+/** The values this export can filter on: phase B only with the anomaly tables. @return list<string> */
+function interes_values(): array {
+    $has = interes_has_anomalies();
+    return array_values(array_filter(array_keys(INTERES_LABELS), fn($v) => $has || !in_array($v, INTERES_PHASE_B, true)));
+}
+
+/** SQL: the pay level of the row is at least $min_level (2..5), by the quintiles of pay_quintiles(). @return array{0:string,1:array} */
+function interes_pay_sql(int $min_level): array {
+    $q = pay_quintiles();
+    if (!$q) return ['0', []];   // too few figures: no level exists
+    return ['(COALESCE(j.project_hire, 0) = 0 AND ' . SALARY_EXPR . ' >= CAST(? AS REAL))', [$q['cuts'][$min_level - 2]]];
+}
+
+/**
+ * SQL: a role of the posting states no experience: under 1 year, or the flag "none required" with no years.
+ * The flag alone is not enough: 2 of 10 postings read by hand had the flag next to 5 years.
+ */
+function interes_no_experience_sql(): string {
+    return 'EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND (r.exp_years < 1 OR (r.exp_none_required = 1 AND r.exp_years IS NULL)))';
+}
+
+/** SQL: the posting states a study level, and the highest one is „medii” or lower. */
+function interes_medium_studies_sql(): string {
+    $in = fn(array $l) => implode(',', array_map(fn($s) => "'$s'", $l));   // constants, not input
+    $high = array_values(array_diff(STUDIES_ORDER, INTERES_LOW_STUDIES));
+    return 'EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND +r.study_level IN (' . $in(INTERES_LOW_STUDIES) . '))'
+         . ' AND NOT EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND +r.study_level IN (' . $in($high) . '))';
+}
+
+/**
+ * The WHERE fragment of one `interes` value, over `job_postings j`, and its binds; null for an unknown
+ * value, or a phase B value of an export without the anomaly tables.
+ *
+ * @return array{0:string,1:array}|null
+ */
+function interes_sql(string $value): ?array {
+    switch ($value) {
+        case 'salariu-cerinte-mici':
+            [$pay, $pb] = interes_pay_sql(INTERES_PAY_TOP);
+            return ["($pay AND (" . interes_no_experience_sql() . ' OR (' . interes_medium_studies_sql() . ')))', $pb];
+        case 'multe-posturi':
+            // A multi-role posting counts the vacancies of ONE role, not the sum (nr_posturi is the sum).
+            return ['(CASE WHEN (SELECT COUNT(*) FROM posting_roles r WHERE r.posting_id = j.id) > 1
+                    THEN EXISTS (SELECT 1 FROM posting_roles r WHERE r.posting_id = j.id AND r.vacancy_count >= CAST(? AS INTEGER))
+                    ELSE COALESCE(j.nr_posturi, j.v5_vacancies_total) >= CAST(? AS INTEGER) END)',
+                    [INTERES_VACANCIES, INTERES_VACANCIES]];
+        case 'debutant-platit':
+            [$pay, $pb] = interes_pay_sql(INTERES_PAY_ENTRY);
+            $title = implode(' OR ', array_fill(0, count(INTERES_ENTRY_LIKE), 'j.title LIKE ?'));
+            return ["(($title) AND $pay)", array_merge(INTERES_ENTRY_LIKE, $pb)];
+        case 'greu-de-ocupat':
+        case 'competente-rare':
+            if (!interes_has_anomalies()) return null;
+            $check = $value === 'greu-de-ocupat' ? 'E03' : 'E05';
+            return ["EXISTS (SELECT 1 FROM anomaly_signals s WHERE s.posting_id = j.id AND s.check_id = '$check'
+                    AND COALESCE(s.detail_json, '') NOT LIKE ?)", [INTERES_FP_LIKE]];
+    }
+    return null;
+}
+
+/** The sentence that says what a filter value is (chip title, facet row title). */
+function interes_rule(string $value): string {
+    return match ($value) {
+        'salariu-cerinte-mici' => 'Salariu în treapta ' . INTERES_PAY_TOP . ' din 5 față de posturile active, fără experiență cerută sau cu studii medii.',
+        'multe-posturi'        => INTERES_VACANCIES . ' sau mai multe posturi la același anunț.',
+        'debutant-platit'      => 'Post de debutant, stagiar sau începător, cu salariu în treapta ' . INTERES_PAY_ENTRY . ' sau 5 din 5.',
+        'greu-de-ocupat'       => 'Același angajator a publicat același titlu de două ori, la 14–90 de zile distanță.',
+        'competente-rare'      => 'Cerințele sunt rare în grupa de ocupații. Semnal nerevizuit de o persoană.',
+        default                => '',
+    };
+}
+
+/**
+ * The `interes` values a posting is in, each with its sentence (detail page, spec § 2.1).
+ * One query per value, over the same interes_sql() as the filter.
+ *
+ * @param array<string,mixed> $p       the posting row (`id`)
+ * @param ?array{level:int} $pay_level pay_level($p), for the sentence of value 4
+ * @return array<string,string>  value => sentence
+ */
+function interes_for_posting(array $p, ?array $pay_level): array {
+    $id = (int)($p['id'] ?? 0);
+    $out = [];
+    foreach (interes_values() as $value) {
+        $sql = interes_sql($value);
+        if (!$sql) continue;
+        $st = db()->prepare("SELECT 1 FROM job_postings j WHERE j.id = ? AND $sql[0]");
+        $st->execute(array_merge([$id], $sql[1]));
+        if (!$st->fetchColumn()) continue;
+        switch ($value) {
+            case 'salariu-cerinte-mici':
+                $why = db()->prepare('SELECT ' . interes_no_experience_sql() . ' FROM job_postings j WHERE j.id = ?');
+                $why->execute([$id]);
+                $out[$value] = 'Salariu în treapta ' . INTERES_PAY_TOP . ' din 5 față de posturile active, '
+                    . ($why->fetchColumn() ? 'fără experiență cerută' : 'cu studii medii') . '.';
+                break;
+            case 'multe-posturi':
+                $n = db()->prepare('SELECT CASE WHEN (SELECT COUNT(*) FROM posting_roles r WHERE r.posting_id = j.id) > 1
+                        THEN (SELECT MAX(r.vacancy_count) FROM posting_roles r WHERE r.posting_id = j.id)
+                        ELSE COALESCE(j.nr_posturi, j.v5_vacancies_total) END FROM job_postings j WHERE j.id = ?');
+                $n->execute([$id]);
+                $out[$value] = (int)$n->fetchColumn() . ' posturi la același anunț.';
+                break;
+            case 'debutant-platit':
+                $out[$value] = 'Post de debutant cu salariu în treapta ' . (int)($pay_level['level'] ?? INTERES_PAY_ENTRY) . ' din 5.';
+                break;
+            case 'greu-de-ocupat':
+                $peer = db()->prepare("SELECT j2.published_at FROM anomaly_signals s JOIN job_postings j2 ON j2.id = CAST(s.peer_value AS INTEGER)
+                    WHERE s.posting_id = ? AND s.check_id = 'E03' AND COALESCE(s.detail_json, '') NOT LIKE ? LIMIT 1");
+                $peer->execute([$id, INTERES_FP_LIKE]);
+                $date = (string)$peer->fetchColumn();
+                $out[$value] = $date !== '' ? 'Același angajator a publicat același titlu și pe ' . fmt_date(substr($date, 0, 10)) . '.'
+                                             : 'Același angajator a publicat același titlu și mai devreme.';
+                break;
+            default:
+                $out[$value] = interes_rule($value);
+        }
+    }
+    return $out;
+}
 
 /**
  * Build WHERE clause fragments and bindings from GET params.
@@ -2811,6 +2975,23 @@ function build_filters(array $p, bool $exclude_key = false, string $excl = ''): 
     // Quick choice: only postings we can put a number on.
     if (($p['has_salary'] ?? '') === '1' && $excl !== 'has_salary') {
         $where[] = SALARY_EXPR . " IS NOT NULL";
+    }
+
+    // "Posturi interesante" (UX-INTERESTING): the values of one group combine with OR, as the other
+    // facets do; an unknown value, or a phase B value without the anomaly tables, adds nothing.
+    if ($excl !== 'interes') {
+        $int_or = [];
+        $int_binds = [];
+        foreach ((array)($p['interes'] ?? []) as $iv) {
+            $sql = is_scalar($iv) ? interes_sql((string)$iv) : null;
+            if (!$sql) continue;
+            $int_or[] = $sql[0];
+            array_push($int_binds, ...$sql[1]);
+        }
+        if ($int_or) {
+            $where[] = '(' . implode(' OR ', $int_or) . ')';
+            array_push($binds, ...$int_binds);
+        }
     }
 
     // Plain-column facets added with the occupation dictionary and prompt v4.

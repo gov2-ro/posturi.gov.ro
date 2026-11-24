@@ -53,11 +53,19 @@ $combos = [
      'params' => ['lang' => ['hu']],
      'tags' => ['necesită limba maghiară']],   // last
 ];
+// "Posturi interesante" (UX-INTERESTING): one card per filter value, after "Primul job". A value with fewer than 5
+// open postings stays a filter and is left out here (spec § 6).
+$interes_cards = [];
+foreach (interes_values() as $_iv) {
+    $interes_cards[] = ['title' => INTERES_LABELS[$_iv], 'params' => ['interes' => [$_iv]], 'tags' => [INTERES_LABELS[$_iv]], 'min' => 5];
+}
+$_first_job = array_search('Primul job: fără experiență cerută', array_column($combos, 'title'), true);
+array_splice($combos, $_first_job === false ? count($combos) : $_first_job + 1, 0, $interes_cards);
 foreach ($combos as $i => $c) {
     $combos[$i]['href'] = home_list_url($c['params']);
     $combos[$i]['n'] = home_count_for($c['params']);
 }
-$combos = array_values(array_filter($combos, fn($c) => $c['n'] > 0));
+$combos = array_values(array_filter($combos, fn($c) => $c['n'] >= ($c['min'] ?? 1)));
 
 // ---- Professional domains and counties: one GROUP BY for (county, family, COR major group) ----
 $domains = [];
@@ -242,7 +250,7 @@ $heading = 'g2-heading-section';
          2026-11-18). The icon is 30 px (the 24 px of a line, + 25%). */ ?>
       <li data-home-theme-example class="mb-4 flex w-fit min-w-0 max-w-full break-inside-avoid flex-col">
         <h3 class="py-0.5">
-          <?php if ($c['icon']): ?><?= icon($c['icon'], 'mr-2 inline-block h-[30px] w-[30px] align-[-7px] text-gov') ?><?php endif; ?><a href="<?= e($c['href']) ?>" class="g2-link-title py-2.5"><?= e($c['title']) ?></a><span data-example-count class="text-base font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
+          <?php if ($c['icon']): ?><?= icon($c['icon'], 'mr-2 inline-block h-[30px] w-[30px] align-[-7px] text-gov') ?><?php endif; ?><a href="<?= e($c['href']) ?>" class="g2-link-title py-2.5 text-base"><?= e($c['title']) ?></a><span data-example-count class="text-sm font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
         </h3>
       </li>
       <?php else: ?>
@@ -250,12 +258,14 @@ $heading = 'g2-heading-section';
         <?php /* One run of inline text: the count follows the last word of the title (a no-break space
            joins them), so it never starts a line alone. The 44 px target is padding on an inline link. */ ?>
         <h3 class="py-0.5">
-          <?php if (!empty($c['flag'])): ?><img src="/static/flags/hu.svg" alt="" width="30" height="20" class="mr-2 inline-block border border-line align-middle"><?php endif; ?><a href="<?= e($c['href']) ?>"<?= !empty($c['lang']) ? ' lang="' . e($c['lang']) . '"' : '' ?> class="g2-link-title py-2.5"><?= e($c['title']) ?></a><span data-example-count class="text-base font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
+          <?php if (!empty($c['flag'])): ?><img src="/static/flags/hu.svg" alt="" width="30" height="20" class="mr-2 inline-block border border-line align-middle"><?php endif; ?><a href="<?= e($c['href']) ?>"<?= !empty($c['lang']) ? ' lang="' . e($c['lang']) . '"' : '' ?> class="g2-link-title py-2.5 text-base"><?= e($c['title']) ?></a><span data-example-count class="text-sm font-normal text-ink-muted">&nbsp;(<?= e($fmt($c['n'])) ?>)</span>
         </h3>
       </li>
       <?php endif; ?>
       <?php endforeach; ?>
     </ul>
+    <?php /* UX-INTERESTING: the way from the ready-made searches to the statistical anomalies. */ ?>
+    <p data-home-anomalies-link class="text-base">Vezi și: <a href="/anomalii/" class="inline-flex min-h-[44px] items-center underline">anomalii și abateri statistice</a></p>
   </section>
   <?php endif; ?>
 

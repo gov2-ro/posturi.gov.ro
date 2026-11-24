@@ -29,6 +29,8 @@ const limitsFixture = path.join(os.tmpdir(), 'posturi-browser-limits.sqlite');
 const rangeFixture = path.join(os.tmpdir(), 'posturi-browser-range.sqlite');
 // Anomalies page (anomalies.spec.js): the shared fixture plus the anomaly tables (tests/fixtures/anomalies_db.php), on its own port.
 const anomaliesFixture = path.join(os.tmpdir(), 'posturi-browser-anomalies.sqlite');
+// "Posturi interesante" (interesting.spec.js): the shared fixture plus the cases of tests/fixtures/interesting_db.php, on its own port.
+const interestingFixture = path.join(os.tmpdir(), 'posturi-browser-interesting.sqlite');
 // UX-14: the private directory of the email alerts (a test key pair and pepper).
 const alertsDir = path.join(os.tmpdir(), 'posturi-browser-alerts');
 
@@ -141,6 +143,17 @@ module.exports = defineConfig({
       timeout: 20_000,
       env: {
         POSTURI_DB: anomaliesFixture,
+        POSTURI_TODAY: '2026-10-03',
+      },
+    },
+    {
+      command: `php tests/fixtures/make.php ${interestingFixture} interesting && php -S 127.0.0.1:8832 router.php`,
+      cwd: webappDir,
+      url: 'http://127.0.0.1:8832/',
+      reuseExistingServer: false,
+      timeout: 20_000,
+      env: {
+        POSTURI_DB: interestingFixture,
         POSTURI_TODAY: '2026-10-03',
       },
     },

@@ -454,6 +454,18 @@ $exp_options = [];
 }
 
 timing_mark('f-exp');
+// "Posturi interesante" (UX-INTERESTING): each count is scope_count() over the same interes_sql() that the
+// filter uses, so the number next to a value is the size of the list that the value gives.
+$interes_options = [];
+{
+    $s = facet_scope('interes');
+    foreach (interes_values() as $iv) {
+        [$iw, $ib] = interes_sql($iv);
+        $cnt = scope_count($s, [$iw], $ib);
+        if ($cnt) $interes_options[] = ['val' => $iv, 'cnt' => $cnt, 'label' => INTERES_LABELS[$iv], 'title' => interes_rule($iv)];
+    }
+}
+$interes_sel = (array)($_GET['interes'] ?? []);
 // Salary filter: net pay of the figure the row shows (stated, else the estimate: law in force, declared pay or, last, the draft law), as a gross
 // threshold in SQL (gross_for_net()), and the option "fără salariu estimat". The facet hides itself
 // while no posting has a figure (before `estimate-salaries.py` has ever run).

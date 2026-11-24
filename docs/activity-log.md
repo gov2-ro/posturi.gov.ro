@@ -2,6 +2,18 @@
 
 ## 2026
 
+### 2026-11-24 — API-01: a public JSON API, briefed (Opus + owner)
+
+**Done:** Checked the live cache of `/posturi.json`. Cloudflare caches it for each full URL (`s-maxage=3600`): the bare URL was a `HIT` (age 2312 s), and `?q=medic` was a `MISS` and then a `HIT`. Wrote the brief `docs/briefs/2026-11-24-public-api.md`.
+
+**Hard:** The cache protects the host only from repeated URLs. A client that walks every page, or adds a random parameter, reaches the host on each request, because the app ignores unknown parameters but Cloudflare keys on them.
+
+**Decided:**
+- No tokens (owner). Tokens do not protect the host, because the requests that hurt are the ones the cache never sees. They also need issuing, storage, revocation and counting on a shared host without Redis. A hard-coded token was possible, but it adds an uncached path for the heaviest users.
+- A fixed page size of 100, strict parameters on `/api/*` (400 for an unknown one), a bulk download, and a Cloudflare rate-limit rule at the edge.
+- The host builds the bulk download on the first request after each data deploy. The VPS has no PHP (checked 2026-11-24), and one PHP serializer for the API and the download prevents drift. A Python dump in the export would be a second serializer.
+- `/posturi.json` and the other feeds stay unchanged.
+
 ### 2026-11-24 — UX-INTERESTING: „Posturi interesante”, phase A and B (Sonnet, from the Opus brief)
 
 **Done.**

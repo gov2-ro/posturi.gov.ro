@@ -164,7 +164,11 @@ function anomaly_render_toc(array $by_group, array $visible_counts): void {
         <a href="#grup-<?= e($g) ?>" class="pg-atoc-g"><?= e(ANOMALY_GROUPS[$g]) ?></a>
         <ul>
           <?php foreach ($checks as $c): $n = $c['count'] === null ? '–' : (string)($visible_counts[$c['check_id']] ?? 0); ?>
+          <?php if ($n === '0' || $n === '–'): /* 2026-11-24 (owner): a check with no signal stays, dimmed and not linked. */ ?>
+          <li><span class="pg-atoc-empty" data-atoc-empty><span><?= e($c['label_ro']) ?></span> <span class="pg-atoc-n"><?= e($n) ?></span></span></li>
+          <?php else: ?>
           <li><a href="#check-<?= e($c['check_id']) ?>"><span><?= e($c['label_ro']) ?></span> <span class="pg-atoc-n"><?= e($n) ?></span></a></li>
+          <?php endif; ?>
           <?php endforeach; ?>
         </ul>
       </li>

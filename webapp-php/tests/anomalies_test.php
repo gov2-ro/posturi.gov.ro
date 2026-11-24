@@ -159,6 +159,13 @@ run_suite('a check with public = 0 is admin-only; overview_rows shortens a list;
     assert_contains('target="_blank" rel="noopener"', $r14, 'the full list in a new tab');
 });
 
+run_suite('the table of contents dims a check with no signal and does not link it', function () use ($srv_pub) {
+    [, $h] = an_get($srv_pub['base'], '/anomalii/');
+    assert_contains('data-atoc-empty><span>Eticheta GRUP-ANGAJATOR</span>', $h, 'R16 (0 signals) is dimmed');
+    assert_same(0, substr_count($h, 'href="#check-R16"'), 'and not linked');
+    assert_contains('href="#check-R14"', $h, 'a check with signals stays linked');
+});
+
 run_suite('a quote keeps its line breaks; the sitemap lists /anomalii/', function () use ($srv_pub) {
     [, $h] = an_get($srv_pub['base'], '/anomalii/');
     assert_contains('<b>x</b>,<br>' . "\n" . 'conform legii.', html_entity_decode($h), 'the line break of the quote');

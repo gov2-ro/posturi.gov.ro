@@ -688,13 +688,17 @@
   .pg-atoc-small > nav { padding: 0 1rem 0.75rem; }
   .pg-atoc-side { display: none; min-width: 0; }
   .pg-atoc-small ul, .pg-atoc-side ul { list-style: none; margin: 0; padding: 0; }
-  .pg-atoc-group ul { padding-left: 0.5rem; }
-  .pg-atoc-small a, .pg-atoc-side a {
+  /* 2026-11-24 (owner): no indent for the checks, space between the groups, no underline, empty checks dimmed. */
+  .pg-atoc-group ul { padding-left: 0; }
+  .pg-atoc-group + .pg-atoc-group { margin-top: 0.75rem; }
+  .pg-atoc-small a, .pg-atoc-side a, .pg-atoc-empty {
     display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; min-height: 44px;
     padding-left: 0.5rem; border-left: 3px solid transparent; font-size: 0.875rem; color: rgb(var(--c-ink));
-    overflow-wrap: anywhere;
+    overflow-wrap: anywhere; text-decoration: none;
   }
-  .pg-atoc-small a:hover, .pg-atoc-side a:hover { color: rgb(var(--c-gov)); text-decoration: underline; }
+  .pg-atoc-empty { color: rgb(var(--c-ink-faint)); }
+  .pg-atoc-empty .pg-atoc-n { color: inherit; }
+  .pg-atoc-small a:hover, .pg-atoc-side a:hover { color: rgb(var(--c-gov)); text-decoration: none; }
   .pg-atoc-small a.pg-atoc-g, .pg-atoc-side a.pg-atoc-g { font-weight: 600; }
   .pg-atoc-small a[aria-current="true"], .pg-atoc-side a[aria-current="true"] {
     border-left-color: rgb(var(--c-gov)); font-weight: 700; color: rgb(var(--c-gov));
@@ -703,7 +707,7 @@
   @media (min-width: 1024px) {
     .pg-atoc-small { display: none; }
     .pg-atoc-side { display: block; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
-    .pg-atoc-small a, .pg-atoc-side a { min-height: 32px; }
+    .pg-atoc-small a, .pg-atoc-side a, .pg-atoc-empty { min-height: 32px; }
   }
 
   /* Signals: a list of cards-in-a-card, one for each posting. */

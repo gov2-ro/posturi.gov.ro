@@ -124,7 +124,7 @@ require __DIR__ . '/../inc/header.php';
           <li><strong>Memoria cache.</strong> Fiecare răspuns reușit poate rămâne în memoria cache până la 1 oră. După o încărcare de date, un răspuns poate fi vechi cel mult o oră.
             Câmpul <code>data_built_at</code> spune când a fost generată baza de date.</li>
           <li><strong>Limita de cereri.</strong> Rețeaua Cloudflare din fața site-ului limitează cererile la adresele <code>/api/</code>:
-            cel mult 60 de cereri la 10 secunde de la o adresă IP. Peste limită, cererile sunt blocate 10 secunde. Un răspuns care vine din memoria cache nu se numără, dacă planul permite asta.</li>
+            cel mult 60 de cereri la 10 secunde de la o adresă IP. Peste limită, cererile sunt blocate 10 secunde. Și răspunsurile din memoria cache se numără.</li>
           <li><strong>Fără cheie.</strong> Limita este aceeași pentru toți.</li>
         </ul>
         <div class="g2-table-wrap" role="region" aria-label="Codurile HTTP" tabindex="0">
@@ -169,6 +169,10 @@ require __DIR__ . '/../inc/header.php';
         <?= toc_h2($toc, 'sursa', 'g2-heading-section') ?>
         <p>Datele provin de pe <a href="https://posturi.gov.ro" class="text-gov hover:underline" target="_blank" rel="noopener">posturi.gov.ro</a>.
           Site-ul le preia periodic și le procesează automat. Proiectul este independent. Nu este un proiect oficial al Guvernului României.</p>
+        <p>Când refolosiți datele, menționați ambele surse:
+          <a href="https://posturi.gov.ro" class="text-gov hover:underline" target="_blank" rel="noopener">posturi.gov.ro</a> pentru anunțurile originale și
+          <a href="https://posturi.gov2.ro" class="text-gov hover:underline">posturi.gov2.ro</a> pentru datele restructurate.</p>
+        <p>Pentru întrebări despre API, scrieți la <a href="mailto:cancelarie@gov2.ro" class="text-gov hover:underline">cancelarie@gov2.ro</a>.</p>
 
         <?= toc_h2($toc, 'fluxuri', 'g2-heading-section') ?>
         <p>Fluxurile <a href="/posturi.json" class="text-gov hover:underline"><code>/posturi.json</code></a>, <a href="/posturi.atom" class="text-gov hover:underline">Atom</a>,

@@ -832,11 +832,14 @@ The site has a public JSON API without tokens. The docs page for readers is `/ap
 - **The download cache.** The first request after a data deploy builds `posturi-private/api/posturi-<built_at>.json.gz` (`al_dir()`, outside the web root). The build takes an exclusive `flock` on `build.lock`, writes a temporary file and renames it. After a build, it deletes the older `posturi-*.json.gz` files. When the folder cannot be written, the answer is 503. The file has no `Content-Encoding`: the client gets the `.gz` file.
 - **Tests.** `php webapp-php/tests/api_test.php`; the four routes also run in `tests/compat_test.php`; `tests/browser/api.spec.js` checks `/api/` at 320, 375 and 1280 px.
 
-Cloudflare rate-limit rule (owner step, in the Cloudflare dashboard):
+Cloudflare rate-limit rule (active since 2026-11-24, zone gov2.ro, Security rules → Rate limiting rules, name "posturi API rate limit"):
 
-- Expression: `starts_with(http.request.uri.path, "/api/")`
-- Proposal: 60 requests for each 10 seconds for each IP, then block for 10 seconds. The rule must not count requests that Cloudflare answers from its cache, if the plan allows that.
-- Open: the free plan may not allow this rule on this zone. The deploy from the Mac does not purge the edge (`CF_ZONE_ID` is empty there), so a cached API answer can be up to 1 hour old.
+- Expression: `(http.host eq "posturi.gov2.ro" and starts_with(http.request.uri.path, "/api/"))`. The zone is `gov2.ro`, so the rule names the host.
+- 60 requests for each 10 seconds for each IP, then block for 10 seconds. The free plan allows one such rule and only these values.
+- The free plan has no option to skip answers from the cache, so cache hits count too.
+- The deploy from the Mac does not purge the edge (`CF_ZONE_ID` is empty there), so a cached API answer can be up to 1 hour old.
+
+Attribution and contact (owner, 2026-11-24): `/api/` asks reusers to name both posturi.gov.ro (the original postings) and posturi.gov2.ro (the restructured data). The API contact is cancelarie@gov2.ro.
 
 ### Structure
 
